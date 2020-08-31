@@ -115,7 +115,7 @@ class Repairer {
             // TableCache can be small since we expect each table to be opened
             // once.
             NewLRUCache(10, db_options_.table_cache_numshardbits)),
-        table_cache_(new TableCache(default_cf_iopts_, immutable_db_options_,
+        table_cache_(new TableCache(0, default_cf_iopts_, immutable_db_options_,
                                     env_options_, raw_table_cache_.get())),
         wb_(db_options_.db_write_buffer_size),
         wc_(db_options_.delayed_write_rate),
@@ -577,8 +577,7 @@ class Repairer {
                                 file_size);
     std::shared_ptr<const TableProperties> props;
     if (status.ok()) {
-      status = table_cache_->GetTableProperties(env_options_, icmp_, t->meta,
-                                                &props);
+      status = table_cache_->GetTableProperties(env_options_, t->meta, &props);
     }
     if (status.ok()) {
       t->column_family_id = static_cast<uint32_t>(props->column_family_id);
@@ -619,8 +618,8 @@ class Repairer {
       // P.S. depend files in VersionStorage has not build yet ...
       DependenceMap empty_dependence_map;
       InternalIterator* iter = table_cache_->NewIterator(
-          ReadOptions(), env_options_, cfd->internal_comparator(), t->meta,
-          empty_dependence_map, nullptr /* range_del_agg */,
+          ReadOptions(), env_options_, t->meta, empty_dependence_map,
+          nullptr /* range_del_agg */,
           cfd->GetLatestMutableCFOptions()->prefix_extractor.get());
       bool empty = true;
       ParsedInternalKey parsed;

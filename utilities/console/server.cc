@@ -126,7 +126,7 @@ static void ExecuteTasks(Executor *executor, long curr_time,
   executor->Execute(plan, curr_time, el);
 }
 
-static void ServerCron(long *last_cron_time, long curr_time,
+static void ServerCron(int64_t *last_cron_time, int64_t curr_time,
                        EventLoop<Client> *el, Logger *log) {
   if (curr_time - *last_cron_time >= kCronInterval) {
     *last_cron_time = curr_time;
@@ -222,7 +222,7 @@ int ServerMain(ServerRunner *runner, rocksdb::DBImpl *db,
       return 1;
     }
 
-    long curr_time = 0;
+    int64_t curr_time = 0;
     status = env->GetCurrentTime(&curr_time);
     if (!status.ok()) {
       ROCKS_LOG_ERROR(log, "Failed getting time. Error message: '%s'",

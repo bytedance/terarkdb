@@ -37,6 +37,7 @@ Reader::Reader(std::shared_ptr<Logger> info_log,
       eof_offset_(0),
       last_record_offset_(0),
       end_of_buffer_offset_(0),
+      cur_block_count_(0),
       log_number_(log_num),
       recycled_(false),
       retry_after_eof_(retry_after_eof) {}
@@ -283,6 +284,7 @@ bool Reader::ReadMore(size_t* drop_size, int *error) {
     buffer_.clear();
     Status status = file_->Read(kBlockSize, &buffer_, backing_store_);
     end_of_buffer_offset_ += buffer_.size();
+    cur_block_count_ ++;
     if (!status.ok()) {
       buffer_.clear();
       ReportDrop(kBlockSize, status);

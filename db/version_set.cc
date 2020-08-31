@@ -16,8 +16,8 @@
 #include <inttypes.h>
 #include <stdio.h>
 
-#include <iostream>
 #include <algorithm>
+#include <iostream>
 #include <list>
 #include <map>
 #include <set>
@@ -360,8 +360,14 @@ Version::~Version() {
         assert(cfd_ != nullptr);
         uint32_t path_id = f->fd.GetPathId();
         assert(path_id < cfd_->ioptions()->cf_paths.size());
-        vset_->obsolete_files_.push_back(
-            ObsoleteFileInfo(f, cfd_->ioptions()->cf_paths[path_id].path));
+        if (f->prop.is_blob_wal()) {
+          vset_->obsolete_files_.push_back(
+              ObsoleteFileInfo(f, cfd_->GetWalDir()));
+          vset_->ReleaseWal(f->fd.GetPathId());
+        } else {
+          vset_->obsolete_files_.push_back(
+              ObsoleteFileInfo(f, cfd_->ioptions()->cf_paths[path_id].path));
+        }
       }
     }
   }
@@ -540,8 +546,8 @@ class LevelIterator final : public InternalIterator, public Snapshot {
       sample_file_read_inc(file_meta.file_metadata);
     }
     return table_cache_->NewIterator(
-        read_options_, env_options_, icomparator_, *file_meta.file_metadata,
-        dependence_map_, range_del_agg_, prefix_extractor_,
+        read_options_, env_options_, *file_meta.file_metadata, dependence_map_,
+        range_del_agg_, prefix_extractor_,
         nullptr /* don't need reference to table */, file_read_hist_,
         for_compaction_, nullptr /* arena */, skip_filters_, level_);
   }
@@ -707,7 +713,6 @@ class BaseReferencedVersionBuilder {
   void DoApplyAndSaveTo(VersionStorageInfo* vstorage, VersionSet* vset) {
     // in Apply, collect each blob wal's used_entries,
     // in SaveTo, use num_entries - used_entries to get num_antiquation
-    version_builder_->SetContext(vset);
     for (auto edit : edit_list_) {
       version_builder_->Apply(edit);
     }
@@ -727,8 +732,8 @@ Status Version::GetTableProperties(std::shared_ptr<const TableProperties>* tp,
   auto table_cache = cfd_->table_cache();
   auto ioptions = cfd_->ioptions();
   Status s = table_cache->GetTableProperties(
-      env_options_, cfd_->internal_comparator(), *file_meta, tp,
-      mutable_cf_options_.prefix_extractor.get(), true /* no io */);
+      env_options_, *file_meta, tp, mutable_cf_options_.prefix_extractor.get(),
+      true /* no io */);
   if (s.ok()) {
     return s;
   }
@@ -893,13 +898,13 @@ size_t Version::GetMemoryUsageByTableReaders() {
   for (auto& file_level : storage_info_.level_files_brief_) {
     for (size_t i = 0; i < file_level.num_files; i++) {
       total_usage += cfd_->table_cache()->GetMemoryUsageByTableReader(
-          env_options_, cfd_->internal_comparator(), file_level.files[i].fd,
+          env_options_, file_level.files[i].fd,
           mutable_cf_options_.prefix_extractor.get());
     }
   }
   for (auto file_meta : storage_info_.LevelFiles(-1)) {
     total_usage += cfd_->table_cache()->GetMemoryUsageByTableReader(
-        env_options_, cfd_->internal_comparator(), file_meta->fd,
+        env_options_, file_meta->fd,
         mutable_cf_options_.prefix_extractor.get());
   }
   return total_usage;
@@ -1080,8 +1085,8 @@ void Version::AddIteratorsForLevel(const ReadOptions& read_options,
          i++) {
       const auto& file = storage_info_.LevelFilesBrief(level).files[i];
       merge_iter_builder->AddIterator(cfd_->table_cache()->NewIterator(
-          read_options, soptions, cfd_->internal_comparator(),
-          *file.file_metadata, storage_info_.dependence_map(), range_del_agg,
+          read_options, soptions, *file.file_metadata,
+          storage_info_.dependence_map(), range_del_agg,
           mutable_cf_options_.prefix_extractor.get(), nullptr,
           cfd_->internal_stats()->GetFileReadHist(level), false, arena,
           false /* skip_filters */, 0 /* level */));
@@ -1137,8 +1142,8 @@ Status Version::OverlapWithLevelIterator(const ReadOptions& read_options,
         continue;
       }
       ScopedArenaIterator iter(cfd_->table_cache()->NewIterator(
-          read_options, env_options, cfd_->internal_comparator(),
-          *file->file_metadata, storage_info_.dependence_map(), &range_del_agg,
+          read_options, env_options, *file->file_metadata,
+          storage_info_.dependence_map(), &range_del_agg,
           mutable_cf_options_.prefix_extractor.get(), nullptr,
           cfd_->internal_stats()->GetFileReadHist(level), false, &arena,
           false /* skip_filters */, 0 /* level */));
@@ -1252,13 +1257,14 @@ Status Version::fetch_buffer(LazyBuffer* buffer) const {
     IterKey iter_key;
     iter_key.SetInternalKey(user_key, sequence, kValueTypeForSeek);
     s = table_cache_->Get(
-        ReadOptions(), cfd_->internal_comparator(), *pair.second,
-        storage_info_.dependence_map(), iter_key.GetInternalKey(), &get_context,
+        ReadOptions(), *pair.second, storage_info_.dependence_map(),
+        iter_key.GetInternalKey(), &get_context,
         mutable_cf_options_.prefix_extractor.get(), nullptr, true);
     if (!s.ok()) {
       return s;
     }
-    if (context_seq != sequence ||
+    if (context_seq != sequence || get_context.is_index() ||
+        !get_context.is_finished() ||
         (get_context.State() != GetContext::kFound &&
          get_context.State() != GetContext::kMerge)) {
       if (get_context.State() == GetContext::kCorrupt) {
@@ -1275,18 +1281,18 @@ Status Version::fetch_buffer(LazyBuffer* buffer) const {
     assert(pair.second->prop.is_blob_wal());
     // blob wal value
     Slice log_handle(reinterpret_cast<const char*>(&context->data[0]),
-                     sizeof(ValueIndex::DefaultLogHandle));
+                     sizeof(DefaultLogHandle));
     bool value_found = false;
     GetContext get_context(cfd_->internal_comparator().user_comparator(),
                            nullptr, cfd_->ioptions()->info_log, db_statistics_,
                            GetContext::kNotFound, log_handle, buffer,
                            &value_found, nullptr, nullptr, nullptr, env_);
     s = table_cache_->Get(
-        ReadOptions(), cfd_->internal_comparator(), *pair.second,
-        storage_info_.dependence_map(), log_handle, &get_context,
-        mutable_cf_options_.prefix_extractor.get(), nullptr, true);
-    if (get_context.State() != GetContext::kFound &&
-        get_context.State() != GetContext::kMerge) {
+        ReadOptions(), *pair.second, storage_info_.dependence_map(), log_handle,
+        &get_context, mutable_cf_options_.prefix_extractor.get(), nullptr,
+        true);
+    if (get_context.State() != GetContext::kFound || get_context.is_index() ||
+        !get_context.is_finished()) {
       if (get_context.State() == GetContext::kCorrupt) {
         return std::move(get_context).CorruptReason();
       } else {
@@ -1311,24 +1317,27 @@ LazyBuffer Version::TransToCombined(const Slice& user_key, uint64_t sequence,
   auto& dependence_map = storage_info_.dependence_map();
   auto find = dependence_map.find(value_index.file_number);
   if (find == dependence_map.end()) {
-    assert(false); // debug
+    assert(false);  // debug
     return LazyBuffer(Status::Corruption("Separate value dependence missing"));
   }
   LazyBufferContext context;
   if (find->second->fd.GetNumber() == value_index.file_number &&
-      value_index.log_handle.valid()) {
+      find->second->prop.is_blob_wal()) {
     // has value index content, fetch buffer use handle in value index content
+    assert(value_index.log_handle.valid());
     assert(value_index.log_handle.size() == 16);
-    memcpy(&context.data, value_index.log_handle.data(), 16);
-    context.data[2] = SequenceNumber(-1);
-    context.data[3] = reinterpret_cast<uint64_t>(&*find);
+    if (value_index.log_handle.valid()) {
+      memcpy(&context.data, value_index.log_handle.data(),
+             std::min<size_t>(16, value_index.log_handle.size()));
+    }
+    context.data[2] = kMaxSequenceNumber;
   } else {
     // no content in value index, use key to fetch buffer
     context.data[0] = reinterpret_cast<uint64_t>(user_key.data());
     context.data[1] = user_key.size();
     context.data[2] = sequence;
-    context.data[3] = reinterpret_cast<uint64_t>(&*find);
   }
+  context.data[3] = reinterpret_cast<uint64_t>(&*find);
   return LazyBuffer(this, context, Slice::Invalid(),
                     find->second->fd.GetNumber());
 }
@@ -1375,9 +1384,8 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
         get_perf_context()->per_level_perf_context_enabled;
     StopWatchNano timer(env_, timer_enabled /* auto_start */);
     *status = table_cache_->Get(
-        read_options, *internal_comparator(), *f->file_metadata,
-        storage_info_.dependence_map(), ikey, &get_context,
-        mutable_cf_options_.prefix_extractor.get(),
+        read_options, *f->file_metadata, storage_info_.dependence_map(), ikey,
+        &get_context, mutable_cf_options_.prefix_extractor.get(),
         cfd_->internal_stats()->GetFileReadHist(fp.GetHitFileLevel()),
         IsFilterSkipped(static_cast<int>(fp.GetHitFileLevel()),
                         fp.IsHitFileLastInLevel()),
@@ -1467,11 +1475,10 @@ void Version::GetKey(const Slice& user_key, const Slice& ikey, Status* status,
   FdWithKeyRange* f = fp.GetNextFile();
 
   while (f != nullptr) {
-    *status =
-        table_cache_->Get(options, *internal_comparator(), *f->file_metadata,
-                          storage_info_.dependence_map(), ikey, &get_context,
-                          mutable_cf_options_.prefix_extractor.get(), nullptr,
-                          true, fp.GetCurrentLevel());
+    *status = table_cache_->Get(
+        options, *f->file_metadata, storage_info_.dependence_map(), ikey,
+        &get_context, mutable_cf_options_.prefix_extractor.get(), nullptr, true,
+        fp.GetCurrentLevel());
     if (!status->ok()) {
       return;
     }
@@ -3603,7 +3610,6 @@ Status VersionSet::ApplyOneVersionEdit(
     // to builder
     auto builder = builders.find(edit.column_family_);
     assert(builder != builders.end());
-    builder->second->version_builder()->SetContext(this);
     builder->second->version_builder()->Apply(&edit);
   }
 
@@ -4494,8 +4500,8 @@ uint64_t VersionSet::ApproximateSize(Version* v, const FdWithKeyRange& f,
           TableCache* table_cache = v->cfd_->table_cache();
           Cache::Handle* handle = nullptr;
           auto s = table_cache->FindTable(
-              v->env_options_, v->cfd_->internal_comparator(), file_meta->fd,
-              &handle, v->GetMutableCFOptions().prefix_extractor.get());
+              v->env_options_, file_meta->fd, &handle,
+              v->GetMutableCFOptions().prefix_extractor.get());
           if (s.ok()) {
             table_reader_ptr = table_cache->GetTableReaderFromHandle(handle);
             result = table_reader_ptr->ApproximateOffsetOf(key);
@@ -4597,7 +4603,7 @@ InternalIterator* VersionSet::MakeInputIterator(
         const LevelFilesBrief* flevel = c->input_levels(which);
         for (size_t i = 0; i < flevel->num_files; i++) {
           list[num++] = cfd->table_cache()->NewIterator(
-              read_options, env_options_compactions, cfd->internal_comparator(),
+              read_options, env_options_compactions,
               *flevel->files[i].file_metadata, dependence_map, range_del_agg,
               c->mutable_cf_options()->prefix_extractor.get(),
               nullptr /* table_reader_ptr */,
@@ -4745,11 +4751,6 @@ void VersionSet::GetObsoleteFiles(std::vector<ObsoleteFileInfo>* files,
   obsolete_manifests_.swap(*manifest_filenames);
   std::vector<ObsoleteFileInfo> pending_files;
   for (auto& f : obsolete_files_) {
-    if (f.metadata->prop.is_blob_wal() &&
-        alive_logs_entries_.find(f.metadata->fd.GetNumber()) !=
-            alive_logs_entries_.end()) {
-      continue;
-    }
     if (f.metadata->fd.GetNumber() < min_pending_output) {
       files->push_back(std::move(f));
     } else {
@@ -4813,10 +4814,19 @@ uint64_t VersionSet::GetTotalSstFilesSize(Version* dummy_versions) {
   return total_files_size;
 }
 
-Status VersionSet::PutBlobMeta(uint64_t log_no,
-                               uint64_t num_entries /*maybe add more meta*/) {
+Status VersionSet::FreezeWal(uint64_t log_no,
+                             uint64_t num_entries /*maybe add more meta*/) {
+  logs_entries_mutex_.Lock();
   assert(alive_logs_entries_.find(log_no) == alive_logs_entries_.end());
   alive_logs_entries_[log_no] = num_entries;
+  logs_entries_mutex_.Unlock();
+  return Status::OK();
+}
+
+Status VersionSet::ReleaseWal(uint64_t log_no) {
+  logs_entries_mutex_.Lock();
+  alive_logs_entries_.erase(log_no);
+  logs_entries_mutex_.Unlock();
   return Status::OK();
 }
 

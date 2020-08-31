@@ -1373,7 +1373,7 @@ Status TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
   return subReader_.Get(global_seqno_, ro, ikey, get_context, flag);
 }
 
-void TerarkZipTableReader::RangeScan(
+Status TerarkZipTableReader::RangeScan(
     const Slice* begin, const SliceTransform* /*prefix_extractor*/, void* arg,
     bool (*callback_func)(void* arg, const Slice& key, LazyBuffer&& value)) {
   auto g_tctx = terark::GetTlsTerarkContext();
@@ -1385,6 +1385,7 @@ void TerarkZipTableReader::RangeScan(
        iter->Valid() && callback_func(arg, iter->key(), iter->value());
        iter->Next()) {
   }
+  return iter->status();
 }
 
 uint64_t TerarkZipTableReader::ApproximateOffsetOf(const Slice& ikey) {
@@ -1608,7 +1609,7 @@ Status TerarkZipTableMultiReader::Get(
   return subReader->Get(global_seqno_, ro, ikey, get_context, flag);
 }
 
-void TerarkZipTableMultiReader::RangeScan(
+Status TerarkZipTableMultiReader::RangeScan(
     const Slice* begin, const SliceTransform* /*prefix_extractor*/, void* arg,
     bool (*callback_func)(void* arg, const Slice& key, LazyBuffer&& value)) {
   auto g_tctx = terark::GetTlsTerarkContext();
@@ -1620,6 +1621,7 @@ void TerarkZipTableMultiReader::RangeScan(
        iter->Valid() && callback_func(arg, iter->key(), iter->value());
        iter->Next()) {
   }
+  return iter->status();
 }
 
 uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf(const Slice& ikey) {

@@ -70,8 +70,8 @@ class ForwardLevelIterator : public InternalIterator {
     ReadRangeDelAggregator range_del_agg(&cfd_->internal_comparator(),
                                          kMaxSequenceNumber /* upper_bound */);
     file_iter_ = cfd_->table_cache()->NewIterator(
-        read_options_, *(cfd_->soptions()), cfd_->internal_comparator(),
-        *files_[file_index_], dependence_map_,
+        read_options_, *(cfd_->soptions()), *files_[file_index_],
+        dependence_map_,
         read_options_.ignore_range_deletions ? nullptr : &range_del_agg,
         prefix_extractor_, nullptr /* table_reader_ptr */, nullptr, false);
     valid_ = false;
@@ -559,8 +559,7 @@ void ForwardIterator::RebuildIterators(bool refresh_sv) {
       continue;
     }
     l0_iters_.push_back(cfd_->table_cache()->NewIterator(
-        read_options_, *cfd_->soptions(), cfd_->internal_comparator(), *l0,
-        vstorage->dependence_map(),
+        read_options_, *cfd_->soptions(), *l0, vstorage->dependence_map(),
         read_options_.ignore_range_deletions ? nullptr : &range_del_agg,
         sv_->mutable_cf_options.prefix_extractor.get()));
   }
@@ -630,8 +629,8 @@ void ForwardIterator::RenewIterators() {
       continue;
     }
     l0_iters_new.push_back(cfd_->table_cache()->NewIterator(
-        read_options_, *cfd_->soptions(), cfd_->internal_comparator(),
-        *l0_files_new[inew], vstorage_new->dependence_map(),
+        read_options_, *cfd_->soptions(), *l0_files_new[inew],
+        vstorage_new->dependence_map(),
         read_options_.ignore_range_deletions ? nullptr : &range_del_agg,
         svnew->mutable_cf_options.prefix_extractor.get()));
   }
@@ -689,8 +688,8 @@ void ForwardIterator::ResetIncompleteIterators() {
     }
     DeleteIterator(l0_iters_[i]);
     l0_iters_[i] = cfd_->table_cache()->NewIterator(
-        read_options_, *cfd_->soptions(), cfd_->internal_comparator(),
-        *l0_files[i], vstorage.dependence_map(), nullptr /* range_del_agg */,
+        read_options_, *cfd_->soptions(), *l0_files[i],
+        vstorage.dependence_map(), nullptr /* range_del_agg */,
         sv_->mutable_cf_options.prefix_extractor.get());
   }
 

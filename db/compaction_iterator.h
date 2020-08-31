@@ -60,10 +60,10 @@ class CompactionIterator {
     const Compaction* compaction_;
   };
 
-  CompactionIterator(
-      InternalIterator* input, SeparateHelper* separate_helper,
-      const Slice* end, const Comparator* cmp, MergeHelper* merge_helper,
-      SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
+  CompactionIterator(InternalIterator* input, SeparateHelper* separate_helper,
+                     const Slice* end, const Comparator* cmp,
+                     MergeHelper* merge_helper, SequenceNumber last_sequence,
+                     std::vector<SequenceNumber>* snapshots,
                      SequenceNumber earliest_write_conflict_snapshot,
                      const SnapshotChecker* snapshot_checker, Env* env,
                      bool report_detailed_time, bool expect_valid_internal_key,
@@ -75,15 +75,16 @@ class CompactionIterator {
                      const SequenceNumber preserve_deletes_seqnum = 0);
 
   // Constructor with custom CompactionProxy, used for tests.
-  CompactionIterator(
-      InternalIterator* input, SeparateHelper* separate_helper,
-      const Slice* end, const Comparator* cmp, MergeHelper* merge_helper,
-      SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
+  CompactionIterator(InternalIterator* input, SeparateHelper* separate_helper,
+                     const Slice* end, const Comparator* cmp,
+                     MergeHelper* merge_helper, SequenceNumber last_sequence,
+                     std::vector<SequenceNumber>* snapshots,
                      SequenceNumber earliest_write_conflict_snapshot,
                      const SnapshotChecker* snapshot_checker, Env* env,
                      bool report_detailed_time, bool expect_valid_internal_key,
                      CompactionRangeDelAggregator* range_del_agg,
-      std::unique_ptr<CompactionProxy> compaction, BlobConfig blob_config,
+                     std::unique_ptr<CompactionProxy> compaction,
+                     BlobConfig blob_config,
                      const CompactionFilter* compaction_filter = nullptr,
                      const std::atomic<bool>* shutting_down = nullptr,
                      const SequenceNumber preserve_deletes_seqnum = 0);
@@ -213,6 +214,7 @@ class CompactionIterator {
 
   size_t filter_sample_interval_ = 64;
   size_t filter_hit_count_ = 0;
+
  public:
   bool IsShuttingDown() {
     // This is a best-effort facility, so memory_order_relaxed is sufficient.
@@ -273,10 +275,13 @@ struct BuilderSeparateHelper : public SeparateHelper {
 
   SeparateHelper* separate_helper = nullptr;
   std::vector<FileMetaData>* output = nullptr;
+  std::vector<TableProperties>* prop = nullptr;
   std::string fname;
+  TableProperties tp;
   std::unique_ptr<WritableFileWriter> file_writer = nullptr;
   std::unique_ptr<TableBuilder> builder = nullptr;
   FileMetaData* current_output = nullptr;
+  TableProperties* current_prop = nullptr;
   std::unique_ptr<ValueExtractor> value_meta_extractor = nullptr;
   std::deque<BuilderLazyBufferState> state_wrapper_storage_;
   std::vector<BuilderLazyBufferState*> state_wrapper_free_;

@@ -1028,9 +1028,9 @@ Status CompactionJob::VerifyFiles() {
       // to cache it here for further user reads
       auto output_level = compact_->compaction->output_level();
       InternalIterator* iter = cfd->table_cache()->NewIterator(
-          ReadOptions(), env_options_, cfd->internal_comparator(),
-          *files_meta[file_idx], empty_dependence_map,
-          nullptr /* range_del_agg */, prefix_extractor, nullptr,
+          ReadOptions(), env_options_, *files_meta[file_idx],
+          empty_dependence_map, nullptr /* range_del_agg */, prefix_extractor,
+          nullptr,
           output_level == -1
               ? nullptr
               : cfd->internal_stats()->GetFileReadHist(output_level),
@@ -1182,7 +1182,7 @@ void CompactionJob::ProcessCompaction(SubcompactionState* sub_compact) {
       assert(false);
       break;
     case kGarbageCollection:
-      //ProcessGarbageCollection(sub_compact);
+      ProcessGarbageCollection(sub_compact);
       break;
     default:
       assert(false);
@@ -1853,6 +1853,7 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
     auto& meta = sub_compact->blob_outputs.front().meta;
     auto& inputs = *sub_compact->compaction->inputs();
     assert(inputs.size() == 1 && inputs.front().level == -1);
+    auto& level_inputs = inputs.front().files;
     ROCKS_LOG_INFO(
         db_options_.info_log,
         "[%s] [JOB %d] Table #%" PRIu64 " GC: %" PRIu64
@@ -1861,12 +1862,15 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
         " get not found, %" PRIu64
         " file number mismatch ], inheritance chain: %" PRIu64 " -> %" PRIu64,
         cfd->GetName().c_str(), job_id_, meta.fd.GetNumber(), counter.input,
-        inputs.front().size(), counter.input - meta.prop.num_entries,
-        sub_compact->compaction->num_antiquation() * 100. / counter.input,
+        level_inputs.size(), counter.input - meta.prop.num_entries,
+        sub_compact->compaction->num_antiquation() * 100. /
+            std::max<double>(1, counter.input),
         counter.garbage_type, counter.get_not_found,
         counter.file_number_mismatch, raw_chain_length,
         inheritance_chain.size());
-    if (counter.input == meta.prop.num_entries || meta.prop.num_entries == 0) {
+    if ((counter.input == meta.prop.num_entries && level_inputs.size() == 1 &&
+         !level_inputs.front()->prop.is_blob_wal()) ||
+        meta.prop.num_entries == 0) {
       ROCKS_LOG_INFO(db_options_.info_log,
                      "[%s] [JOB %d] Table #%" PRIu64
                      " GC purge %s records, dropped",
@@ -2322,8 +2326,8 @@ Status CompactionJob::InstallCompactionResults(
         // test map sst
         DependenceMap empty_dependence_map;
         InternalIterator* iter = cfd->table_cache()->NewIterator(
-            ReadOptions(), env_options_, cfd->internal_comparator(),
-            o.file_meta, empty_dependence_map, nullptr /* range_del_agg */,
+            ReadOptions(), env_options_, o.file_meta, empty_dependence_map,
+            nullptr /* range_del_agg */,
             mutable_cf_options.prefix_extractor.get(), nullptr,
             cfd->internal_stats()->GetFileReadHist(compaction->output_level()),
             false, nullptr /* arena */, false /* skip_filters */,
@@ -2401,8 +2405,8 @@ Status CompactionJob::InstallCompactionResults(
       // test map sst
       DependenceMap empty_dependence_map;
       InternalIterator* iter = cfd->table_cache()->NewIterator(
-          ReadOptions(), env_options_, cfd->internal_comparator(), file_meta,
-          empty_dependence_map, nullptr /* range_del_agg */,
+          ReadOptions(), env_options_, file_meta, empty_dependence_map,
+          nullptr /* range_del_agg */,
           mutable_cf_options.prefix_extractor.get(), nullptr,
           cfd->internal_stats()->GetFileReadHist(compaction->output_level()),
           false, nullptr /* arena */, false /* skip_filters */,
@@ -2430,6 +2434,7 @@ Status CompactionJob::InstallCompactionResults(
   } else {
     // Add compaction inputs
     if (compaction->compaction_type() != kGarbageCollection) {
+      // GC NOT delete input files?
       compaction->AddInputDeletions(compaction->edit());
     }
 

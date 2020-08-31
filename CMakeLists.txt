@@ -1150,6 +1150,9 @@ if(WITH_TOOLS)
   #add_subdirectory(terark-tools/terark-test)
   add_subdirectory(terark-tools/batch-write-bench)
 endif()
-
+add_definitions(
+  -Wfatal-errors
+)
 add_definitions(-DTERARKDB_ENABLE_CONSOLE)
 add_subdirectory(terark-tools/terark-test)
+add_subdirectory(terark-tools/sst_scan)

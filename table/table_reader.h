@@ -9,6 +9,7 @@
 
 #pragma once
 #include <memory>
+
 #include "db/range_tombstone_fragmenter.h"
 #include "rocksdb/cache.h"
 #include "rocksdb/slice_transform.h"
@@ -17,6 +18,7 @@
 namespace rocksdb {
 
 class Cache;
+struct ImmutableCFOptions;
 class Iterator;
 struct ParsedInternalKey;
 class Slice;
@@ -46,6 +48,12 @@ class TableReader {
                                         Arena* arena = nullptr,
                                         bool skip_filters = false,
                                         bool for_compaction = false) = 0;
+
+  virtual InternalIterator* NewIteratorWithCF(const ReadOptions&, uint32_t,
+                                              const ImmutableCFOptions&,
+                                              Arena* = nullptr) {
+    return NewErrorInternalIterator(Status::NotSupported());
+  }
 
   virtual FragmentedRangeTombstoneIterator* NewRangeTombstoneIterator(
       const ReadOptions& /*read_options*/) {
@@ -90,12 +98,25 @@ class TableReader {
                      const SliceTransform* prefix_extractor,
                      bool skip_filters = false) = 0;
 
+  // Calls get_context->SaveValue() repeatedly, starting with
+  // the entry found after a call to Seek(key), until it returns false.
+  // May not make such a call if filter policy says that key is not present.
+  //
+  // get_context->MarkKeyMayExist needs to be called when it is configured to be
+  // memory only and the key is not found in the block cache.
+  //
+  // readOptions is the options for the read
+  // handle is the value position info
+  virtual Status GetFromHandle(const ReadOptions&, const Slice&, GetContext*) {
+    return Status::NotSupported();
+  }
+
   // Logic same as for(it->Seek(begin); it->Valid() && callback(*it); ++it) {}
   // Specialization for performance
-  virtual void RangeScan(const Slice* begin,
-                         const SliceTransform* prefix_extractor, void* arg,
-                         bool (*callback_func)(void* arg, const Slice& key,
-                                               LazyBuffer&& value));
+  virtual Status RangeScan(const Slice* begin,
+                           const SliceTransform* prefix_extractor, void* arg,
+                           bool (*callback_func)(void* arg, const Slice& key,
+                                                 LazyBuffer&& value));
 
   // Prefetch data corresponding to a give range of keys
   // Typically this functionality is required for table implementations that

@@ -440,8 +440,8 @@ Status BuildTable(
       // we will regrad this verification as user reads since the goal is
       // to cache it here for further user reads
       std::unique_ptr<InternalIterator> it(table_cache->NewIterator(
-          ReadOptions(), env_options, internal_comparator, *sst_meta(),
-          empty_dependence_map, nullptr /* range_del_agg */,
+          ReadOptions(), env_options, *sst_meta(), empty_dependence_map,
+          nullptr /* range_del_agg */,
           mutable_cf_options.prefix_extractor.get(), nullptr,
           (internal_stats == nullptr) ? nullptr
                                       : internal_stats->GetFileReadHist(0),

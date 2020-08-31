@@ -782,8 +782,9 @@ void CompactionPicker::GetGrandparents(
 // Try to perform garbage collection from certain column family.
 // Resulting as a pointer of compaction, nullptr as nothing to do.
 Compaction* CompactionPicker::PickGarbageCollection(
-    const std::string& /*cf_name*/, const MutableCFOptions& mutable_cf_options,
-    VersionStorageInfo* vstorage, LogBuffer* /*log_buffer*/) {
+    const std::string& /*cf_name*/, uint64_t max_log_number_to_gc,
+    const MutableCFOptions& mutable_cf_options, VersionStorageInfo* vstorage,
+    LogBuffer* /*log_buffer*/) {
   std::vector<GarbageFileInfo> gc_files;
 
   // Setting fragment_size as one eighth max_file_size prevents selecting
@@ -799,6 +800,9 @@ Compaction* CompactionPicker::PickGarbageCollection(
   // 3. marked for compaction for other reasons
   for (auto f : vstorage->LevelFiles(-1)) {
     if (!f->is_gc_permitted() || f->being_compacted) {
+      continue;
+    }
+    if (f->prop.is_blob_wal() && f->fd.GetNumber() >= max_log_number_to_gc) {
       continue;
     }
     GarbageFileInfo info = {f};
@@ -885,7 +889,7 @@ void CompactionPicker::InitFilesBeingCompact(
                          const DependenceMap& depend_map, Arena* arena,
                          TableReader** table_reader_ptr) {
     return table_cache_->NewIterator(
-        options, env_options_, *icmp_, *file_metadata, depend_map, nullptr,
+        options, env_options_, *file_metadata, depend_map, nullptr,
         mutable_cf_options.prefix_extractor.get(), table_reader_ptr, nullptr,
         false, arena, true, -1);
   };
@@ -1190,7 +1194,7 @@ Compaction* CompactionPicker::PickRangeCompaction(
                          const DependenceMap& depend_map, Arena* arena,
                          TableReader** table_reader_ptr) {
     return table_cache_->NewIterator(
-        options, env_options_, *icmp_, *file_metadata, depend_map, nullptr,
+        options, env_options_, *file_metadata, depend_map, nullptr,
         mutable_cf_options.prefix_extractor.get(), table_reader_ptr, nullptr,
         false, arena, true, -1);
   };
@@ -1707,7 +1711,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
   DependenceMap empty_dependence_map;
   ReadOptions options;
   ScopedArenaIterator iter(table_cache_->NewIterator(
-      options, env_options_, *icmp_, *input.files.front(), empty_dependence_map,
+      options, env_options_, *input.files.front(), empty_dependence_map,
       nullptr, mutable_cf_options.prefix_extractor.get(), nullptr, nullptr,
       false, &arena, true, input.level));
   if (!iter->status().ok()) {
@@ -1952,8 +1956,7 @@ Compaction* CompactionPicker::PickBottommostLevelCompaction(
     }
     std::shared_ptr<const TableProperties> tp;
     auto s = table_cache_->GetTableProperties(
-        env_options_, *icmp_, *f, &tp,
-        mutable_cf_options.prefix_extractor.get(), true);
+        env_options_, *f, &tp, mutable_cf_options.prefix_extractor.get(), true);
     if (s.IsIncomplete()) {
       return f->fd.largest_seqno < oldest_snapshot_seqnum;
     }
@@ -2505,8 +2508,7 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
                            const DependenceMap& depend_map, Arena* arena,
                            TableReader** table_reader_ptr) {
       return picker->table_cache()->NewIterator(
-          options, picker->env_options(), ioptions_.internal_comparator,
-          *file_metadata, depend_map, nullptr,
+          options, picker->env_options(), *file_metadata, depend_map, nullptr,
           mutable_cf_options_.prefix_extractor.get(), table_reader_ptr, nullptr,
           false, arena, true, -1);
     };
@@ -2726,8 +2728,7 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
                            const DependenceMap& depend_map, Arena* arena,
                            TableReader** table_reader_ptr) {
       return picker->table_cache()->NewIterator(
-          options, picker->env_options(), ioptions_.internal_comparator,
-          *file_metadata, depend_map, nullptr,
+          options, picker->env_options(), *file_metadata, depend_map, nullptr,
           mutable_cf_options_.prefix_extractor.get(), table_reader_ptr, nullptr,
           false, arena, true, -1);
     };

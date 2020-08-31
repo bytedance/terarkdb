@@ -74,6 +74,7 @@ enum CompactionType {
   kKeyValueCompaction = 0,
   kMapCompaction = 1,
   kGarbageCollection = 2,
+  kPreCreateWalIndex = 3,
 };
 
 struct CompactionParams {
@@ -333,6 +334,12 @@ class Compaction {
   void set_is_trivial_move(bool trivial_move) {
     is_trivial_move_ = trivial_move;
   }
+  void set_is_wal_gc(bool gcwal) {
+    is_wal_gc_ = gcwal;
+  }
+  bool is_wal_gc() {
+    return is_wal_gc_;
+  }
 
   // Used when allow_trivial_move option is set in
   // Universal compaction. Returns true, if the input files
@@ -471,6 +478,7 @@ class Compaction {
 
   // If true, then output map sst
   const CompactionType compaction_type_;
+  bool is_wal_gc_ = false;
 
   // Range limit for inputs
   std::vector<SelectedRange> input_range_;

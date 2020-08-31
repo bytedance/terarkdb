@@ -372,15 +372,22 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
   // We may ignore the dbname when generating the file names.
   const char* kDumbDbName = "";
   for (auto& file : state.sst_delete_files) {
-    candidate_files.emplace_back(JobContext::CandidateFileInfo{
-        MakeTableFileName(kDumbDbName, file.metadata->fd.GetNumber()),
-        state.PushPath(file.path)});
+    if (file.metadata->prop.is_blob_wal()) {
+      candidate_files.emplace_back(JobContext::CandidateFileInfo{
+          LogFileName(kDumbDbName, file.metadata->fd.GetNumber()),
+          state.PushPath(immutable_db_options_.wal_dir)});
+    } else {
+      candidate_files.emplace_back(JobContext::CandidateFileInfo{
+          MakeTableFileName(kDumbDbName, file.metadata->fd.GetNumber()),
+          state.PushPath(file.path)});
+    }
     if (file.metadata->table_reader_handle) {
       table_cache_->Release(file.metadata->table_reader_handle);
     }
     file.DeleteMetadata();
   }
 
+  // TODO some log already deleted by upper
   for (auto file_num : state.log_delete_files) {
     if (file_num > 0) {
       candidate_files.emplace_back(JobContext::CandidateFileInfo{
@@ -459,6 +466,7 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
       case kLogFile:
         keep = ((number >= state.log_number) ||
                 (number == state.prev_log_number) ||
+                (sst_live.find(number) != sst_live.end()) ||
                 (log_recycle_files_set.find(number) !=
                  log_recycle_files_set.end()));
         break;
@@ -678,7 +686,7 @@ uint64_t PrecomputeMinLogNumberToKeep(
 
   // Get min log number containing unflushed data for other column families.
   uint64_t min_log_number_to_keep =
-      vset->PreComputeMinLogNumberBeingDepended(&cfd_to_flush);
+      vset->PreComputeMinLogNumberWithUnflushedData(&cfd_to_flush);
   if (cf_min_log_number_to_keep != 0) {
     min_log_number_to_keep =
         std::min(cf_min_log_number_to_keep, min_log_number_to_keep);

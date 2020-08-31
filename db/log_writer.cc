@@ -10,8 +10,10 @@
 #include "db/log_writer.h"
 
 #include <stdint.h>
+
 #include <iostream>
 
+#include "db/column_family.h"
 #include "db/version_edit.h"
 #include "db/version_set.h"
 #include "options/db_options.h"
@@ -71,7 +73,7 @@ Status Writer::AddRecord(const Slice& slice, size_t num_entries,
   const char* ptr = slice.data();
   size_t left = slice.size();
 
-  assert(recycle_log_files_==0); // Forbiden
+  assert(recycle_log_files_ == 0);  // Forbiden
   // Header size varies depending on whether we are recycling or not.
   const int header_size =
       recycle_log_files_ ? kRecyclableHeaderSize : kHeaderSize;
@@ -125,17 +127,8 @@ Status Writer::AddRecord(const Slice& slice, size_t num_entries,
       // writebatch's content and set writebatch_content_offset only once.
       assert(dest_->GetFileSize() ==
              block_counts_ * kBlockSize + block_offset_);
-      if (WriteBatchInternal::kHeader >= fragment_length) {
-        // write batch's header cross blocks, so it makes we need add two header
-        // before first value in this write batch
-        wt->wal_offset_of_wb_content_ = dest_->GetFileSize() +
-                                        WriteBatchInternal::kHeader +
-                                        2 * header_size;
-      } else {
-        wt->wal_offset_of_wb_content_ =
-            dest_->GetFileSize() + WriteBatchInternal::kHeader + header_size;
-      }
-
+      wt->wal_offset_of_wb_content_ =
+          GetFirstEntryPhysicalOffset(dest_->GetFileSize(), header_size, avail);
       assert(wt->wal_offset_of_wb_content_ % kBlockSize >=
              (uint64_t)header_size);
     }
@@ -200,12 +193,15 @@ Status Writer::EmitPhysicalRecord(RecordType t, const char* ptr, size_t n) {
 }
 
 WalBlobReader::WalBlobReader(std::unique_ptr<RandomAccessFile>&& src,
-                             uint64_t log_no, const ImmutableDBOptions& idbo)
+                             uint64_t log_no, const ImmutableDBOptions& idbo,
+                             const EnvOptions& eo)
     : blob_cache_(idbo.blob_cache),
       wal_header_size_(idbo.recycle_log_file_num > 0 ? kRecyclableHeaderSize
                                                      : kHeaderSize),
       log_number_(log_no),
-      src_(std::move(src)) {}
+      src_(std::move(src)),
+      ioptions_(idbo),
+      env_options_(eo) {}
 
 class Blob {
  public:
@@ -219,7 +215,7 @@ class Blob {
     size_ = 0;
   }
 
-  void Shrink(size_t head_size, size_t record_header_size) {
+  void ShrinkVal(size_t head_size, size_t record_header_size) {
     assert(head_size != 0 && size_ == slice_.size() && buf_ == slice_.data());
     size_t kBlockAvailSize = kBlockSize - record_header_size;
 
@@ -241,9 +237,7 @@ class Blob {
     slice_ = Slice(buf_, size_);  // tailing unused space just wasted
   }
 
-  uint64_t DataSize() {
-    return size_;
-  }
+  uint64_t DataSize() { return size_; }
 
   Slice slice_;
   char* buf_ = nullptr;
@@ -263,7 +257,8 @@ void DeleteCachedEntry(const Slice& /*key*/, void* Blob) {
 }
 
 // generate an id from the file
-void WalBlobReader::GenerateCacheUniqueId(const Slice& log_handle, std::string& uid) {
+void WalBlobReader::GenerateCacheUniqueId(const Slice& log_handle,
+                                          std::string& uid) const {
   char prefix_id[kMaxCacheKeyPrefixSize];
   size_t prefix_length =
       src_->GetUniqueId(&prefix_id[0], kMaxCacheKeyPrefixSize);
@@ -275,37 +270,26 @@ void WalBlobReader::GenerateCacheUniqueId(const Slice& log_handle, std::string& 
 }
 
 Status WalBlobReader::GetBlob(const Slice& log_handle,
-                              GetContext* get_context) {
-  auto set_value = [&](Cache::Handle* handle) {
-    Blob* b = (Blob*)blob_cache_->Value(handle);
-    bool matched;
-    get_context->SaveValue(
-        ParsedInternalKey(log_handle, kMaxSequenceNumber, kTypeValue),
-        LazyBuffer(b->slice_,
-                   std::move(Cleanable(
-                       [](void* c, void* h) {
-                         static_cast<Cache*>(c)->Release(
-                             static_cast<Cache::Handle*>(h), true);
-                       },
-                       blob_cache_.get(), handle)),
-                   log_number_),
-        &matched);
-    assert(matched);
-    get_context->MarkKeyMayExist();
+                              LazyBuffer* lazy_blob) const {
+  assert(lazy_blob);
+  auto release_cache = [](void* c, void* h) {
+    static_cast<Cache*>(c)->Release(static_cast<Cache::Handle*>(h), false);
   };
-
   // checkout blob_cache
-  assert(log_handle.size() == sizeof(ValueIndex::DefaultLogHandle));
+  assert(log_handle.size() == sizeof(DefaultLogHandle));
   std::string blob_uid;
   GenerateCacheUniqueId(log_handle, blob_uid);
   Cache::Handle* handle = blob_cache_->Lookup(blob_uid);
   if (handle) {
-    set_value(handle);
+    Blob* b = (Blob*)blob_cache_->Value(handle);
+    lazy_blob->reset(b->slice_,
+                     Cleanable(release_cache, blob_cache_.get(), handle),
+                     log_number_);
     return Status::OK();
   }
 
   // decode and calculate sizes
-  ValueIndex::DefaultLogHandle content(log_handle);
+  DefaultLogHandle content(log_handle);
   size_t blob_physical_length =
       GetPhysicalLength(content.length, content.offset, wal_header_size_);
   size_t head_size = content.length;
@@ -321,7 +305,7 @@ Status WalBlobReader::GetBlob(const Slice& log_handle,
   Blob* blob = new Blob(blob_physical_length);
   Status s = src_->Read(content.offset, blob_physical_length, &(blob->slice_),
                         blob->buf_);
-  assert(s.ok()); // TODO return status
+  assert(s.ok());  // TODO return status
   assert(blob->slice_.size() != 0 &&
          blob->slice_.size() == blob_physical_length);
   if (head_size != 0) {
@@ -329,7 +313,8 @@ Status WalBlobReader::GetBlob(const Slice& log_handle,
         terark::Crc16c_update(0, blob->slice_.data(), head_size);
     // assert(content.head_crc == head_crc);
     if (content.head_crc != head_crc) {
-      std::cout << "head crc wrong" << std::endl;
+      // return Status::IOError("");
+      assert(false);
     }
   }
   if (tail_size != 0) {
@@ -337,7 +322,7 @@ Status WalBlobReader::GetBlob(const Slice& log_handle,
         0, blob->slice_.data() + blob->slice_.size() - tail_size, tail_size);
     // assert(tail_crc == content.tail_crc);
     if (tail_crc != content.tail_crc) {
-      std::cout << "tail crc wrong" << std::endl;
+      assert(false);  // TODO
     }
   }
   // check middletype crc
@@ -355,29 +340,199 @@ Status WalBlobReader::GetBlob(const Slice& log_handle,
         crc32c::Value(header + 6, length + wal_header_size_ - 6);
     assert(actual_crc == expected_crc);
     header += kBlockSize;
+
+    (void)type, (void)actual_crc, (void)expected_crc;
   }
 
   // insert into blob_cache, and return
-  if (head_size) {
+  if (head_size != content.length) {
     // cross more than one block, need remove middle log record header
-    blob->Shrink(head_size, wal_header_size_);
+    blob->ShrinkVal(head_size, wal_header_size_);
   }
   s = blob_cache_->Insert(blob_uid, blob, sizeof(Blob) + blob->DataSize(),
                           &DeleteCachedEntry<Blob>, &handle);
   assert(s.ok());
-  set_value(handle);
+  Blob* b = (Blob*)blob_cache_->Value(handle);
+  lazy_blob->reset(b->slice_,
+                   Cleanable(release_cache, blob_cache_.get(), handle),
+                   log_number_);
   return Status::OK();
 }
 
-InternalIterator* WalBlobReader::NewIterator(
-    const ReadOptions& read_options, const SliceTransform* /*prefix_extractor*/,
-    Arena* arena, bool /*skip_filters*/, bool /*for_compaction*/) {
+void WalBlobReader::GetCFWalTupleOffsets(uint32_t cf_id, uint64_t* cf_offset,
+                                         uint64_t* cf_entries) {
+  const WalIndexFooter* wif = reinterpret_cast<const WalIndexFooter*>(
+      index_file_data_.data() + index_file_data_.size() -
+      sizeof(WalIndexFooter));
+
+  uint32_t cf_phy_index_size = wif->count_ * sizeof(WalCfIndex);
+  Slice footer(index_file_data_.data() + index_file_data_.size() -
+                   sizeof(WalIndexFooter) - cf_phy_index_size,
+               cf_phy_index_size);
+
+  bool find = false;
+  for (uint32_t i = 0; i < wif->count_; ++i) {
+    const WalCfIndex* wci = reinterpret_cast<const WalCfIndex*>(
+        footer.data() + i * sizeof(WalCfIndex));
+    if (wci->id_ == cf_id) {
+      *cf_offset = wci->offset_;
+      *cf_entries = wci->count_;
+      find = true;
+    }
+  }
+  assert(find ||
+         wif->count_ == 0);  // TODO maybe skip not founded and return status
+}
+
+InternalIterator* WalBlobReader::NewIteratorWithCF(
+    const ReadOptions&, uint32_t cf_id, const ImmutableCFOptions& ioptions,
+    Arena* arena) {
+  const std::string filename = LogIndexFileName(ioptions_.wal_dir, log_number_);
+  uint64_t file_size = 0;
+  auto s = ioptions_.env->GetFileSize(filename, &file_size);
+
+  if (s.ok() && (!index_file_data_.valid() || index_file_data_.empty())) {
+    // since many cf may shared same wal, but only mmap index file into
+    // index_file_data once
+    EnvOptions env_options_for_index = env_options_;
+    env_options_for_index.use_mmap_reads = true;
+    env_options_for_index.use_direct_reads = false;
+    s = ioptions_.env->NewRandomAccessFile(filename, &src_idx_,
+                                           env_options_for_index);
+    if (s.ok()) {
+      s = src_idx_->Read(0, file_size, &index_file_data_,
+                         nullptr /*mmap read*/);
+    }
+  }
+  if (s.ok() && index_file_data_.size() != file_size) {
+    // TODO more details
+    s = Status::IOError("Invalid file size");
+  }
+  if (!s.ok()) {
+    return NewErrorInternalIterator(s, arena);
+  }
+
+  uint64_t cf_offset = 0;
+  uint64_t cf_entries = 0;
+  GetCFWalTupleOffsets(cf_id, &cf_offset, &cf_entries);
+  assert(cf_offset % kWalEntrySize == 0);
   if (arena == nullptr) {
-    return new BlobWalIterator();
+    return new WalBlobIterator(this, ioptions, cf_offset, cf_entries);
   } else {
-    auto* mem = arena->AllocateAligned(sizeof(BlobWalIterator));
-    return new (mem) BlobWalIterator();
+    auto* mem = arena->AllocateAligned(sizeof(WalBlobIterator));
+    return new (mem) WalBlobIterator(this, ioptions, cf_offset, cf_entries);
   }
 }
+
+Status WalBlobReader::GetFromHandle(const ReadOptions&, const Slice& handle,
+                                    GetContext* get_context) {
+  LazyBuffer value;
+  auto s = GetBlob(handle, &value);
+  if (s.ok()) {
+    bool unused;
+    bool read_more = get_context->SaveValue(
+        ParsedInternalKey(handle, kMaxSequenceNumber, kTypeValue),
+        std::move(value), &unused);
+    (void)read_more;
+    assert(!read_more);
+    assert(unused);
+  }
+  return s;
+}
+
+void WalBlobIterator::Next() {
+  // TODO key in wal does not merge repeated key, need do it when iterator it
+  ++i_;
+  if (Valid()) {
+    FetchKV();
+    if (!last_key_.empty()) {
+      (void)ioptions_;
+      assert(ioptions_.internal_comparator.Compare(iter_key_.GetKey(),
+                                                   Slice(last_key_)) > 0);
+    }
+    last_key_.assign(iter_key_.GetKey().data(), iter_key_.GetKey().size());
+  }
+}
+
+Status WalBlobIterator::FetchKV() {
+  uint64_t seq;
+  ValueType type;
+
+  // unpack seq & type
+  const char* cur_kv_base = cf_data_.data() + i_ * kWalEntrySize;
+  Slice packed_seq(cur_kv_base + 2 * kDefaultLogHandleSize, 8);
+  UnPackSequenceAndType(*(reinterpret_cast<const uint64_t*>(packed_seq.data())),
+                        &seq, &type);
+  assert(type == kTypeMerge || type == kTypeValue);
+
+  // read userkey use WalBlobReader getblob with handle
+  // in SeparateCf, key has already remove prefixed length, so this handle point
+  // to user key data
+  Slice k_handle(cur_kv_base, kDefaultLogHandleSize);
+  LazyBuffer lazy_key;
+  reader_->GetBlob(k_handle, &lazy_key);
+  auto s = lazy_key.fetch();
+  assert(s.ok() && lazy_key.slice().size() != 0);
+  iter_key_.SetInternalKey(lazy_key.slice(), seq, type);
+  parsed_ikey_ = ParsedInternalKey(lazy_key.slice(), seq, type);
+
+  // read user value
+  Slice v_handle(cur_kv_base + kDefaultLogHandleSize, kDefaultLogHandleSize);
+  reader_->GetBlob(v_handle, &value_);
+  s = value_.fetch();
+  assert(value_.valid());
+  assert(s.ok());
+
+  return s;
+}
+
+Status WalIndexWriter::WriteCF(
+    uint32_t cf_id,
+    const std::vector<std::pair<ParsedInternalKey, WalEntry>>& sorted_entries) {
+  uint32_t crc32 = 0;
+
+  WalCfIndex wci;
+  wci.id_ = cf_id;
+  wci.offset_ = index_file_->GetFileSize();
+  assert(wci.offset_ % sizeof(WalEntry) == 0);
+  wci.count_ = sorted_entries.size();
+
+  Status status;
+  for (auto& t : sorted_entries) {
+    DefaultLogHandle content(t.second.GetSlice());
+    assert(content.length != 0);
+    status = index_file_->Append(t.second.GetSlice());
+    crc32 = crc32c::Extend(crc32, t.second.GetSlice().data(),
+                           t.second.GetSlice().size());
+    if (!status.ok()) {
+      return status;
+    }
+  }
+  wci.crc32_ = crc32;
+
+  cf_indexes_.push_back(wci);
+  return status;
+}
+
+Status WalIndexWriter::WriteFooter() {
+  uint32_t crc32 = 0;
+  for (auto& i : cf_indexes_) {
+    auto s = index_file_->Append(Slice((char*)&i, sizeof(WalCfIndex)));
+    if (!s.ok()) {
+      return s;
+    }
+    crc32 = crc32c::Extend(crc32, (char*)&i, sizeof(WalCfIndex));
+  }
+
+  WalIndexFooter wif;
+  wif.count_ = static_cast<uint32_t>(cf_indexes_.size());
+  wif.crc32_ = crc32c::Extend(crc32, (char*)&wif.count_, 4);
+  auto s = index_file_->Append(Slice((char*)&wif, sizeof(wif)));
+  if (!s.ok()) {
+    return s;
+  }
+  return s;
+}
+
 }  // namespace log
 }  // namespace rocksdb

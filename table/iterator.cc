@@ -8,6 +8,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "rocksdb/iterator.h"
+
 #include "db/dbformat.h"
 #include "table/internal_iterator.h"
 #include "table/iterator_wrapper.h"
@@ -22,9 +23,7 @@ Cleanable::Cleanable() {
 
 Cleanable::~Cleanable() { DoCleanup(); }
 
-Cleanable::Cleanable(Cleanable&& other) noexcept {
-  *this = std::move(other);
-}
+Cleanable::Cleanable(Cleanable&& other) noexcept { *this = std::move(other); }
 
 Cleanable& Cleanable::operator=(Cleanable&& other) noexcept {
   if (this != &other) {
@@ -115,7 +114,7 @@ LazyBuffer CombinedInternalIterator::value() const {
     return iter_->value();
   }
   LazyBuffer v = separate_helper_->TransToCombined(
-      pikey.user_key, pikey.sequence, std::move(iter_->value()));
+      pikey.user_key, pikey.sequence, iter_->value());
   auto s = v.fetch();
   if (!s.ok()) {
     v.reset(std::move(s));
@@ -135,7 +134,7 @@ LazyBuffer CombinedInternalIterator::value(const Slice& user_key) const {
     return iter_->value();
   }
   return separate_helper_->TransToCombined(user_key, pikey.sequence,
-                                           std::move(iter_->value()));
+                                           iter_->value());
 }
 
 namespace {

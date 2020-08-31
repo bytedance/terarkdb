@@ -784,7 +784,7 @@ Status DBImpl::RecoverLogFiles(const std::vector<uint64_t>& log_numbers,
       // That's why we set ignore missing column families to true
       bool has_valid_writes = false;
       status = WriteBatchInternal::InsertInto(
-          &batch, column_family_memtables_.get(), &flush_scheduler_, true,
+          &batch, column_family_memtables_.get(), &flush_scheduler_, -1, true,
           log_number, this, false /* concurrent_memtable_writes */,
           next_sequence, &has_valid_writes, seq_per_batch_, batch_per_txn_);
       MaybeIgnoreError(&status);

@@ -8,6 +8,10 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #include "db/db_impl.h"
 
+#include <atomic>
+
+#include "db/log_format.h"
+
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
 #endif
@@ -223,14 +227,18 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
           static_cast<int64_t>(mutable_db_options_.delayed_write_rate / 8),
           kDefaultLowPriThrottledRate))),
       last_batch_group_size_(0),
+      index_creating_(0),
       unscheduled_flushes_(0),
       unscheduled_compactions_(0),
       unscheduled_garbage_collections_(0),
+      unscheduled_wal_index_creation_(0),
       bg_bottom_compaction_scheduled_(0),
       bg_compaction_scheduled_(0),
       bg_garbage_collection_scheduled_(0),
+      bg_wal_index_creation_scheduled_(0),
       num_running_compactions_(0),
       num_running_garbage_collections_(0),
+      num_running_wal_index_creations_(0),
       bg_flush_scheduled_(0),
       num_running_flushes_(0),
       bg_purge_scheduled_(0),
@@ -1302,6 +1310,175 @@ void DBImpl::BackgroundCallPurge() {
   // that case, all DB variables will be dealloacated and referencing them
   // will cause trouble.
   mutex_.Unlock();
+}
+
+void DBImpl::BackgroundCallCreateWalIndex() {
+  if (wal_queue_.empty()) {
+    return;
+  }
+
+  log_write_mutex_.Lock();
+  std::deque<uint64_t> wals;
+  for (auto wal : wal_queue_) {
+    wals.push_back(wal);
+  }
+  wal_queue_.clear();
+  log_write_mutex_.Unlock();
+
+  for (auto& log_no : wals) {
+    Status s = CreateWalIndex(log_no);
+    if (!s.ok()) {
+      // TODO Background Error
+      assert(false);
+    }
+  }
+
+  index_creating_.store(false, std::memory_order_relaxed);
+}
+
+Status DBImpl::CreateWalIndex(uint64_t log_number) {
+  assert(immutable_db_options_.recycle_log_file_num == 0);
+  auto idx_fname = LogIndexFileName(immutable_db_options_.wal_dir, log_number);
+  auto tmp_idx_fname = idx_fname + ".tmp";
+  auto status = immutable_db_options_.env->FileExists(idx_fname);
+  if (!status.IsNotFound()) {
+    // index file already exist or error
+    return status;
+  }
+  status = immutable_db_options_.env->FileExists(tmp_idx_fname);
+  if (!status.IsNotFound()) {
+    // tmp index file already exist or error
+    return status;
+  }
+
+  uint64_t wal_header_size = log::kHeaderSize;
+  // Open the log file
+  std::string fname = LogFileName(immutable_db_options_.wal_dir, log_number);
+  std::unique_ptr<SequentialFile> file;
+  status = env_->NewSequentialFile(fname, &file,
+                                   env_->OptimizeForLogRead(env_options_));
+  if (!status.ok()) {
+    MaybeIgnoreError(&status);
+    if (!status.ok()) {
+      return status;
+    }
+  }
+  std::unique_ptr<SequentialFileReader> file_reader(
+      new SequentialFileReader(std::move(file), fname));
+
+#ifndef NDEBUG
+  std::unique_ptr<RandomAccessFile> rd_file;
+  auto s = env_->NewRandomAccessFile(fname, &rd_file, env_options_);
+  if (!s.ok()) {
+    return s;
+  }
+  std::unique_ptr<RandomAccessFileReader> rd_file_reader(
+      new RandomAccessFileReader(std::move(rd_file), fname, env_));
+  char tmp_scratch[10];
+  Slice content;
+#endif
+
+  // reader wal and collect cf data
+  log::Reader reader(immutable_db_options_.info_log, std::move(file_reader),
+                     nullptr, true, log_number, false);
+  auto arena_size = mutable_db_options_.max_wal_size / 8;
+  Arena arena(arena_size);
+  std::map<uint32_t, std::vector<std::pair<ParsedInternalKey, WalEntry>>>
+      wal_entry_map;
+  std::string scratch;
+  Slice record;
+  while (reader.ReadRecord(&record, &scratch)) {
+    assert(reader.LastRecordOffset() == 0 ||
+           reader.LastRecordOffset() >= log::kHeaderSize);
+    assert(record.size() >= WriteBatchInternal::kHeader);
+
+    WriteBatch batch;
+    WriteBatchInternal::SetContents(&batch, record);
+
+    auto batch_content_offset = [&] {
+      uint64_t physical_record_offset = reader.LastRecordOffset();
+      // 1. check whether need padding
+      uint64_t cur_block_avail =
+          log::kBlockSize - reader.LastRecordOffset() % log::kBlockSize;
+      if (cur_block_avail <= wal_header_size) {
+        assert(wal_header_size == log::kHeaderSize);
+        physical_record_offset += cur_block_avail;
+      }
+
+      // 2. check whether WriteBatchHeader cross block
+      uint64_t write_batch_offset = physical_record_offset + wal_header_size;
+      cur_block_avail = log::kBlockSize - write_batch_offset % log::kBlockSize;
+      if (cur_block_avail <= WriteBatchInternal::kHeader) {
+        return write_batch_offset + WriteBatchInternal::kHeader +
+               wal_header_size;
+      }
+      return write_batch_offset + WriteBatchInternal::kHeader;
+    };
+
+    uint64_t bco = batch_content_offset();
+#ifdef NDEBUG
+    if (log::kBlockSize - bco % log::kBlockSize >= 10) {
+      auto s = rd_file_reader->Read(bco, 10, &content, &tmp_scratch[0]);
+      assert(s.ok());
+      assert(content.compare(Slice(
+              batch.Data().c_str() + WriteBatchInternal::kHeader, 10)) == 0);
+    }
+#endif
+
+    status = WriteBatchInternal::SeparateCfData(
+        &batch, &arena, bco, wal_header_size, &wal_entry_map);
+    if (!status.ok()) {
+      return status;
+    }
+  }
+
+  // create index file and sync
+  std::unique_ptr<WritableFile> index_file;
+  status = NewWritableFile(immutable_db_options_.env, tmp_idx_fname,
+                           &index_file, env_options_);
+  if (!status.ok()) {
+    return status;
+  }
+  index_file->SetIOPriority(Env::IOPriority::IO_LOW);
+
+  log::WalIndexWriter wi(std::move(index_file), tmp_idx_fname, env_options_,
+                         immutable_db_options_);
+  for (auto& cf_entries : wal_entry_map) {
+    uint32_t cf_id = cf_entries.first;
+    auto get_ic = [&]() -> const InternalKeyComparator* {
+      InstrumentedMutexLock lock(&mutex_);
+      auto cfd = versions_->GetColumnFamilySet()->GetColumnFamily(cf_id);
+      return cfd == nullptr ? nullptr : &cfd->internal_comparator();
+    };
+    auto ic = get_ic();  // DON'T use reference
+    if (ic == nullptr) {
+      // cf dropped ?
+      continue;
+    }
+    auto cmp = [&](const std::pair<ParsedInternalKey, WalEntry>& a,
+                   const std::pair<ParsedInternalKey, WalEntry>& b) {
+      return ic->Compare(a.first, b.first) < 0;
+    };
+    try {
+      // sort by internal key
+      std::stable_sort(cf_entries.second.begin(), cf_entries.second.end(), cmp);
+      // write to index file
+      status = wi.WriteCF(cf_id, cf_entries.second);
+    } catch (const std::bad_alloc& ex) {
+      status = Status::BadAlloc();
+    }
+    if (!status.ok()) {
+      break;
+    }
+  }
+  if (status.ok()) {
+    status = wi.Finish();
+  }
+  if (status.ok()) {
+    status = env_->RenameFile(tmp_idx_fname, idx_fname);
+  }
+
+  return status;
 }
 
 namespace {

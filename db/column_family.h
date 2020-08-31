@@ -278,7 +278,8 @@ class ColumnFamilyData {
                              const std::vector<SequenceNumber>& snapshots,
                              LogBuffer* log_buffer);
 
-  Compaction* PickGarbageCollection(const MutableCFOptions& mutable_options,
+  Compaction* PickGarbageCollection(uint64_t max_log_number_to_gc,
+                                    const MutableCFOptions& mutable_options,
                                     LogBuffer* log_buffer);
   // Check if the passed range overlap with any running compactions.
   // REQUIRES: DB mutex held
@@ -410,6 +411,8 @@ class ColumnFamilyData {
   Status AddDirectories();
 
   Directory* GetDataDir(size_t path_id) const;
+  std::string GetWalDir() const;
+  void ReleaseWal(uint64_t log_no);
 
  private:
   friend class ColumnFamilySet;

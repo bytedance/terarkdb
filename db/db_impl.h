@@ -736,12 +736,6 @@ class DBImpl : public DB {
   static Status CreateAndNewDirectory(Env* env, const std::string& dirname,
                                       std::unique_ptr<Directory>* directory);
 
-  const MutableCFOptions* GetMutableCfOption(uint64_t cf_id) {
-    return versions_->GetColumnFamilySet()
-        ->GetColumnFamily(cf_id)
-        ->GetLatestMutableCFOptions();
-  }
-
  protected:
   Env* const env_;
   const std::string dbname_;
@@ -1123,6 +1117,8 @@ class DBImpl : public DB {
   void SchedulePendingPurge(const std::string& fname,
                             const std::string& dir_to_sync, FileType type,
                             uint64_t number, int job_id);
+  void SchedulePendingWalIndexCreation(uint64_t);
+
   static void BGWorkCompaction(void* arg);
   static void BGWorkGarbageCollection(void* arg);
   // Runs a pre-chosen universal compaction involving bottom level in a
@@ -1130,12 +1126,16 @@ class DBImpl : public DB {
   static void BGWorkBottomCompaction(void* arg);
   static void BGWorkFlush(void* db);
   static void BGWorkPurge(void* arg);
+  static void BGWorkCreateWalIndex(void* arg);
+
   static void UnscheduleCallback(void* arg);
   void BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
                                 Env::Priority bg_thread_pri);
   void BackgroundCallGarbageCollection();
   void BackgroundCallFlush();
   void BackgroundCallPurge();
+  void BackgroundCallCreateWalIndex();
+
   Status BackgroundCompaction(bool* madeProgress, JobContext* job_context,
                               LogBuffer* log_buffer,
                               PrepickedCompaction* prepicked_compaction);
@@ -1429,6 +1429,9 @@ class DBImpl : public DB {
   // A queue to store filenames of the files to be purged
   std::deque<PurgeFileInfo> purge_queue_;
 
+  std::deque<uint64_t> wal_queue_;
+  std::atomic<bool> index_creating_;
+
   // A pointer to the file numbers that have been assigned to certain
   // JobContext. Current implementation tracks SST, WAL & MANIFEST files.
   std::unordered_set<const std::vector<uint64_t>*> files_grabbed_for_purge_;
@@ -1446,6 +1449,7 @@ class DBImpl : public DB {
   int unscheduled_flushes_;
   int unscheduled_compactions_;
   int unscheduled_garbage_collections_;
+  int unscheduled_wal_index_creation_;
 
   // count how many background compactions are running or have been scheduled in
   // the BOTTOM pool
@@ -1458,11 +1462,18 @@ class DBImpl : public DB {
   // scheduled
   int bg_garbage_collection_scheduled_;
 
+  // count how many background wal index creation are running or have been
+  // scheduled
+  int bg_wal_index_creation_scheduled_;
+
   // stores the number of compactions are currently running
   int num_running_compactions_;
 
   // stores the number of garbage collections are currently running
   int num_running_garbage_collections_;
+
+  // stores the number of wal index creation are currently running
+  int num_running_wal_index_creations_;
 
   // number of background memtable flush jobs, submitted to the HIGH pool
   int bg_flush_scheduled_;
@@ -1634,8 +1645,12 @@ class DBImpl : public DB {
   bool ShouldntRunManualCompaction(ManualCompactionState* m);
   bool HaveManualCompaction(ColumnFamilyData* cfd);
   bool MCOverlap(ManualCompactionState* m, ManualCompactionState* m1);
+  bool ShouldCreateWalIndex();
 
   size_t GetWalPreallocateBlockSize(uint64_t write_buffer_size) const;
+
+  Status CreateWalIndex(uint64_t log_file_no);
+
   Env::WriteLifeTimeHint CalculateWALWriteHint() { return Env::WLTH_SHORT; }
 
   // When set, we use a separate queue for writes that dont write to memtable.

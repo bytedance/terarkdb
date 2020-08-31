@@ -8,6 +8,8 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #include "db/dbformat.h"
 
+#include "db/log_format.h"
+
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
 #endif
@@ -15,7 +17,10 @@
 #include <inttypes.h>
 #include <stdio.h>
 
+#include <iostream>
+
 #include "db/log_writer.h"
+#include "db/write_batch_internal.h"
 #include "monitoring/perf_context_imp.h"
 #include "port/port.h"
 #include "util/coding.h"
@@ -124,6 +129,7 @@ int InternalKeyComparator::Compare(const ParsedInternalKey& a,
     if (a.sequence > b.sequence) {
       r = -1;
     } else if (a.sequence < b.sequence) {
+      std::cout << a.sequence << __LINE__ << b.sequence << std::endl;
       r = +1;
     } else if (a.type > b.type) {
       r = -1;
@@ -267,15 +273,16 @@ ValueIndex::ValueIndex(const Slice& slice) {
   }
 }
 
-size_t GetPhysicalLength(uint32_t logical_length, uint64_t physical_offset,
-                           size_t wal_header_size) {
+size_t GetPhysicalLength(uint64_t logical_length, uint64_t physical_offset,
+                         uint64_t wal_header_size) {
   // physical_offset is data size ahead of current data, it can end at tail of
   // last block exactly which make it be zero. when it is 0, first block has no
   // remain space
-  assert(physical_offset >= wal_header_size);
+  assert(physical_offset == 0 || physical_offset >= wal_header_size);
   if (logical_length == 0) {
     return 0;
   }
+
   size_t first_block_remain_size =
       (log::kBlockSize - physical_offset % log::kBlockSize) % log::kBlockSize;
 
@@ -300,4 +307,21 @@ uint64_t GetPhysicalOffset(uint64_t ahead_data_offset, size_t ahead_data_size,
   }
   return result;
 }
+
+// "record" refer to a logical record of wal which is a whole writebatch
+// "entry" refer to a logical key-value-pair in write batch
+uint64_t GetFirstEntryPhysicalOffset(uint64_t batch_record_offset,
+                                     uint64_t header_size, uint64_t avail_) {
+  uint64_t avail = log::kBlockSize - batch_record_offset % log::kBlockSize -
+                   log::kHeaderSize;
+  assert(avail == avail_);
+  if (WriteBatchInternal::kHeader >= avail) {
+    // write batch's header cross blocks, so it makes we need add two header
+    // before first entry in this write batch
+    return batch_record_offset + WriteBatchInternal::kHeader + 2 * header_size;
+  } else {
+    return batch_record_offset + WriteBatchInternal::kHeader + header_size;
+  }
+}
+
 }  // namespace rocksdb

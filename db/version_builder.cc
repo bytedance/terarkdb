@@ -162,7 +162,6 @@ class VersionBuilder::Rep {
   // on invalid levels. The version is not consistent if in the end the files
   // on invalid levels don't cancel out.
   std::map<int, std::unordered_set<uint64_t>> invalid_levels_;
-  std::unordered_map<uint64_t, uint64_t>* used_entries_ = nullptr;
   // Whether there are invalid new files or invalid deletion on levels larger
   // than num_levels_.
   bool has_invalid_levels_;
@@ -240,7 +239,6 @@ class VersionBuilder::Rep {
   }
 
   void PutSst(FileMetaData* f, int level) {
-    // not just sst include blob wal
     auto ib = dependence_map_.emplace(f->fd.GetNumber(),
                                       DependenceItem{0, 0, false, level, f, 0});
     f->Ref();
@@ -305,7 +303,6 @@ class VersionBuilder::Rep {
 
   void CalculateDependence(bool finish, bool is_open_db = false) {
     if (!finish && (!is_open_db || new_deleted_files_ < 65536)) {
-      // TODO
       return;
     }
     ++dependence_version_;
@@ -380,7 +377,6 @@ class VersionBuilder::Rep {
     // 1. map sst depend hiden sst
     // 2. key sst depend blob sst/wal
     for (auto& dependence : f->prop.dependence) {
-      (*used_entries_)[dependence.file_number] += dependence.entry_count;
       auto item = TransFileNumber(dependence.file_number);
       if (item == nullptr) {
         fprintf(stderr, "Missing dependence files");
@@ -545,12 +541,8 @@ class VersionBuilder::Rep {
     }
   }
 
-  void SetContext(VersionSet* vset) {
-    used_entries_ = vset->GetMapOfUsedEntries();
-  }
   // Apply all of the edits in *edit to the current state.
   void Apply(VersionEdit* edit) {
-    assert(used_entries_);
     Init();
     CheckConsistency(base_vstorage_, false);
     if (debugger_) {
@@ -668,8 +660,6 @@ class VersionBuilder::Rep {
     }
     for (auto& pair : dependence_map_) {
       auto& item = pair.second;
-      item.f->num_antiquation =
-          item.f->prop.num_entries - (*used_entries_)[pair.first];
       if (item.level == -1) {
         if (item.f->is_gc_forbidden()) {
           push_old_file(item.f);
@@ -737,10 +727,10 @@ class VersionBuilder::Rep {
         auto file_read_hist =
             level >= 0 ? internal_stats->GetFileReadHist(level) : nullptr;
         table_cache_->FindTable(
-            env_options_, *base_vstorage_->InternalComparator(), file_meta->fd,
-            &file_meta->table_reader_handle, prefix_extractor, false /*no_io */,
-            true /* record_read_stats */, file_read_hist, false, level,
-            prefetch_index_and_filter_in_cache, file_meta->prop.is_map_sst());
+            env_options_, file_meta->fd, &file_meta->table_reader_handle,
+            prefix_extractor, false /*no_io */, true /* record_read_stats */,
+            file_read_hist, false, level, prefetch_index_and_filter_in_cache,
+            file_meta->prop.is_map_sst());
         if (file_meta->table_reader_handle != nullptr) {
           // Load table_reader
           file_meta->fd.table_reader = table_cache_->GetTableReaderFromHandle(
@@ -783,9 +773,9 @@ class VersionBuilder::Rep {
         auto* file_meta = files_meta[file_idx];
         std::shared_ptr<const TableProperties> properties;
 
-        auto s = table_cache_->GetTableProperties(
-            env_options_, *base_vstorage_->InternalComparator(), *file_meta,
-            &properties, prefix_extractor, false /*no_io */);
+        auto s = table_cache_->GetTableProperties(env_options_, *file_meta,
+                                                  &properties, prefix_extractor,
+                                                  false /*no_io */);
 
         if (s.ok() && properties) {
           file_meta->prop.num_entries = properties->num_entries;
@@ -829,10 +819,6 @@ bool VersionBuilder::CheckConsistencyForNumLevels() {
   return rep_->CheckConsistencyForNumLevels();
 }
 
-void VersionBuilder::SetContext(VersionSet* vset) {
-  // now context of versionbuider only has used_entries
-  rep_->SetContext(vset);
-}
 void VersionBuilder::Apply(VersionEdit* edit) { rep_->Apply(edit); }
 
 void VersionBuilder::SaveTo(VersionStorageInfo* vstorage) {

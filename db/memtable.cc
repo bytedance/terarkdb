@@ -654,7 +654,7 @@ static bool SaveValue(void* arg, const Slice& internal_key, const char* value) {
     // this assert
     assert(value_index.log_type == ValueIndex::kDefault);
 
-    value_with_index.remove_prefix(ValueIndex::kDefaultLogIndexSize);
+    value_with_index.remove_prefix(kDefaultLogIndexSize);
     return value_with_index;
   };
   Saver* s = reinterpret_cast<Saver*>(arg);

@@ -46,6 +46,7 @@ enum FileType {
 // in the db named by "dbname".  The result will be prefixed with
 // "dbname".
 extern std::string LogFileName(const std::string& dbname, uint64_t number);
+extern std::string LogIndexFileName(const std::string& name, uint64_t number);
 
 static const std::string ARCHIVAL_DIR = "archive";
 

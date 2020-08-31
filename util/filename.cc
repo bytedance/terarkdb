@@ -74,6 +74,11 @@ std::string LogFileName(const std::string& name, uint64_t number) {
   return MakeFileName(name, number, "log");
 }
 
+std::string LogIndexFileName(const std::string& name, uint64_t number) {
+  assert(number > 0);
+  return MakeFileName(name, number, "idx");
+}
+
 std::string ArchivalDirectory(const std::string& dir) {
   return dir + "/" + ARCHIVAL_DIR;
 }

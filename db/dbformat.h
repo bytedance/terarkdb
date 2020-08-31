@@ -782,6 +782,112 @@ struct ParsedInternalKeyComparator {
 
   const InternalKeyComparator* cmp;
 };
+extern Slice ArenaPinSlice(const Slice& slice, Arena* arena);
+extern Slice ArenaPinInternalKey(const Slice& user_key, SequenceNumber seq,
+                                 ValueType type, Arena* arena);
+
+struct ValueIndex {
+  static constexpr uint64_t kLogHandleTypeMask = 0xC000000000000000;
+  static constexpr uint64_t kFileNumberMask = 0x3FFFFFFFFFFFFFFF;
+  // If turn on KV-separate, ValueData is replaced by ValueIndex
+  // has 3 part:
+  // 1. file_number (higtest two bit is ContentSize)
+  // 2. index content (optional)
+  // 3. value (in memtable) or meta (optional, in sst)
+  enum LogHandleType : uint64_t {
+    kEmpty = 0x0000000000000000,
+    kDefault = 0x4000000000000000,
+    kReverse0 = 0x8000000000000000,
+    kReverse1 = 0xC000000000000000,
+  };
+
+  ValueIndex(const Slice& s);  // decode a slice to a valueindex
+  Slice Encode(uint64_t file_number, const Slice& content, const Slice& meta);
+
+  uint64_t file_number = uint64_t(-1);
+  LogHandleType log_type = kEmpty;
+  Slice log_handle = Slice::Invalid();
+  Slice meta_or_value = Slice();
+};
+
+struct DefaultLogHandle {
+  uint64_t offset;
+  uint32_t length;
+  uint16_t head_crc;
+  uint16_t tail_crc;
+
+  DefaultLogHandle() {}
+  DefaultLogHandle(const Slice& slice) {
+    static_assert(sizeof(DefaultLogHandle) == 16,
+                  "invalid DefaultLogHandle size");
+    Decode(slice);
+  }
+  static void Encode(uint64_t offset, uint32_t length, uint16_t head_crc,
+                     uint16_t tail_crc, char* buf) {
+    EncodeFixed64(buf, offset);
+    assert(length < size_t{port::kMaxUint32});
+    EncodeFixed32(buf + 8, length);
+
+    EncodeFixed16(buf + 12, head_crc);
+    EncodeFixed16(buf + 14, tail_crc);
+  }
+
+ private:
+  void Decode(const Slice& content) {
+    assert(content.size() >= sizeof(DefaultLogHandle));
+    offset = DecodeFixed64(content.data());
+    length = DecodeFixed32(content.data() + 8);
+    head_crc = DecodeFixed16(content.data() + 12);
+    tail_crc = DecodeFixed16(content.data() + 14);
+  }
+};
+static constexpr uint64_t kDefaultLogHandleSize = sizeof(DefaultLogHandle);
+static constexpr uint64_t kDefaultLogIndexSize =
+    sizeof(uint64_t) + kDefaultLogHandleSize;
+
+static constexpr uint64_t kWalEntrySize = kDefaultLogHandleSize * 2 + 8;
+struct WalEntry {
+  static constexpr uint64_t kMergeIndexMark = 0x8000000000000000;
+
+  WalEntry(uint64_t k_offset, uint64_t v_offset, uint32_t k_len, uint32_t v_len,
+           uint16_t k_h_crc, uint16_t k_t_crc, uint16_t v_h_crc,
+           uint16_t v_t_crc, SequenceNumber s, ValueType t) {
+    DefaultLogHandle::Encode(k_offset, k_len, k_h_crc, k_t_crc, &buf_[0]);
+    DefaultLogHandle::Encode(v_offset, v_len, v_h_crc, v_t_crc,
+                             &buf_[kDefaultLogHandleSize]);
+    uint64_t packed_seq_no_ = PackSequenceAndType(s, t);
+
+    EncodeFixed64(&buf_[kDefaultLogHandleSize * 2], packed_seq_no_);
+    static_assert(sizeof(WalEntry) == kWalEntrySize,
+                  "sizeof(WalEntry) must equal with kWalEntrySize");
+  }
+  char buf_[kWalEntrySize];
+
+  Slice GetSlice() const { return Slice(buf_, kWalEntrySize); }
+};
+
+struct WalCfIndex {
+  uint32_t id_;
+  uint32_t crc32_;
+  uint64_t offset_;
+  uint64_t count_;
+};
+
+struct WalIndexFooter {
+  uint32_t count_;
+  uint32_t crc32_;
+};
+
+static constexpr uint32_t kMajorKeySize =
+    512;  // assume most key size smaller than this
+
+uint64_t GetPhysicalOffset(uint64_t ahead_data_offset, uint64_t ahead_data_size,
+                           uint64_t header_size);
+
+size_t GetPhysicalLength(uint64_t logical_length, uint64_t physical_offset,
+                         uint64_t wal_header_size);
+uint64_t GetFirstEntryPhysicalOffset(uint64_t batch_record_offset,
+                                     uint64_t header_size, uint64_t avail_);
 
 class SeparateHelper {
  public:
@@ -800,7 +906,7 @@ class SeparateHelper {
     if (!port::kLittleEndian) {
       file_number = EndianTransform(file_number, sizeof file_number);
     }
-    return file_number;
+    return file_number & ValueIndex::kFileNumberMask;
   }
   static Slice DecodeValueMeta(const Slice& slice) {
     assert(slice.size() >= sizeof(uint64_t));
@@ -808,7 +914,10 @@ class SeparateHelper {
                  slice.size() - sizeof(uint64_t));
   }
 
-  virtual std::string GetValueMeta(const Slice& internal_key, const LazyBuffer& value) { return ""; }
+  virtual std::string GetValueMeta(const Slice& /*internal_key*/,
+                                   const LazyBuffer& /*value*/) {
+    return "";
+  }
 
   static Status TransToSeparate(const Slice& internal_key, LazyBuffer& value,
                                 uint64_t file_number, const Slice& meta,
@@ -832,64 +941,5 @@ class SeparateHelper {
   virtual LazyBuffer TransToCombined(const Slice& user_key, uint64_t sequence,
                                      LazyBuffer&& value) const = 0;
 };
-
-
-extern Slice ArenaPinSlice(const Slice& slice, Arena* arena);
-extern Slice ArenaPinInternalKey(const Slice& user_key, SequenceNumber seq,
-                                 ValueType type, Arena* arena);
-
-struct ValueIndex {
-  static constexpr uint64_t kLogHandleTypeMask = 0xC000000000000000;
-  static constexpr uint64_t kFileNumberMask = 0x3FFFFFFFFFFFFFFF;
-  // If turn on KV-separate, ValueData is replaced by ValueIndex
-  // has 3 part:
-  // 1. file_number (higtest two bit is ContentSize)
-  // 2. index content (optional)
-  // 3. value (in memtable) or meta (optional, in sst)
-  enum LogHandleType : uint64_t {
-    kEmpty = 0x0000000000000000,
-    kDefault = 0x4000000000000000,
-    kReverse0 = 0x8000000000000000,
-    kReverse1 = 0xC000000000000000,
-  };
-
-  struct DefaultLogHandle {
-    uint64_t offset;
-    uint32_t length;
-    uint16_t head_crc;
-    uint16_t tail_crc;
-
-    DefaultLogHandle(const Slice& slice) {
-      static_assert(sizeof(DefaultLogHandle) == 16,
-                    "invalid DefaultLogHandle size");
-      Decode(slice);
-    }
-
-   private:
-    void Decode(const Slice& content) {
-      assert(content.size() >= sizeof(DefaultLogHandle));
-      offset = DecodeFixed64(content.data());
-      length = DecodeFixed32(content.data() + 8);
-      head_crc = DecodeFixed16(content.data() + 12);
-      tail_crc = DecodeFixed16(content.data() + 14);
-    }
-  };
-  static constexpr uint64_t kDefaultLogIndexSize =
-      sizeof(uint64_t) + sizeof(DefaultLogHandle);
-
-  ValueIndex(const Slice& s);  // decode a slice to a valueindex
-  Slice Encode(uint64_t file_number, const Slice& content, const Slice& meta);
-
-  uint64_t file_number = uint64_t(-1);
-  LogHandleType log_type = kEmpty;
-  Slice log_handle = Slice::Invalid();
-  Slice meta_or_value = Slice();
-};
-
-uint64_t GetPhysicalOffset(uint64_t ahead_data_offset, size_t ahead_data_size,
-                           size_t header_size);
-
-size_t GetPhysicalLength(uint32_t logical_length, uint64_t physical_offset,
-                           size_t wal_header_size);
 
 }  // namespace rocksdb

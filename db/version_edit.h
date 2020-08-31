@@ -102,6 +102,7 @@ struct TablePropertyCache {
   std::vector<Dependence> dependence;       // make these sst hidden
   std::vector<uint64_t> inheritance_chain;  // inheritance chain
 
+  bool is_essence_sst() const { return purpose == kEssenceSst; }
   bool is_map_sst() const { return purpose == kMapSst; }
   bool is_blob_wal() const { return purpose == kLogSst; }
   bool has_range_deletions() const { return (flags & kNoRangeDeletions) == 0; }
@@ -112,6 +113,12 @@ struct TablePropertyCache {
 };
 
 struct FileMetaData {
+  enum GCStatus : uint8_t {
+    kGarbageCollectionForbidden = 0,
+    kGarbageCollectionCandidate = 1,
+    kGarbageCollectionPermitted = 2,
+  };
+
   FileDescriptor fd;
   InternalKey smallest;  // Smallest internal key served by table
   InternalKey largest;   // Largest internal key served by table
@@ -140,7 +147,7 @@ struct FileMetaData {
 
   bool need_upgrade;  // this sst from origin rocksdb
 
-  uint8_t gc_status;  // for gc picker
+  GCStatus gc_status;  // for gc picker
 
   TablePropertyCache prop;  // Cache some TableProperty fields into manifest
 
@@ -193,12 +200,6 @@ struct FileMetaData {
     fd.smallest_seqno = std::min(fd.smallest_seqno, seqno);
     fd.largest_seqno = std::max(fd.largest_seqno, seqno);
   }
-
-  enum {
-    kGarbageCollectionForbidden = 0,
-    kGarbageCollectionCandidate = 1,
-    kGarbageCollectionPermitted = 2,
-  };
 
   bool is_gc_forbidden() const {
     return gc_status == kGarbageCollectionForbidden;

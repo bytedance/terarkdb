@@ -36,6 +36,7 @@
 #include "rocksdb/write_batch.h"
 
 #include <map>
+#include <queue>
 #include <stack>
 #include <stdexcept>
 #include <type_traits>
@@ -45,6 +46,7 @@
 #include "db/db_impl.h"
 #include "db/dbformat.h"
 #include "db/flush_scheduler.h"
+#include "db/log_format.h"
 #include "db/memtable.h"
 #include "db/merge_context.h"
 #include "db/snapshot_impl.h"
@@ -95,15 +97,14 @@ struct ValueIndexBuf {
     uint64_t physical_offset =
         GetPhysicalOffset(wal_offset_of_wb_content,
                           value.data() - batch_content, wal_record_header_size);
-    assert(physical_offset < 1000000000);
     EncodeFixed64(buf_ + 8, physical_offset);
     assert(value.size() < size_t{port::kMaxUint32});
     EncodeFixed32(buf_ + 16, (uint32_t)value.size());
 
     // Add crc of head&tail
-    size_t head_size = std::min(
+    uint64_t head_size = std::min<uint64_t>(
         log::kBlockSize - physical_offset % log::kBlockSize, value.size());
-    size_t tail_size = 0;
+    uint64_t tail_size = 0;
     if (value.size() > head_size) {
       size_t kBlockAvailSize = log::kBlockSize - wal_record_header_size;
       tail_size = (value.size() - head_size) % kBlockAvailSize;
@@ -118,7 +119,7 @@ struct ValueIndexBuf {
   const char* Data() { return buf_; }
 
  private:
-  char buf_[ValueIndex::kDefaultLogIndexSize];
+  char buf_[kDefaultLogIndexSize];
 };
 struct BatchContentClassifier : public WriteBatch::Handler {
   uint32_t content_flags = 0;
@@ -1084,7 +1085,7 @@ class MemTableInserter : public WriteBatch::Handler {
   using DupDetector = std::aligned_storage<sizeof(DuplicateDetector)>::type;
   DupDetector duplicate_detector_;
   bool dup_dectector_on_;
-  size_t blob_size_=-1;
+  size_t blob_size_ = -1;
 
   MemPostInfoMap& GetPostMap() {
     assert(concurrent_memtable_writes_);
@@ -1279,8 +1280,7 @@ class MemTableInserter : public WriteBatch::Handler {
       if (value.size() > blob_size_) {
         tv.Fill(value, wal_offset_of_wb_content_, wal_record_header_size_,
                 batch_content_, log_used_);
-        Slice parts[] = {Slice(tv.Data(), ValueIndex::kDefaultLogIndexSize),
-                         value};
+        Slice parts[] = {Slice(tv.Data(), kDefaultLogIndexSize), value};
         SliceParts value_parts(parts, 2);
         mem_res =
             mem->Add(sequence_, kTypeValueIndex, key, value_parts,
@@ -1615,8 +1615,7 @@ class MemTableInserter : public WriteBatch::Handler {
       if (value.size() > blob_size_) {
         tv.Fill(value, wal_offset_of_wb_content_, wal_record_header_size_,
                 batch_content_, log_used_);
-        Slice parts[] = {Slice(tv.Data(), ValueIndex::kDefaultLogIndexSize),
-                         value};
+        Slice parts[] = {Slice(tv.Data(), kDefaultLogIndexSize), value};
         SliceParts value_parts(parts, 2);
         mem_res = mem->Add(sequence_, kTypeMergeIndex, key, value_parts);
       } else {
@@ -1803,56 +1802,55 @@ class MemTableInserter : public WriteBatch::Handler {
     }
     return &GetPostMap()[mem];
   }
-  };
+};
 
 // This function can only be called in these conditions:
 // 1) During Recovery()
 // 2) During Write(), in a single-threaded write thread
 // 3) During Write(), in a concurrent context where memtables has been cloned
 // The reason is that it calls memtables->Seek(), which has a stateful cache
-  Status WriteBatchInternal::InsertInto(
-      WriteThread::WriteGroup& write_group, SequenceNumber sequence,
-      ColumnFamilyMemTables* memtables, FlushScheduler* flush_scheduler,
-      bool ignore_missing_column_families, uint64_t recovery_log_number, DB* db,
-      bool concurrent_memtable_writes, bool seq_per_batch, bool batch_per_txn,
-      uint64_t blob_size) {
-    MemTableInserter inserter(
-        sequence, memtables, flush_scheduler, ignore_missing_column_families,
-        recovery_log_number, db, concurrent_memtable_writes,
-        nullptr /*has_valid_writes*/, seq_per_batch, batch_per_txn);
-    for (auto w : write_group) {
-      if (w->CallbackFailed()) {
-        continue;
-      }
-      w->sequence = inserter.sequence();
-      if (!w->ShouldWriteToMemtable()) {
-        // In seq_per_batch_ mode this advances the seq by one.
-        inserter.MaybeAdvanceSeq(true);
-        continue;
-      }
-      SetSequence(w->batch, inserter.sequence());
-      inserter.set_log_number_ref(w->log_ref);
-      inserter.SetContext(
-          w->wal_offset_of_wb_content_,
-          w->is_recycle ? log::kRecyclableHeaderSize : log::kHeaderSize,
-          w->batch->Data(), blob_size, w->log_used);
-      w->status = w->batch->Iterate(&inserter);
-      if (!w->status.ok()) {
-        return w->status;
-      }
-      assert(!seq_per_batch || w->batch_cnt != 0);
-      assert(!seq_per_batch ||
-             inserter.sequence() - w->sequence == w->batch_cnt);
+Status WriteBatchInternal::InsertInto(
+    WriteThread::WriteGroup& write_group, SequenceNumber sequence,
+    ColumnFamilyMemTables* memtables, FlushScheduler* flush_scheduler,
+    uint64_t blob_size, bool ignore_missing_column_families,
+    uint64_t recovery_log_number, DB* db, bool concurrent_memtable_writes,
+    bool seq_per_batch, bool batch_per_txn) {
+  MemTableInserter inserter(
+      sequence, memtables, flush_scheduler, ignore_missing_column_families,
+      recovery_log_number, db, concurrent_memtable_writes,
+      nullptr /*has_valid_writes*/, seq_per_batch, batch_per_txn);
+  for (auto w : write_group) {
+    if (w->CallbackFailed()) {
+      continue;
     }
-    return Status::OK();
+    w->sequence = inserter.sequence();
+    if (!w->ShouldWriteToMemtable()) {
+      // In seq_per_batch_ mode this advances the seq by one.
+      inserter.MaybeAdvanceSeq(true);
+      continue;
+    }
+    SetSequence(w->batch, inserter.sequence());
+    inserter.set_log_number_ref(w->log_ref);
+    inserter.SetContext(
+        w->wal_offset_of_wb_content_,
+        w->is_recycle ? log::kRecyclableHeaderSize : log::kHeaderSize,
+        w->batch->Data(), blob_size, w->log_used);
+    w->status = w->batch->Iterate(&inserter);
+    if (!w->status.ok()) {
+      return w->status;
+    }
+    assert(!seq_per_batch || w->batch_cnt != 0);
+    assert(!seq_per_batch || inserter.sequence() - w->sequence == w->batch_cnt);
+  }
+  return Status::OK();
 }
 
 Status WriteBatchInternal::InsertInto(
     WriteThread::Writer* writer, SequenceNumber sequence,
     ColumnFamilyMemTables* memtables, FlushScheduler* flush_scheduler,
-    bool ignore_missing_column_families, uint64_t log_number, DB* db,
-    bool concurrent_memtable_writes, bool seq_per_batch, size_t batch_cnt,
-    bool batch_per_txn, uint64_t blob_size) {
+    uint64_t blob_size, bool ignore_missing_column_families,
+    uint64_t log_number, DB* db, bool concurrent_memtable_writes,
+    bool seq_per_batch, size_t batch_cnt, bool batch_per_txn) {
 #ifdef NDEBUG
   (void)batch_cnt;
 #endif
@@ -1878,17 +1876,17 @@ Status WriteBatchInternal::InsertInto(
 
 Status WriteBatchInternal::InsertInto(
     const WriteBatch* batch, ColumnFamilyMemTables* memtables,
-    FlushScheduler* flush_scheduler, bool ignore_missing_column_families,
-    uint64_t log_number, DB* db, bool concurrent_memtable_writes,
-    SequenceNumber* next_seq, bool* has_valid_writes, bool seq_per_batch,
-    bool batch_per_txn, size_t batch_content_wal_offset,
-    size_t wal_header_size, uint64_t blob_size) {
+    FlushScheduler* flush_scheduler, uint64_t blob_size,
+    bool ignore_missing_column_families, uint64_t log_number, DB* db,
+    bool concurrent_memtable_writes, SequenceNumber* next_seq,
+    bool* has_valid_writes, bool seq_per_batch, bool batch_per_txn,
+    size_t batch_content_wal_offset, size_t wal_header_size) {
   MemTableInserter inserter(Sequence(batch), memtables, flush_scheduler,
                             ignore_missing_column_families, log_number, db,
                             concurrent_memtable_writes, has_valid_writes,
                             seq_per_batch, batch_per_txn);
   inserter.SetContext(batch_content_wal_offset, wal_header_size, batch->rep_,
-                      blob_size, log_number);  // XXXX log_number maybe wrong
+                      blob_size, log_number);  // XXX log_number maybe wrong
   Status s = batch->Iterate(&inserter);
   if (next_seq != nullptr) {
     *next_seq = inserter.sequence();
@@ -1942,6 +1940,133 @@ size_t WriteBatchInternal::AppendedByteSize(size_t leftByteSize,
   } else {
     return leftByteSize + rightByteSize - WriteBatchInternal::kHeader;
   }
+}
+
+// in each Put/Merge, append it into wal index and collect summary info.
+// then destruct current object append summary to wal index footer
+class WalIndexCreater : public WriteBatch::Handler {
+ public:
+  Status PutCF(uint32_t column_family_id, const Slice& key /*user key*/,
+               const Slice& value) override {
+    assert(value.data() > key.data());
+    CollectInfo(column_family_id, key, value, kTypeValue);
+
+    ++seq_;
+    return Status::OK();
+  }
+  Status MergeCF(uint32_t column_family_id, const Slice& key,
+                 const Slice& value) override {
+    assert(value.data() > key.data());
+    CollectInfo(column_family_id, key, value, kTypeMerge);
+
+    ++seq_;
+    return Status::OK();
+  }
+
+  // behind type just increase seq_ and  skip
+  Status DeleteCF(uint32_t /*column_family_id*/,
+                  const Slice& /*key*/) override {
+    ++seq_;
+    return Status::OK();
+  }
+  Status SingleDeleteCF(uint32_t, const Slice&) override {
+    ++seq_;
+    return Status::OK();
+  }
+  Status DeleteRangeCF(uint32_t /*column_family_id*/,
+                       const Slice& /*begin_key*/,
+                       const Slice& /*end_key*/) override {
+    ++seq_;
+    return Status::OK();
+  }
+
+  WalIndexCreater(
+      const WriteBatch* b, Arena* a, uint64_t physical_offset,
+      uint64_t head_size,
+      std::map<uint32_t, std::vector<std::pair<ParsedInternalKey, WalEntry>>>*
+          wal_entry_map)
+      : batch_(b),
+        arena_(a),
+        batch_content_physical_offset_(physical_offset),
+        wal_record_header_size_(head_size),
+        seq_(WriteBatchInternal::Sequence(b)),
+        wal_entry_map_(wal_entry_map) {}
+  ~WalIndexCreater() {}
+
+  // behind type only in wal just skip
+  // TODO(liuyangming) for transactiondb, seq_per_batch = true and this batch is
+  // merged batch, need increate seq when found trx Commit
+  Status MarkBeginPrepare(bool = false) override { return Status::OK(); }
+  Status MarkEndPrepare(const Slice& /*xid*/) override { return Status::OK(); }
+  Status MarkNoop(bool /*empty_batch*/) override { return Status::OK(); }
+  Status MarkRollback(const Slice& /*xid*/) override { return Status::OK(); }
+  Status MarkCommit(const Slice& /*xid*/) override { return Status::OK(); }
+
+ protected:
+  friend class WriteBatch;
+
+ private:
+  void CollectInfo(uint32_t column_family_id, const Slice& key /*user key*/,
+                   const Slice& value, ValueType type) {
+    assert(key.data() < value.data());  // value next to key
+    assert(wal_record_header_size_ == log::kHeaderSize);
+    size_t kBlockAvailSize = log::kBlockSize - wal_record_header_size_;
+
+    uint64_t key_offset = GetPhysicalOffset(
+        batch_content_physical_offset_,
+        key.data() - batch_->Data().data() - WriteBatchInternal::kHeader,
+        wal_record_header_size_);
+    uint64_t k_head_size = std::min<uint64_t>(
+        log::kBlockSize - key_offset % log::kBlockSize, key.size());
+    size_t k_tail_size = 0;
+    if (key.size() > k_head_size) {
+      k_tail_size = (key.size() - k_head_size) % kBlockAvailSize;
+    }
+    uint16_t k_head_crc = terark::Crc16c_update(0, key.data(), k_head_size);
+    uint16_t k_tail_crc = terark::Crc16c_update(
+        0, key.data() + key.size() - k_tail_size, k_tail_size);
+
+    uint64_t val_offset = GetPhysicalOffset(
+        batch_content_physical_offset_,
+        value.data() - batch_->Data().data() - WriteBatchInternal::kHeader,
+        wal_record_header_size_);
+
+    uint64_t v_head_size = std::min<uint64_t>(
+        log::kBlockSize - val_offset % log::kBlockSize, value.size());
+    uint64_t v_tail_size = 0;
+    if (value.size() > v_head_size) {
+      v_tail_size = (value.size() - v_head_size) % kBlockAvailSize;
+    }
+    uint16_t v_head_crc = terark::Crc16c_update(0, value.data(), v_head_size);
+    uint16_t v_tail_crc = terark::Crc16c_update(
+        0, value.data() + value.size() - v_tail_size, v_tail_size);
+
+    (*wal_entry_map_)[column_family_id].push_back(std::make_pair(
+        ParsedInternalKey(ArenaPinSlice(key, arena_), seq_, type),
+        WalEntry(key_offset, val_offset, uint32_t(key.size()),
+                 uint32_t(value.size()), k_head_crc, k_tail_crc, v_head_crc,
+                 v_tail_crc, seq_, type)));
+  }
+
+  const WriteBatch* batch_;
+  Arena* arena_;
+  uint64_t batch_content_physical_offset_;
+  uint64_t wal_record_header_size_;
+  SequenceNumber seq_;
+  std::map<uint32_t, std::vector<std::pair<ParsedInternalKey, WalEntry>>>*
+      wal_entry_map_;
+};
+
+Status WriteBatchInternal::SeparateCfData(
+    const WriteBatch* batch, Arena* arena,
+    uint64_t batch_content_physical_offset, uint64_t wal_header_size,
+    std::map<uint32_t, std::vector<std::pair<ParsedInternalKey, WalEntry>>>*
+        wal_entry_map) {
+  WalIndexCreater creater(batch, arena, batch_content_physical_offset,
+                          wal_header_size, wal_entry_map);
+
+  Status s = batch->Iterate(&creater);
+  return s;
 }
 
 }  // namespace rocksdb

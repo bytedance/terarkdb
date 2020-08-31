@@ -6,6 +6,8 @@
 // Copyright (c) 2011 The LevelDB Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
+#include <atomic>
+
 #include "db/db_impl.h"
 
 #ifndef __STDC_FORMAT_MACROS
@@ -1875,6 +1877,21 @@ void DBImpl::MaybeScheduleFlushOrCompaction() {
     env_->Schedule(&DBImpl::BGWorkCompaction, ca, Env::Priority::LOW, this,
                    &DBImpl::UnscheduleCallback);
   }
+
+  // TODO check condition and schedule create wal index
+  // condition: has unindexed wal and those wals exceed limit
+  while (ShouldCreateWalIndex()) {
+    mutex_.Unlock();
+    assert(!wal_queue_.empty());
+    CompactionArg* ca = new CompactionArg;
+    ca->db = this;
+    ca->prepicked_compaction = nullptr;
+    bg_wal_index_creation_scheduled_++;
+    unscheduled_wal_index_creation_--;
+    env_->Schedule(&DBImpl::BGWorkCreateWalIndex, ca, Env::Priority::LOW, this,
+                   &DBImpl::UnscheduleCallback);
+    mutex_.Lock();
+  }
 }
 
 DBImpl::BGJobLimits DBImpl::GetBGJobLimits() const {
@@ -2035,6 +2052,10 @@ void DBImpl::SchedulePendingPurge(const std::string& fname,
   }
 }
 
+void DBImpl::SchedulePendingWalIndexCreation(uint64_t file_no) {
+  log_write_mutex_.AssertHeld();
+  wal_queue_.push_back(file_no);
+}
 void DBImpl::BGWorkFlush(void* db) {
   IOSTATS_SET_THREAD_POOL_ID(Env::Priority::HIGH);
   TEST_SYNC_POINT("DBImpl::BGWorkFlush");
@@ -2079,6 +2100,14 @@ void DBImpl::BGWorkPurge(void* db) {
   TEST_SYNC_POINT("DBImpl::BGWorkPurge:start");
   reinterpret_cast<DBImpl*>(db)->BackgroundCallPurge();
   TEST_SYNC_POINT("DBImpl::BGWorkPurge:end");
+}
+
+void DBImpl::BGWorkCreateWalIndex(void* arg) {
+  CompactionArg ca = *(reinterpret_cast<CompactionArg*>(arg));
+  IOSTATS_SET_THREAD_POOL_ID(Env::Priority::HIGH);
+  TEST_SYNC_POINT("DBImpl::BGWorkCreateWalIndex:start");
+  reinterpret_cast<DBImpl*>(ca.db)->BackgroundCallCreateWalIndex();
+  TEST_SYNC_POINT("DBImpl::BGWorkCreateWalIndex:end");
 }
 
 void DBImpl::UnscheduleCallback(void* arg) {
@@ -2966,7 +2995,8 @@ Status DBImpl::BackgroundGarbageCollection(bool* made_progress,
       // until we make a copy in the following code
       TEST_SYNC_POINT(
           "DBImpl::BackgroundGarbageCollection():BeforePickGarbageCollection");
-      c.reset(cfd->PickGarbageCollection(*mutable_cf_options, log_buffer));
+      c.reset(cfd->PickGarbageCollection(MinLogNumberToKeep(),
+                                         *mutable_cf_options, log_buffer));
       TEST_SYNC_POINT(
           "DBImpl::BackgroundGarbageCollection():AfterPickGarbageCollection");
 
@@ -3174,6 +3204,19 @@ bool DBImpl::MCOverlap(ManualCompactionState* m, ManualCompactionState* m1) {
   return true;
 }
 
+bool DBImpl::ShouldCreateWalIndex() {
+  bool f = false;
+  if (index_creating_.compare_exchange_weak(f, true,
+                                            std::memory_order_relaxed)) {
+    if (wal_queue_.empty()) {
+      index_creating_.store(false);
+      return false;
+    }
+
+    return true;
+  }
+  return false;
+}
 // SuperVersionContext gets created and destructed outside of the lock --
 // we use this conveniently to:
 // * malloc one SuperVersion() outside of the lock -- new_superversion

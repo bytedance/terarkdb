@@ -115,7 +115,7 @@ class ChaosTest {
     bbto.pin_top_level_index_and_filter = true;
     bbto.pin_l0_filter_and_index_blocks_in_cache = true;
     bbto.filter_policy.reset(NewBloomFilterPolicy(10, true));
-    bbto.block_cache = NewLRUCache(4ULL << 30, 6, false);
+    bbto.block_cache = NewLRUCache(4ULL << 10, 6, false);
 
     options.compaction_pri = kMinOverlappingRatio;
     options.compression = kZSTD;

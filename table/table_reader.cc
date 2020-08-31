@@ -8,6 +8,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "table_reader.h"
+
 #include "rocksdb/statistics.h"
 #include "table/get_context.h"
 #include "table/scoped_arena_iterator.h"
@@ -15,10 +16,10 @@
 
 namespace rocksdb {
 
-void TableReader::RangeScan(const Slice* begin,
-                            const SliceTransform* prefix_extractor, void* arg,
-                            bool (*callback_func)(void* arg, const Slice& key,
-                                                  LazyBuffer&& value)) {
+Status TableReader::RangeScan(const Slice* begin,
+                              const SliceTransform* prefix_extractor, void* arg,
+                              bool (*callback_func)(void* arg, const Slice& key,
+                                                    LazyBuffer&& value)) {
   Arena arena;
   ScopedArenaIterator iter(
       NewIterator(ReadOptions(), prefix_extractor, &arena));
@@ -26,6 +27,7 @@ void TableReader::RangeScan(const Slice* begin,
        iter->Valid() && callback_func(arg, iter->key(), iter->value());
        iter->Next()) {
   }
+  return iter->status();
 }
 
 void TableReader::UpdateMaxCoveringTombstoneSeq(
@@ -36,9 +38,9 @@ void TableReader::UpdateMaxCoveringTombstoneSeq(
     std::unique_ptr<FragmentedRangeTombstoneIterator> range_del_iter(
         NewRangeTombstoneIterator(readOptions));
     if (range_del_iter != nullptr) {
-      *max_covering_tombstone_seq = std::max(
-          *max_covering_tombstone_seq,
-          range_del_iter->MaxCoveringTombstoneSeqnum(user_key));
+      *max_covering_tombstone_seq =
+          std::max(*max_covering_tombstone_seq,
+                   range_del_iter->MaxCoveringTombstoneSeqnum(user_key));
     }
   }
 }

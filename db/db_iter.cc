@@ -255,9 +255,8 @@ class DBIter final : public Iterator {
     if (separate_helper_ == nullptr || ikey.type != index_type) {
       return iter_->value();
     } else {
-      return separate_helper_->TransToCombined(
-          saved_key_.GetUserKey(), ikey.sequence,
-          std::move(iter_->value()));
+      return separate_helper_->TransToCombined(saved_key_.GetUserKey(),
+                                               ikey.sequence, iter_->value());
     }
   }
 

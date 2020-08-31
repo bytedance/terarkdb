@@ -86,7 +86,7 @@ struct IteratorCacheContext {
     read_options.total_order_seek = true;
 
     return ctx->cfd->table_cache()->NewIterator(
-        read_options, *ctx->env_options, ctx->cfd->internal_comparator(), *f,
+        read_options, *ctx->env_options, *f,
         f->prop.is_map_sst() ? empty_dependence_map : dependence_map,
         nullptr /* range_del_agg */,
         ctx->mutable_cf_options->prefix_extractor.get(), reader_ptr,
