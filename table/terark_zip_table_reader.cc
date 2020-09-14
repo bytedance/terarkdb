@@ -798,15 +798,15 @@ Status TerarkZipTableReaderBase::LoadTombstone(RandomAccessFileReader* file,
                                                uint64_t file_size) {
   BlockContents tombstoneBlock;
   Status s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber,
-                                 GetTableReaderOptions().ioptions,
+                                 table_reader_options_.ioptions,
                                  kRangeDelBlock, &tombstoneBlock);
   if (s.ok()) {
     auto block = DetachBlockContents(tombstoneBlock, GetSequenceNumber());
-    auto icomp = &GetTableReaderOptions().internal_comparator;
+    auto icomp = &table_reader_options_.internal_comparator;
     auto iter = std::unique_ptr<InternalIteratorBase<Slice>>(
         block->NewIterator<DataBlockIter>(
             icomp, icomp->user_comparator(), nullptr,
-            GetTableReaderOptions().ioptions.statistics));
+            table_reader_options_.ioptions.statistics));
     iter->RegisterCleanup(
         [](void* arg0, void* /*arg1*/) { delete static_cast<Block*>(arg0); },
         block, nullptr);
@@ -826,7 +826,7 @@ TerarkZipTableReaderBase::NewRangeTombstoneIterator(
   if (read_options.snapshot != nullptr) {
     snapshot = read_options.snapshot->GetSequenceNumber();
   }
-  auto icomp = &GetTableReaderOptions().internal_comparator;
+  auto icomp = &table_reader_options_.internal_comparator;
   return new FragmentedRangeTombstoneIterator(fragmented_range_dels_, *icomp,
                                               snapshot);
 }

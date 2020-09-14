@@ -54,10 +54,6 @@ class TerarkZipTableReaderBase : public TableReader, boost::noncopyable {
 
   virtual SequenceNumber GetSequenceNumber() const = 0;
 
-  const TableReaderOptions& GetTableReaderOptions() const {
-    return table_reader_options_;
-  }
-
   Status LoadTombstone(RandomAccessFileReader* file, uint64_t file_size);
 
   uint64_t FileNumber() const override {
