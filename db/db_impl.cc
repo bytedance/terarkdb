@@ -583,6 +583,7 @@ Status DBImpl::CloseHelper() {
     const FlushRequest& flush_req = PopFirstFromFlushQueue();
     for (const auto& iter : flush_req) {
       ColumnFamilyData* cfd = iter.first;
+      cfd->dec_queued_for_flush();
       if (cfd->Unref()) {
         delete cfd;
       }

@@ -360,12 +360,16 @@ class ColumnFamilyData {
   void ResetThreadLocalSuperVersions();
 
   // Protected by DB mutex
-  void set_queued_for_flush(bool value) { queued_for_flush_ = value; }
+  void inc_queued_for_flush() { ++queued_for_flush_; }
+  void dec_queued_for_flush() {
+    --queued_for_flush_;
+    assert(queued_for_flush_ >= 0);
+  }
   void set_queued_for_compaction(bool value) { queued_for_compaction_ = value; }
   void set_queued_for_garbage_collection(bool value) {
     queued_for_garbage_collection_ = value;
   }
-  bool queued_for_flush() { return queued_for_flush_; }
+  bool queued_for_flush() { return queued_for_flush_ > 0; }
   bool queued_for_compaction() { return queued_for_compaction_; }
   bool queued_for_garbage_collection() {
     return queued_for_garbage_collection_;
@@ -477,7 +481,7 @@ class ColumnFamilyData {
   std::unique_ptr<WriteControllerToken> write_controller_token_;
 
   // If true --> this ColumnFamily is currently present in DBImpl::flush_queue_
-  bool queued_for_flush_;
+  int queued_for_flush_;
 
   // If true --> this ColumnFamily is currently present in
   // DBImpl::compaction_queue_

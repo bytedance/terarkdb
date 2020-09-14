@@ -2009,6 +2009,7 @@ void DBImpl::SchedulePendingFlush(const FlushRequest& flush_req,
     ColumnFamilyData* cfd = iter.first;
     cfd->Ref();
     cfd->SetFlushReason(flush_reason);
+    cfd->inc_queued_for_flush();
   }
   unscheduled_flushes_ += static_cast<int>(flush_req.size());
   flush_queue_.push_back(flush_req);
@@ -2132,6 +2133,7 @@ Status DBImpl::BackgroundFlush(bool* made_progress, JobContext* job_context,
       if (cfd->IsDropped() || !cfd->imm()->IsFlushPending()) {
         // can't flush this CF, try next one
         if (cfd->Unref()) {
+          cfd->dec_queued_for_flush();
           delete cfd;
         }
         continue;
@@ -2166,6 +2168,7 @@ Status DBImpl::BackgroundFlush(bool* made_progress, JobContext* job_context,
     *reason = bg_flush_args[0].cfd_->GetFlushReason();
     for (auto& arg : bg_flush_args) {
       ColumnFamilyData* cfd = arg.cfd_;
+      cfd->dec_queued_for_flush();
       if (cfd->Unref()) {
         delete cfd;
         arg.cfd_ = nullptr;

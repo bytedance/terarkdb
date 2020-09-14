@@ -455,7 +455,7 @@ ColumnFamilyData::ColumnFamilyData(
       log_number_(0),
       flush_reason_(FlushReason::kOthers),
       column_family_set_(column_family_set),
-      queued_for_flush_(false),
+      queued_for_flush_(0),
       queued_for_compaction_(false),
       queued_for_garbage_collection_(false),
       prev_compaction_needed_bytes_(0),
@@ -533,7 +533,7 @@ ColumnFamilyData::~ColumnFamilyData() {
 
   // It would be wrong if this ColumnFamilyData is in flush_queue_ or
   // compaction_queue_ and we destroyed it
-  assert(!queued_for_flush_);
+  assert(queued_for_flush_ == 0);
   assert(!queued_for_compaction_);
   assert(!queued_for_garbage_collection_);
 
