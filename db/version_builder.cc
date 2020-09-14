@@ -358,6 +358,9 @@ class VersionBuilder::Rep {
             case FileMetaData::kGarbageCollectionPermitted:
               assert(item.gc_forbidden_version != dependence_version_);
               break;
+            case FileMetaData::kGarbageCollectionDefered:
+              assert(item.f->prop.is_blob_wal());
+              break;
           }
           item.f->num_antiquation = num_antiquation;
         }

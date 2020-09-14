@@ -477,6 +477,7 @@ class DBImpl : public DB {
     int max_flushes;
     int max_compactions;
     int max_garbage_collections;
+    int max_wal_index_creations;
   };
   // Returns maximum background flushes and compactions allowed to be scheduled
   BGJobLimits GetBGJobLimits() const;
@@ -1134,7 +1135,7 @@ class DBImpl : public DB {
   void BackgroundCallGarbageCollection();
   void BackgroundCallFlush();
   void BackgroundCallPurge();
-  void BackgroundCallCreateWalIndex();
+  void BackgroundCallWalIndexCreation();
 
   Status BackgroundCompaction(bool* madeProgress, JobContext* job_context,
                               LogBuffer* log_buffer,
@@ -1142,6 +1143,8 @@ class DBImpl : public DB {
   Status BackgroundGarbageCollection(bool* madeProgress,
                                      JobContext* job_context,
                                      LogBuffer* log_buffer);
+  Status BackgroundWalIndexCreation(JobContext* job_context,
+                                    LogBuffer* log_buffer);
   Status BackgroundFlush(bool* madeProgress, JobContext* job_context,
                          LogBuffer* log_buffer, FlushReason* reason);
 
@@ -1429,8 +1432,8 @@ class DBImpl : public DB {
   // A queue to store filenames of the files to be purged
   std::deque<PurgeFileInfo> purge_queue_;
 
-  std::deque<uint64_t> wal_queue_;
-  std::atomic<bool> index_creating_;
+  // after switchmem, a new static wal is created, then need to create its index
+  std::atomic<bool> has_wal_without_index_;
 
   // A pointer to the file numbers that have been assigned to certain
   // JobContext. Current implementation tracks SST, WAL & MANIFEST files.
@@ -1449,7 +1452,6 @@ class DBImpl : public DB {
   int unscheduled_flushes_;
   int unscheduled_compactions_;
   int unscheduled_garbage_collections_;
-  int unscheduled_wal_index_creation_;
 
   // count how many background compactions are running or have been scheduled in
   // the BOTTOM pool
@@ -1575,6 +1577,7 @@ class DBImpl : public DB {
 
 #ifndef ROCKSDB_LITE
   WalManager wal_manager_;
+  std::atomic<bool> index_creating_;
 #endif  // ROCKSDB_LITE
 
   // Unified interface for logging events

@@ -6,6 +6,7 @@
 // Copyright (c) 2011 The LevelDB Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
+#include <atomic>
 #include "db/db_impl.h"
 
 #ifndef __STDC_FORMAT_MACROS
@@ -1681,9 +1682,18 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
       }
       // when last log flushed, add it to db->versions. so that we can get wal
       // meta data later. also mark this blob as garbage to collect.
-      versions_->FreezeWal(cur_log_writer->get_log_number(),
-                           cur_log_writer->get_num_entries());
-      SchedulePendingWalIndexCreation(cur_log_writer->get_log_number());
+      {
+        FileMetaData bm;
+        bm.fd = FileDescriptor(cur_log_writer->get_log_number(), 0 /*path_id*/,
+                               cur_log_writer->file()->GetFileSize(), 0,
+                               kMaxSequenceNumber);
+        bm.prop.num_entries = cur_log_writer->get_num_entries();
+        bm.prop.purpose = kLogSst;
+        bm.smallest.SetMinPossibleForUserKey(Slice());
+        bm.largest.SetMaxPossibleForUserKey(Slice());
+        versions_->CacheWalMeta(cur_log_writer->get_log_number(), bm);
+        has_wal_without_index_.store(true, std::memory_order_relaxed);
+      }
     }
     logs_.emplace_back(logfile_number_, new_log);
     alive_log_files_.push_back(LogFileNumberSize(logfile_number_));

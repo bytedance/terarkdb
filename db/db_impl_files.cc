@@ -309,6 +309,9 @@ void DBImpl::DeleteObsoleteFileImpl(int job_id, const std::string& fname,
   if (type == kTableFile) {
     file_deletion_status =
         DeleteSSTFile(&immutable_db_options_, fname, path_to_sync);
+  } else if (type == kLogFile) {
+    file_deletion_status =
+        DeleteWalFile(&immutable_db_options_, fname, path_to_sync);
   } else {
     file_deletion_status = env_->DeleteFile(fname);
   }
@@ -539,7 +542,9 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
                    : "/") +
               to_delete;
     }
-
+    if (type == kLogFile) {
+      versions_->ReleaseWalMeta(number);
+    }
 #ifndef ROCKSDB_LITE
     if (type == kLogFile && (immutable_db_options_.wal_ttl_seconds > 0 ||
                              immutable_db_options_.wal_size_limit_mb > 0)) {

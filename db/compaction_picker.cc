@@ -802,7 +802,8 @@ Compaction* CompactionPicker::PickGarbageCollection(
     if (!f->is_gc_permitted() || f->being_compacted) {
       continue;
     }
-    if (f->prop.is_blob_wal() && f->fd.GetNumber() >= max_log_number_to_gc) {
+    if (f->prop.is_blob_wal() &&
+        (f->fd.GetNumber() >= max_log_number_to_gc || f->is_gc_defered())) {
       continue;
     }
     GarbageFileInfo info = {f};

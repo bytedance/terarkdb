@@ -145,12 +145,12 @@ class WalBlobIterator : public InternalIteratorBase<LazyBuffer> {
   WalBlobIterator(const WalBlobReader* reader,
                   const ImmutableCFOptions& ioptions, uint64_t cf_start_offset,
                   uint64_t cf_entries)
-      : ioptions_(ioptions),
-        cf_entries_(cf_entries),
+      : cf_entries_(cf_entries),
         i_(0),
         reader_(reader),
         cf_data_(reader->FileData().data() + cf_start_offset,
-                 kWalEntrySize * cf_entries) {
+                 kWalEntrySize * cf_entries),
+        ioptions_(ioptions) {
     SeekToFirst();
   }
   bool Valid() const override { return i_ < cf_entries_ && status_.ok(); }
@@ -166,13 +166,17 @@ class WalBlobIterator : public InternalIteratorBase<LazyBuffer> {
   }
   void SeekToFirst() override {
     i_ = 0;
+#ifndef NDEBUG
     last_key_.clear();
+#endif
     status_ = Status::OK();
     if (Valid()) {
       status_ = FetchKV();
+#ifndef NDEBUG
       if (status_.ok()) {
         last_key_.assign(iter_key_.GetKey().data(), iter_key_.GetKey().size());
       }
+#endif
     }
   }
 
@@ -195,16 +199,17 @@ class WalBlobIterator : public InternalIteratorBase<LazyBuffer> {
  private:
   Status FetchKV();
 
-  const ImmutableCFOptions& ioptions_;
   const uint64_t cf_entries_;
   uint64_t i_;
   const WalBlobReader* reader_;
   Slice cf_data_;
-
+#ifndef NDEBUG
+  const ImmutableCFOptions& ioptions_;
+  std::string last_key_;
+#endif
   Status status_;
   LazyBuffer value_;
   IterKey iter_key_;
-  std::string last_key_;
   ParsedInternalKey parsed_ikey_;
 };
 
@@ -286,9 +291,9 @@ class WalIndexWriter {
     return s;
   }
 
-  Status WriteCF(
-      uint32_t cf_id,
-      const std::vector<std::pair<ParsedInternalKey, WalEntry>>& sorted_entries);
+  Status WriteCF(uint32_t cf_id,
+                 const std::vector<std::pair<ParsedInternalKey, WalEntry>>&
+                     sorted_entries);
 
  private:
   Status WriteFooter();

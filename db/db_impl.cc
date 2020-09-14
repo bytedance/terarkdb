@@ -227,11 +227,9 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
           static_cast<int64_t>(mutable_db_options_.delayed_write_rate / 8),
           kDefaultLowPriThrottledRate))),
       last_batch_group_size_(0),
-      index_creating_(0),
       unscheduled_flushes_(0),
       unscheduled_compactions_(0),
       unscheduled_garbage_collections_(0),
-      unscheduled_wal_index_creation_(0),
       bg_bottom_compaction_scheduled_(0),
       bg_compaction_scheduled_(0),
       bg_garbage_collection_scheduled_(0),
@@ -256,6 +254,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       num_running_ingest_file_(0),
 #ifndef ROCKSDB_LITE
       wal_manager_(immutable_db_options_, env_options_, seq_per_batch),
+      index_creating_(false),
 #endif  // ROCKSDB_LITE
       event_logger_(immutable_db_options_.info_log.get()),
       bg_work_paused_(0),
@@ -1310,30 +1309,6 @@ void DBImpl::BackgroundCallPurge() {
   // that case, all DB variables will be dealloacated and referencing them
   // will cause trouble.
   mutex_.Unlock();
-}
-
-void DBImpl::BackgroundCallCreateWalIndex() {
-  if (wal_queue_.empty()) {
-    return;
-  }
-
-  log_write_mutex_.Lock();
-  std::deque<uint64_t> wals;
-  for (auto wal : wal_queue_) {
-    wals.push_back(wal);
-  }
-  wal_queue_.clear();
-  log_write_mutex_.Unlock();
-
-  for (auto& log_no : wals) {
-    Status s = CreateWalIndex(log_no);
-    if (!s.ok()) {
-      // TODO Background Error
-      assert(false);
-    }
-  }
-
-  index_creating_.store(false, std::memory_order_relaxed);
 }
 
 Status DBImpl::CreateWalIndex(uint64_t log_number) {

@@ -1,4 +1,5 @@
 #include "chaos_test.hpp"
+#include "rocksdb/advanced_options.h"
 
 namespace rocksdb {
 
@@ -50,7 +51,7 @@ class ChaosTest {
     options.allow_mmap_writes = false;
     options.allow_concurrent_memtable_write = true;
     options.use_direct_reads = true;
-    options.max_background_garbage_collections = 8;
+    options.max_background_garbage_collections = 6;
     options.WAL_size_limit_MB = 0;
     options.use_aio_reads = true;
     options.max_background_jobs = 32;
@@ -414,7 +415,7 @@ class ChaosTest {
       if (true) {
         auto s = db->Write(wo, b.GetWriteBatch());
         if (!s.ok()) {
-          printf("%s\n", s.getState());
+          printf("%s\n", s.ToString().c_str());
           break;
         }
         b.Clear();
@@ -785,7 +786,7 @@ class ChaosTest {
     for (int i = 0; i < cf_num; ++i) {
       options.compaction_style = rocksdb::kCompactionStyleLevel;
       options.write_buffer_size = size_t(file_size_base * 1.2);
-      options.enable_lazy_compaction = true;
+      options.enable_lazy_compaction = false;
       cfDescriptors.emplace_back(rocksdb::kDefaultColumnFamilyName, options);
       options.compaction_style = rocksdb::kCompactionStyleUniversal;
       options.write_buffer_size = size_t(file_size_base * 1.1);

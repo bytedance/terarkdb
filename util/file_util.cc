@@ -4,6 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 #include "util/file_util.h"
+#include "util/filename.h"
 
 #include <sys/resource.h>
 #include <sys/syscall.h>
@@ -90,6 +91,17 @@ Status CreateFile(Env* env, const std::string& destination,
     return s;
   }
   return dest_writer->Sync(use_fsync);
+}
+
+Status DeleteWalFile(const ImmutableDBOptions* db_options,
+                     const std::string& fname, const std::string& dir_to_sync) {
+  auto idx_fname = fname;
+  idx_fname.replace(fname.size() - 3, 3, "idx");
+  Status status = db_options->env->DeleteFile(idx_fname);
+  if (status.ok()) {
+    return DeleteDBFile(db_options, fname, dir_to_sync, false);
+  }
+  return status;
 }
 
 Status DeleteSSTFile(const ImmutableDBOptions* db_options,

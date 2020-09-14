@@ -17,7 +17,6 @@
 #include <stdio.h>
 
 #include <algorithm>
-#include <iostream>
 #include <list>
 #include <map>
 #include <set>
@@ -363,7 +362,6 @@ Version::~Version() {
         if (f->prop.is_blob_wal()) {
           vset_->obsolete_files_.push_back(
               ObsoleteFileInfo(f, cfd_->GetWalDir()));
-          vset_->ReleaseWal(f->fd.GetPathId());
         } else {
           vset_->obsolete_files_.push_back(
               ObsoleteFileInfo(f, cfd_->ioptions()->cf_paths[path_id].path));
@@ -1206,6 +1204,7 @@ VersionStorageInfo::VersionStorageInfo(
       finalized_(false),
       is_pick_compaction_fail(false),
       is_pick_garbage_collection_fail(false),
+      is_pick_wal_index_creation_fail(false),
       force_consistency_checks_(_force_consistency_checks) {
   ++files_;  // level -1 used for dependence files
 }
@@ -4686,6 +4685,29 @@ bool VersionSet::VerifyCompactionFileConsistency(Compaction* c) {
   return true;  // everything good
 }
 
+bool VersionSet::PickWalToGC(
+    const std::unordered_map<uint64_t, FileMetaData*>& ongoings,
+    std::vector<FileMetaData*>* picked_wals, InstrumentedMutex* mu) {
+  mu->AssertHeld();
+  bool found = false;
+  for (auto cfd_iter : *column_family_set_) {
+    if (!cfd_iter->initialized()) {
+      continue;
+    }
+    Version* version = cfd_iter->current();
+    const auto* vstorage = version->storage_info();
+    for (const auto& file : vstorage->LevelFiles(-1)) {
+      if (file->prop.is_blob_wal() &&
+          ongoings.find(file->fd.GetNumber()) == ongoings.end() &&
+          file->is_gc_defered()) {
+        picked_wals->push_back(file);
+        found = true;
+      }
+    }
+  }
+  return found;
+}
+
 Status VersionSet::GetMetadataForFile(uint64_t number, int* filelevel,
                                       FileMetaData** meta,
                                       ColumnFamilyData** cfd) {
@@ -4814,25 +4836,24 @@ uint64_t VersionSet::GetTotalSstFilesSize(Version* dummy_versions) {
   return total_files_size;
 }
 
-Status VersionSet::FreezeWal(uint64_t log_no,
-                             uint64_t num_entries /*maybe add more meta*/) {
-  logs_entries_mutex_.Lock();
-  assert(alive_logs_entries_.find(log_no) == alive_logs_entries_.end());
-  alive_logs_entries_[log_no] = num_entries;
-  logs_entries_mutex_.Unlock();
+Status VersionSet::CacheWalMeta(uint64_t log_no, FileMetaData fm) {
+  log_meta_mutex_.Lock();
+  assert(log_meta_cache_.find(log_no) == log_meta_cache_.end());
+  log_meta_cache_[log_no] = fm;
+  log_meta_mutex_.Unlock();
   return Status::OK();
 }
 
-Status VersionSet::ReleaseWal(uint64_t log_no) {
-  logs_entries_mutex_.Lock();
-  alive_logs_entries_.erase(log_no);
-  logs_entries_mutex_.Unlock();
+Status VersionSet::ReleaseWalMeta(uint64_t log_no) {
+  log_meta_mutex_.Lock();
+  log_meta_cache_.erase(log_no);
+  log_meta_mutex_.Unlock();
   return Status::OK();
 }
 
-uint64_t VersionSet::GetWalEntryNumber(uint64_t log_no) {
-  auto find = alive_logs_entries_.find(log_no);
-  assert(find != alive_logs_entries_.end());
+FileMetaData VersionSet::GetWalMeta(uint64_t log_no) {
+  auto find = log_meta_cache_.find(log_no);
+  assert(find != log_meta_cache_.end());
   return find->second;
 }
 

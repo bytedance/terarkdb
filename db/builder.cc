@@ -375,18 +375,7 @@ Status BuildTable(
       // construct filemetadata of depended blob wal
       for (auto& d : dependence) {
         sst_meta()->prop.dependence.emplace_back(Dependence{d.first, d.second});
-
-        FileMetaData bm;
-        bm.fd.packed_number_and_path_id =
-            PackFileNumberAndPathId(d.first, 0);  // XXX path id of wal
-        bm.prop.num_entries = versions_->GetWalEntryNumber(d.first);
-        bm.prop.purpose = kLogSst;
-        bm.smallest.SetMinPossibleForUserKey(Slice());
-        bm.largest.SetMaxPossibleForUserKey(Slice());
-        bm.fd.smallest_seqno = 0;
-        bm.fd.largest_seqno = kMaxSequenceNumber;
-
-        meta_vec->push_back(std::move(bm));
+        meta_vec->push_back(versions_->GetWalMeta(d.first));
       }
       auto& prop_dependence = sst_meta()->prop.dependence;
       std::sort(prop_dependence.begin(), prop_dependence.end(),

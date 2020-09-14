@@ -432,8 +432,13 @@ int InputSummary(const std::vector<FileMetaData*>& files, char* output,
     int ret;
     char sztxt[16];
     AppendHumanBytes(files.at(i)->fd.GetFileSize(), sztxt, 16);
-    ret = snprintf(output + write, sz, "%" PRIu64 "(%s) ",
-                   files.at(i)->fd.GetNumber(), sztxt);
+    if (files.at(i)->prop.is_blob_wal()) {
+      ret = snprintf(output + write, sz, "%" PRIu64 "(%s,log) ",
+                     files.at(i)->fd.GetNumber(), sztxt);
+    } else {
+      ret = snprintf(output + write, sz, "%" PRIu64 "(%s,sst) ",
+                     files.at(i)->fd.GetNumber(), sztxt);
+    }
     if (ret < 0 || ret >= sz) break;
     write += ret;
   }

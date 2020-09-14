@@ -7,6 +7,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #include <atomic>
+#include <type_traits>
+#include <unordered_map>
 
 #include "db/db_impl.h"
 
@@ -1880,17 +1882,18 @@ void DBImpl::MaybeScheduleFlushOrCompaction() {
 
   // TODO check condition and schedule create wal index
   // condition: has unindexed wal and those wals exceed limit
-  while (ShouldCreateWalIndex()) {
-    mutex_.Unlock();
-    assert(!wal_queue_.empty());
+  assert(bg_job_limits.max_wal_index_creations == 1);
+  assert(mutable_db_options_.max_task_per_thread == 1);
+  while (bg_wal_index_creation_scheduled_ <
+             bg_job_limits.max_wal_index_creations *
+                 mutable_db_options_.max_task_per_thread &&
+         has_wal_without_index_.load(std::memory_order_release)) {
     CompactionArg* ca = new CompactionArg;
     ca->db = this;
     ca->prepicked_compaction = nullptr;
     bg_wal_index_creation_scheduled_++;
-    unscheduled_wal_index_creation_--;
     env_->Schedule(&DBImpl::BGWorkCreateWalIndex, ca, Env::Priority::LOW, this,
                    &DBImpl::UnscheduleCallback);
-    mutex_.Lock();
   }
 }
 
@@ -1934,6 +1937,7 @@ DBImpl::BGJobLimits DBImpl::GetBGJobLimits(
     // throttle background compactions until we deem necessary
     res.max_compactions = 1;
   }
+  res.max_wal_index_creations = 1;
   return res;
 }
 
@@ -2052,10 +2056,6 @@ void DBImpl::SchedulePendingPurge(const std::string& fname,
   }
 }
 
-void DBImpl::SchedulePendingWalIndexCreation(uint64_t file_no) {
-  log_write_mutex_.AssertHeld();
-  wal_queue_.push_back(file_no);
-}
 void DBImpl::BGWorkFlush(void* db) {
   IOSTATS_SET_THREAD_POOL_ID(Env::Priority::HIGH);
   TEST_SYNC_POINT("DBImpl::BGWorkFlush");
@@ -2106,7 +2106,7 @@ void DBImpl::BGWorkCreateWalIndex(void* arg) {
   CompactionArg ca = *(reinterpret_cast<CompactionArg*>(arg));
   IOSTATS_SET_THREAD_POOL_ID(Env::Priority::HIGH);
   TEST_SYNC_POINT("DBImpl::BGWorkCreateWalIndex:start");
-  reinterpret_cast<DBImpl*>(ca.db)->BackgroundCallCreateWalIndex();
+  reinterpret_cast<DBImpl*>(ca.db)->BackgroundCallWalIndexCreation();
   TEST_SYNC_POINT("DBImpl::BGWorkCreateWalIndex:end");
 }
 
@@ -2497,6 +2497,39 @@ void DBImpl::BackgroundCallGarbageCollection() {
     // that case, all DB variables will be dealloacated and referencing them
     // will cause trouble.
   }
+}
+
+void DBImpl::BackgroundCallWalIndexCreation() {
+  JobContext job_context(next_job_id_.fetch_add(1), true);
+  TEST_SYNC_POINT("BackgroundCallWalIndexCreation:0");
+  LogBuffer log_buffer(InfoLogLevel::INFO_LEVEL,
+                       immutable_db_options_.info_log.get());
+  InstrumentedMutexLock l(&mutex_);
+  num_running_wal_index_creations_++;
+
+  assert(bg_wal_index_creation_scheduled_);
+  Status s = BackgroundWalIndexCreation(&job_context, &log_buffer);
+  TEST_SYNC_POINT("BackgroundWalIndexCreation:1");
+  if (!s.ok() && !s.IsShutdownInProgress()) {
+    mutex_.Unlock();
+    uint64_t error_cnt =
+        default_cf_internal_stats_->BumpAndGetBackgroundErrorCount();
+    log_buffer.FlushBufferToLog();
+    ROCKS_LOG_ERROR(immutable_db_options_.info_log,
+                    "Waiting after background wal index creation error: %s, "
+                    "Accumulated background error counts: %" PRIu64,
+                    s.ToString().c_str(), error_cnt);
+    LogFlush(immutable_db_options_.info_log);
+    env_->SleepForMicroseconds(1000000);
+    mutex_.Lock();
+  }
+
+  assert(num_running_wal_index_creations_ > 0);
+  num_running_wal_index_creations_ --;
+  bg_wal_index_creation_scheduled_--;
+
+  // See if there's more work to be done
+  MaybeScheduleFlushOrCompaction();
 }
 
 Status DBImpl::BackgroundCompaction(bool* made_progress,
@@ -3112,6 +3145,61 @@ Status DBImpl::BackgroundGarbageCollection(bool* made_progress,
   return status;
 }
 
+Status DBImpl::BackgroundWalIndexCreation(JobContext* job_context,
+                                          LogBuffer* log_buffer) {
+  TEST_SYNC_POINT("DBImpl::BackgroundWalIndexCreation:Start");
+
+  Status status;
+  if (!error_handler_.IsBGWorkStopped()) {
+    if (shutting_down_.load(std::memory_order_acquire)) {
+      status = Status::ShutdownInProgress();
+    }
+  } else {
+    status = error_handler_.GetBGError();
+  }
+
+  if (!status.ok()) {
+    return status;
+  }
+
+  // 1. Pick Wal files from ColumnFamilySet, Need mutex lock
+  mutex_.AssertHeld();
+  TEST_SYNC_POINT("DBImpl::BackgroundWalIndexCreation:PickWalFiles");
+  std::vector<FileMetaData*> picked_wals;
+  if (versions_->PickWalToGC(versions_->index_creating_ongoing_wals_,
+                             &picked_wals, &mutex_)) {
+    // 2. CreateWalIndex respectively, no lock
+    mutex_.Unlock();
+    TEST_SYNC_POINT("DBImpl::BackgroundWalIndexCreation:CreateIndexes");
+    std::unordered_set<uint64_t> failed_wal;
+    for (auto& f : picked_wals) {
+      Status s = CreateWalIndex(f->fd.GetNumber());
+      if (UNLIKELY(!s.ok())) {
+        failed_wal.insert(f->fd.GetNumber());
+        ROCKS_LOG_WARN(immutable_db_options_.info_log,
+                       "%d WalIndexCreation Fail: %s", f->fd.GetNumber(),
+                       status.ToString().c_str());
+        // TODO clear mess of failed wals clear tmp index, and remove it from
+        // index_creating_ongoing_wals
+        continue;
+      }
+    }
+
+    // 3. broadcast wal gcstatus, (maybe lock?)
+    TEST_SYNC_POINT("DBImpl::BackgroundWalIndexCreation:BroadcastGcstatus");
+    for (auto& f : picked_wals) {
+      if (failed_wal.find(f->fd.GetNumber()) != failed_wal.end()) {
+        continue;
+      }
+      f->gc_status = FileMetaData::kGarbageCollectionPermitted;
+    }
+    mutex_.Lock();
+  }
+
+  TEST_SYNC_POINT("DBImpl::BackgroundWalIndexCreation:Finish");
+  return status;
+}
+
 bool DBImpl::HasPendingManualCompaction() {
   return (!manual_compaction_dequeue_.empty());
 }
@@ -3208,11 +3296,6 @@ bool DBImpl::ShouldCreateWalIndex() {
   bool f = false;
   if (index_creating_.compare_exchange_weak(f, true,
                                             std::memory_order_relaxed)) {
-    if (wal_queue_.empty()) {
-      index_creating_.store(false);
-      return false;
-    }
-
     return true;
   }
   return false;

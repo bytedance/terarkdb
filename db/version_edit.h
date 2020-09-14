@@ -117,6 +117,7 @@ struct FileMetaData {
     kGarbageCollectionForbidden = 0,
     kGarbageCollectionCandidate = 1,
     kGarbageCollectionPermitted = 2,
+    kGarbageCollectionDefered   = 3,
   };
 
   FileDescriptor fd;
@@ -210,6 +211,9 @@ struct FileMetaData {
   bool is_gc_permitted() const {
     return gc_status == kGarbageCollectionPermitted;
   }
+  bool is_gc_defered() const {
+    return gc_status == kGarbageCollectionDefered;
+  }
   void set_gc_candidate() { gc_status = kGarbageCollectionCandidate; }
 };
 
@@ -296,6 +300,9 @@ class VersionEdit {
                const TablePropertyCache& prop) {
     assert(smallest_seqno <= largest_seqno || prop.purpose == kLogSst);
     FileMetaData f;
+    f.gc_status = prop.is_blob_wal()
+                      ? FileMetaData::kGarbageCollectionDefered
+                      : FileMetaData::kGarbageCollectionForbidden;
     f.fd = FileDescriptor(file, file_path_id, file_size, smallest_seqno,
                           largest_seqno);
     f.smallest = smallest;

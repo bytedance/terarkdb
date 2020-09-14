@@ -267,6 +267,9 @@ class VersionStorageInfo {
   bool IsPickGarbageCollectionFail() const {
     return is_pick_garbage_collection_fail;
   }
+  bool IsPickWalIndexCreationFail() const {
+    return is_pick_wal_index_creation_fail;
+  }
 
   int num_levels() const { return num_levels_; }
 
@@ -600,6 +603,7 @@ class VersionStorageInfo {
 
   bool is_pick_compaction_fail;
   bool is_pick_garbage_collection_fail;
+  bool is_pick_wal_index_creation_fail;
 
   // If set to true, we will run consistency checks even if RocksDB
   // is compiled in release mode
@@ -1173,11 +1177,12 @@ class VersionSet {
   std::vector<ObsoleteFileInfo> obsolete_files_;
   std::vector<std::string> obsolete_manifests_;
 
-  // logs that are flushed by memtable switch, only can be removed when its data
-  // transfer to new blob-sst, (when key ssy need combined value, it will search
-  // dependence map and find blob-sst that inherit its data)
-  std::map<uint64_t, uint64_t> alive_logs_entries_;
-  InstrumentedMutex  logs_entries_mutex_;
+  // XXX may need ref?
+  std::unordered_map<uint64_t, FileMetaData*> index_creating_ongoing_wals_;
+
+  // cache log_meta until all dependence sst of this log flushed
+  std::unordered_map<uint64_t, FileMetaData> log_meta_cache_;
+  InstrumentedMutex log_meta_mutex_;
   const bool seq_per_batch_;
 
   // env options for all reads and writes except compactions
@@ -1200,10 +1205,13 @@ class VersionSet {
       return MinLogNumberWithUnflushedData();
     }
   }
-  Status FreezeWal(uint64_t log_no,
-                   uint64_t num_entries /*maybe add more meta*/);
-  Status ReleaseWal(uint64_t log_no);
-  uint64_t GetWalEntryNumber(uint64_t log_no);
+  Status CacheWalMeta(uint64_t log_no, FileMetaData fm);
+  Status ReleaseWalMeta(uint64_t log_no);
+  FileMetaData GetWalMeta(uint64_t log_no);
+
+  bool PickWalToGC(const std::unordered_map<uint64_t, FileMetaData*>& ongoings,
+                   std::vector<FileMetaData*>* picked_wals,
+                   InstrumentedMutex* mu);
 };
 
 }  // namespace rocksdb

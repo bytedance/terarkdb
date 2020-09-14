@@ -380,8 +380,8 @@ void WalBlobReader::GetCFWalTupleOffsets(uint32_t cf_id, uint64_t* cf_offset,
       find = true;
     }
   }
-  assert(find ||
-         wif->count_ == 0);  // TODO maybe skip not founded and return status
+  // TODO maybe skip not founded and return status
+  assert(find || wif->count_ == 0);
 }
 
 InternalIterator* WalBlobReader::NewIteratorWithCF(
@@ -390,6 +390,9 @@ InternalIterator* WalBlobReader::NewIteratorWithCF(
   const std::string filename = LogIndexFileName(ioptions_.wal_dir, log_number_);
   uint64_t file_size = 0;
   auto s = ioptions_.env->GetFileSize(filename, &file_size);
+  if (UNLIKELY(!s.ok())) {
+    s = Status::IOError(filename, "Index File Not Found");
+  }
 
   if (s.ok() && (!index_file_data_.valid() || index_file_data_.empty())) {
     // since many cf may shared same wal, but only mmap index file into
@@ -441,16 +444,17 @@ Status WalBlobReader::GetFromHandle(const ReadOptions&, const Slice& handle,
 }
 
 void WalBlobIterator::Next() {
-  // TODO key in wal does not merge repeated key, need do it when iterator it
   ++i_;
   if (Valid()) {
     FetchKV();
+#ifndef NDEBUG
     if (!last_key_.empty()) {
       (void)ioptions_;
       assert(ioptions_.internal_comparator.Compare(iter_key_.GetKey(),
                                                    Slice(last_key_)) > 0);
     }
     last_key_.assign(iter_key_.GetKey().data(), iter_key_.GetKey().size());
+#endif
   }
 }
 
