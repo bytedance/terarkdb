@@ -496,7 +496,7 @@ Status DBImpl::ResumeImpl() {
 void DBImpl::WaitForBackgroundWork() {
   // Wait for background work to finish
   while (bg_bottom_compaction_scheduled_ || bg_compaction_scheduled_ ||
-         bg_flush_scheduled_) {
+         bg_flush_scheduled_ || bg_garbage_collection_scheduled_) {
     bg_cv_.Wait();
   }
 }
@@ -574,9 +574,9 @@ Status DBImpl::CloseHelper() {
   // Wait for background work to finish
   while (true) {
     int bg_scheduled = bg_bottom_compaction_scheduled_ +
-                       bg_compaction_scheduled_ +
-                       bg_garbage_collection_scheduled_ + bg_flush_scheduled_ +
-                       bg_purge_scheduled_ - bg_unscheduled;
+                       bg_compaction_scheduled_ + bg_flush_scheduled_ +
+                       bg_wal_index_creation_scheduled_ + bg_purge_scheduled_ -
+                       bg_unscheduled;
     if (bg_scheduled || pending_purge_obsolete_files_ ||
         error_handler_.IsRecoveryInProgress() || !console_runner_.closed_) {
       TEST_SYNC_POINT("DBImpl::~DBImpl:WaitJob");
@@ -584,7 +584,7 @@ Status DBImpl::CloseHelper() {
     } else {
       bg_bottom_compaction_scheduled_ = 0;
       bg_compaction_scheduled_ = 0;
-      bg_garbage_collection_scheduled_ = 0;
+      bg_wal_index_creation_scheduled_ = 0;
       bg_flush_scheduled_ = 0;
       bg_purge_scheduled_ = 0;
       break;
@@ -1396,7 +1396,7 @@ Status DBImpl::CreateWalIndex(uint64_t log_number) {
       auto s = rd_file_reader->Read(bco, 10, &content, &tmp_scratch[0]);
       assert(s.ok());
       assert(content.compare(Slice(
-              batch.Data().c_str() + WriteBatchInternal::kHeader, 10)) == 0);
+                 batch.Data().c_str() + WriteBatchInternal::kHeader, 10)) == 0);
     }
 #endif
 
