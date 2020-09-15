@@ -193,7 +193,7 @@ class WriteBatchInternal {
   // state meant to be used only during recovery.
   static void SetAsLastestPersistentState(WriteBatch* b);
   static bool IsLatestPersistentState(const WriteBatch* b);
-  static Status SeparateCfData(
+  static Status SeparateCFData(
       const WriteBatch* batch, Arena* arena,
       uint64_t batch_content_physical_offset, uint64_t wal_header_size,
       std::map<uint32_t, std::vector<std::pair<ParsedInternalKey, WalEntry>>>*

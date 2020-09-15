@@ -174,10 +174,19 @@ struct SliceParts {
   SliceParts() : parts(nullptr), num_parts(0) {}
 
   size_t size() const { return total_size; };
+  void dump(void* dst, size_t cap) const {
+    assert(cap >= total_size);
+    (void)cap;
+    char* char_dst = reinterpret_cast<char*>(dst);
+    for (int i = 0; i < num_parts; ++i) {
+      memcpy(char_dst, parts[i].data(), parts[i].size());
+      char_dst += parts[i].size();
+    }
+  }
+
   const Slice* parts;
   int num_parts;
   size_t total_size;
-
 };
 
 inline bool operator==(const Slice& x, const Slice& y) {

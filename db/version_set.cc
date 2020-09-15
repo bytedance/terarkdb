@@ -1819,18 +1819,6 @@ void VersionStorageInfo::ComputeCompactionScore(
     }
   }
 
-  // Calculate total_garbage_ratio_ as criterion for NeedsGarbageCollection().
-  double num_entries = 0;
-  for (auto& f : LevelFiles(-1)) {
-    if (f->is_gc_forbidden()) {
-      continue;
-    }
-    total_garbage_ratio_ += f->num_antiquation;
-    num_entries += f->prop.num_entries;
-  }
-  total_garbage_ratio_ /= std::max<double>(1, num_entries);
-
-  is_pick_compaction_fail = false;
   ComputeFilesMarkedForCompaction();
   ComputeBottommostFilesMarkedForCompaction();
   if (mutable_cf_options.ttl > 0) {
@@ -1945,7 +1933,12 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f,
         }
       }
     }
+    if (f->prop.is_blob_wal()) {
+      blob_wal_dependence_.emplace_back(
+          f->fd.GetNumber(), f->prop.num_entries - f->num_antiquation);
+    }
   } else {
+    assert(!f->prop.is_blob_wal());
     if (f->prop.is_map_sst()) {
       space_amplification_[level] |= kHasMapSst;
     }
@@ -2869,6 +2862,34 @@ bool VersionStorageInfo::RangeMightExistAfterSortedRun(
   return false;
 }
 
+void VersionStorageInfo::UpdateGarbageCollectionInfo(
+    const std::unordered_map<uint64_t, uint64_t>& blob_wal_dependence_map) {
+  if (!blob_wal_dependence_.empty()) {
+    uint64_t new_blob_num_antiquation = 0;
+
+    for (auto f : files_[-1]) {
+      if (f->is_gc_forbidden()) {
+        continue;
+      }
+      if (f->prop.is_blob_wal()) {
+        auto find = blob_wal_dependence_map.find(f->fd.GetNumber());
+        assert(find != blob_wal_dependence_map.end());
+        if (find != blob_wal_dependence_map.end()) {
+          f->num_antiquation =
+              f->prop.num_entries - std::min(f->prop.num_entries, find->second);
+        }
+      }
+      new_blob_num_antiquation += f->num_antiquation;
+    }
+    blob_num_antiquation_ = new_blob_num_antiquation;
+  }
+  // Calculate total_garbage_ratio_ as criterion for NeedsGarbageCollection().
+  total_garbage_ratio_ =
+      blob_num_antiquation_ / std::max<double>(1, blob_num_entries_);
+
+  is_pick_compaction_fail = false;
+}
+
 void Version::AddLiveFiles(std::vector<FileDescriptor>* live) {
   for (int level = -1; level < storage_info_.num_levels(); level++) {
     const std::vector<FileMetaData*>& files = storage_info_.files_[level];
@@ -3178,11 +3199,45 @@ Status VersionSet::ProcessManifestWrites(
     EnvOptions opt_env_opts = env_->OptimizeForManifestWrite(env_options_);
     mu->Unlock();
 
+    std::unordered_map<uint64_t, uint64_t> blob_wal_dependence_map;
+    std::vector<uint32_t> cfd_id;
+
+    auto collect_wal_entry_depend = [&](VersionStorageInfo* vstorage) {
+      for (auto& pair : vstorage->blob_wal_dependence()) {
+        blob_wal_dependence_map[pair.first] += pair.second;
+      }
+    };
     if (!first_writer.edit_list.front()->IsColumnFamilyManipulation()) {
       for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
+        cfd_id.emplace_back(versions[i]->cfd()->GetID());
         assert(!builder_guards.empty() &&
                builder_guards.size() == versions.size());
         builder_guards[i]->DoApplyAndSaveTo(versions[i]->storage_info(), this);
+        collect_wal_entry_depend(versions[i]->storage_info());
+      }
+
+      std::sort(cfd_id.begin(), cfd_id.end());
+      for (auto cfd : *column_family_set_) {
+        if (!cfd->initialized() ||
+            std::binary_search(cfd_id.begin(), cfd_id.end(), cfd->GetID())) {
+          continue;
+        }
+        collect_wal_entry_depend(cfd->current()->storage_info());
+      }
+      for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
+        versions[i]->storage_info()->UpdateGarbageCollectionInfo(
+            blob_wal_dependence_map);
+      }
+
+      if (!blob_wal_dependence_map.empty()) {
+        for (auto cfd : *column_family_set_) {
+          if (!cfd->initialized() ||
+              std::binary_search(cfd_id.begin(), cfd_id.end(), cfd->GetID())) {
+            continue;
+          }
+          cfd->current()->storage_info()->UpdateGarbageCollectionInfo(
+              blob_wal_dependence_map);
+        }
       }
     }
 
@@ -4685,8 +4740,8 @@ bool VersionSet::VerifyCompactionFileConsistency(Compaction* c) {
   return true;  // everything good
 }
 
-bool VersionSet::PickWalToGC(
-    std::vector<FileMetaData*>* picked_wals, InstrumentedMutex* mu) {
+bool VersionSet::PickWalToGC(std::vector<FileMetaData*>* picked_wals,
+                             InstrumentedMutex* mu) {
   mu->AssertHeld();
   bool found = false;
   for (auto cfd_iter : *column_family_set_) {

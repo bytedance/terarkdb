@@ -14,6 +14,7 @@
 #include <limits>
 #include <list>
 #include <map>
+#include <queue>
 #include <set>
 #include <string>
 #include <utility>
@@ -1114,7 +1115,7 @@ class DBImpl : public DB {
   void SchedulePendingFlush(const FlushRequest& req, FlushReason flush_reason);
 
   void SchedulePendingCompaction(ColumnFamilyData* cfd);
-  void SchedulePendingGarbageCollection(ColumnFamilyData* cfd);
+  void SchedulePendingGarbageCollection();
   void SchedulePendingPurge(const std::string& fname,
                             const std::string& dir_to_sync, FileType type,
                             uint64_t number, int job_id);
@@ -1427,7 +1428,16 @@ class DBImpl : public DB {
   // invariant(column family present in compaction_queue_ <==>
   // ColumnFamilyData::pending_compaction_ == true)
   std::deque<ColumnFamilyData*> compaction_queue_;
-  std::deque<ColumnFamilyData*> garbage_collection_queue_;
+  struct GarbageCollectionQueueCmp {
+    bool operator()(const std::pair<double, ColumnFamilyData*>& l,
+                    const std::pair<double, ColumnFamilyData*>& r) const {
+      return l.first < r.first;
+    }
+  };
+  std::priority_queue<std::pair<double, ColumnFamilyData*>,
+                      std::vector<std::pair<double, ColumnFamilyData*>>,
+                      GarbageCollectionQueueCmp>
+      garbage_collection_queue_;
 
   // A queue to store filenames of the files to be purged
   std::deque<PurgeFileInfo> purge_queue_;

@@ -116,7 +116,8 @@ struct ValueIndexBuf {
     EncodeFixed16(buf_ + 20, head_crc);
     EncodeFixed16(buf_ + 22, tail_crc);
   }
-  const char* Data() { return buf_; }
+  const char* data() const { return buf_; }
+  size_t size() const { return kDefaultLogIndexSize; }
 
  private:
   char buf_[kDefaultLogIndexSize];
@@ -1280,16 +1281,14 @@ class MemTableInserter : public WriteBatch::Handler {
       if (value.size() > blob_size_) {
         tv.Fill(value, wal_offset_of_wb_content_, wal_record_header_size_,
                 batch_content_, log_used_);
-        Slice parts[] = {Slice(tv.Data(), kDefaultLogIndexSize), value};
+        Slice parts[] = {Slice(tv.data(), tv.size()), value};
         SliceParts value_parts(parts, 2);
         mem_res =
             mem->Add(sequence_, kTypeValueIndex, key, value_parts,
                      concurrent_memtable_writes_, get_post_process_info(mem));
       } else {
-        Slice parts[] = {value};
-        SliceParts value_parts(parts, 1);
         mem_res =
-            mem->Add(sequence_, kTypeValue, key, value_parts,
+            mem->Add(sequence_, kTypeValue, key, value,
                      concurrent_memtable_writes_, get_post_process_info(mem));
       }
       if (UNLIKELY(!mem_res)) {
@@ -1615,13 +1614,11 @@ class MemTableInserter : public WriteBatch::Handler {
       if (value.size() > blob_size_) {
         tv.Fill(value, wal_offset_of_wb_content_, wal_record_header_size_,
                 batch_content_, log_used_);
-        Slice parts[] = {Slice(tv.Data(), kDefaultLogIndexSize), value};
+        Slice parts[] = {Slice(tv.data(), tv.size()), value};
         SliceParts value_parts(parts, 2);
         mem_res = mem->Add(sequence_, kTypeMergeIndex, key, value_parts);
       } else {
-        Slice parts[] = {value};
-        SliceParts value_parts(parts, 1);
-        mem_res = mem->Add(sequence_, kTypeMerge, key, value_parts);
+        mem_res = mem->Add(sequence_, kTypeMerge, key, value);
       }
       // Add merge operator to memtable
       if (UNLIKELY(!mem_res)) {
@@ -1912,12 +1909,10 @@ Status WriteBatchInternal::Append(WriteBatch* dst, const WriteBatch* src,
     src_len = batch_end.size - WriteBatchInternal::kHeader;
     src_count = batch_end.count;
     src_flags = batch_end.content_flags;
-    dst->merge_batch_of_wal = true;
   } else {
     src_len = src->rep_.size() - WriteBatchInternal::kHeader;
     src_count = Count(src);
     src_flags = src->content_flags_.load(std::memory_order_relaxed);
-    dst->merge_batch_of_wal = false;
   }
 
   SetCount(dst, Count(dst) + src_count);
@@ -2053,7 +2048,7 @@ class WalIndexCreater : public WriteBatch::Handler {
       wal_entry_map_;
 };
 
-Status WriteBatchInternal::SeparateCfData(
+Status WriteBatchInternal::SeparateCFData(
     const WriteBatch* batch, Arena* arena,
     uint64_t batch_content_physical_offset, uint64_t wal_header_size,
     std::map<uint32_t, std::vector<std::pair<ParsedInternalKey, WalEntry>>>*

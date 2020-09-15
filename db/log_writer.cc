@@ -62,13 +62,7 @@ Writer::Writer(std::unique_ptr<WritableFileWriter>&& dest, uint64_t log_number,
 
 Writer::~Writer() { WriteBuffer(); }
 
-Status Writer::WriteBuffer() {
-  auto s = dest_->Flush();
-  if (!s.ok()) {
-    return s;
-  }
-  return s;
-}
+Status Writer::WriteBuffer() { return dest_->Flush(); }
 
 Status Writer::AddRecord(const Slice& slice, size_t num_entries, void* p) {
   WriteThread::Writer* wt = static_cast<WriteThread::Writer*>(p);

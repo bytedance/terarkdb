@@ -336,6 +336,11 @@ class VersionStorageInfo {
   // REQUIRES: This version has been saved (see VersionSet::SaveTo)
   const DependenceMap& dependence_map() const { return dependence_map_; }
 
+  // REQUIRES: This version has been saved (see VersionSet::SaveTo)
+  const std::vector<std::pair<uint64_t, uint64_t>>& blob_wal_dependence() {
+    return blob_wal_dependence_;
+  }
+
   const rocksdb::LevelFilesBrief& LevelFilesBrief(int level) const {
     assert(level < static_cast<int>(level_files_brief_.size()));
     return level_files_brief_[level];
@@ -489,6 +494,9 @@ class VersionStorageInfo {
                                      const Slice& largest_user_key,
                                      int last_level, int last_l0_idx);
 
+  void UpdateGarbageCollectionInfo(
+      const std::unordered_map<uint64_t, uint64_t>& blob_wal_dependence_map);
+
  private:
   const InternalKeyComparator* internal_comparator_;
   const Comparator* user_comparator_;
@@ -577,10 +585,11 @@ class VersionStorageInfo {
 
   enum {
     kHasMapSst = 1ULL << 0,
-    kHasRangeDeletion = 1ULL << 1,
+    kHasRangeDeletion = 1ULL << 2,
   };
   std::unordered_map<int, int> space_amplification_;
   std::vector<double> read_amplification_;
+  std::vector<std::pair<uint64_t, uint64_t>> blob_wal_dependence_;
 
   int l0_delay_trigger_count_ = 0;  // Count used to trigger slow down and stop
                                     // for number of L0 files.

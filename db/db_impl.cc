@@ -480,8 +480,8 @@ Status DBImpl::ResumeImpl() {
   if (s.ok()) {
     for (auto cfd : *versions_->GetColumnFamilySet()) {
       SchedulePendingCompaction(cfd);
-      SchedulePendingGarbageCollection(cfd);
     }
+    SchedulePendingGarbageCollection();
     MaybeScheduleFlushOrCompaction();
   }
 
@@ -1400,7 +1400,7 @@ Status DBImpl::CreateWalIndex(uint64_t log_number) {
     }
 #endif
 
-    status = WriteBatchInternal::SeparateCfData(
+    status = WriteBatchInternal::SeparateCFData(
         &batch, &arena, bco, wal_header_size, &wal_entry_map);
     if (!status.ok()) {
       return status;
@@ -2461,7 +2461,7 @@ void DBImpl::ReleaseSnapshot(const Snapshot* s) {
                ->BottommostFilesMarkedForCompaction()
                .empty()) {
         SchedulePendingCompaction(cfd);
-        SchedulePendingGarbageCollection(cfd);
+        SchedulePendingGarbageCollection();
         MaybeScheduleFlushOrCompaction();
       }
     }

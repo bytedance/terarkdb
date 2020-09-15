@@ -62,7 +62,7 @@ bool MemWriterToken::init_value(void* valptr, size_t valsize) noexcept {
     if (value_loc == MainPatricia::mem_alloc_fail) break;
     auto value_enc = (char*)trie->mem_get(value_loc);
     auto value_dst = EncodeVarint32(value_enc, (uint32_t)value_.size());
-    memcpy(value_dst, value_.data(), value_.size());
+    value_.dump(value_dst, value_.size());
     auto* data = (details::tag_vector_t::data_t*)trie->mem_get(data_loc);
     data->loc = (uint32_t)value_loc;
     data->tag = tag_;
@@ -300,7 +300,7 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice& internal_key,
   auto fn_insert_impl = [&](MainPatricia* trie) {
     auto token = trie->tls_writer_token_nn<MemWriterToken>();
     assert(dynamic_cast<MemWriterToken*>(token) != nullptr);
-    token->reset_tag_value(tag, value.parts[1]); // FIXME
+    token->reset_tag_value(tag, value);
     token->acquire(trie);
     TERARK_SCOPE_EXIT(token->idle());
     uint32_t tmp_loc = UINT32_MAX;
@@ -314,9 +314,7 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice& internal_key,
       }
       auto valptr = (char*)trie->mem_get(value_loc);
       valptr = EncodeVarint32(valptr, (uint32_t)value.size());
-      for (int i = 0; i < value.num_parts; ++i) {
-        memcpy(valptr, value.parts[i].data(), value.parts[i].size());
-      }
+      value.dump(valptr, value.size());
       uint32_t size;
       // row lock: infinite spin on LOCK_FLAG
       do {

@@ -28,12 +28,12 @@ namespace rocksdb {
 // Write token pairing with MainPatricia
 class MemWriterToken : public terark::Patricia::WriterToken {
   uint64_t tag_;
-  Slice value_;
+  SliceParts value_;
 
  public:
-  uint64_t get_tag() { return tag_; }
+  uint64_t get_tag() const { return tag_; }
 
-  void reset_tag_value(uint64_t tag, const Slice& value) {
+  void reset_tag_value(uint64_t tag, const SliceParts& value) {
     tag_ = tag;
     value_ = value;
   }
@@ -92,46 +92,45 @@ class PatriciaTrieRep : public MemTableRep {
 
   // Return approximate memory usage which is sum of memory usage from
   // all patricia trie handled by this rep.
-  virtual size_t ApproximateMemoryUsage() override;
+  size_t ApproximateMemoryUsage() override;
 
   // This approximition is not supported, return 0 instead.
-  virtual uint64_t ApproximateNumEntries(const Slice& /*start_ikey*/,
-                                         const Slice& /*end_ikey*/) override {
+  uint64_t ApproximateNumEntries(const Slice& /*start_ikey*/,
+                                 const Slice& /*end_ikey*/) override {
     return 0;
   }
 
   // Return true if this rep contains querying key.
-  virtual bool Contains(const Slice& internal_key) const override;
+  bool Contains(const Slice& internal_key) const override;
 
   // Get with lazyslice feedback, parsing the value when truly needed.
-  virtual void Get(const LookupKey& k, void* callback_args,
-                   bool (*callback_func)(void* arg, const Slice& key,
-                                         const char* value)) override;
+  void Get(const LookupKey& k, void* callback_args,
+           bool (*callback_func)(void* arg, const Slice& key,
+                                 const char* value)) override;
 
   // Return iterator of this rep
-  virtual MemTableRep::Iterator* GetIterator(Arena* arena) override;
+  MemTableRep::Iterator* GetIterator(Arena* arena) override;
 
   // Insert with keyhandle is not supported.
-  virtual void Insert(KeyHandle /*handle*/) override { assert(false); }
+  void Insert(KeyHandle /*handle*/) override { assert(false); }
 
   // Return true if insertion successed.
-  virtual bool InsertKeyValue(const Slice& internal_key,
-                              const SliceParts& value) override;
+  bool InsertKeyValue(const Slice& internal_key,
+                      const SliceParts& value) override;
 
   // Concurrent write is supported by default.
-  virtual bool InsertKeyValueConcurrently(const Slice& internal_key,
-                                          const SliceParts& value) override {
+  bool InsertKeyValueConcurrently(const Slice& internal_key,
+                                  const SliceParts& value) override {
     return InsertKeyValue(internal_key, value);
   }
 
-  virtual void MarkReadOnly() override;
+  void MarkReadOnly() override;
 };
 
 // Heap iterator for traversing multi tries simultaneously.
 // Create a heap to merge iterators from all tries.
 template <bool heap_mode>
-class PatriciaRepIterator : public MemTableRep::Iterator,
-                            boost::noncopyable {
+class PatriciaRepIterator : public MemTableRep::Iterator, boost::noncopyable {
   typedef terark::Patricia::ReaderToken token_t;
 
   // Inner iterator abstructiong for polymorphism

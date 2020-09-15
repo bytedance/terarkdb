@@ -1980,24 +1980,27 @@ ColumnFamilyData* DBImpl::PopFirstFromCompactionQueue() {
 void DBImpl::AddToGarbageCollectionQueue(ColumnFamilyData* cfd) {
   assert(!cfd->queued_for_garbage_collection());
   cfd->Ref();
-  garbage_collection_queue_.push_back(cfd);
+  garbage_collection_queue_.emplace(
+      cfd->current()->storage_info()->total_garbage_ratio(), cfd);
   cfd->set_queued_for_garbage_collection(true);
 }
 
 ColumnFamilyData* DBImpl::PopFirstFromGarbageCollectionQueue() {
   assert(!garbage_collection_queue_.empty());
-  auto max_iter = garbage_collection_queue_.begin();
-  double max_load = (*max_iter)->current()->GetGarbageCollectionLoad();
-  for (auto it = std::next(max_iter); it != garbage_collection_queue_.end();
-       ++it) {
-    double tmp_load = (*it)->current()->GetGarbageCollectionLoad();
-    if (max_load < tmp_load) {
-      max_load = tmp_load;
-      max_iter = it;
-    }
+
+  autovector<ColumnFamilyData*> check_list;
+  int max_check = std::min(int(garbage_collection_queue_.size()),
+                           GetBGJobLimits().max_garbage_collections);
+  for (int i = 0; i < max_check; ++i) {
+    check_list.emplace_back(garbage_collection_queue_.top().second);
+    garbage_collection_queue_.pop();
   }
-  auto cfd = *max_iter;
-  garbage_collection_queue_.erase(max_iter);
+  for (auto cfd : check_list) {
+    garbage_collection_queue_.emplace(
+        cfd->current()->GetGarbageCollectionLoad(), cfd);
+  }
+  auto cfd = garbage_collection_queue_.top().second;
+  garbage_collection_queue_.pop();
   assert(cfd->queued_for_garbage_collection());
   cfd->set_queued_for_garbage_collection(false);
   return cfd;
@@ -2035,8 +2038,12 @@ void DBImpl::SchedulePendingCompaction(ColumnFamilyData* cfd) {
   }
 }
 
-void DBImpl::SchedulePendingGarbageCollection(ColumnFamilyData* cfd) {
-  if (!cfd->queued_for_garbage_collection() && cfd->NeedsGarbageCollection()) {
+void DBImpl::SchedulePendingGarbageCollection() {
+  for (auto cfd : *versions_->GetColumnFamilySet()) {
+    if (cfd->IsDropped() || !cfd->queued_for_garbage_collection() ||
+        !cfd->NeedsGarbageCollection()) {
+      continue;
+    }
     AddToGarbageCollectionQueue(cfd);
     ++unscheduled_garbage_collections_;
   }
@@ -2525,7 +2532,7 @@ void DBImpl::BackgroundCallWalIndexCreation() {
   }
 
   assert(num_running_wal_index_creations_ > 0);
-  num_running_wal_index_creations_ --;
+  num_running_wal_index_creations_--;
   bg_wal_index_creation_scheduled_--;
 
   // See if there's more work to be done
@@ -3332,7 +3339,7 @@ void DBImpl::InstallSuperVersionAndScheduleWork(
   // Whenever we install new SuperVersion, we might need to issue new flushes or
   // compactions.
   SchedulePendingCompaction(cfd);
-  SchedulePendingGarbageCollection(cfd);
+  SchedulePendingGarbageCollection();
   MaybeScheduleFlushOrCompaction();
 
   // Update max_total_in_memory_state_

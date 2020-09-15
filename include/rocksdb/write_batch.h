@@ -24,10 +24,12 @@
 
 #pragma once
 
+#include <stdint.h>
+
 #include <atomic>
 #include <stack>
 #include <string>
-#include <stdint.h>
+
 #include "rocksdb/status.h"
 #include "rocksdb/types.h"
 #include "rocksdb/write_batch_base.h"
@@ -327,7 +329,6 @@ class WriteBatch : public WriteBatchBase {
   const SavePoint& GetWalTerminationPoint() const { return wal_term_point_; }
 
   void SetMaxBytes(size_t max_bytes) override { max_bytes_ = max_bytes; }
-  bool merge_batch_of_wal = false;
 
  private:
   friend class WriteBatchInternal;
