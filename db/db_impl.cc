@@ -11,7 +11,6 @@
 #include <atomic>
 
 #include "db/log_format.h"
-
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
 #endif
@@ -254,7 +253,6 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       num_running_ingest_file_(0),
 #ifndef ROCKSDB_LITE
       wal_manager_(immutable_db_options_, env_options_, seq_per_batch),
-      index_creating_(false),
 #endif  // ROCKSDB_LITE
       event_logger_(immutable_db_options_.info_log.get()),
       bg_work_paused_(0),
@@ -576,7 +574,8 @@ Status DBImpl::CloseHelper() {
   // Wait for background work to finish
   while (true) {
     int bg_scheduled = bg_bottom_compaction_scheduled_ +
-                       bg_compaction_scheduled_ + bg_flush_scheduled_ +
+                       bg_compaction_scheduled_ +
+                       bg_garbage_collection_scheduled_ + bg_flush_scheduled_ +
                        bg_purge_scheduled_ - bg_unscheduled;
     if (bg_scheduled || pending_purge_obsolete_files_ ||
         error_handler_.IsRecoveryInProgress() || !console_runner_.closed_) {
@@ -585,6 +584,7 @@ Status DBImpl::CloseHelper() {
     } else {
       bg_bottom_compaction_scheduled_ = 0;
       bg_compaction_scheduled_ = 0;
+      bg_garbage_collection_scheduled_ = 0;
       bg_flush_scheduled_ = 0;
       bg_purge_scheduled_ = 0;
       break;

@@ -1077,6 +1077,27 @@ class VersionSet {
 
   const ImmutableDBOptions* db_options() const { return db_options_; }
 
+  void LogAndApplyHelper(ColumnFamilyData* cfd, VersionBuilder* b, Version* v,
+                         VersionEdit* edit, InstrumentedMutex* mu,
+                         bool apply = true);
+  uint64_t MinLogNumberToKeep() {
+    if (db_options_->allow_2pc) {
+      return min_log_number_to_keep_2pc();
+    } else {
+      return MinLogNumberWithUnflushedData();
+    }
+  }
+  Status CacheWalMeta(uint64_t log_no, FileMetaData fm);
+  Status ReleaseWalMeta(uint64_t log_no);
+  FileMetaData GetWalMeta(uint64_t log_no);
+  bool PickWalToGC(std::vector<FileMetaData*>* picked_wals,
+                   InstrumentedMutex* mu);
+  void SetWalWithoutIndex(bool flag) {
+    has_wal_without_index_.store(flag, std::memory_order_relaxed);
+  }
+  bool HasWalWithoutIndex() {
+    return has_wal_without_index_.load(std::memory_order_relaxed);
+  }
   static uint64_t GetNumLiveVersions(Version* dummy_versions);
 
   static uint64_t GetTotalSstFilesSize(Version* dummy_versions);
@@ -1177,8 +1198,10 @@ class VersionSet {
   std::vector<ObsoleteFileInfo> obsolete_files_;
   std::vector<std::string> obsolete_manifests_;
 
-  // XXX may need ref?
   std::unordered_map<uint64_t, FileMetaData*> index_creating_ongoing_wals_;
+
+  // after switchmem, a new static wal is created, then need to create its index
+  std::atomic<bool> has_wal_without_index_;
 
   // cache log_meta until all dependence sst of this log flushed
   std::unordered_map<uint64_t, FileMetaData> log_meta_cache_;
@@ -1193,25 +1216,6 @@ class VersionSet {
   void operator=(const VersionSet&);
 
   void LogAndApplyCFHelper(VersionEdit* edit);
-
- public:
-  void LogAndApplyHelper(ColumnFamilyData* cfd, VersionBuilder* b, Version* v,
-                         VersionEdit* edit, InstrumentedMutex* mu,
-                         bool apply = true);
-  uint64_t MinLogNumberToKeep() {
-    if (db_options_->allow_2pc) {
-      return min_log_number_to_keep_2pc();
-    } else {
-      return MinLogNumberWithUnflushedData();
-    }
-  }
-  Status CacheWalMeta(uint64_t log_no, FileMetaData fm);
-  Status ReleaseWalMeta(uint64_t log_no);
-  FileMetaData GetWalMeta(uint64_t log_no);
-
-  bool PickWalToGC(const std::unordered_map<uint64_t, FileMetaData*>& ongoings,
-                   std::vector<FileMetaData*>* picked_wals,
-                   InstrumentedMutex* mu);
 };
 
 }  // namespace rocksdb

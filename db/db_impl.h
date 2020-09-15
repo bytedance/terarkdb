@@ -1432,9 +1432,6 @@ class DBImpl : public DB {
   // A queue to store filenames of the files to be purged
   std::deque<PurgeFileInfo> purge_queue_;
 
-  // after switchmem, a new static wal is created, then need to create its index
-  std::atomic<bool> has_wal_without_index_;
-
   // A pointer to the file numbers that have been assigned to certain
   // JobContext. Current implementation tracks SST, WAL & MANIFEST files.
   std::unordered_set<const std::vector<uint64_t>*> files_grabbed_for_purge_;
@@ -1648,7 +1645,6 @@ class DBImpl : public DB {
   bool ShouldntRunManualCompaction(ManualCompactionState* m);
   bool HaveManualCompaction(ColumnFamilyData* cfd);
   bool MCOverlap(ManualCompactionState* m, ManualCompactionState* m1);
-  bool ShouldCreateWalIndex();
 
   size_t GetWalPreallocateBlockSize(uint64_t write_buffer_size) const;
 

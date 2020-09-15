@@ -177,6 +177,7 @@ struct SliceParts {
   const Slice* parts;
   int num_parts;
   size_t total_size;
+
 };
 
 inline bool operator==(const Slice& x, const Slice& y) {

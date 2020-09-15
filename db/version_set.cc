@@ -4686,7 +4686,6 @@ bool VersionSet::VerifyCompactionFileConsistency(Compaction* c) {
 }
 
 bool VersionSet::PickWalToGC(
-    const std::unordered_map<uint64_t, FileMetaData*>& ongoings,
     std::vector<FileMetaData*>* picked_wals, InstrumentedMutex* mu) {
   mu->AssertHeld();
   bool found = false;
@@ -4698,13 +4697,16 @@ bool VersionSet::PickWalToGC(
     const auto* vstorage = version->storage_info();
     for (const auto& file : vstorage->LevelFiles(-1)) {
       if (file->prop.is_blob_wal() &&
-          ongoings.find(file->fd.GetNumber()) == ongoings.end() &&
+          index_creating_ongoing_wals_.find(file->fd.GetNumber()) ==
+              index_creating_ongoing_wals_.end() &&
           file->is_gc_defered()) {
         picked_wals->push_back(file);
+        index_creating_ongoing_wals_.emplace(file->fd.GetNumber(), file);
         found = true;
       }
     }
   }
+  SetWalWithoutIndex(false);
   return found;
 }
 

@@ -12,10 +12,12 @@
 #include <stdint.h>
 
 #include <iostream>
+#include <memory>
 
 #include "db/column_family.h"
 #include "db/version_edit.h"
 #include "db/version_set.h"
+#include "db/write_thread.h"
 #include "options/db_options.h"
 #include "rocksdb/env.h"
 #include "table/get_context.h"
@@ -68,19 +70,16 @@ Status Writer::WriteBuffer() {
   return s;
 }
 
-Status Writer::AddRecord(const Slice& slice, size_t num_entries,
-                         WriteThread::Writer* wt) {
-  const char* ptr = slice.data();
-  size_t left = slice.size();
-
-  assert(recycle_log_files_ == 0);  // Forbiden
-  // Header size varies depending on whether we are recycling or not.
-  const int header_size =
-      recycle_log_files_ ? kRecyclableHeaderSize : kHeaderSize;
+Status Writer::AddRecord(const Slice& slice, size_t num_entries, void* p) {
+  WriteThread::Writer* wt = static_cast<WriteThread::Writer*>(p);
+  assert(!recycle_log_files_);  // Forbiden wal recycle
+  const int header_size = kHeaderSize;
   if (wt) {
-    wt->is_recycle = recycle_log_files_ ? true : false;
+    wt->wal_record_header_size = header_size;
   }
 
+  const char* ptr = slice.data();
+  size_t left = slice.size();
   // Fragment the record if necessary and emit it.  Note that if slice
   // is empty, we still want to iterate once to emit a single
   // zero-length record
@@ -123,13 +122,13 @@ Status Writer::AddRecord(const Slice& slice, size_t num_entries,
       type = recycle_log_files_ ? kRecyclableMiddleType : kMiddleType;
     }
 
-    if (wt != nullptr && wt->wal_offset_of_wb_content_ == uint64_t(-1)) {
+    if (wt != nullptr && wt->wal_offset_of_wb_content == uint64_t(-1)) {
       // writebatch's content and set writebatch_content_offset only once.
       assert(dest_->GetFileSize() ==
              block_counts_ * kBlockSize + block_offset_);
-      wt->wal_offset_of_wb_content_ =
+      wt->wal_offset_of_wb_content =
           GetFirstEntryPhysicalOffset(dest_->GetFileSize(), header_size, avail);
-      assert(wt->wal_offset_of_wb_content_ % kBlockSize >=
+      assert(wt->wal_offset_of_wb_content % kBlockSize >=
              (uint64_t)header_size);
     }
     s = EmitPhysicalRecord(type, ptr, fragment_length);

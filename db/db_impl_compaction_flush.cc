@@ -1880,14 +1880,12 @@ void DBImpl::MaybeScheduleFlushOrCompaction() {
                    &DBImpl::UnscheduleCallback);
   }
 
-  // TODO check condition and schedule create wal index
-  // condition: has unindexed wal and those wals exceed limit
   assert(bg_job_limits.max_wal_index_creations == 1);
   assert(mutable_db_options_.max_task_per_thread == 1);
   while (bg_wal_index_creation_scheduled_ <
              bg_job_limits.max_wal_index_creations *
                  mutable_db_options_.max_task_per_thread &&
-         has_wal_without_index_.load(std::memory_order_release)) {
+         versions_->HasWalWithoutIndex()) {
     CompactionArg* ca = new CompactionArg;
     ca->db = this;
     ca->prepicked_compaction = nullptr;
@@ -2104,6 +2102,7 @@ void DBImpl::BGWorkPurge(void* db) {
 
 void DBImpl::BGWorkCreateWalIndex(void* arg) {
   CompactionArg ca = *(reinterpret_cast<CompactionArg*>(arg));
+  delete reinterpret_cast<CompactionArg*>(arg);
   IOSTATS_SET_THREAD_POOL_ID(Env::Priority::HIGH);
   TEST_SYNC_POINT("DBImpl::BGWorkCreateWalIndex:start");
   reinterpret_cast<DBImpl*>(ca.db)->BackgroundCallWalIndexCreation();
@@ -3166,9 +3165,8 @@ Status DBImpl::BackgroundWalIndexCreation(JobContext* job_context,
   mutex_.AssertHeld();
   TEST_SYNC_POINT("DBImpl::BackgroundWalIndexCreation:PickWalFiles");
   std::vector<FileMetaData*> picked_wals;
-  if (versions_->PickWalToGC(versions_->index_creating_ongoing_wals_,
-                             &picked_wals, &mutex_)) {
-    // 2. CreateWalIndex respectively, no lock
+  if (versions_->PickWalToGC(&picked_wals, &mutex_)) {
+    // 2. CreateWalIndex respectively, NO LOCK
     mutex_.Unlock();
     TEST_SYNC_POINT("DBImpl::BackgroundWalIndexCreation:CreateIndexes");
     std::unordered_set<uint64_t> failed_wal;
@@ -3179,13 +3177,17 @@ Status DBImpl::BackgroundWalIndexCreation(JobContext* job_context,
         ROCKS_LOG_WARN(immutable_db_options_.info_log,
                        "%d WalIndexCreation Fail: %s", f->fd.GetNumber(),
                        status.ToString().c_str());
-        // TODO clear mess of failed wals clear tmp index, and remove it from
+        auto idx_fname =
+            LogIndexFileName(immutable_db_options_.wal_dir, f->fd.GetNumber());
+        auto tmp_idx_fname = idx_fname + ".tmp";
+        immutable_db_options_.env->DeleteFile(tmp_idx_fname);
+        // clear mess of failed wals clear tmp index, and remove it from
         // index_creating_ongoing_wals
         continue;
       }
     }
 
-    // 3. broadcast wal gcstatus, (maybe lock?)
+    // 3. broadcast wal gc_status
     TEST_SYNC_POINT("DBImpl::BackgroundWalIndexCreation:BroadcastGcstatus");
     for (auto& f : picked_wals) {
       if (failed_wal.find(f->fd.GetNumber()) != failed_wal.end()) {
@@ -3292,14 +3294,6 @@ bool DBImpl::MCOverlap(ManualCompactionState* m, ManualCompactionState* m1) {
   return true;
 }
 
-bool DBImpl::ShouldCreateWalIndex() {
-  bool f = false;
-  if (index_creating_.compare_exchange_weak(f, true,
-                                            std::memory_order_relaxed)) {
-    return true;
-  }
-  return false;
-}
 // SuperVersionContext gets created and destructed outside of the lock --
 // we use this conveniently to:
 // * malloc one SuperVersion() outside of the lock -- new_superversion

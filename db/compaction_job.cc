@@ -1266,7 +1266,8 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
 
   BuilderSeparateHelper separate_helper;
   // since merge may contain value from separate_helper, put merge after
-  // separate helper make surce deconstruct merge first
+  // separate helper make sure deconstructor of merge happen before
+  // separate_helper
   MergeHelper merge(
       env_, cfd->user_comparator(), cfd->ioptions()->merge_operator,
       compaction_filter, db_options_.info_log.get(),
@@ -1871,6 +1872,8 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
     if ((counter.input == meta.prop.num_entries && level_inputs.size() == 1 &&
          !level_inputs.front()->prop.is_blob_wal()) ||
         meta.prop.num_entries == 0) {
+      // drop output when output has no data, or single normal sst into single
+      // normal sst(permit single blob wal into  normal sst)
       ROCKS_LOG_INFO(db_options_.info_log,
                      "[%s] [JOB %d] Table #%" PRIu64
                      " GC purge %s records, dropped",
@@ -2434,7 +2437,6 @@ Status CompactionJob::InstallCompactionResults(
   } else {
     // Add compaction inputs
     if (compaction->compaction_type() != kGarbageCollection) {
-      // GC NOT delete input files?
       compaction->AddInputDeletions(compaction->edit());
     }
 

@@ -178,6 +178,13 @@ class MemTable {
            const SliceParts& value, bool allow_concurrent = false,
            MemTablePostProcessInfo* post_process_info = nullptr);
 
+  bool Add(SequenceNumber seq, ValueType type, const Slice& key,
+           const Slice& value, bool allow_concurrent = false,
+           MemTablePostProcessInfo* post_process_info = nullptr) {
+    return Add(seq, type, key, SliceParts(value), allow_concurrent,
+               post_process_info);
+  }
+
   // If memtable contains a value for key, store it in *value and return true.
   // If memtable contains a deletion for key, store a NotFound() error
   // in *status and return true.

@@ -833,16 +833,15 @@ WriteBatch* DBImpl::MergeBatch(const WriteThread::WriteGroup& write_group,
 
 static void UnpackBatchInfo(WriteThread::WriteGroup& write_group,
                             bool wal_only) {
-  assert(!write_group.leader->is_recycle);  // forbid recycle
   assert(write_group.leader == *(write_group.begin()));
 
-  size_t ahead_offset = write_group.leader->wal_offset_of_wb_content_;
+  size_t ahead_offset = write_group.leader->wal_offset_of_wb_content;
   size_t ahead_batch_size = 0;
   for (auto writer : write_group) {
-    writer->wal_offset_of_wb_content_ =
+    writer->wal_offset_of_wb_content =
         GetPhysicalOffset(ahead_offset, ahead_batch_size, log::kHeaderSize);
     assert(writer != write_group.leader ||
-           writer->wal_offset_of_wb_content_ == ahead_offset);
+           writer->wal_offset_of_wb_content == ahead_offset);
 
     if (wal_only && (!writer->batch->GetWalTerminationPoint().is_cleared())) {
       const SavePoint& batch_end = writer->batch->GetWalTerminationPoint();
@@ -1452,9 +1451,8 @@ Status DBImpl::NewLogWriter(std::unique_ptr<log::Writer>* new_log,
       LogFileName(immutable_db_options_.wal_dir, new_log_number);
   EnvOptions opt_env_opt = env_->OptimizeForLogWrite(env_options_, db_options);
   Status s;
-  // if (recycle_log_number && LogNotDepended(recycle_log_number)) {
-  // Not Support recycle_log_file_num>0 temporarily
   if (recycle_log_number) {
+    assert(false); // NOT Support recycle wal any more
     ROCKS_LOG_INFO(immutable_db_options_.info_log,
                    "reusing log %" PRIu64 " from recycle list\n",
                    recycle_log_number);
@@ -1469,10 +1467,8 @@ Status DBImpl::NewLogWriter(std::unique_ptr<log::Writer>* new_log,
     std::unique_ptr<WritableFileWriter> file_writer(new WritableFileWriter(
         std::move(lfile), log_fname, opt_env_opt, nullptr /* stats */,
         immutable_db_options_.listeners));
-    new_log->reset(
-        new log::Writer(std::move(file_writer), new_log_number,
-                        immutable_db_options_.recycle_log_file_num > 0,
-                        versions_.get(), manual_wal_flush_));
+    new_log->reset(new log::Writer(std::move(file_writer), new_log_number,
+                                   false, versions_.get(), manual_wal_flush_));
   }
   return s;
 }
@@ -1680,9 +1676,9 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
                        cfd->GetName().c_str(), cur_log_writer->get_log_number(),
                        new_log_number);
       }
-      // when last log flushed, add it to db->versions. so that we can get wal
-      // meta data later. also mark this blob as garbage to collect.
       {
+        // when last log flushed, add it to db->versions. so that we can get wal
+        // meta data later. also mark this blob as garbage to collect.
         FileMetaData bm;
         bm.fd = FileDescriptor(cur_log_writer->get_log_number(), 0 /*path_id*/,
                                cur_log_writer->file()->GetFileSize(), 0,
@@ -1692,7 +1688,7 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
         bm.smallest.SetMinPossibleForUserKey(Slice());
         bm.largest.SetMaxPossibleForUserKey(Slice());
         versions_->CacheWalMeta(cur_log_writer->get_log_number(), bm);
-        has_wal_without_index_.store(true, std::memory_order_relaxed);
+        versions_->SetWalWithoutIndex(true);
       }
     }
     logs_.emplace_back(logfile_number_, new_log);

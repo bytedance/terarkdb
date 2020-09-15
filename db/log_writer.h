@@ -17,8 +17,6 @@
 
 #include "db/dbformat.h"
 #include "db/log_format.h"
-//#include "db/version_set.h"
-#include "db/write_thread.h"
 #include "rocksdb/env.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
@@ -227,12 +225,10 @@ class Writer {
                   bool manual_flush = false);
   ~Writer();
 
-  Status AddRecord(const Slice& slice, size_t num_entries,
-                   WriteThread::Writer*);
+  Status AddRecord(const Slice& slice, size_t num_entries, void*);
   Status AddRecord(const Slice& slice) {
-    return AddRecord(slice, 0,
-                     nullptr);  // if do not have write thread, then do not
-                                // need update num_entries
+    // if do not have write thread, then do not need update num_entries
+    return AddRecord(slice, 0, nullptr);
   }
 
   WritableFileWriter* file() { return dest_.get(); }

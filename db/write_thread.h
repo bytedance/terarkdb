@@ -7,6 +7,7 @@
 
 #include <assert.h>
 #include <stdint.h>
+
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -15,6 +16,7 @@
 #include <vector>
 
 #include "db/dbformat.h"
+#include "db/log_writer.h"
 #include "db/pre_release_callback.h"
 #include "db/write_callback.h"
 #include "monitoring/instrumented_mutex.h"
@@ -122,11 +124,10 @@ class WriteThread {
     PreReleaseCallback* pre_release_callback;
     uint64_t log_used;  // log number that this batch was inserted into
     uint64_t log_ref;   // log number that memtable insert should reference
-    uint64_t wal_offset_of_wb_content_ = uint64_t(-1);
+    uint64_t wal_offset_of_wb_content;
+    uint64_t wal_record_header_size;
     WriteCallback* callback;
     bool made_waitable;          // records lazy construction of mutex and cv
-    bool is_recycle = false;  // kHeaderSize or kRecyclableHeaderSize ( maybe not need
-                      // if disable recycle logs
     std::atomic<uint8_t> state;  // write under StateMutex() or pre-link
     WriteGroup* write_group;
     SequenceNumber sequence;  // the sequence number to use for the first key
@@ -148,6 +149,8 @@ class WriteThread {
           pre_release_callback(nullptr),
           log_used(0),
           log_ref(0),
+          wal_offset_of_wb_content(std::numeric_limits<uint64_t>::max()),
+          wal_record_header_size(log::kHeaderSize),
           callback(nullptr),
           made_waitable(false),
           state(STATE_INIT),
@@ -169,6 +172,8 @@ class WriteThread {
           pre_release_callback(_pre_release_callback),
           log_used(0),
           log_ref(_log_ref),
+          wal_offset_of_wb_content(std::numeric_limits<uint64_t>::max()),
+          wal_record_header_size(log::kHeaderSize),
           callback(_callback),
           made_waitable(false),
           state(STATE_INIT),
@@ -244,7 +249,7 @@ class WriteThread {
     std::condition_variable& StateCV() {
       assert(made_waitable);
       return *static_cast<std::condition_variable*>(
-                 static_cast<void*>(&state_cv_bytes));
+          static_cast<void*>(&state_cv_bytes));
     }
   };
 

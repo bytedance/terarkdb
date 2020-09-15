@@ -1831,10 +1831,8 @@ Status WriteBatchInternal::InsertInto(
     }
     SetSequence(w->batch, inserter.sequence());
     inserter.set_log_number_ref(w->log_ref);
-    inserter.SetContext(
-        w->wal_offset_of_wb_content_,
-        w->is_recycle ? log::kRecyclableHeaderSize : log::kHeaderSize,
-        w->batch->Data(), blob_size, w->log_used);
+    inserter.SetContext(w->wal_offset_of_wb_content, log::kHeaderSize,
+                        w->batch->Data(), blob_size, w->log_used);
     w->status = w->batch->Iterate(&inserter);
     if (!w->status.ok()) {
       return w->status;
@@ -1861,10 +1859,8 @@ Status WriteBatchInternal::InsertInto(
       seq_per_batch, batch_per_txn);
   SetSequence(writer->batch, sequence);
   inserter.set_log_number_ref(writer->log_ref);
-  inserter.SetContext(
-      writer->wal_offset_of_wb_content_,
-      writer->is_recycle ? log::kRecyclableHeaderSize : log::kHeaderSize,
-      writer->batch->Data(), blob_size, writer->log_used);
+  inserter.SetContext(writer->wal_offset_of_wb_content, log::kHeaderSize,
+                      writer->batch->Data(), blob_size, writer->log_used);
   Status s = writer->batch->Iterate(&inserter);
   assert(!seq_per_batch || batch_cnt != 0);
   assert(!seq_per_batch || inserter.sequence() - sequence == batch_cnt);

@@ -375,9 +375,6 @@ class ColumnFamilyData {
   bool queued_for_garbage_collection() {
     return queued_for_garbage_collection_;
   }
-  bool queued_for_wal_index_creation() {
-    return queued_for_wal_index_creation_;
-  }
 
   enum class WriteStallCause {
     kNone,
@@ -494,8 +491,6 @@ class ColumnFamilyData {
   bool queued_for_compaction_;
 
   bool queued_for_garbage_collection_;
-
-  bool queued_for_wal_index_creation_;
 
   uint64_t prev_compaction_needed_bytes_;
 
