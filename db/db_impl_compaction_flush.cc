@@ -2132,8 +2132,8 @@ Status DBImpl::BackgroundFlush(bool* made_progress, JobContext* job_context,
       ColumnFamilyData* cfd = iter.first;
       if (cfd->IsDropped() || !cfd->imm()->IsFlushPending()) {
         // can't flush this CF, try next one
+        cfd->dec_queued_for_flush();
         if (cfd->Unref()) {
-          cfd->dec_queued_for_flush();
           delete cfd;
         }
         continue;
