@@ -782,7 +782,7 @@ void CompactionPicker::GetGrandparents(
 // Try to perform garbage collection from certain column family.
 // Resulting as a pointer of compaction, nullptr as nothing to do.
 Compaction* CompactionPicker::PickGarbageCollection(
-    const std::string& /*cf_name*/, uint64_t max_log_number_to_gc,
+    const std::string& /*cf_name*/, uint64_t min_log_number_to_keep,
     const MutableCFOptions& mutable_cf_options, VersionStorageInfo* vstorage,
     LogBuffer* /*log_buffer*/) {
   std::vector<GarbageFileInfo> gc_files;
@@ -803,7 +803,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
       continue;
     }
     if (f->prop.is_blob_wal() &&
-        (f->fd.GetNumber() >= max_log_number_to_gc || f->is_gc_defered())) {
+        (f->fd.GetNumber() >= min_log_number_to_keep || f->is_gc_defered())) {
       continue;
     }
     GarbageFileInfo info = {f};

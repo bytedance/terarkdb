@@ -20,6 +20,7 @@
 #include "db/version_edit.h"
 #include "table/merging_iterator.h"
 #include "table/scoped_arena_iterator.h"
+#include "db/compaction_picker.h"
 #include "table/sst_file_writer_collectors.h"
 #include "table/table_builder.h"
 #include "util/file_reader_writer.h"

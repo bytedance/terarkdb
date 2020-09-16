@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "dbformat.h"
 #include "port/port.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
@@ -919,7 +920,7 @@ TEST_F(CompactionIteratorWithSnapshotCheckerTest,
 }
 
 // Compaction filter should keep uncommitted key as-is, and
-//   * Convert the latest velue to deletion, and/or
+//   * Convert the latest value to deletion, and/or
 //   * if latest value is a merge, apply filter to all suequent merges.
 
 TEST_F(CompactionIteratorWithSnapshotCheckerTest, CompactionFilter_Value) {

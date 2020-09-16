@@ -54,6 +54,13 @@ struct FileDescriptor {
         smallest_seqno(_smallest_seqno),
         largest_seqno(_largest_seqno) {}
 
+  FileDescriptor(const FileDescriptor& fd)
+      : table_reader(fd.table_reader),
+        packed_number_and_path_id(fd.packed_number_and_path_id),
+        file_size(fd.GetFileSize()),
+        smallest_seqno(fd.smallest_seqno),
+        largest_seqno(fd.largest_seqno) {}
+
   FileDescriptor& operator=(const FileDescriptor& fd) {
     table_reader = fd.table_reader;
     packed_number_and_path_id = fd.packed_number_and_path_id;
@@ -117,7 +124,7 @@ struct FileMetaData {
     kGarbageCollectionForbidden = 0,
     kGarbageCollectionCandidate = 1,
     kGarbageCollectionPermitted = 2,
-    kGarbageCollectionDefered   = 3,
+    kGarbageCollectionDefered = 3,
   };
 
   FileDescriptor fd;
@@ -211,9 +218,7 @@ struct FileMetaData {
   bool is_gc_permitted() const {
     return gc_status == kGarbageCollectionPermitted;
   }
-  bool is_gc_defered() const {
-    return gc_status == kGarbageCollectionDefered;
-  }
+  bool is_gc_defered() const { return gc_status == kGarbageCollectionDefered; }
   void set_gc_candidate() { gc_status = kGarbageCollectionCandidate; }
 };
 

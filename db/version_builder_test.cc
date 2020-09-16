@@ -142,7 +142,7 @@ TEST_F(VersionBuilderTest, ApplyAndSaveTo) {
   VersionEdit version_edit;
   version_edit.AddFile(2, 666, 0, 100U, GetInternalKey("301"),
                        GetInternalKey("350"), 200, 200, false,
-                       GetPropCache(1, {27U}));
+                       GetPropCache(0, {27U}));
   version_edit.DeleteFile(3, 27U);
 
   EnvOptions env_options;
@@ -178,7 +178,7 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic) {
   VersionEdit version_edit;
   version_edit.AddFile(3, 666, 0, 100U, GetInternalKey("301"),
                        GetInternalKey("350"), 200, 200, false,
-                       GetPropCache(1, {1U}));
+                       GetPropCache(0, {1U}));
   version_edit.DeleteFile(0, 1U);
   version_edit.DeleteFile(0, 88U);
 
@@ -221,7 +221,7 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic2) {
   VersionEdit version_edit;
   version_edit.AddFile(4, 666, 0, 100U, GetInternalKey("301"),
                        GetInternalKey("350"), 200, 200, false,
-                       GetPropCache(1, {1U, 4U}));
+                       GetPropCache(0, {1U, 4U}));
   version_edit.AddFile(4, 5, 0, 100U, GetInternalKey("120"),
                        GetInternalKey("149"), 200, 200, false,
                        GetPropCache(0, {}));
@@ -260,7 +260,7 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic3) {
   VersionEdit version_edit;
   version_edit.AddFile(1, 11U, 0, 100U, GetInternalKey("100"),
                        GetInternalKey("119"), 2, 2, false,
-                       GetPropCache(1, {4U, 5U}));
+                       GetPropCache(0, {4U, 5U}));
   version_edit.AddFile(1, 12U, 0, 100U, GetInternalKey("120"),
                        GetInternalKey("129"), 2, 2, false, {});
   version_edit.AddFile(1, 13U, 0, 100U, GetInternalKey("130"),
@@ -274,7 +274,7 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic3) {
                        GetInternalKey("109"), 2, 2, false, {});
   version_edit.AddFile(-1, 4U, 0, 50U, GetInternalKey("100"),
                        GetInternalKey("114"), 2, 2, false,
-                       GetPropCache(1, {2U}));
+                       GetPropCache(0, {2U}));
   version_edit.AddFile(-1, 5U, 0, 50U, GetInternalKey("115"),
                        GetInternalKey("119"), 2, 2, false, {});
   version_builder.Apply(&version_edit);
@@ -282,7 +282,7 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic3) {
   VersionEdit version_edit2;
   version_edit2.AddFile(2, 21U, 0, 100U, GetInternalKey("110"),
                         GetInternalKey("159"), 2, 2, false,
-                        GetPropCache(1, {11U, 12U, 13U, 14U, 15U}));
+                        GetPropCache(0, {11U, 12U, 13U, 14U, 15U}));
   version_edit2.DeleteFile(1, 11U);
   version_edit2.DeleteFile(1, 12U);
   version_edit2.DeleteFile(1, 13U);
@@ -293,14 +293,14 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic3) {
   VersionEdit version_edit3;
   version_edit3.AddFile(2, 22U, 0, 100U, GetInternalKey("100"),
                         GetInternalKey("159"), 2, 2, false,
-                        GetPropCache(1, {4U, 5U, 12U, 13U, 14U, 15U}));
+                        GetPropCache(0, {4U, 5U, 12U, 13U, 14U, 15U}));
   version_edit3.DeleteFile(2, 21U);
   version_builder.Apply(&version_edit3);
 
   VersionEdit version_edit4;
   version_edit4.AddFile(2, 23U, 0, 100U, GetInternalKey("140"),
                         GetInternalKey("159"), 2, 2, false,
-                        GetPropCache(1, {4U, 12U, 13U, 14U, 15U}));
+                        GetPropCache(0, {4U, 12U, 13U, 14U, 15U}));
   version_edit4.AddFile(2, 5U, 0, 50U, GetInternalKey("115"),
                         GetInternalKey("119"), 2, 2, false, {});
   version_edit4.DeleteFile(2, 22U);
@@ -309,7 +309,7 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic3) {
   VersionEdit version_edit5;
   version_edit5.AddFile(2, 24U, 0, 100U, GetInternalKey("140"),
                         GetInternalKey("159"), 2, 2, false,
-                        GetPropCache(1, {14U, 15U}));
+                        GetPropCache(0, {14U, 15U}));
   version_edit5.DeleteFile(2, 23U);
   version_builder.Apply(&version_edit5);
 

@@ -18,6 +18,7 @@
 #include <inttypes.h>
 
 #include "db/builder.h"
+#include "db/compaction_picker.h"
 #include "db/error_handler.h"
 #include "db/event_helpers.h"
 #include "db/map_builder.h"
@@ -1022,7 +1023,7 @@ Status DBImpl::CompactFilesImpl(
   }
 
   if (output_file_names != nullptr) {
-    for (const auto newf : c->edit()->GetNewFiles()) {
+    for (const auto& newf : c->edit()->GetNewFiles()) {
       (*output_file_names)
           .push_back(TableFileName(c->immutable_cf_options()->cf_paths,
                                    newf.second.fd.GetNumber(),
@@ -1114,7 +1115,7 @@ void DBImpl::NotifyOnCompactionBegin(ColumnFamilyData* cfd, Compaction* c,
         }
       }
     }
-    for (const auto newf : c->edit()->GetNewFiles()) {
+    for (const auto& newf : c->edit()->GetNewFiles()) {
       info.output_files.push_back(TableFileName(
           c->immutable_cf_options()->cf_paths, newf.second.fd.GetNumber(),
           newf.second.fd.GetPathId()));
@@ -1178,7 +1179,7 @@ void DBImpl::NotifyOnCompactionCompleted(
         }
       }
     }
-    for (const auto newf : c->edit()->GetNewFiles()) {
+    for (const auto& newf : c->edit()->GetNewFiles()) {
       if (!c->IsNewOutputTable(newf.second.fd.GetNumber())) {
         continue;
       }
@@ -3173,7 +3174,7 @@ Status DBImpl::BackgroundWalIndexCreation(JobContext* job_context,
   mutex_.AssertHeld();
   TEST_SYNC_POINT("DBImpl::BackgroundWalIndexCreation:PickWalFiles");
   std::vector<FileMetaData*> picked_wals;
-  if (versions_->PickWalToGC(&picked_wals, &mutex_)) {
+  if (versions_->PickBlobWalWithoutIndex(&picked_wals, &mutex_)) {
     // 2. CreateWalIndex respectively, NO LOCK
     mutex_.Unlock();
     TEST_SYNC_POINT("DBImpl::BackgroundWalIndexCreation:CreateIndexes");

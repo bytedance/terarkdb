@@ -5,7 +5,24 @@ import subprocess
 import sys
 
 SKIP_LIST = []
-TEST_LIST = []
+TEST_LIST = [
+"options_settable_test",
+"option_change_migration_test",
+"document_db_test",
+"options_util_test",
+"cleanable_test",
+"heap_test",
+"object_registry_test",
+"c_test",
+"compaction_iterator_test",
+"listener_test",
+"event_logger_test",
+"lazy_buffer_test",
+"db_table_properties_test",
+"thread_list_test",
+"trace_analyzer_test",
+"merger_test"
+        ]
 
 def run_test(name):
     cmd = "./build/%s" % name
@@ -18,9 +35,9 @@ def run_test(name):
     return process.returncode
 
 if __name__ == '__main__':
-    for (dirpath, dirnames, filenames) in walk("build"):
-        TEST_LIST = [x for x in filenames if x not in SKIP_LIST and x.endswith("_test")]
-        break
+    #for (dirpath, dirnames, filenames) in walk("build"):
+    #    TEST_LIST = [x for x in filenames if x not in SKIP_LIST and x.endswith("_test")]
+    #    break
 
     # run all tests
     if len(sys.argv) > 1 and sys.argv[1] != None:

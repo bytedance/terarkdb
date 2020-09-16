@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "db/column_family.h"
+#include "db/compaction_picker.h"
 #include "db/version_set.h"
 #include "rocksdb/compaction_filter.h"
 #include "util/string_util.h"

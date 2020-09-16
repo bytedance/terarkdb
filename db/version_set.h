@@ -31,7 +31,6 @@
 
 #include "db/column_family.h"
 #include "db/compaction.h"
-#include "db/compaction_picker.h"
 #include "db/dbformat.h"
 #include "db/file_indexer.h"
 #include "db/log_reader.h"
@@ -1099,13 +1098,13 @@ class VersionSet {
   Status CacheWalMeta(uint64_t log_no, FileMetaData fm);
   Status ReleaseWalMeta(uint64_t log_no);
   FileMetaData GetWalMeta(uint64_t log_no);
-  bool PickWalToGC(std::vector<FileMetaData*>* picked_wals,
-                   InstrumentedMutex* mu);
+  bool PickBlobWalWithoutIndex(std::vector<FileMetaData*>* picked_wals,
+                               InstrumentedMutex* mu);
   void SetWalWithoutIndex(bool flag) {
-    has_wal_without_index_.store(flag, std::memory_order_relaxed);
+    has_blobwal_and_nonindex_.store(flag, std::memory_order_relaxed);
   }
   bool HasWalWithoutIndex() {
-    return has_wal_without_index_.load(std::memory_order_relaxed);
+    return has_blobwal_and_nonindex_.load(std::memory_order_relaxed);
   }
   static uint64_t GetNumLiveVersions(Version* dummy_versions);
 
@@ -1210,7 +1209,7 @@ class VersionSet {
   std::unordered_map<uint64_t, FileMetaData*> index_creating_ongoing_wals_;
 
   // after switchmem, a new static wal is created, then need to create its index
-  std::atomic<bool> has_wal_without_index_;
+  std::atomic<bool> has_blobwal_and_nonindex_;
 
   // cache log_meta until all dependence sst of this log flushed
   std::unordered_map<uint64_t, FileMetaData> log_meta_cache_;

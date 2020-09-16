@@ -41,20 +41,19 @@ class DummyDB : public StackableDB {
  public:
   /* implicit */
   DummyDB(const Options& options, const std::string& dbname)
-     : StackableDB(nullptr), options_(options), dbname_(dbname),
-       deletions_enabled_(true), sequence_number_(0) {}
+      : StackableDB(nullptr),
+        options_(options),
+        dbname_(dbname),
+        deletions_enabled_(true),
+        sequence_number_(0) {}
 
   virtual SequenceNumber GetLatestSequenceNumber() const override {
     return ++sequence_number_;
   }
 
-  virtual const std::string& GetName() const override {
-    return dbname_;
-  }
+  virtual const std::string& GetName() const override { return dbname_; }
 
-  virtual Env* GetEnv() const override {
-    return options_.env;
-  }
+  virtual Env* GetEnv() const override { return options_.env; }
 
   using DB::GetOptions;
   virtual Options GetOptions(
@@ -93,12 +92,10 @@ class DummyDB : public StackableDB {
   class DummyLogFile : public LogFile {
    public:
     /* implicit */
-     DummyLogFile(const std::string& path, bool alive = true)
-         : path_(path), alive_(alive) {}
+    DummyLogFile(const std::string& path, bool alive = true)
+        : path_(path), alive_(alive) {}
 
-    virtual std::string PathName() const override {
-      return path_;
-    }
+    virtual std::string PathName() const override { return path_; }
 
     virtual uint64_t LogNumber() const override {
       // what business do you have calling this method?
@@ -116,14 +113,12 @@ class DummyDB : public StackableDB {
       return kMaxSequenceNumber;
     }
 
-    virtual uint64_t SizeFileBytes() const override {
-      return 0;
-    }
+    virtual uint64_t SizeFileBytes() const override { return 0; }
 
    private:
     std::string path_;
     bool alive_;
-  }; // DummyLogFile
+  };  // DummyLogFile
 
   virtual Status GetSortedWalFiles(VectorLogPtr& files) override {
     EXPECT_TRUE(!deletions_enabled_);
@@ -141,12 +136,13 @@ class DummyDB : public StackableDB {
   std::vector<std::string> live_files_;
   // pair<filename, alive?>
   std::vector<std::pair<std::string, bool>> wal_files_;
+
  private:
   Options options_;
   std::string dbname_;
   bool deletions_enabled_;
   mutable SequenceNumber sequence_number_;
-}; // DummyDB
+};  // DummyDB
 
 class TestEnv : public EnvWrapper {
  public:
@@ -173,6 +169,7 @@ class TestEnv : public EnvWrapper {
       size_left = (n > size_left) ? size_left - n : 0;
       return Status::OK();
     }
+
    private:
     size_t size_left = 200;
     Random rnd_;
@@ -190,8 +187,12 @@ class TestEnv : public EnvWrapper {
     } else {
       Status s = EnvWrapper::NewSequentialFile(f, r, options);
       if (s.ok()) {
+        if (Slice(f).ends_with(".log")) {
+          num_wals_.fetch_add(1);
+        }
         if ((*r)->use_direct_io()) {
           ++num_direct_seq_readers_;
+        } else {
         }
         ++num_seq_readers_;
       }
@@ -352,6 +353,7 @@ class TestEnv : public EnvWrapper {
     num_direct_seq_readers_ = 0;
     num_writers_ = 0;
     num_direct_writers_ = 0;
+    num_wals_ = 0;
   }
 
   int num_rand_readers() { return num_rand_readers_; }
@@ -360,6 +362,7 @@ class TestEnv : public EnvWrapper {
   int num_direct_seq_readers() { return num_direct_seq_readers_; }
   int num_writers() { return num_writers_; }
   int num_direct_writers() { return num_direct_writers_; }
+  int num_wals() { return num_wals_; }
 
  private:
   port::Mutex mutex_;
@@ -383,6 +386,8 @@ class TestEnv : public EnvWrapper {
   std::atomic<int> num_direct_seq_readers_;
   std::atomic<int> num_writers_;
   std::atomic<int> num_direct_writers_;
+
+  std::atomic<int> num_wals_;
 };  // TestEnv
 
 class FileManager : public EnvWrapper {
@@ -392,7 +397,7 @@ class FileManager : public EnvWrapper {
   Status DeleteRandomFileInDir(const std::string& dir) {
     std::vector<std::string> children;
     GetChildren(dir, &children);
-    if (children.size() <= 2) { // . and ..
+    if (children.size() <= 2) {  // . and ..
       return Status::NotFound("");
     }
     while (true) {
@@ -494,7 +499,7 @@ class FileManager : public EnvWrapper {
 
  private:
   Random rnd_;
-}; // FileManager
+};  // FileManager
 
 // utility functions
 static size_t FillDB(DB* db, int from, int to) {
@@ -549,7 +554,7 @@ class BackupableDBTest : public testing::Test {
     // set up db options
     options_.create_if_missing = true;
     options_.paranoid_checks = true;
-    options_.write_buffer_size = 1 << 17; // 128KB
+    options_.write_buffer_size = 1 << 17;  // 128KB
     options_.env = test_db_env_.get();
     options_.wal_dir = dbname_;
 
@@ -682,7 +687,7 @@ class BackupableDBTest : public testing::Test {
   std::unique_ptr<FileManager> file_manager_;
 
   // all the dbs!
-  DummyDB* dummy_db_; // BackupableDB owns dummy_db_
+  DummyDB* dummy_db_;  // BackupableDB owns dummy_db_
   std::unique_ptr<DB> db_;
   std::unique_ptr<BackupEngine> backup_engine_;
 
@@ -691,7 +696,7 @@ class BackupableDBTest : public testing::Test {
 
  protected:
   std::unique_ptr<BackupableDBOptions> backupable_options_;
-}; // BackupableDBTest
+};  // BackupableDBTest
 
 void AppendPath(const std::string& path, std::vector<std::string>& v) {
   for (auto& f : v) {
@@ -1492,7 +1497,8 @@ TEST_F(BackupableDBTest, ChangeManifestDuringBackupCreation) {
   });
   rocksdb::SyncPoint::GetInstance()->EnableProcessing();
 
-  rocksdb::port::Thread flush_thread{[this]() { ASSERT_OK(db_->Flush(FlushOptions())); }};
+  rocksdb::port::Thread flush_thread{
+      [this]() { ASSERT_OK(db_->Flush(FlushOptions())); }};
 
   ASSERT_OK(backup_engine_->CreateNewBackup(db_.get(), false));
 
@@ -1712,6 +1718,7 @@ TEST_P(BackupableDBTestWithParam, BackupUsingDirectIO) {
     // For all ops, files should be opened in direct mode.
     test_backup_env_->ClearFileOpenCounters();
     test_db_env_->ClearFileOpenCounters();
+
     CloseBackupEngine();
     OpenBackupEngine();
     ASSERT_OK(backup_engine_->CreateNewBackup(db_.get(),
@@ -1729,6 +1736,7 @@ TEST_P(BackupableDBTestWithParam, BackupUsingDirectIO) {
     ASSERT_GT(test_db_env_->num_direct_seq_readers(), 0);
     // Currently the DB doesn't support reading WALs or manifest with direct
     // I/O, so subtract two.
+    ASSERT_EQ(test_db_env_->num_wals(), 1);
     ASSERT_EQ(test_db_env_->num_seq_readers() - 2,
               test_db_env_->num_direct_seq_readers());
     ASSERT_EQ(0, test_db_env_->num_rand_readers());
@@ -1743,9 +1751,9 @@ TEST_P(BackupableDBTestWithParam, BackupUsingDirectIO) {
   }
 }
 
-}  // anon namespace
+}  // namespace
 
-} //  namespace rocksdb
+}  //  namespace rocksdb
 
 int main(int argc, char** argv) {
   rocksdb::port::InstallStackTraceHandler();

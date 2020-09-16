@@ -1015,13 +1015,13 @@ Compaction* ColumnFamilyData::PickCompaction(
 }
 
 Compaction* ColumnFamilyData::PickGarbageCollection(
-    uint64_t max_log_number_to_gc, const MutableCFOptions& mutable_options,
+    uint64_t min_log_number_to_keep, const MutableCFOptions& mutable_options,
     LogBuffer* log_buffer) {
   StopWatch sw(ioptions_.env, ioptions_.statistics,
                PICK_GARBAGE_COLLECTION_TIME);
 
   auto* result = compaction_picker_->PickGarbageCollection(
-      GetName(), max_log_number_to_gc, mutable_options,
+      GetName(), min_log_number_to_keep, mutable_options,
       current_->storage_info(), log_buffer);
   if (result != nullptr) {
     result->SetInputVersion(current_);

@@ -103,6 +103,7 @@ struct MutableDBOptions {
   int max_background_garbage_collections;
   bool avoid_flush_during_shutdown;
   size_t writable_file_max_buffer_size;
+  size_t blob_cache_size;
   uint64_t delayed_write_rate;
   uint64_t max_wal_size;
   uint64_t max_total_wal_size;

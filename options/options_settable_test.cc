@@ -199,6 +199,7 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
       {offsetof(struct DBOptions, listeners),
        sizeof(std::vector<std::shared_ptr<EventListener>>)},
       {offsetof(struct DBOptions, row_cache), sizeof(std::shared_ptr<Cache>)},
+      {offsetof(struct DBOptions, blob_cache), sizeof(std::shared_ptr<Cache>)},
       {offsetof(struct DBOptions, metrics_reporter_factory), sizeof(std::shared_ptr<MetricsReporterFactory>)},
       {offsetof(struct DBOptions, wal_filter), sizeof(const WalFilter*)},
   };
@@ -257,6 +258,7 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
                              "skip_log_error_on_recovery=true;"
                              "use_aio_reads=true;"
                              "writable_file_max_buffer_size=1048576;"
+                             "blob_cache_size=32768;"
                              "paranoid_checks=true;"
                              "is_fd_close_on_exec=false;"
                              "bytes_per_sync=4295013613;"

@@ -537,6 +537,7 @@ class LevelIterator final : public InternalIterator, public Snapshot {
                *read_options_.iterate_upper_bound) >= 0;
   }
 
+
   InternalIterator* NewFileIterator() {
     assert(file_index_ < flevel_->num_files);
     auto file_meta = flevel_->files[file_index_];
@@ -2979,6 +2980,7 @@ VersionSet::VersionSet(const std::string& dbname,
       current_version_number_(0),
       manifest_file_size_(0),
       manifest_edit_count_(0),
+      has_blobwal_and_nonindex_(false),
       seq_per_batch_(seq_per_batch),
       env_options_(storage_options) {}
 
@@ -3238,6 +3240,7 @@ Status VersionSet::ProcessManifestWrites(
           cfd->current()->storage_info()->UpdateGarbageCollectionInfo(
               blob_wal_dependence_map);
         }
+        SetWalWithoutIndex(true);
       }
     }
 
@@ -4740,8 +4743,8 @@ bool VersionSet::VerifyCompactionFileConsistency(Compaction* c) {
   return true;  // everything good
 }
 
-bool VersionSet::PickWalToGC(std::vector<FileMetaData*>* picked_wals,
-                             InstrumentedMutex* mu) {
+bool VersionSet::PickBlobWalWithoutIndex(
+    std::vector<FileMetaData*>* picked_wals, InstrumentedMutex* mu) {
   mu->AssertHeld();
   bool found = false;
   for (auto cfd_iter : *column_family_set_) {
@@ -4761,7 +4764,9 @@ bool VersionSet::PickWalToGC(std::vector<FileMetaData*>* picked_wals,
       }
     }
   }
-  SetWalWithoutIndex(false);
+  if (found) {
+    SetWalWithoutIndex(false);
+  }
   return found;
 }
 

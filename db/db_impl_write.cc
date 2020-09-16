@@ -1688,7 +1688,6 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
         bm.smallest.SetMinPossibleForUserKey(Slice());
         bm.largest.SetMaxPossibleForUserKey(Slice());
         versions_->CacheWalMeta(cur_log_writer->get_log_number(), bm);
-        versions_->SetWalWithoutIndex(true);
       }
     }
     logs_.emplace_back(logfile_number_, new_log);

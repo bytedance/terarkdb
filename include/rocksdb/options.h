@@ -810,6 +810,8 @@ struct DBOptions {
   // Dynamically changeable through SetDBOptions() API.
   size_t writable_file_max_buffer_size = 1024 * 1024;
 
+  size_t blob_cache_size = 32768;
+
   // Use adaptive mutex, which spins in the user space before resorting
   // to kernel. This could reduce context switch when the mutex is not
   // heavily contended. However, if the mutex is hot, we could end up
@@ -943,8 +945,6 @@ struct DBOptions {
   // Default: nullptr (disabled)
   // Not supported in ROCKSDB_LITE mode!
   std::shared_ptr<Cache> row_cache = nullptr;
-
-  size_t blob_cache_size = 32768;
 
   // A global cache for blob in wal which is shared across CF.
   // Default: nullptr (disabled)

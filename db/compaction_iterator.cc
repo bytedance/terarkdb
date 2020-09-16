@@ -270,8 +270,11 @@ void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
     compaction_filter_value_.clear();
     compaction_filter_skip_until_.Clear();
     auto doFilter = [&]() {
-      std::string meta = input_.separate_helper()->GetValueMeta(
-          current_key_.GetInternalKey(), value_);
+      std::string meta;
+      if (input_.separate_helper() != nullptr) {
+        meta = input_.separate_helper()->GetValueMeta(
+            current_key_.GetInternalKey(), value_);
+      }
       filter = compaction_filter_->FilterV2(
           compaction_->level(), ikey_.user_key,
           CompactionFilter::ValueType::kValue, Slice(meta.data(), meta.size()),

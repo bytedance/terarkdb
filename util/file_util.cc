@@ -97,11 +97,11 @@ Status DeleteWalFile(const ImmutableDBOptions* db_options,
                      const std::string& fname, const std::string& dir_to_sync) {
   auto idx_fname = fname;
   idx_fname.replace(fname.size() - 3, 3, "idx");
-  Status status = db_options->env->DeleteFile(idx_fname);
+  auto status = db_options->env->FileExists(idx_fname);
   if (status.ok()) {
-    return DeleteDBFile(db_options, fname, dir_to_sync, false);
+    status = db_options->env->DeleteFile(idx_fname);
   }
-  return status;
+  return DeleteDBFile(db_options, fname, dir_to_sync, false);
 }
 
 Status DeleteSSTFile(const ImmutableDBOptions* db_options,
