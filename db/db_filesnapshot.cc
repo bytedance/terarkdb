@@ -12,8 +12,10 @@
 
 #include <inttypes.h>
 #include <stdint.h>
+
 #include <algorithm>
 #include <string>
+
 #include "db/db_impl.h"
 #include "db/job_context.h"
 #include "db/version_set.h"
@@ -53,7 +55,7 @@ Status DBImpl::EnableFileDeletions(bool force) {
     } else if (disable_delete_obsolete_files_ > 0) {
       --disable_delete_obsolete_files_;
     }
-    if (disable_delete_obsolete_files_ == 0)  {
+    if (disable_delete_obsolete_files_ == 0) {
       file_deletion_enabled = true;
       FindObsoleteFiles(&job_context, true);
       bg_cv_.SignalAll();
@@ -61,7 +63,9 @@ Status DBImpl::EnableFileDeletions(bool force) {
   }
   if (file_deletion_enabled) {
     ROCKS_LOG_INFO(immutable_db_options_.info_log, "File Deletions Enabled");
-    PurgeObsoleteFiles(job_context);
+    if (job_context.HaveSomethingToDelete()) {
+      PurgeObsoleteFiles(job_context);
+    }
   } else {
     ROCKS_LOG_WARN(immutable_db_options_.info_log,
                    "File Deletions Enable, but not really enabled. Counter: %d",
@@ -77,8 +81,7 @@ int DBImpl::IsFileDeletionsEnabled() const {
 }
 
 Status DBImpl::GetLiveFiles(std::vector<std::string>& ret,
-                            uint64_t* manifest_file_size,
-                            bool flush_memtable) {
+                            uint64_t* manifest_file_size, bool flush_memtable) {
   *manifest_file_size = 0;
 
   mutex_.Lock();
@@ -165,6 +168,6 @@ Status DBImpl::GetSortedWalFiles(VectorLogPtr& files) {
   return wal_manager_.GetSortedWalFiles(files);
 }
 
-}
+}  // namespace rocksdb
 
 #endif  // ROCKSDB_LITE

@@ -59,6 +59,12 @@ class SstFileManager {
   // thread-safe
   virtual std::unordered_map<std::string, uint64_t> GetTrackedFiles() = 0;
 
+  // thread-safe
+  virtual void DisableTruncate() = 0;
+
+  // thread-safe
+  virtual void EnableTruncate(bool force = false) = 0;
+
   // Return delete rate limit in bytes per second.
   // thread-safe
   virtual int64_t GetDeleteRateBytesPerSecond() = 0;
@@ -113,5 +119,7 @@ extern SstFileManager* NewSstFileManager(
     bool delete_existing_trash = true, Status* status = nullptr,
     double max_trash_db_ratio = 0.25,
     uint64_t bytes_max_delete_chunk = 64 * 1024 * 1024);
+
+extern std::string RemoveTrashExtension(const std::string& fname);
 
 }  // namespace rocksdb

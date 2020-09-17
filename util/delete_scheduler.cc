@@ -31,6 +31,7 @@ DeleteScheduler::DeleteScheduler(Env* env, int64_t rate_bytes_per_sec,
       pending_files_(0),
       bytes_max_delete_chunk_(bytes_max_delete_chunk),
       closing_(false),
+      pause_truncate_(0),
       cv_(&mu_),
       info_log_(info_log),
       sst_file_manager_(sst_file_manager),
@@ -52,13 +53,43 @@ DeleteScheduler::~DeleteScheduler() {
   }
 }
 
+void DeleteScheduler::DisableTruncate() {
+  int counter = pause_truncate_.fetch_add(1) + 1;
+  if (counter == 1) {
+    ROCKS_LOG_INFO(info_log_, "DeleteScheduler truncate Disabled");
+  } else {
+    ROCKS_LOG_WARN(info_log_, "DeleteScheduler truncate Disabled. Counter: %d",
+                   counter);
+  }
+}
+
+void DeleteScheduler::EnableTruncate(bool force) {
+  int counter;
+  if (force) {
+    pause_truncate_.store(0);
+    counter = 0;
+  } else {
+    counter = pause_truncate_.fetch_sub(1) - 1;
+  }
+  if (counter == 0) {
+    ROCKS_LOG_INFO(info_log_, "DeleteScheduler truncate Enabled");
+  } else {
+    ROCKS_LOG_WARN(info_log_,
+                   "DeleteScheduler truncate Enabled, but not really "
+                   "enabled. Counter: %d",
+                   counter);
+  }
+  LogFlush(info_log_);
+}
+
 Status DeleteScheduler::DeleteFile(const std::string& file_path,
                                    const std::string& dir_to_sync,
                                    const bool force_bg) {
   Status s;
-  if (rate_bytes_per_sec_.load() <= 0 || (!force_bg &&
-      total_trash_size_.load() >
-          sst_file_manager_->GetTotalSize() * max_trash_db_ratio_.load())) {
+  if (rate_bytes_per_sec_.load() <= 0 ||
+      (!force_bg &&
+       total_trash_size_.load() >
+           sst_file_manager_->GetTotalSize() * max_trash_db_ratio_.load())) {
     // Rate limiting is disabled or trash size makes up more than
     // max_trash_db_ratio_ (default 25%) of the total DB size
     TEST_SYNC_POINT("DeleteScheduler::DeleteFile");
@@ -238,7 +269,8 @@ void DeleteScheduler::BackgroundEmptyTrash() {
         // rate limiting is enabled
         total_penlty =
             ((total_deleted_bytes * kMicrosInSecond) / current_delete_rate);
-        while (!closing_ && !cv_.TimedWait(start_time + total_penlty)) {}
+        while (!closing_ && !cv_.TimedWait(start_time + total_penlty)) {
+        }
       } else {
         // rate limiting is disabled
         total_penlty = 0;
@@ -269,7 +301,8 @@ Status DeleteScheduler::DeleteTrashFile(const std::string& path_in_trash,
   TEST_SYNC_POINT("DeleteScheduler::DeleteTrashFile:DeleteFile");
   if (s.ok()) {
     bool need_full_delete = true;
-    if (bytes_max_delete_chunk_ != 0 && file_size > bytes_max_delete_chunk_) {
+    if (pause_truncate_.load() == 0 && bytes_max_delete_chunk_ != 0 &&
+        file_size > bytes_max_delete_chunk_) {
       uint64_t num_hard_links = 2;
       // We don't have to worry aobut data race between linking a new
       // file after the number of file link check and ftruncte because

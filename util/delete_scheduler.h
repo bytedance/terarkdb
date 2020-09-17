@@ -14,7 +14,6 @@
 
 #include "monitoring/instrumented_mutex.h"
 #include "port/port.h"
-
 #include "rocksdb/status.h"
 
 namespace rocksdb {
@@ -38,6 +37,10 @@ class DeleteScheduler {
 
   ~DeleteScheduler();
 
+  void DisableTruncate();
+
+  void EnableTruncate(bool force = false);
+
   // Return delete rate limit in bytes per second
   int64_t GetRateBytesPerSecond() { return rate_bytes_per_sec_.load(); }
 
@@ -50,7 +53,7 @@ class DeleteScheduler {
   // set, it forces the file to always be deleted in the background thread,
   // except when rate limiting is disabled
   Status DeleteFile(const std::string& fname, const std::string& dir_to_sync,
-      const bool force_bg = false);
+                    const bool force_bg = false);
 
   // Wait for all files being deleteing in the background to finish or for
   // destructor to be called.
@@ -63,9 +66,7 @@ class DeleteScheduler {
   uint64_t GetTotalTrashSize() { return total_trash_size_.load(); }
 
   // Return trash/DB size ratio where new files will be deleted immediately
-  double GetMaxTrashDBRatio() {
-    return max_trash_db_ratio_.load();
-  }
+  double GetMaxTrashDBRatio() { return max_trash_db_ratio_.load(); }
 
   // Update trash/DB size ratio where new files will be deleted immediately
   void SetMaxTrashDBRatio(double r) {
@@ -115,6 +116,7 @@ class DeleteScheduler {
   bool num_link_error_printed_ = false;
   // Set to true in ~DeleteScheduler() to force BackgroundEmptyTrash to stop
   bool closing_;
+  std::atomic<int> pause_truncate_;
   // Condition variable signaled in these conditions
   //    - pending_files_ value change from 0 => 1
   //    - pending_files_ value change from 1 => 0

@@ -10,10 +10,9 @@
 #include <list>
 #include <string>
 
-#include "port/port.h"
-
 #include "db/compaction.h"
 #include "db/error_handler.h"
+#include "port/port.h"
 #include "rocksdb/sst_file_manager.h"
 #include "util/delete_scheduler.h"
 
@@ -84,6 +83,12 @@ class SstFileManagerImpl : public SstFileManager {
 
   // Return a map containing all tracked files and there corresponding sizes.
   std::unordered_map<std::string, uint64_t> GetTrackedFiles() override;
+
+  // thread-safe
+  virtual void DisableTruncate() override;
+
+  // thread-safe
+  virtual void EnableTruncate(bool force = false) override;
 
   // Return delete rate limit in bytes per second.
   virtual int64_t GetDeleteRateBytesPerSecond() override;

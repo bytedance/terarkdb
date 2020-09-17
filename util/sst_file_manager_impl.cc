@@ -35,12 +35,9 @@ SstFileManagerImpl::SstFileManagerImpl(Env* env, std::shared_ptr<Logger> logger,
       bg_thread_(nullptr),
       reserved_disk_buffer_(0),
       free_space_trigger_(0),
-      cur_instance_(nullptr) {
-}
+      cur_instance_(nullptr) {}
 
-SstFileManagerImpl::~SstFileManagerImpl() {
-  Close();
-}
+SstFileManagerImpl::~SstFileManagerImpl() { Close(); }
 
 void SstFileManagerImpl::Close() {
   {
@@ -160,9 +157,8 @@ bool SstFileManagerImpl::EnoughRoomForCompaction(
 
   // Update cur_compactions_reserved_size_ so concurrent compaction
   // don't max out space
-  size_t needed_headroom =
-      cur_compactions_reserved_size_ + size_added_by_compaction +
-      compaction_buffer_size_;
+  size_t needed_headroom = cur_compactions_reserved_size_ +
+                           size_added_by_compaction + compaction_buffer_size_;
   if (max_allowed_space_ != 0 &&
       (needed_headroom + total_files_size_ > max_allowed_space_)) {
     return false;
@@ -189,8 +185,10 @@ bool SstFileManagerImpl::EnoughRoomForCompaction(
     needed_headroom -= in_progress_files_size_;
     if (free_space < needed_headroom + size_added_by_compaction) {
       // We hit the condition of not enough disk space
-      ROCKS_LOG_ERROR(logger_, "free space [%d bytes] is less than "
-          "needed headroom [%d bytes]\n", free_space, needed_headroom);
+      ROCKS_LOG_ERROR(logger_,
+                      "free space [%d bytes] is less than "
+                      "needed headroom [%d bytes]\n",
+                      free_space, needed_headroom);
       return false;
     }
   }
@@ -216,6 +214,14 @@ std::unordered_map<std::string, uint64_t>
 SstFileManagerImpl::GetTrackedFiles() {
   MutexLock l(&mu_);
   return tracked_files_;
+}
+
+void SstFileManagerImpl::DisableTruncate() {
+  delete_scheduler_.DisableTruncate();
+}
+
+void SstFileManagerImpl::EnableTruncate(bool force) {
+  delete_scheduler_.EnableTruncate(force);
 }
 
 int64_t SstFileManagerImpl::GetDeleteRateBytesPerSecond() {
@@ -266,17 +272,19 @@ void SstFileManagerImpl::ClearError() {
       // now
       if (bg_err_.severity() == Status::Severity::kHardError) {
         if (free_space < reserved_disk_buffer_) {
-          ROCKS_LOG_ERROR(logger_, "free space [%d bytes] is less than "
-              "required disk buffer [%d bytes]\n", free_space,
-              reserved_disk_buffer_);
+          ROCKS_LOG_ERROR(logger_,
+                          "free space [%d bytes] is less than "
+                          "required disk buffer [%d bytes]\n",
+                          free_space, reserved_disk_buffer_);
           ROCKS_LOG_ERROR(logger_, "Cannot clear hard error\n");
           s = Status::NoSpace();
         }
       } else if (bg_err_.severity() == Status::Severity::kSoftError) {
         if (free_space < free_space_trigger_) {
-          ROCKS_LOG_WARN(logger_, "free space [%d bytes] is less than "
-              "free space for compaction trigger [%d bytes]\n", free_space,
-              free_space_trigger_);
+          ROCKS_LOG_WARN(logger_,
+                         "free space [%d bytes] is less than "
+                         "free space for compaction trigger [%d bytes]\n",
+                         free_space, free_space_trigger_);
           ROCKS_LOG_WARN(logger_, "Cannot clear soft error\n");
           s = Status::NoSpace();
         }
@@ -401,12 +409,11 @@ bool SstFileManagerImpl::CancelErrorRecovery(ErrorHandler* handler) {
   return false;
 }
 
-Status SstFileManagerImpl::ScheduleFileDeletion(
-    const std::string& file_path, const std::string& path_to_sync,
-    const bool force_bg) {
+Status SstFileManagerImpl::ScheduleFileDeletion(const std::string& file_path,
+                                                const std::string& path_to_sync,
+                                                const bool force_bg) {
   TEST_SYNC_POINT("SstFileManagerImpl::ScheduleFileDeletion");
-  return delete_scheduler_.DeleteFile(file_path, path_to_sync,
-                                      force_bg);
+  return delete_scheduler_.DeleteFile(file_path, path_to_sync, force_bg);
 }
 
 void SstFileManagerImpl::WaitForEmptyTrash() {
@@ -510,5 +517,15 @@ SstFileManager* NewSstFileManager(Env* /*env*/,
 }
 
 #endif  // ROCKSDB_LITE
+
+std::string RemoveTrashExtension(const std::string& fname) {
+  if (DeleteScheduler::IsTrashFile(fname)) {
+    assert(fname.size() > DeleteScheduler::kTrashExtension.size());
+    return std::string(fname.data(),
+                       fname.size() - DeleteScheduler::kTrashExtension.size());
+  } else {
+    return fname;
+  }
+}
 
 }  // namespace rocksdb
