@@ -53,7 +53,7 @@ SET(CMAKE_INSTALL_BINDIR ${CMAKE_BINARY_DIR}/bin)
 SET(CMAKE_INSTALL_INCLUDEDIR ${CMAKE_BINARY_DIR}/include)
 
 option(BUILD_SHARED_LIB "build shared lib" OFF)
-option(WITH_JEMALLOC "build with JeMalloc" OFF)
+option(WITH_JEMALLOC "build with JeMalloc" ON)
 option(WITH_SNAPPY "build with SNAPPY" ON)
 option(WITH_LZ4 "build with lz4" ON)
 option(WITH_ZLIB "build with zlib" ON)

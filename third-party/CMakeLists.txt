@@ -121,3 +121,16 @@ ADD_DEPENDENCIES(bzip2 bzip2-project)
 SET_TARGET_PROPERTIES(bzip2 PROPERTIES
     IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/lib/libbz2.a
     INCLUDE_DIRECTORIES ${CMAKE_BINARY_DIR}/include)
+ 
+# Jemalloc
+ExternalProject_Add(jemalloc-project
+    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/jemalloc
+    CONFIGURE_COMMAND ""
+    BUILD_IN_SOURCE 1
+    BUILD_COMMAND bash autogen.sh && "CFLAGS=-fPIC" "CXXFLAGS=-fPIC" "LDFLAGS=-fPIC" ./configure --prefix=${CMAKE_BINARY_DIR} --enable-prof && make -j 20
+    INSTALL_COMMAND make install PREFIX=${CMAKE_BINARY_DIR}) && make clean
+ADD_LIBRARY(jemalloc STATIC IMPORTED GLOBAL)
+ADD_DEPENDENCIES(jemalloc jemalloc-project)
+SET_TARGET_PROPERTIES(jemalloc PROPERTIES
+    IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/lib/libjemalloc.a
+    INCLUDE_DIRECTORIES ${CMAKE_BINARY_DIR}/include)
