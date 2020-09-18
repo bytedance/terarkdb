@@ -22,12 +22,25 @@ cmake ../ \
   - Or you can include_directory their absolute file path for quick use.
 
 
-## 1.2.As standalone library
+## 1.2.As Standalone Library
 - clone terarkdb && git submodule update --init --recursive
 - mkdir build && cd build && cmake ../ -DCMAKE_BUILD_TYPE=Release -DWITH_TESTS=OFF
 - make install
 - Now you shoud have a `build/lib` and `build/include` directory
 - Add `build/lib` to your library path and link all libraries inside it
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

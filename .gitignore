@@ -26,7 +26,6 @@ make_config.mk
 CMakeCache.txt
 CMakeFiles/
 build/
-third-party/
 
 ldb
 manifest_dump

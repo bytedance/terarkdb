@@ -16,7 +16,6 @@ IF(WITH_SNAPPY)
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/snappy
         CONFIGURE_COMMAND mkdir -p build
         BUILD_IN_SOURCE 1
-        EXCLUDE_FROM_ALL True
         BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} -DSNAPPY_BUILD_TESTS=OFF -DHAVE_LIBLZO2=OFF && make -j 10
         INSTALL_COMMAND cd build && ls -l && make install && cd ../ && rm -rf build)
     ADD_LIBRARY(snappy STATIC IMPORTED GLOBAL)
@@ -48,7 +47,6 @@ ExternalProject_Add(zlib-project
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/zlib
     CONFIGURE_COMMAND rm -rf build && mkdir -p build
     BUILD_IN_SOURCE 1
-    EXCLUDE_FROM_ALL True
     BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} && make
     # zlib compile will produce some dirty files, we need to clean them.
     INSTALL_COMMAND cd build && make install && cd ../ && rm -rf build zconf.h.included && git checkout . )
@@ -72,7 +70,6 @@ IF(WITH_GFLAGS)
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/gflags
         CONFIGURE_COMMAND rm -rf build-cmake && mkdir -p build-cmake
         BUILD_IN_SOURCE 1
-        EXCLUDE_FROM_ALL True
         BUILD_COMMAND cd build-cmake && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} && make
         INSTALL_COMMAND cd build-cmake && make install)
     ADD_LIBRARY(gflags STATIC IMPORTED GLOBAL)
@@ -110,4 +107,17 @@ ADD_LIBRARY(lz4 STATIC IMPORTED GLOBAL)
 ADD_DEPENDENCIES(lz4 lz4-project)
 SET_TARGET_PROPERTIES(lz4 PROPERTIES
     IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/lib/liblz4.a
+    INCLUDE_DIRECTORIES ${CMAKE_BINARY_DIR}/include)
+
+# bzip2
+ExternalProject_Add(bzip2-project
+    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/bzip2
+    CONFIGURE_COMMAND ""
+    BUILD_IN_SOURCE 1
+    BUILD_COMMAND make "CXXFLAGS=-fPIC -O2" "CFLAGS=-fPIC -O2" -j 4
+    INSTALL_COMMAND make install PREFIX=${CMAKE_BINARY_DIR})
+ADD_LIBRARY(bzip2 STATIC IMPORTED GLOBAL)
+ADD_DEPENDENCIES(bzip2 bzip2-project)
+SET_TARGET_PROPERTIES(bzip2 PROPERTIES
+    IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/lib/libbz2.a
     INCLUDE_DIRECTORIES ${CMAKE_BINARY_DIR}/include)
