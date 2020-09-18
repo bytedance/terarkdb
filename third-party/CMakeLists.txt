@@ -115,7 +115,7 @@ ExternalProject_Add(bzip2-project
     CONFIGURE_COMMAND ""
     BUILD_IN_SOURCE 1
     BUILD_COMMAND make "CXXFLAGS=-fPIC -O2" "CFLAGS=-fPIC -O2" -j 4
-    INSTALL_COMMAND make install PREFIX=${CMAKE_BINARY_DIR})
+    INSTALL_COMMAND make install PREFIX=${CMAKE_BINARY_DIR} && make clean)
 ADD_LIBRARY(bzip2 STATIC IMPORTED GLOBAL)
 ADD_DEPENDENCIES(bzip2 bzip2-project)
 SET_TARGET_PROPERTIES(bzip2 PROPERTIES
@@ -128,7 +128,7 @@ ExternalProject_Add(jemalloc-project
     CONFIGURE_COMMAND ""
     BUILD_IN_SOURCE 1
     BUILD_COMMAND bash autogen.sh && "CFLAGS=-fPIC" "CXXFLAGS=-fPIC" "LDFLAGS=-fPIC" ./configure --prefix=${CMAKE_BINARY_DIR} --enable-prof && make -j 20
-    INSTALL_COMMAND make install PREFIX=${CMAKE_BINARY_DIR}) && make clean
+    INSTALL_COMMAND make install PREFIX=${CMAKE_BINARY_DIR} && make clean)
 ADD_LIBRARY(jemalloc STATIC IMPORTED GLOBAL)
 ADD_DEPENDENCIES(jemalloc jemalloc-project)
 SET_TARGET_PROPERTIES(jemalloc PROPERTIES
