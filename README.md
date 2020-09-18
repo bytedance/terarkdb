@@ -28,6 +28,7 @@ cmake ../ \
 - make install
 - Now you shoud have a `build/lib` and `build/include` directory
 - Add `build/lib` to your library path and link all libraries inside it
+  - `-lrocksdb -lbz2 -ljemalloc -llz4 -lmetrics2 -lsnappy -lz -lterark-core-r -lzstd-lboost_context -lboost_fiber -lboost_filesystem -lboost_system`
 
 
 
