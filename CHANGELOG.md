@@ -1,6 +1,20 @@
 
 ## CHANGELOG
 
+- 版本号：v1.2.12
+- 日期：2020-09-18
+- 发版说明：
+  - 计划内例行发版
+- 功能变更：
+  - 增加选项 DBOptions::max_wal_size 控制最大单个 WAL 文件大小
+  - SstFileManager 增加 DisableTruncate/EnableTruncate 接口
+    - 允许暂时禁用 DeleteScheduler 的 Truncate 调用
+- 修复问题：
+  - 修复开区 KV 分离后 SstFileManager 空间计算错误的问题
+  - 修复多 CF 下内存管控导致疯狂 Flush 单个 CF 导致写 Stop 的问题
+- 已知问题：
+  - 使用 LazyUniversalCompaction 有极低概率触发无效 TrivialMove 导致写阻塞
+
 - 版本号：v1.2.11
 - 日期：2020-08-28
 - 发版说明：
