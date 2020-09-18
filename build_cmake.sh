@@ -13,7 +13,7 @@ else
     echo you must ensure libaio-dev have been installed
 fi
 
-git submodule --init --recursive
+git submodule update --init --recursive
 
 cd $BASE/$OUTPUT && cmake ../ -DCMAKE_BUILD_TYPE=Release -DWITH_TESTS=OFF
 cd $BASE/$OUTPUT && make -j $(nproc) && make install
