@@ -314,6 +314,7 @@ TEST_LIB_SOURCES = \
 =======
 TEST_LIB_SOURCES =                                              \
   db/db_test_util.cc                                            \
+  test_util/mock_time_env.cc                                    \
   test_util/testharness.cc                                      \
   test_util/testutil.cc                                         \
 >>>>>>> 671d15cbd... Persistent Stats: persist stats history to disk (#5046)
