@@ -12,18 +12,22 @@ namespace rocksdb {
 class DBImplGCTTL_Test : public DBTestBase {
  public:
   DBImplGCTTL_Test() : DBTestBase("/db_GC_ttl_test"){
+
   }
-  void init() {
+
+  void init(){
     rocksdb::SyncPoint::GetInstance()->SetCallBack(
         "DBImpl:ScheduleGCTTL",
-        [&](void* /*arg*/) { mark = 0;flag = true;});
+        [&](void* /*arg*/) {
+          mark = 0;flag = true;
+        });
     rocksdb::SyncPoint::GetInstance()->SetCallBack(
         "DBImpl:ScheduleGCTTL-mark",
         [&](void* /*arg*/) { mark++;});
     SyncPoint::GetInstance()->EnableProcessing();
 
     dbname = test::PerThreadDBPath("ttl_gc_test");
-    ASSERT_OK(DestroyDB(dbname, options));
+    DestroyDB(dbname, options);
 
     options.create_if_missing = true;
     options.ttl_garbage_collection_percentage = 50.0;
@@ -32,10 +36,10 @@ class DBImplGCTTL_Test : public DBTestBase {
     options.level0_file_num_compaction_trigger = 8;
     options.stats_dump_period_sec = 10;
     options.table_factory.reset(new BlockBasedTableFactory(BlockBasedTableOptions()));
-
   }
 
  protected:
+  std::unique_ptr<rocksdb::MockTimeEnv> mock_env;
   Options options;
   std::string dbname;
   bool flag = false;
@@ -44,14 +48,13 @@ class DBImplGCTTL_Test : public DBTestBase {
 
 TEST_F(DBImplGCTTL_Test, L0FileExpiredTest) {
   init();
-  std::unique_ptr<rocksdb::MockTimeEnv> mock_env;
+  int L0FilesNums = 4;
+  uint64_t ttl = 200;
   mock_env.reset(new rocksdb::MockTimeEnv(env_));
-  mock_env->set_current_time(0); // in seconds
+  mock_env->set_current_time(ttl); // in seconds
   options.env = mock_env.get();
   Reopen(options);
 
-  int L0FilesNums = 4;
-  uint64_t ttl = 200;
   char ts_string[8];
   EncodeFixed64(ts_string, ttl);
   int KeyEntrys = 800;
@@ -72,8 +75,6 @@ TEST_F(DBImplGCTTL_Test, L0FileExpiredTest) {
   ASSERT_TRUE(flag);
   ASSERT_EQ(L0FilesNums,mark);
   dbfull()->TEST_WaitForCompact();
-  dbfull()->Close();
-
 
 }
 }  // namespace rocksdb

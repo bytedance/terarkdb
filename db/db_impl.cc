@@ -926,7 +926,7 @@ void DBImpl::ScheduleGCTTL() {
   TEST_SYNC_POINT("DBImpl:ScheduleGCTTL");
   uint64_t mark_count = 0;
   uint64_t marked_count = 0;
-  uint64_t nowSeconds = env_->NowMicros() / 1000000;
+  uint64_t nowSeconds = env_->NowMicros() / 1000U / 1000U;
   auto should_marked_for_compacted = [](uint64_t ratio_expire_time,
                                         uint64_t scan_gap_expire_time,
                                         uint64_t now) {
