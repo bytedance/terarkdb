@@ -609,6 +609,13 @@ cpp_library(
     srcs = [
         "db/db_test_util.cc",
         "table/mock_table.cc",
+<<<<<<< HEAD
+=======
+        "test_util/mock_time_env.cc",
+        "test_util/testharness.cc",
+        "test_util/testutil.cc",
+        "tools/block_cache_analyzer/block_cache_trace_analyzer.cc",
+>>>>>>> ac1734d06... Fix/minimize mock_time_env.h dependencies (#7426)
         "tools/trace_analyzer_tool.cc",
         "util/fault_injection_test_env.cc",
         "util/testharness.cc",

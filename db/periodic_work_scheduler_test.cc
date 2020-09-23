@@ -6,6 +6,7 @@
 #include "db/periodic_work_scheduler.h"
 
 #include "db/db_test_util.h"
+#include "util/cast_util.h"
 
 namespace rocksdb {
 
