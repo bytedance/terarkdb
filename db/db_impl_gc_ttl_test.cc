@@ -2,11 +2,10 @@
 // This source code is licensed under Apache 2.0 License.
 
 #include "util/testharness.h"
-#include "util/testutil.h"
+#include "db/db_test_util.h"
 #include "util/string_util.h"
 #include "db/db_impl.h"
 #include "util/sync_point.h"
-#include "db/db_test_util.h"
 
 namespace rocksdb {
 
@@ -67,7 +66,7 @@ TEST_F(DBImplGCTTL_Test, L0FileExpiredTest) {
     }
     dbfull()->Flush(FlushOptions());
   }
-
+//  dbfull()->StartPeriodicWorkScheduler();
   ASSERT_EQ(10, dbfull()->GetDBOptions().stats_dump_period_sec);
   dbfull()->TEST_WaitForStatsDumpRun([&] { mock_env->set_current_time(ttl); });
   ASSERT_TRUE(flag);

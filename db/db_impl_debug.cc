@@ -11,7 +11,7 @@
 
 #include "db/db_impl.h"
 #include "db/error_handler.h"
-#include "monitoring/stats_dump_scheduler.h"
+#include "db/periodic_work_scheduler.h"
 #include "monitoring/thread_status_updater.h"
 
 namespace rocksdb {
@@ -253,14 +253,14 @@ size_t DBImpl::TEST_GetWalPreallocateBlockSize(
 
 #ifndef ROCKSDB_LITE
 void DBImpl::TEST_WaitForStatsDumpRun(std::function<void()> callback) const {
-  if (stats_dump_scheduler_ != nullptr) {
-    static_cast<StatsDumpTestScheduler*>(stats_dump_scheduler_)
+  if (periodic_work_scheduler_ != nullptr) {
+    static_cast<PeriodicWorkTestScheduler*>(periodic_work_scheduler_)
         ->TEST_WaitForRun(callback);
   }
 }
 
-StatsDumpTestScheduler* DBImpl::TEST_GetStatsDumpScheduler() const {
-  return static_cast<StatsDumpTestScheduler*>(stats_dump_scheduler_);
+PeriodicWorkTestScheduler* DBImpl::TEST_GetPeriodicWorkScheduler() const {
+  return static_cast<PeriodicWorkTestScheduler*>(periodic_work_scheduler_);
 }
 #endif  // !ROCKSDB_LITE
 

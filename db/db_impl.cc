@@ -46,6 +46,7 @@
 #include "db/memtable_list.h"
 #include "db/merge_context.h"
 #include "db/merge_helper.h"
+#include "db/periodic_work_scheduler.h"
 #include "db/range_tombstone_fragmenter.h"
 #include "db/table_cache.h"
 #include "db/table_properties_collector.h"
@@ -58,7 +59,6 @@
 #include "monitoring/in_memory_stats_history.h"
 #include "monitoring/iostats_context_imp.h"
 #include "monitoring/perf_context_imp.h"
-#include "monitoring/stats_dump_scheduler.h"
 #include "monitoring/persistent_stats_history.h"
 #include "monitoring/thread_status_updater.h"
 #include "monitoring/thread_status_util.h"
@@ -261,7 +261,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       refitting_level_(false),
       opened_successfully_(false),
 #ifndef ROCKSDB_LITE
-      stats_dump_scheduler_(nullptr),
+      periodic_work_scheduler_(nullptr),
 #endif  // ROCKSDB_LITE
       two_write_queues_(options.two_write_queues),
       manual_wal_flush_(options.manual_wal_flush),
@@ -512,8 +512,8 @@ void DBImpl::CancelAllBackgroundWork(bool wait) {
                  "Shutdown: canceling all background work");
 
 #ifndef ROCKSDB_LITE
-  if (stats_dump_scheduler_ != nullptr) {
-    stats_dump_scheduler_->Unregister(this);
+  if (periodic_work_scheduler_ != nullptr) {
+    periodic_work_scheduler_->Unregister(this);
   }
 #endif  // !ROCKSDB_LITE
 
@@ -772,18 +772,18 @@ void DBImpl::PrintStatistics() {
   }
 }
 
-void DBImpl::StartStatsDumpScheduler() {
+void DBImpl::StartPeriodicWorkScheduler() {
 #ifndef ROCKSDB_LITE
   {
     InstrumentedMutexLock l(&mutex_);
-    stats_dump_scheduler_ = StatsDumpScheduler::Default();
-    TEST_SYNC_POINT_CALLBACK("DBImpl::StartStatsDumpScheduler:Init",
-                             &stats_dump_scheduler_);
+    periodic_work_scheduler_ = PeriodicWorkScheduler::Default();
+    TEST_SYNC_POINT_CALLBACK("DBImpl::StartPeriodicWorkScheduler:Init",
+                             &periodic_work_scheduler_);
   }
 
-  stats_dump_scheduler_->Register(this,
-                                  mutable_db_options_.stats_dump_period_sec,
-                                  mutable_db_options_.stats_persist_period_sec);
+  periodic_work_scheduler_->Register(
+      this, mutable_db_options_.stats_dump_period_sec,
+      mutable_db_options_.stats_persist_period_sec);
 #endif  // !ROCKSDB_LITE
 }
 
@@ -1044,6 +1044,13 @@ void DBImpl::ScheduleBgFree(JobContext* job_context, SuperVersion* sv) {
     SchedulePurge();
   }
 }
+void DBImpl::FlushInfoLog() {
+  if (shutdown_initiated_) {
+    return;
+  }
+  TEST_SYNC_POINT("DBImpl::FlushInfoLog:StartRunning");
+  LogFlush(immutable_db_options_.info_log);
+}
 
 Directory* DBImpl::GetDataDir(ColumnFamilyData* cfd, size_t path_id) const {
   assert(cfd);
@@ -1169,19 +1176,12 @@ Status DBImpl::SetDBOptions(
               mutable_db_options_.stats_dump_period_sec ||
           new_options.stats_persist_period_sec !=
               mutable_db_options_.stats_persist_period_sec) {
-        if (stats_dump_scheduler_) {
-          mutex_.Unlock();
-          stats_dump_scheduler_->Unregister(this);
-          mutex_.Lock();
-        }
-      }
-      if (new_options.stats_persist_period_sec !=
-          mutable_db_options_.stats_persist_period_sec) {
-          mutex_.Unlock();
-          stats_dump_scheduler_->Register(this,
-                                          new_options.stats_dump_period_sec,
-                                          new_options.stats_persist_period_sec);
-          mutex_.Lock();
+        mutex_.Unlock();
+        periodic_work_scheduler_->Unregister(this);
+        periodic_work_scheduler_->Register(
+            this, new_options.stats_dump_period_sec,
+            new_options.stats_persist_period_sec);
+        mutex_.Lock();
       }
       write_controller_.set_max_delayed_write_rate(
           new_options.delayed_write_rate);
