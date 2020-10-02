@@ -69,9 +69,9 @@ class ArenaWrappedDBIter;
 class InMemoryStatsHistoryIterator;
 class MemTable;
 class PersistentStatsHistoryIterator;
-class StatsDumpScheduler;
+class PeriodicWorkScheduler;
 #ifndef NDEBUG
-class StatsDumpTestScheduler;
+class PeriodicWorkTestScheduler;
 #endif  // !NDEBUG
 
 class TableCache;
@@ -398,14 +398,6 @@ class DBImpl : public DB {
   LogsWithPrepTracker* logs_with_prep_tracker() {
     return &logs_with_prep_tracker_;
   }
-  // persist stats to column family "_persistent_stats"
-  void PersistStats();
-
-  // dump rocksdb.stats to LOG
-  void DumpStats();
-
-  //
-  void ScheduleGCTTL();
 
 #ifndef NDEBUG
   // Extra methods (for testing) that are not in the public DB interface
@@ -790,10 +782,21 @@ class DBImpl : public DB {
   VersionSet* TEST_GetVersionSet() const { return versions_.get(); }
 
 #ifndef ROCKSDB_LITE
-  StatsDumpTestScheduler* TEST_GetStatsDumpScheduler() const;
+  PeriodicWorkTestScheduler* TEST_GetPeriodicWorkScheduler() const;
 #endif  // !ROCKSDB_LITE
 
 #endif  // NDEBUG
+
+  // persist stats to column family "_persistent_stats"
+  void PersistStats();
+
+  // dump rocksdb.stats to LOG
+  void DumpStats();
+
+  // flush LOG out of application buffer
+  void FlushInfoLog();
+
+  void ScheduleGCTTL();
  protected:
   Env* const env_;
   const std::string dbname_;
@@ -1239,7 +1242,7 @@ class DBImpl : public DB {
                                bool* sfm_bookkeeping, LogBuffer* log_buffer);
 
   // Schedule background tasks
-  void StartStatsDumpScheduler();
+  void StartPeriodicWorkScheduler();
 
   void PrintStatistics();
 
@@ -1733,10 +1736,11 @@ class DBImpl : public DB {
   size_t GetWalPreallocateBlockSize(uint64_t write_buffer_size) const;
   Env::WriteLifeTimeHint CalculateWALWriteHint() { return Env::WLTH_SHORT; }
 #ifndef ROCKSDB_LITE
-  // Scheduler to run DumpStats() and PersistStats(). Currently, it always use
-  // a global instance from StatsDumpScheduler::Default(). Only in unittest, it
-  // can be overrided by StatsDumpTestSchduler.
-  StatsDumpScheduler* stats_dump_scheduler_;
+  // Scheduler to run DumpStats(), PersistStats(), and FlushInfoLog().
+  // Currently, it always use a global instance from
+  // PeriodicWorkScheduler::Default(). Only in unittest, it can be overrided by
+  // PeriodicWorkTestScheduler.
+  PeriodicWorkScheduler* periodic_work_scheduler_;
 #endif
 
   // When set, we use a separate queue for writes that dont write to memtable.
