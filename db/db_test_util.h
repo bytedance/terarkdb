@@ -39,6 +39,7 @@
 #include "rocksdb/sst_file_writer.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/checkpoint.h"
 #include "table/block_based_table_factory.h"
 #include "table/mock_table.h"
@@ -48,14 +49,12 @@
 #include "util/filename.h"
 #include "util/mock_time_env.h"
 #include "util/mutexlock.h"
-
 #include "util/string_util.h"
 #include "util/sync_point.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 #include "utilities/merge_operators.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace anon {
@@ -290,9 +289,7 @@ class SpecialEnv : public EnvWrapper {
       Env::IOPriority GetIOPriority() override {
         return base_->GetIOPriority();
       }
-      bool use_direct_io() const override {
-        return base_->use_direct_io();
-      }
+      bool use_direct_io() const override { return base_->use_direct_io(); }
       Status Allocate(uint64_t offset, uint64_t len) override {
         return base_->Allocate(offset, len);
       }
@@ -978,30 +975,6 @@ class DBTestBase : public testing::Test {
 
   uint64_t TestGetTickerCount(const Options& options, Tickers ticker_type) {
     return options.statistics->getTickerCount(ticker_type);
-  }
-};
-
-class SafeMockTimeEnv : public MockTimeEnv {
- public:
-  explicit SafeMockTimeEnv(Env* base) : MockTimeEnv(base) {
-    SyncPoint::GetInstance()->DisableProcessing();
-    SyncPoint::GetInstance()->ClearAllCallBacks();
-#if defined(OS_MACOSX) && !defined(NDEBUG)
-    // This is an alternate way (vs. SpecialEnv) of dealing with the fact
-    // that on some platforms, pthread_cond_timedwait does not appear to
-    // release the lock for other threads to operate if the deadline time
-    // is already passed. (TimedWait calls are currently a bad abstraction
-    // because the deadline parameter is usually computed from Env time,
-    // but is interpreted in real clock time.)
-    SyncPoint::GetInstance()->SetCallBack(
-        "InstrumentedCondVar::TimedWaitInternal", [&](void* arg) {
-          uint64_t time_us = *reinterpret_cast<uint64_t*>(arg);
-          if (time_us < this->RealNowMicros()) {
-            *reinterpret_cast<uint64_t*>(arg) = this->RealNowMicros() + 1000;
-          }
-        });
-#endif  // OS_MACOSX && !NDEBUG
-    SyncPoint::GetInstance()->EnableProcessing();
   }
 };
 

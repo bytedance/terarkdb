@@ -16,6 +16,7 @@
 #include "db/builder.h"
 #include "db/error_handler.h"
 #include "db/map_builder.h"
+
 #include "monitoring/persistent_stats_history.h"
 #include "options/options_helper.h"
 #include "rocksdb/wal_filter.h"
@@ -1513,7 +1514,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
     }
   }
   if (s.ok()) {
-    impl->StartStatsDumpScheduler();
+    impl->StartPeriodicWorkScheduler();
   } else {
     for (auto* h : *handles) {
       delete h;
