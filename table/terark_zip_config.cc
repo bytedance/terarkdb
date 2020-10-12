@@ -400,7 +400,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo,
     }
   }
 
-  MyGetBool(cfo, enable_lazy_compaction, true);
+  MyGetBool(cfo, enable_lazy_compaction, false);
 
   MyOverrideXiB(cfo, write_buffer_size);
   MyOverrideXiB(cfo, target_file_size_base);

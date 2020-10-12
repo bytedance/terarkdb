@@ -129,7 +129,6 @@ int InternalKeyComparator::Compare(const ParsedInternalKey& a,
     if (a.sequence > b.sequence) {
       r = -1;
     } else if (a.sequence < b.sequence) {
-      std::cout << a.sequence << __LINE__ << b.sequence << std::endl;
       r = +1;
     } else if (a.type > b.type) {
       r = -1;
@@ -262,7 +261,7 @@ ValueIndex::ValueIndex(const Slice& slice) {
       break;
     case kDefault: {
       assert(slice.size() >= kDefaultLogIndexSize);
-      log_handle = Slice(slice.data() + 8, sizeof(DefaultLogHandle));
+      log_handle = Slice(slice.data() + 8, kDefaultLogHandleSize);
       meta_or_value = Slice(slice.data() + kDefaultLogIndexSize,
                             slice.size() - kDefaultLogIndexSize);
     } break;
@@ -322,6 +321,25 @@ uint64_t GetFirstEntryPhysicalOffset(uint64_t batch_record_offset,
   } else {
     return batch_record_offset + WriteBatchInternal::kHeader + header_size;
   }
+}
+
+uint64_t GetAheadDataOffset(uint64_t cur_offset,
+                            uint64_t ahead_data_size_with_header,
+                            uint64_t header_size, bool is_cleared) {
+  uint64_t ahead_data_size =
+      ahead_data_size_with_header - WriteBatchInternal::kHeader;
+  if (cur_offset == 0 || is_cleared) return uint64_t(-1);
+  assert(cur_offset > log::kHeaderSize);  // must have ahead data
+  uint64_t tail_data_size = cur_offset % log::kBlockSize - header_size;
+  uint64_t ahead_block_count =
+      (ahead_data_size - tail_data_size) % log::kBlockSize;
+  uint64_t ahead_content_physical_offset =
+      cur_offset - ahead_data_size - ahead_block_count * header_size -
+                  tail_data_size >
+              0
+          ? header_size
+          : 0;
+  return ahead_content_physical_offset;
 }
 
 }  // namespace rocksdb

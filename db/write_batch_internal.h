@@ -156,26 +156,27 @@ class WriteBatchInternal {
   static Status InsertInto(
       WriteThread::WriteGroup& write_group, SequenceNumber sequence,
       ColumnFamilyMemTables* memtables, FlushScheduler* flush_scheduler,
-      uint64_t blob_size = -1, bool ignore_missing_column_families = false,
-      uint64_t log_number = 0, DB* db = nullptr,
-      bool concurrent_memtable_writes = false, bool seq_per_batch = false,
-      bool batch_per_txn = true);
+      bool enable_kv_separate = false,
+      bool ignore_missing_column_families = false, uint64_t log_number = 0,
+      DB* db = nullptr, bool concurrent_memtable_writes = false,
+      bool seq_per_batch = false, bool batch_per_txn = true);
 
   // Convenience form of InsertInto when you have only one batch
   // next_seq returns the seq after last sequence number used in MemTable insert
   static Status InsertInto(
       const WriteBatch* batch, ColumnFamilyMemTables* memtables,
-      FlushScheduler* flush_scheduler, uint64_t blob_size = -1,
+      FlushScheduler* flush_scheduler, bool enable_kv_separate = false,
       bool ignore_missing_column_families = false, uint64_t log_number = 0,
       DB* db = nullptr, bool concurrent_memtable_writes = false,
       SequenceNumber* next_seq = nullptr, bool* has_valid_writes = nullptr,
       bool seq_per_batch = false, bool batch_per_txn = true,
-      size_t batch_content_wal_offset = 0, size_t wal_header_size = 0);
+      size_t batch_content_wal_offset = (uint64_t)-1,
+      size_t wal_header_size = log::kHeaderSize);
 
   static Status InsertInto(WriteThread::Writer* writer, SequenceNumber sequence,
                            ColumnFamilyMemTables* memtables,
                            FlushScheduler* flush_scheduler,
-                           uint64_t blob_size = -1,
+                           bool enable_kv_separate = false,
                            bool ignore_missing_column_families = false,
                            uint64_t log_number = 0, DB* db = nullptr,
                            bool concurrent_memtable_writes = false,

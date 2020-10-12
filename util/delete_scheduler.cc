@@ -44,9 +44,13 @@ DeleteScheduler::DeleteScheduler(Env* env, int64_t rate_bytes_per_sec,
 
 DeleteScheduler::~DeleteScheduler() {
   {
-    InstrumentedMutexLock l(&mu_);
-    closing_ = true;
-    cv_.SignalAll();
+    try {
+      InstrumentedMutexLock l(&mu_);
+      closing_ = true;
+      cv_.SignalAll();
+    } catch (const std::exception& e) {
+      ROCKS_LOG_WARN(info_log_, "%s", e.what());
+    }
   }
   if (bg_thread_) {
     bg_thread_->join();

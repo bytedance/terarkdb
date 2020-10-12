@@ -124,7 +124,6 @@ class WriteThread {
     PreReleaseCallback* pre_release_callback;
     uint64_t log_used;  // log number that this batch was inserted into
     uint64_t log_ref;   // log number that memtable insert should reference
-    uint64_t wal_offset_of_wb_content;
     uint64_t wal_record_header_size;
     WriteCallback* callback;
     bool made_waitable;          // records lazy construction of mutex and cv
@@ -149,7 +148,6 @@ class WriteThread {
           pre_release_callback(nullptr),
           log_used(0),
           log_ref(0),
-          wal_offset_of_wb_content(std::numeric_limits<uint64_t>::max()),
           wal_record_header_size(log::kHeaderSize),
           callback(nullptr),
           made_waitable(false),
@@ -172,7 +170,6 @@ class WriteThread {
           pre_release_callback(_pre_release_callback),
           log_used(0),
           log_ref(_log_ref),
-          wal_offset_of_wb_content(std::numeric_limits<uint64_t>::max()),
           wal_record_header_size(log::kHeaderSize),
           callback(_callback),
           made_waitable(false),

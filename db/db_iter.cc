@@ -254,10 +254,22 @@ class DBIter final : public Iterator {
   LazyBuffer GetValue(const ParsedInternalKey& ikey, ValueType index_type) {
     if (separate_helper_ == nullptr || ikey.type != index_type) {
       return iter_->value();
-    } else {
-      return separate_helper_->TransToCombined(saved_key_.GetUserKey(),
-                                               ikey.sequence, iter_->value());
     }
+
+    ValueIndex value_index(iter_->value().slice());
+    auto is_mem_val = [&] {
+      return value_index.log_type == ValueIndex::kDefault &&
+             iter_->value().slice().size() > kDefaultLogIndexSize;
+    };
+    if (is_mem_val()) {
+      if(!iter_->value().valid()) {
+        iter_->value().fetch();
+      }
+      return LazyBuffer(Slice(iter_->value().data() + kDefaultLogIndexSize,
+                              iter_->value().size() - kDefaultLogIndexSize));
+    }
+    return separate_helper_->TransToCombined(saved_key_.GetUserKey(),
+                                             ikey.sequence, iter_->value());
   }
 
   void PrevInternal();

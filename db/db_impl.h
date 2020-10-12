@@ -14,7 +14,6 @@
 #include <limits>
 #include <list>
 #include <map>
-#include <queue>
 #include <set>
 #include <string>
 #include <utility>
@@ -937,11 +936,11 @@ class DBImpl : public DB {
   // Flush the in-memory write buffer to storage.  Switches to a new
   // log-file/memtable and writes a new descriptor iff successful. Then
   // installs a new super version for the column family.
-  Status FlushMemTableToOutputFile(ColumnFamilyData* cfd,
-                                   const MutableCFOptions& mutable_cf_options,
-                                   bool* madeProgress, JobContext* job_context,
-                                   SuperVersionContext* superversion_context,
-                                   LogBuffer* log_buffer);
+  Status FlushMemTableToOutputFile(
+      ColumnFamilyData* cfd, const MutableCFOptions& mutable_cf_options,
+      const ImmutableDBOptions& immutable_db_options, bool* madeProgress,
+      JobContext* job_context, SuperVersionContext* superversion_context,
+      LogBuffer* log_buffer);
 
   // Argument required by background flush thread.
   struct BGFlushArg {
@@ -1058,6 +1057,9 @@ class DBImpl : public DB {
   WriteBatch* MergeBatch(const WriteThread::WriteGroup& write_group,
                          WriteBatch* tmp_batch, size_t* write_with_wal,
                          WriteBatch** to_be_cached_state);
+
+  void UnpackBatch(const WriteThread::WriteGroup& write_group,
+                   const WriteBatch* merged_batch, bool wal_only = true);
 
   Status WriteToWAL(const WriteBatch& merged_batch, log::Writer* log_writer,
                     uint64_t* log_used, uint64_t* log_size,
@@ -1428,16 +1430,8 @@ class DBImpl : public DB {
   // invariant(column family present in compaction_queue_ <==>
   // ColumnFamilyData::pending_compaction_ == true)
   std::deque<ColumnFamilyData*> compaction_queue_;
-  struct GarbageCollectionQueueCmp {
-    bool operator()(const std::pair<double, ColumnFamilyData*>& l,
-                    const std::pair<double, ColumnFamilyData*>& r) const {
-      return l.first < r.first;
-    }
-  };
-  std::priority_queue<std::pair<double, ColumnFamilyData*>,
-                      std::vector<std::pair<double, ColumnFamilyData*>>,
-                      GarbageCollectionQueueCmp>
-      garbage_collection_queue_;
+  //
+  std::vector<ColumnFamilyData*> garbage_collection_queue_;
 
   // A queue to store filenames of the files to be purged
   std::deque<PurgeFileInfo> purge_queue_;

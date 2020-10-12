@@ -83,9 +83,14 @@ struct ValueIndexBuf {
   ~ValueIndexBuf() {}
   void Fill(const Slice& value, uint64_t wal_offset_of_wb_content,
             uint64_t wal_record_header_size, const char* batch_content,
-            uint64_t log_number) {
+            uint64_t log_number
+#ifndef NDEBUG
+            ,
+            const ImmutableDBOptions& dbo
+#endif  // !NDEBUG
+  ) {
     // add value index in front of data,
-    assert(log_number >> 62 == 0);
+    assert(log_number != 0 && log_number >> 62 == 0);
     assert(batch_content);
     assert(wal_record_header_size != uint64_t(-1));
 
@@ -97,8 +102,12 @@ struct ValueIndexBuf {
     uint64_t physical_offset =
         GetPhysicalOffset(wal_offset_of_wb_content,
                           value.data() - batch_content, wal_record_header_size);
+#ifndef NDEBUG
+#warning "debug code"
+    assert(log_number != 27 || physical_offset == 967);
+#endif  // !NDEBUG
     EncodeFixed64(buf_ + 8, physical_offset);
-    assert(value.size() < size_t{port::kMaxUint32});
+    assert(value.size() != 0 && value.size() < size_t{port::kMaxUint32});
     EncodeFixed32(buf_ + 16, (uint32_t)value.size());
 
     // Add crc of head&tail
@@ -1060,7 +1069,7 @@ class MemTableInserter : public WriteBatch::Handler {
   bool post_info_created_;
   uint64_t wal_offset_of_wb_content_;
   uint64_t wal_record_header_size_;
-  const char* batch_content_;
+  const char* batch_content_addr_;
 
   bool* has_valid_writes_;
   // On some (!) platforms just default creating
@@ -1086,7 +1095,7 @@ class MemTableInserter : public WriteBatch::Handler {
   using DupDetector = std::aligned_storage<sizeof(DuplicateDetector)>::type;
   DupDetector duplicate_detector_;
   bool dup_dectector_on_;
-  size_t blob_size_ = -1;
+  bool enable_kv_separate_;
 
   MemPostInfoMap& GetPostMap() {
     assert(concurrent_memtable_writes_);
@@ -1134,7 +1143,7 @@ class MemTableInserter : public WriteBatch::Handler {
         post_info_created_(false),
         wal_offset_of_wb_content_(-1),
         wal_record_header_size_(-1),
-        batch_content_(nullptr),
+        batch_content_addr_(nullptr),
         has_valid_writes_(has_valid_writes),
         rebuilding_trx_(nullptr),
         rebuilding_trx_seq_(0),
@@ -1148,7 +1157,8 @@ class MemTableInserter : public WriteBatch::Handler {
         write_before_prepare_(!batch_per_txn),
         unprepared_batch_(false),
         duplicate_detector_(),
-        dup_dectector_on_(false) {
+        dup_dectector_on_(false),
+        enable_kv_separate_(false) {
     assert(cf_mems_);
   }
 
@@ -1183,12 +1193,12 @@ class MemTableInserter : public WriteBatch::Handler {
   }
 
   void set_log_number_ref(uint64_t log) { log_number_ref_ = log; }
-  void SetContext(size_t wo, size_t hs, const std::string& br, size_t blob_size,
-                  uint64_t log) {
+  void SetContext(size_t wo, size_t hs, const char* batch_start,
+                  bool enable_kv_separate, uint64_t log) {
     wal_offset_of_wb_content_ = wo;
     wal_record_header_size_ = hs;
-    batch_content_ = br.data() + WriteBatchInternal::kHeader;
-    blob_size_ = blob_size;
+    batch_content_addr_ = batch_start;
+    enable_kv_separate_ = enable_kv_separate;
     log_used_ = log;
   }
 
@@ -1268,7 +1278,15 @@ class MemTableInserter : public WriteBatch::Handler {
       return seek_status;
     }
     Status ret_status;
-
+    auto get_cf_blob_size = [&]() {
+      if (cf_mems_ && cf_mems_->current() &&
+          cf_mems_->current()->GetLatestMutableCFOptions()) {
+        assert(cf_mems_->current()->GetLatestMutableCFOptions()->blob_size >=
+               8);
+        return cf_mems_->current()->GetLatestMutableCFOptions()->blob_size;
+      } else
+        return (uint64_t)-1;
+    };
     MemTable* mem = cf_mems_->GetMemTable();
     auto* moptions = mem->GetImmutableMemTableOptions();
     // inplace_update_support is inconsistent with snapshots, and therefore with
@@ -1276,12 +1294,19 @@ class MemTableInserter : public WriteBatch::Handler {
     assert(!seq_per_batch_ || !moptions->inplace_update_support);
     if (!moptions->inplace_update_support) {
       // now separate kv only happen on non-inplace-update-support
-      ValueIndexBuf tv;
+      ValueIndexBuf value_index_buf;
       bool mem_res = false;
-      if (value.size() > blob_size_) {
-        tv.Fill(value, wal_offset_of_wb_content_, wal_record_header_size_,
-                batch_content_, log_used_);
-        Slice parts[] = {Slice(tv.data(), tv.size()), value};
+      if (enable_kv_separate_ && value.size() > get_cf_blob_size()) {
+        // TODO add blob_large_key_ratio_lsh16_ checking?
+        value_index_buf.Fill(value, wal_offset_of_wb_content_,
+                             wal_record_header_size_, batch_content_addr_, log_used_
+#ifndef NDEBUG
+                             ,
+                             db_->immutable_db_options()
+#endif  // !NDEBUG
+        );
+        Slice parts[] = {Slice(value_index_buf.data(), value_index_buf.size()),
+                         value};
         SliceParts value_parts(parts, 2);
         mem_res =
             mem->Add(sequence_, kTypeValueIndex, key, value_parts,
@@ -1607,14 +1632,28 @@ class MemTableInserter : public WriteBatch::Handler {
         }
       }
     }
-
+    auto get_cf_blob_size = [&]() {
+      if (cf_mems_ && cf_mems_->current() &&
+          cf_mems_->current()->GetLatestMutableCFOptions()) {
+        assert(cf_mems_->current()->GetLatestMutableCFOptions()->blob_size >=
+               8);
+        return cf_mems_->current()->GetLatestMutableCFOptions()->blob_size;
+      } else
+        return (uint64_t)-1;
+    };
     if (!perform_merge) {
-      ValueIndexBuf tv;
+      ValueIndexBuf value_index_buf;
       bool mem_res = false;
-      if (value.size() > blob_size_) {
-        tv.Fill(value, wal_offset_of_wb_content_, wal_record_header_size_,
-                batch_content_, log_used_);
-        Slice parts[] = {Slice(tv.data(), tv.size()), value};
+      if (enable_kv_separate_ && value.size() > get_cf_blob_size()) {
+        value_index_buf.Fill(value, wal_offset_of_wb_content_,
+                             wal_record_header_size_, batch_content_addr_, log_used_
+#ifndef NDEBUG
+                             ,
+                             db_->immutable_db_options()
+#endif  // !NDEBUG
+        );
+        Slice parts[] = {Slice(value_index_buf.data(), value_index_buf.size()),
+                         value};
         SliceParts value_parts(parts, 2);
         mem_res = mem->Add(sequence_, kTypeMergeIndex, key, value_parts);
       } else {
@@ -1809,7 +1848,7 @@ class MemTableInserter : public WriteBatch::Handler {
 Status WriteBatchInternal::InsertInto(
     WriteThread::WriteGroup& write_group, SequenceNumber sequence,
     ColumnFamilyMemTables* memtables, FlushScheduler* flush_scheduler,
-    uint64_t blob_size, bool ignore_missing_column_families,
+    bool enable_kv_separate, bool ignore_missing_column_families,
     uint64_t recovery_log_number, DB* db, bool concurrent_memtable_writes,
     bool seq_per_batch, bool batch_per_txn) {
   MemTableInserter inserter(
@@ -1828,8 +1867,16 @@ Status WriteBatchInternal::InsertInto(
     }
     SetSequence(w->batch, inserter.sequence());
     inserter.set_log_number_ref(w->log_ref);
-    inserter.SetContext(w->wal_offset_of_wb_content, log::kHeaderSize,
-                        w->batch->Data(), blob_size, w->log_used);
+    if (w->batch->GetWalTerminationPoint().is_cleared()) {
+      inserter.SetContext(w->batch->GetDataOffsetInWal(), log::kHeaderSize,
+                          w->batch->Data().data() + WriteBatchInternal::kHeader,
+                          enable_kv_separate, w->log_used);
+    } else {
+      inserter.SetContext(
+          w->batch->GetDataOffsetInWal(), log::kHeaderSize,
+          w->batch->Data().data() + w->batch->GetWalTerminationPoint().size,
+          enable_kv_separate, w->log_used);
+    }
     w->status = w->batch->Iterate(&inserter);
     if (!w->status.ok()) {
       return w->status;
@@ -1843,7 +1890,7 @@ Status WriteBatchInternal::InsertInto(
 Status WriteBatchInternal::InsertInto(
     WriteThread::Writer* writer, SequenceNumber sequence,
     ColumnFamilyMemTables* memtables, FlushScheduler* flush_scheduler,
-    uint64_t blob_size, bool ignore_missing_column_families,
+    bool enable_kv_separate, bool ignore_missing_column_families,
     uint64_t log_number, DB* db, bool concurrent_memtable_writes,
     bool seq_per_batch, size_t batch_cnt, bool batch_per_txn) {
 #ifdef NDEBUG
@@ -1856,8 +1903,18 @@ Status WriteBatchInternal::InsertInto(
       seq_per_batch, batch_per_txn);
   SetSequence(writer->batch, sequence);
   inserter.set_log_number_ref(writer->log_ref);
-  inserter.SetContext(writer->wal_offset_of_wb_content, log::kHeaderSize,
-                      writer->batch->Data(), blob_size, writer->log_used);
+  if (writer->batch->GetWalTerminationPoint().is_cleared()) {
+    inserter.SetContext(
+        writer->batch->GetDataOffsetInWal(), log::kHeaderSize,
+        writer->batch->Data().data() + WriteBatchInternal::kHeader,
+        enable_kv_separate, writer->log_used);
+  } else {
+    inserter.SetContext(writer->batch->GetDataOffsetInWal(), log::kHeaderSize,
+                        writer->batch->Data().data() +
+                            writer->batch->GetWalTerminationPoint().size,
+                        enable_kv_separate, writer->log_used);
+  }
+
   Status s = writer->batch->Iterate(&inserter);
   assert(!seq_per_batch || batch_cnt != 0);
   assert(!seq_per_batch || inserter.sequence() - sequence == batch_cnt);
@@ -1869,17 +1926,28 @@ Status WriteBatchInternal::InsertInto(
 
 Status WriteBatchInternal::InsertInto(
     const WriteBatch* batch, ColumnFamilyMemTables* memtables,
-    FlushScheduler* flush_scheduler, uint64_t blob_size,
+    FlushScheduler* flush_scheduler, bool enable_kv_separate,
     bool ignore_missing_column_families, uint64_t log_number, DB* db,
     bool concurrent_memtable_writes, SequenceNumber* next_seq,
     bool* has_valid_writes, bool seq_per_batch, bool batch_per_txn,
     size_t batch_content_wal_offset, size_t wal_header_size) {
+  // if do not have log writer, batch_content_wal_offset is unkown, just
+  // forbiden this case
+  assert(!enable_kv_separate);
   MemTableInserter inserter(Sequence(batch), memtables, flush_scheduler,
                             ignore_missing_column_families, log_number, db,
                             concurrent_memtable_writes, has_valid_writes,
                             seq_per_batch, batch_per_txn);
-  inserter.SetContext(batch_content_wal_offset, wal_header_size, batch->rep_,
-                      blob_size, log_number);  // XXX log_number maybe wrong
+  if (batch->GetWalTerminationPoint().is_cleared()) {
+    inserter.SetContext(batch_content_wal_offset, wal_header_size,
+                        batch->Data().data() + WriteBatchInternal::kHeader,
+                        enable_kv_separate, log_number);
+  } else {
+    inserter.SetContext(
+        batch_content_wal_offset, wal_header_size,
+        batch->Data().data() + batch->GetWalTerminationPoint().size,
+        enable_kv_separate, log_number);
+  }
   Status s = batch->Iterate(&inserter);
   if (next_seq != nullptr) {
     *next_seq = inserter.sequence();

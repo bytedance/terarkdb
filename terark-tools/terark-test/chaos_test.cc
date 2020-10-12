@@ -214,7 +214,7 @@ class ChaosTest {
       options.table_factory.reset(
           rocksdb::NewTerarkZipTableFactory(tzto, options.table_factory));
    }
-    wo.blob_size = 512;
+    wo.enable_kv_separate = false;
   }
 
   std::pair<std::string, std::string> get_ran_range_pair(

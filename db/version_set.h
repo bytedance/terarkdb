@@ -680,6 +680,7 @@ class Version : public SeparateHelper, private LazyBufferState {
 
   // Add all files listed in the current version to *live.
   void AddLiveFiles(std::vector<FileDescriptor>* live);
+  void AddLiveFiles(std::vector<FileMetaData*>* live);
 
   // Return a human readable string that describes this version's contents.
   std::string DebugString(bool hex = false, bool print_stats = false) const;
@@ -1070,7 +1071,8 @@ class VersionSet {
                             FileMetaData** metadata, ColumnFamilyData** cfd);
 
   // This function doesn't support leveldb SST filenames
-  void GetLiveFilesMetaData(std::vector<LiveFileMetaData>* metadata);
+  void GetLiveFilesMetaData(std::vector<LiveFileMetaData>* metadata,
+                            const std::string& wal_dir);
 
   void GetObsoleteFiles(std::vector<ObsoleteFileInfo>* files,
                         std::vector<std::string>* manifest_filenames,
@@ -1098,6 +1100,7 @@ class VersionSet {
   Status CacheWalMeta(uint64_t log_no, FileMetaData fm);
   Status ReleaseWalMeta(uint64_t log_no);
   FileMetaData GetWalMeta(uint64_t log_no);
+  TableProperties GetWalProp(uint64_t log_no);
   bool PickBlobWalWithoutIndex(std::vector<FileMetaData*>* picked_wals,
                                InstrumentedMutex* mu);
   void SetWalWithoutIndex(bool flag) {

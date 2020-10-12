@@ -115,8 +115,9 @@ Status DBImpl::SyncClosedLogs(JobContext* job_context) {
 
 Status DBImpl::FlushMemTableToOutputFile(
     ColumnFamilyData* cfd, const MutableCFOptions& mutable_cf_options,
-    bool* made_progress, JobContext* job_context,
-    SuperVersionContext* superversion_context, LogBuffer* log_buffer) {
+    const ImmutableDBOptions& immutable_db_options, bool* made_progress,
+    JobContext* job_context, SuperVersionContext* superversion_context,
+    LogBuffer* log_buffer) {
   mutex_.AssertHeld();
   // TODO(ZouZhiZhang) find out Assertion reason
   // assert(cfd->imm()->NumNotFlushed() != 0);
@@ -205,8 +206,14 @@ Status DBImpl::FlushMemTableToOutputFile(
     if (sfm) {
       // Notify sst_file_manager that a new file was added
       for (auto file_meta : flush_job.GetFileMetas()) {
-        std::string file_path = MakeTableFileName(
-            cfd->ioptions()->cf_paths[0].path, file_meta.fd.GetNumber());
+        std::string file_path;
+        if (file_meta.prop.is_blob_wal()) {
+          file_path = LogFileName(immutable_db_options.wal_dir,
+                                  file_meta.fd.GetNumber());
+        } else {
+          file_path = MakeTableFileName(cfd->ioptions()->cf_paths[0].path,
+                                        file_meta.fd.GetNumber());
+        }
         sfm->OnAddFile(file_path);
         if (sfm->IsMaxAllowedSpaceReached()) {
           Status new_bg_error =
@@ -236,9 +243,9 @@ Status DBImpl::FlushMemTablesToOutputFiles(
     ColumnFamilyData* cfd = arg.cfd_;
     MutableCFOptions mutable_cf_options = *cfd->GetLatestMutableCFOptions();
     SuperVersionContext* superversion_context = arg.superversion_context_;
-    Status s = FlushMemTableToOutputFile(cfd, mutable_cf_options, made_progress,
-                                         job_context, superversion_context,
-                                         log_buffer);
+    Status s = FlushMemTableToOutputFile(
+        cfd, mutable_cf_options, immutable_db_options_, made_progress,
+        job_context, superversion_context, log_buffer);
     if (!s.ok()) {
       status = s;
       if (!s.IsShutdownInProgress()) {
@@ -485,8 +492,12 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
                              jobs[i].GetTableProperties());
       if (sfm) {
         for (auto file_meta : jobs[i].GetFileMetas()) {
-          std::string file_path = MakeTableFileName(
-              cfds[i]->ioptions()->cf_paths[0].path, file_meta.fd.GetNumber());
+          std::string file_path =
+              file_meta.prop.is_blob_wal()
+                  ? LogFileName(immutable_db_options_.wal_dir,
+                                file_meta.fd.GetNumber())
+                  : MakeTableFileName(cfds[i]->ioptions()->cf_paths[0].path,
+                                      file_meta.fd.GetNumber());
           sfm->OnAddFile(file_path);
           if (sfm->IsMaxAllowedSpaceReached() &&
               error_handler_.GetBGError().ok()) {
@@ -604,8 +615,12 @@ void DBImpl::NotifyOnFlushCompleted(
       info.cf_name = cfd->GetName();
       // TODO(yhchiang): make db_paths dynamic in case flush does not
       //                 go to L0 in the future.
-      info.file_path = MakeTableFileName(cfd->ioptions()->cf_paths[0].path,
-                                         file_meta->fd.GetNumber());
+      info.file_path =
+          file_meta->prop.is_blob_wal()
+              ? LogFileName(immutable_db_options_.wal_dir,
+                            file_meta->fd.GetNumber())
+              : MakeTableFileName(cfd->ioptions()->cf_paths[0].path,
+                                  file_meta->fd.GetNumber());
       info.thread_id = env_->GetThreadID();
       info.job_id = job_id;
       info.triggered_writes_slowdown = triggered_writes_slowdown;
@@ -750,6 +765,24 @@ Status DBImpl::CompactRange(const CompactRangeOptions& options,
       }
       TEST_SYNC_POINT("DBImpl::RunManualCompaction()::1");
       TEST_SYNC_POINT("DBImpl::RunManualCompaction()::2");
+    }
+    while (cfd->ioptions()->enable_lazy_compaction) {
+      int bottommost_level;
+      {
+        InstrumentedMutexLock l(&mutex_);
+        bottommost_level =
+            cfd->current()->storage_info()->num_non_empty_levels() - 1;
+      }
+      if (max_level_with_files >= bottommost_level) {
+        break;
+      }
+      do {
+        ++max_level_with_files;
+        s = RunManualCompaction(cfd, max_level_with_files, max_level_with_files,
+                                options.target_path_id,
+                                options.max_subcompactions, begin, end,
+                                &files_being_compact, exclusive, false);
+      } while (max_level_with_files < bottommost_level);
     }
   }
   if (!s.ok()) {
@@ -1023,7 +1056,7 @@ Status DBImpl::CompactFilesImpl(
   }
 
   if (output_file_names != nullptr) {
-    for (const auto& newf : c->edit()->GetNewFiles()) {
+    for (const auto newf : c->edit()->GetNewFiles()) {
       (*output_file_names)
           .push_back(TableFileName(c->immutable_cf_options()->cf_paths,
                                    newf.second.fd.GetNumber(),
@@ -1115,7 +1148,7 @@ void DBImpl::NotifyOnCompactionBegin(ColumnFamilyData* cfd, Compaction* c,
         }
       }
     }
-    for (const auto& newf : c->edit()->GetNewFiles()) {
+    for (const auto newf : c->edit()->GetNewFiles()) {
       info.output_files.push_back(TableFileName(
           c->immutable_cf_options()->cf_paths, newf.second.fd.GetNumber(),
           newf.second.fd.GetPathId()));
@@ -1179,7 +1212,7 @@ void DBImpl::NotifyOnCompactionCompleted(
         }
       }
     }
-    for (const auto& newf : c->edit()->GetNewFiles()) {
+    for (const auto newf : c->edit()->GetNewFiles()) {
       if (!c->IsNewOutputTable(newf.second.fd.GetNumber())) {
         continue;
       }
@@ -1981,27 +2014,38 @@ ColumnFamilyData* DBImpl::PopFirstFromCompactionQueue() {
 void DBImpl::AddToGarbageCollectionQueue(ColumnFamilyData* cfd) {
   assert(!cfd->queued_for_garbage_collection());
   cfd->Ref();
-  garbage_collection_queue_.emplace(
-      cfd->current()->storage_info()->total_garbage_ratio(), cfd);
+  garbage_collection_queue_.emplace_back(cfd);
   cfd->set_queued_for_garbage_collection(true);
 }
 
 ColumnFamilyData* DBImpl::PopFirstFromGarbageCollectionQueue() {
   assert(!garbage_collection_queue_.empty());
 
-  autovector<ColumnFamilyData*> check_list;
   int max_check = std::min(int(garbage_collection_queue_.size()),
                            GetBGJobLimits().max_garbage_collections);
-  for (int i = 0; i < max_check; ++i) {
-    check_list.emplace_back(garbage_collection_queue_.top().second);
-    garbage_collection_queue_.pop();
+  assert(max_check > 0);
+  std::nth_element(
+      garbage_collection_queue_.begin(),
+      garbage_collection_queue_.begin() + max_check,
+      garbage_collection_queue_.end(),
+      [](ColumnFamilyData* left, ColumnFamilyData* right) {
+        return left->current()->storage_info()->total_garbage_ratio() >
+               right->current()->storage_info()->total_garbage_ratio();
+      });
+
+  auto max_iter = garbage_collection_queue_.begin();
+  double max_load = (*max_iter)->current()->GetGarbageCollectionLoad();
+  for (auto it = std::next(max_iter),
+            end = garbage_collection_queue_.begin() + max_check;
+       it != end; ++it) {
+    double tmp_load = (*it)->current()->GetGarbageCollectionLoad();
+    if (max_load < tmp_load) {
+      max_load = tmp_load;
+      max_iter = it;
+    }
   }
-  for (auto cfd : check_list) {
-    garbage_collection_queue_.emplace(
-        cfd->current()->GetGarbageCollectionLoad(), cfd);
-  }
-  auto cfd = garbage_collection_queue_.top().second;
-  garbage_collection_queue_.pop();
+  auto cfd = *max_iter;
+  garbage_collection_queue_.erase(max_iter);
   assert(cfd->queued_for_garbage_collection());
   cfd->set_queued_for_garbage_collection(false);
   return cfd;
@@ -3185,7 +3229,7 @@ Status DBImpl::BackgroundWalIndexCreation(JobContext* job_context,
         failed_wal.insert(f->fd.GetNumber());
         ROCKS_LOG_WARN(immutable_db_options_.info_log,
                        "%d WalIndexCreation Fail: %s", f->fd.GetNumber(),
-                       status.ToString().c_str());
+                       s.ToString().c_str());
         auto idx_fname =
             LogIndexFileName(immutable_db_options_.wal_dir, f->fd.GetNumber());
         auto tmp_idx_fname = idx_fname + ".tmp";

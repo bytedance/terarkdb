@@ -64,13 +64,15 @@ Writer::~Writer() { WriteBuffer(); }
 
 Status Writer::WriteBuffer() { return dest_->Flush(); }
 
-Status Writer::AddRecord(const Slice& slice, size_t num_entries, void* p) {
-  WriteThread::Writer* wt = static_cast<WriteThread::Writer*>(p);
-  assert(!recycle_log_files_);  // Forbiden wal recycle
+Status Writer::AddRecord(const Slice& slice, size_t num_entries,
+                         uint64_t* wal_offset
+#ifndef NDEBUG
+                         ,
+                         const ImmutableDBOptions& idbo
+#endif
+) {
+  assert(!recycle_log_files_);  // wal recycle conflict with blob in wal
   const int header_size = kHeaderSize;
-  if (wt) {
-    wt->wal_record_header_size = header_size;
-  }
 
   const char* ptr = slice.data();
   size_t left = slice.size();
@@ -116,20 +118,20 @@ Status Writer::AddRecord(const Slice& slice, size_t num_entries, void* p) {
       type = recycle_log_files_ ? kRecyclableMiddleType : kMiddleType;
     }
 
-    if (wt != nullptr && wt->wal_offset_of_wb_content == uint64_t(-1)) {
-      // writebatch's content and set writebatch_content_offset only once.
-      assert(dest_->GetFileSize() ==
-             block_counts_ * kBlockSize + block_offset_);
-      wt->wal_offset_of_wb_content =
-          GetFirstEntryPhysicalOffset(dest_->GetFileSize(), header_size, avail);
-      assert(wt->wal_offset_of_wb_content % kBlockSize >=
-             (uint64_t)header_size);
-    }
+    uint64_t ahead_data_size = dest_->GetFileSize();
+    assert(ahead_data_size == block_counts_ * kBlockSize + block_offset_);
     s = EmitPhysicalRecord(type, ptr, fragment_length);
+    if (s.ok() && wal_offset != nullptr && *wal_offset == uint64_t(-1)) {
+      // writebatch's content and set writebatch_content_offset only once.
+      *wal_offset =
+          GetFirstEntryPhysicalOffset(ahead_data_size, header_size, avail);
+      assert(*wal_offset % kBlockSize >= (uint64_t)header_size);
+    }
     ptr += fragment_length;
     left -= fragment_length;
     begin = false;
   } while (s.ok() && left > 0);
+
   num_entries_ += num_entries;
   return s;
 }
@@ -173,6 +175,7 @@ Status Writer::EmitPhysicalRecord(RecordType t, const char* ptr, size_t n) {
 
   // Write the header and the payload
   Status s = dest_->Append(Slice(buf, header_size));
+  assert(s.ok());
   if (s.ok()) {
     s = dest_->Append(Slice(ptr, n));
     if (s.ok()) {
@@ -273,6 +276,7 @@ Status WalBlobReader::GetBlob(const Slice& log_handle,
   std::string blob_uid;
   GenerateCacheUniqueId(log_handle, blob_uid);
   Cache::Handle* handle = blob_cache_->Lookup(blob_uid);
+  Status status = Status::OK();
   if (handle) {
     Blob* b = (Blob*)blob_cache_->Value(handle);
     lazy_blob->reset(b->slice_,
@@ -295,27 +299,33 @@ Status WalBlobReader::GetBlob(const Slice& log_handle,
   }
 
   // read log file and check checksum
+#ifndef NDEBUG
+  uint64_t _file_size;
+  std::string log_name = LogFileName(ioptions_.wal_dir, log_number_);
+  auto _s = ioptions_.env->GetFileSize(log_name, &_file_size);
+  assert(_file_size >= content.offset);
+#endif  // !NDEBUG
   Blob* blob = new Blob(blob_physical_length);
-  Status s = src_->Read(content.offset, blob_physical_length, &(blob->slice_),
-                        blob->buf_);
-  assert(s.ok());  // TODO return status
+  status = src_->Read(content.offset, blob_physical_length, &(blob->slice_),
+                      blob->buf_);
+  if (!status.ok()) {
+    return status;
+  }
   assert(blob->slice_.size() != 0 &&
          blob->slice_.size() == blob_physical_length);
   if (head_size != 0) {
     uint32_t head_crc =
         terark::Crc16c_update(0, blob->slice_.data(), head_size);
-    // assert(content.head_crc == head_crc);
     if (content.head_crc != head_crc) {
-      // return Status::IOError("");
       assert(false);
+      return Status::IOError("head_crc not match");
     }
   }
   if (tail_size != 0) {
     uint32_t tail_crc = terark::Crc16c_update(
         0, blob->slice_.data() + blob->slice_.size() - tail_size, tail_size);
-    // assert(tail_crc == content.tail_crc);
     if (tail_crc != content.tail_crc) {
-      assert(false);  // TODO
+      return Status::IOError("tail_crc not match");
     }
   }
   // check middletype crc
@@ -342,14 +352,16 @@ Status WalBlobReader::GetBlob(const Slice& log_handle,
     // cross more than one block, need remove middle log record header
     blob->ShrinkVal(head_size, wal_header_size_);
   }
-  s = blob_cache_->Insert(blob_uid, blob, sizeof(Blob) + blob->DataSize(),
-                          &DeleteCachedEntry<Blob>, &handle);
-  assert(s.ok());
+  status = blob_cache_->Insert(blob_uid, blob, sizeof(Blob) + blob->DataSize(),
+                               &DeleteCachedEntry<Blob>, &handle);
+  if (!status.ok()) {
+    return status;
+  }
   Blob* b = (Blob*)blob_cache_->Value(handle);
   lazy_blob->reset(b->slice_,
                    Cleanable(release_cache, blob_cache_.get(), handle),
                    log_number_);
-  return Status::OK();
+  return status;
 }
 
 void WalBlobReader::GetCFWalTupleOffsets(uint32_t cf_id, uint64_t* cf_offset,
@@ -401,7 +413,6 @@ InternalIterator* WalBlobReader::NewIteratorWithCF(
     }
   }
   if (s.ok() && index_file_data_.size() != file_size) {
-    // TODO more details
     s = Status::IOError("Invalid file size");
   }
   if (!s.ok()) {
@@ -420,7 +431,8 @@ InternalIterator* WalBlobReader::NewIteratorWithCF(
   }
 }
 
-Status WalBlobReader::GetFromHandle(const ReadOptions&, const Slice& handle,
+Status WalBlobReader::GetFromHandle(const ReadOptions& readOptions,
+                                    const Slice& handle,
                                     GetContext* get_context) {
   LazyBuffer value;
   auto s = GetBlob(handle, &value);

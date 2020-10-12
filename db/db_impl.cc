@@ -3262,7 +3262,7 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
 
 void DBImpl::GetLiveFilesMetaData(std::vector<LiveFileMetaData>* metadata) {
   InstrumentedMutexLock l(&mutex_);
-  versions_->GetLiveFilesMetaData(metadata);
+  versions_->GetLiveFilesMetaData(metadata, immutable_db_options_.wal_dir);
 }
 
 void DBImpl::GetColumnFamilyMetaData(ColumnFamilyHandle* column_family,
@@ -3279,7 +3279,7 @@ void DBImpl::GetColumnFamilyMetaData(ColumnFamilyHandle* column_family,
 Status DBImpl::CheckConsistency(bool read_only) {
   mutex_.AssertHeld();
   std::vector<LiveFileMetaData> metadata;
-  versions_->GetLiveFilesMetaData(&metadata);
+  versions_->GetLiveFilesMetaData(&metadata, immutable_db_options_.wal_dir);
 
   std::string corruption_messages;
   for (const auto& md : metadata) {

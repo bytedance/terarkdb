@@ -60,6 +60,15 @@ struct SavePoint {
   bool is_cleared() const { return (size | count | content_flags) == 0; }
 };
 
+struct WalPosition {
+  uint64_t wal_offset_of_wb_content;
+  uint64_t log_number;
+  WalPosition()
+      : wal_offset_of_wb_content(uint64_t(-1)), log_number(uint64_t(-1)) {}
+  WalPosition(uint64_t offset, uint64_t no)
+      : wal_offset_of_wb_content(offset), log_number(no) {}
+};
+
 class WriteBatch : public WriteBatchBase {
  public:
   explicit WriteBatch(size_t reserved_bytes = 0, size_t max_bytes = 0);
@@ -277,6 +286,14 @@ class WriteBatch : public WriteBatchBase {
 
   // Retrieve data size of the batch.
   size_t GetDataSize() const { return rep_.size(); }
+  uint64_t GetDataOffsetInWal() const {
+    return wal_position_.wal_offset_of_wb_content;
+  }
+  uint64_t GetLogNumber() const { return wal_position_.log_number; }
+  void SetWalPosition(uint64_t offset, uint64_t no) {
+    wal_position_.wal_offset_of_wb_content = offset;
+    wal_position_.log_number = no;
+  }
 
   // Returns the number of updates in the batch
   int Count() const;
@@ -360,6 +377,8 @@ class WriteBatch : public WriteBatchBase {
   bool is_latest_persistent_state_ = false;
 
  protected:
+
+  WalPosition wal_position_;
   std::string rep_;  // See comment in write_batch.cc for the format of rep_
 
   // Intentionally copyable

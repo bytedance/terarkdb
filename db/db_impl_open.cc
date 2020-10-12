@@ -265,7 +265,12 @@ Status DBImpl::NewDB() {
     log::Writer log(std::move(file_writer), 0, false, versions_.get());
     std::string record;
     new_db.EncodeTo(&record);
-    s = log.AddRecord(record);
+    s = log.AddRecord(record
+#ifndef NDEBUG
+                      ,
+                      immutable_db_options_
+#endif  // !NDEBUG
+    );
     if (s.ok()) {
       s = SyncManifest(env_, &immutable_db_options_, log.file());
     }
@@ -784,9 +789,10 @@ Status DBImpl::RecoverLogFiles(const std::vector<uint64_t>& log_numbers,
       // That's why we set ignore missing column families to true
       bool has_valid_writes = false;
       status = WriteBatchInternal::InsertInto(
-          &batch, column_family_memtables_.get(), &flush_scheduler_, -1, true,
-          log_number, this, false /* concurrent_memtable_writes */,
-          next_sequence, &has_valid_writes, seq_per_batch_, batch_per_txn_);
+          &batch, column_family_memtables_.get(), &flush_scheduler_,
+          false /*enable_kv_separate*/, true, log_number, this,
+          false /* concurrent_memtable_writes */, next_sequence,
+          &has_valid_writes, seq_per_batch_, batch_per_txn_);
       MaybeIgnoreError(&status);
       if (!status.ok()) {
         // We are treating this as a failure while reading since we read valid

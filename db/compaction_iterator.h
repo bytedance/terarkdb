@@ -226,23 +226,24 @@ InternalIterator* NewCompactionIterator(
     CompactionIterator* (*new_compaction_iter_callback)(void*), void* arg,
     const Slice* start_user_key = nullptr);
 
-struct BuilderSeparateHelper : public SeparateHelper {
-  class BuilderLazyBufferState : public LazyBufferStateWrapper {
-    BuilderSeparateHelper* helper_;
+// working with CompactionIterator to separate big value
+struct CompactionSeparateHelper : public SeparateHelper {
+  class CompactionLazyBufferState : public LazyBufferStateWrapper {
+    CompactionSeparateHelper* helper_;
     mutable LazyBuffer value_;
 
     void destroy(LazyBuffer* buffer) const override {
       LazyBufferStateWrapper::destroy(buffer);
-      auto self = const_cast<BuilderLazyBufferState*>(this);
+      auto self = const_cast<CompactionLazyBufferState*>(this);
       helper_->FreeState(self);
     }
 
    public:
-    BuilderLazyBufferState(BuilderSeparateHelper* h) : helper_(h) {}
+    CompactionLazyBufferState(CompactionSeparateHelper* h) : helper_(h) {}
     LazyBuffer& value() const { return value_; }
   };
 
-  BuilderLazyBufferState* AllocState() {
+  CompactionLazyBufferState* AllocState() {
     if (state_wrapper_free_.empty()) {
       state_wrapper_storage_.emplace_back(this);
       return &state_wrapper_storage_.back();
@@ -253,7 +254,7 @@ struct BuilderSeparateHelper : public SeparateHelper {
       return state;
     }
   }
-  void FreeState(BuilderLazyBufferState* state) {
+  void FreeState(CompactionLazyBufferState* state) {
     state->value().reset();
     state_wrapper_free_.emplace_back(state);
   }
@@ -283,8 +284,8 @@ struct BuilderSeparateHelper : public SeparateHelper {
   FileMetaData* current_output = nullptr;
   TableProperties* current_prop = nullptr;
   std::unique_ptr<ValueExtractor> value_meta_extractor = nullptr;
-  std::deque<BuilderLazyBufferState> state_wrapper_storage_;
-  std::vector<BuilderLazyBufferState*> state_wrapper_free_;
+  std::deque<CompactionLazyBufferState> state_wrapper_storage_;
+  std::vector<CompactionLazyBufferState*> state_wrapper_free_;
   Status (*trans_to_separate_callback)(void* args, const Slice& key,
                                        LazyBuffer& value) = nullptr;
   void* trans_to_separate_callback_args = nullptr;

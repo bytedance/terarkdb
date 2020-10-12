@@ -15,6 +15,7 @@
 #include <utility>
 
 #include "monitoring/perf_context_imp.h"
+#include "port/port_posix.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/db.h"
 #include "rocksdb/filter_policy.h"
@@ -888,6 +889,8 @@ size_t GetPhysicalLength(uint64_t logical_length, uint64_t physical_offset,
                          uint64_t wal_header_size);
 uint64_t GetFirstEntryPhysicalOffset(uint64_t batch_record_offset,
                                      uint64_t header_size, uint64_t avail_);
+uint64_t GetAheadDataOffset(uint64_t cur_offset, uint64_t ahead_data_size,
+                            uint64_t header_size, bool is_cleared);
 
 class SeparateHelper {
  public:

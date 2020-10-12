@@ -411,12 +411,10 @@ void MergeIteratorBuilder::AddIterator(InternalIterator* iter,
   }
   auto ptr = arena->AllocateAligned(sizeof(CombinedInternalIterator));
   InternalIterator* separate_iter =
-      new (ptr) CombinedInternalIterator(iter, separate_helper);
-  separate_iter->RegisterCleanup(
-      [](void* arg1, void* /*arg2*/) {
-        reinterpret_cast<InternalIterator*>(arg1)->~InternalIterator();
-      },
-      iter, nullptr);
+      new(ptr) CombinedInternalIterator(iter, separate_helper);
+  separate_iter->RegisterCleanup([](void* arg1, void* /*arg2*/) {
+    reinterpret_cast<InternalIterator*>(arg1)->~InternalIterator();
+  }, iter, nullptr);
   AddIterator(separate_iter);
 }
 

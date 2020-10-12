@@ -790,9 +790,10 @@ Compaction* CompactionPicker::PickGarbageCollection(
   // Setting fragment_size as one eighth max_file_size prevents selecting
   // massive files to single compaction which would pin down the maximum
   // deletable file number for a long time resulting possible storage leakage.
-  size_t max_file_size =
+  uint64_t max_file_size =
       MaxFileSizeForLevel(mutable_cf_options, 1, ioptions_.compaction_style);
-  size_t fragment_size = max_file_size / 8;
+  uint64_t fragment_size = max_file_size / 8;
+  uint64_t max_pick_size = max_file_size * 8;
 
   // Traverse level -1 to filter out all blob sstables needs GC.
   // 1. score more than garbage collection baseline.
@@ -841,19 +842,19 @@ Compaction* CompactionPicker::PickGarbageCollection(
   gc_files.front().f->set_gc_candidate();
 
   uint64_t total_estimate_size = gc_files.front().estimate_size;
+  uint64_t total_pick_size = gc_files.front().f->fd.file_size;
   uint64_t num_antiquation = gc_files.front().f->num_antiquation;
   for (auto it = std::next(gc_files.begin()); it != gc_files.end(); ++it) {
     auto& info = *it;
-    if (total_estimate_size + info.estimate_size > max_file_size) {
+    if (total_estimate_size + info.estimate_size > max_file_size ||
+        total_pick_size + info.f->num_antiquation > max_pick_size) {
       continue;
     }
     total_estimate_size += info.estimate_size;
+    total_pick_size = gc_files.front().f->fd.file_size;
     num_antiquation += info.f->num_antiquation;
     input.files.push_back(info.f);
     info.f->set_gc_candidate();
-    if (input.size() >= 8) {
-      break;
-    }
   }
 
   int bottommost_level = vstorage->num_levels() - 1;

@@ -148,7 +148,10 @@ class WalBlobIterator : public InternalIteratorBase<LazyBuffer> {
         reader_(reader),
         cf_data_(reader->FileData().data() + cf_start_offset,
                  kWalEntrySize * cf_entries),
-        ioptions_(ioptions) {
+#ifndef NDEBUG
+        ioptions_(ioptions)
+#endif
+  {
     SeekToFirst();
   }
   bool Valid() const override { return i_ < cf_entries_ && status_.ok(); }
@@ -225,10 +228,26 @@ class Writer {
                   bool manual_flush = false);
   ~Writer();
 
-  Status AddRecord(const Slice& slice, size_t num_entries, void*);
-  Status AddRecord(const Slice& slice) {
+  Status AddRecord(const Slice& slice, size_t num_entries, uint64_t* wal_offset
+#ifndef NDEBUG
+                   ,
+                   const ImmutableDBOptions& idbo
+#endif
+  );
+
+  Status AddRecord(const Slice& slice
+#ifndef NDEBUG
+                   ,
+                   const ImmutableDBOptions& idbo
+#endif
+  ) {
     // if do not have write thread, then do not need update num_entries
-    return AddRecord(slice, 0, nullptr);
+    return AddRecord(slice, 0, nullptr
+#ifndef NDEBUG
+                     ,
+                     idbo
+#endif  // !NDEBUG
+    );
   }
 
   WritableFileWriter* file() { return dest_.get(); }

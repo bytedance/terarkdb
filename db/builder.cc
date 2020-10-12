@@ -156,8 +156,11 @@ Status BuildTable(
                       snapshots.empty() ? 0 : snapshots.back(),
                       snapshot_checker);
 
-    BuilderSeparateHelper separate_helper;
-    if (ioptions.value_meta_extractor_factory != nullptr) {
+    CompactionSeparateHelper separate_helper;
+    if (ioptions.value_meta_extractor_factory != nullptr &&
+        reason != TableFileCreationReason::kRecovery) {
+      // (WorkAround) for myrocks, when db recovery dict manager has not ready
+      // for value extract
       ValueExtractorContext context = {column_family_id};
       separate_helper.value_meta_extractor =
           ioptions.value_meta_extractor_factory->CreateValueExtractor(context);
@@ -370,12 +373,14 @@ Status BuildTable(
             Dependence{blob.fd.GetNumber(), blob.prop.num_entries});
         assert(dependence.find(blob.fd.GetNumber()) != dependence.end());
         assert(dependence[blob.fd.GetNumber()] == blob.prop.num_entries);
+        // clear blob-sst item in dependence
         dependence.erase(blob.fd.GetNumber());
       }
       // construct filemetadata of depended blob wal
       for (auto& d : dependence) {
         sst_meta()->prop.dependence.emplace_back(Dependence{d.first, d.second});
         meta_vec->push_back(versions_->GetWalMeta(d.first));
+        table_properties_vec->push_back(versions_->GetWalProp(d.first));
       }
       auto& prop_dependence = sst_meta()->prop.dependence;
       std::sort(prop_dependence.begin(), prop_dependence.end(),

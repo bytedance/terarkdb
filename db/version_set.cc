@@ -1279,9 +1279,8 @@ Status Version::fetch_buffer(LazyBuffer* buffer) const {
     }
   } else {
     assert(pair.second->prop.is_blob_wal());
-    // blob wal value
     Slice log_handle(reinterpret_cast<const char*>(&context->data[0]),
-                     sizeof(DefaultLogHandle));
+                     kDefaultLogHandleSize);
     bool value_found = false;
     GetContext get_context(cfd_->internal_comparator().user_comparator(),
                            nullptr, cfd_->ioptions()->info_log, db_statistics_,
@@ -1291,6 +1290,10 @@ Status Version::fetch_buffer(LazyBuffer* buffer) const {
         ReadOptions(), *pair.second, storage_info_.dependence_map(), log_handle,
         &get_context, mutable_cf_options_.prefix_extractor.get(), nullptr,
         true);
+    if (!s.ok()) {
+      return s;
+    }
+
     if (get_context.State() != GetContext::kFound || get_context.is_index() ||
         !get_context.is_finished()) {
       if (get_context.State() == GetContext::kCorrupt) {
@@ -1317,19 +1320,19 @@ LazyBuffer Version::TransToCombined(const Slice& user_key, uint64_t sequence,
   auto& dependence_map = storage_info_.dependence_map();
   auto find = dependence_map.find(value_index.file_number);
   if (find == dependence_map.end()) {
-    assert(false);  // debug
     return LazyBuffer(Status::Corruption("Separate value dependence missing"));
   }
   LazyBufferContext context;
-  if (find->second->fd.GetNumber() == value_index.file_number &&
-      find->second->prop.is_blob_wal()) {
+  if (find->second->prop.is_blob_wal()) {
+#ifndef NDEBUG
+    assert(value_index.log_type == ValueIndex::kDefault);
+    assert(value_index.log_handle.valid() &&
+           value_index.log_handle.size() == kDefaultLogHandleSize);
+    DefaultLogHandle content(value_index.log_handle);
+    assert(content.length >= mutable_cf_options_.blob_size);
+#endif
     // has value index content, fetch buffer use handle in value index content
-    assert(value_index.log_handle.valid());
-    assert(value_index.log_handle.size() == 16);
-    if (value_index.log_handle.valid()) {
-      memcpy(&context.data, value_index.log_handle.data(),
-             std::min<size_t>(16, value_index.log_handle.size()));
-    }
+    memcpy(&context.data, value_index.log_handle.data(), kDefaultLogHandleSize);
     context.data[2] = kMaxSequenceNumber;
   } else {
     // no content in value index, use key to fetch buffer
@@ -2900,6 +2903,15 @@ void Version::AddLiveFiles(std::vector<FileDescriptor>* live) {
   }
 }
 
+void Version::AddLiveFiles(std::vector<FileMetaData*>* live) {
+  for (int level = -1; level < storage_info_.num_levels(); level++) {
+    const std::vector<FileMetaData*>& files = storage_info_.files_[level];
+    for (const auto& file : files) {
+      live->push_back(file);
+    }
+  }
+}
+
 std::string Version::DebugString(bool hex, bool print_stats) const {
   std::string r;
   for (int level = 0; level < storage_info_.num_levels_; level++) {
@@ -3304,7 +3316,12 @@ Status VersionSet::ProcessManifestWrites(
         }
         TEST_KILL_RANDOM("VersionSet::LogAndApply:BeforeAddRecord",
                          rocksdb_kill_odds * REDUCE_ODDS2);
-        s = descriptor_log_->AddRecord(record);
+        s = descriptor_log_->AddRecord(record
+#ifndef NDEBUG
+                                       ,
+                                       *db_options_
+#endif  // !NDEBUG
+        );
         if (!s.ok()) {
           break;
         }
@@ -4403,7 +4420,12 @@ Status VersionSet::WriteSnapshot(log::Writer* log) {
         return Status::Corruption("Unable to Encode VersionEdit:" +
                                   edit.DebugString(true));
       }
-      Status s = log->AddRecord(record);
+      Status s = log->AddRecord(record
+#ifndef NDEBUG
+                                ,
+                                *db_options_
+#endif  // !NDEBUG
+      );
       if (!s.ok()) {
         return s;
       }
@@ -4429,7 +4451,12 @@ Status VersionSet::WriteSnapshot(log::Writer* log) {
         return Status::Corruption("Unable to Encode VersionEdit:" +
                                   edit.DebugString(true));
       }
-      Status s = log->AddRecord(record);
+      Status s = log->AddRecord(record
+#ifndef NDEBUG
+                                ,
+                                *db_options_
+#endif  // !NDEBUG
+      );
       if (!s.ok()) {
         return s;
       }
@@ -4793,7 +4820,8 @@ Status VersionSet::GetMetadataForFile(uint64_t number, int* filelevel,
   return Status::NotFound("File not present in any level");
 }
 
-void VersionSet::GetLiveFilesMetaData(std::vector<LiveFileMetaData>* metadata) {
+void VersionSet::GetLiveFilesMetaData(std::vector<LiveFileMetaData>* metadata,
+                                      const std::string& wal_dir) {
   for (auto cfd : *column_family_set_) {
     if (cfd->IsDropped() || !cfd->initialized()) {
       continue;
@@ -4811,6 +4839,10 @@ void VersionSet::GetLiveFilesMetaData(std::vector<LiveFileMetaData>* metadata) {
           filemetadata.db_path = cfd->ioptions()->cf_paths.back().path;
         }
         filemetadata.name = MakeTableFileName("", file->fd.GetNumber());
+        if (file->prop.is_blob_wal()) {
+          filemetadata.name = LogFileName("", file->fd.GetNumber());
+          filemetadata.db_path = wal_dir;
+        }
         filemetadata.level = level;
         filemetadata.size = static_cast<size_t>(file->fd.GetFileSize());
         filemetadata.smallestkey = file->smallest.user_key().ToString();
@@ -4917,6 +4949,14 @@ FileMetaData VersionSet::GetWalMeta(uint64_t log_no) {
   auto find = log_meta_cache_.find(log_no);
   assert(find != log_meta_cache_.end());
   return find->second;
+}
+
+TableProperties VersionSet::GetWalProp(uint64_t log_no) {
+  auto meta = GetWalMeta(log_no);
+  TableProperties tp;
+  tp.num_entries = meta.prop.num_entries;
+  tp.purpose = meta.prop.purpose;
+  return tp;
 }
 
 }  // namespace rocksdb

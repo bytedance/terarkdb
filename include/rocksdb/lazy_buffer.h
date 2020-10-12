@@ -100,7 +100,7 @@ class LazyBufferState {
 
 class LazyBufferStateWrapper : public LazyBufferState {
   // if LazyBuffer use StateWrapper as its state, buffer can replace it state
-  // with another, see BuilderSeparateHelper which inherit this class , store
+  // with another, see CompactionSeparateHelper which inherit this class , store
   // its origin value and replace original lazybuffer's state
  public:
   void set_state(const LazyBufferState* state) { state_ = state; }
@@ -394,7 +394,6 @@ inline void LazyBufferStateWrapper::uninitialized_resize(LazyBuffer* buffer,
                                                          size_t size) const {
   buffer->unwrap_state(const_cast<LazyBufferStateWrapper*>(this));
   state_->uninitialized_resize(buffer, size);
-  assert(buffer->file_number() == uint64_t(-1));
   destroy(nullptr);
 }
 
@@ -402,7 +401,6 @@ inline void LazyBufferStateWrapper::assign_slice(LazyBuffer* buffer,
                                                  const Slice& slice) const {
   buffer->unwrap_state(const_cast<LazyBufferStateWrapper*>(this));
   state_->assign_slice(buffer, slice);
-  assert(buffer->file_number() == uint64_t(-1));
   destroy(nullptr);
 }
 

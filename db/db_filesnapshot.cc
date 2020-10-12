@@ -124,7 +124,7 @@ Status DBImpl::GetLiveFiles(std::vector<std::string>& ret,
   }
 
   // Make a set of all of the live *.sst files
-  std::vector<FileDescriptor> live;
+  std::vector<FileMetaData*> live;
   for (auto cfd : *versions_->GetColumnFamilySet()) {
     if (cfd->IsDropped()) {
       continue;
@@ -138,7 +138,12 @@ Status DBImpl::GetLiveFiles(std::vector<std::string>& ret,
   // create names of the live files. The names are not absolute
   // paths, instead they are relative to dbname_;
   for (const auto& live_file : live) {
-    ret.push_back(MakeTableFileName("", live_file.GetNumber()));
+    if (live_file->prop.is_blob_wal()) {
+      ret.push_back(LogFileName(immutable_db_options_.wal_dir,
+                                live_file->fd.GetNumber()));
+    } else {
+      ret.push_back(MakeTableFileName("", live_file->fd.GetNumber()));
+    }
   }
 
   ret.push_back(CurrentFileName(""));

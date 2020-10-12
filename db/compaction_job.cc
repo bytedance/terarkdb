@@ -1264,7 +1264,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     compaction_filter = compaction_filter_from_factory.get();
   }
 
-  BuilderSeparateHelper separate_helper;
+  CompactionSeparateHelper separate_helper;
   // since merge may contain value from separate_helper, put merge after
   // separate helper make sure deconstructor of merge happen before
   // separate_helper
@@ -1457,6 +1457,24 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     }
     assert(sub_compact->builder != nullptr);
     assert(sub_compact->current_output() != nullptr);
+
+#ifndef NDEBUG
+    if (c_iter->ikey().type == kTypeValueIndex ||
+        c_iter->ikey().type == kTypeMergeIndex) {
+      auto s = value.fetch();
+      if (!s.ok()) {
+        break;
+      }
+      ValueIndex value_index(value.slice());
+      if (value_index.log_type == ValueIndex::kDefault) {
+        DefaultLogHandle content(value_index.log_handle);
+        assert(content.length != 0);
+      } else {
+        assert(!value_index.log_handle.valid());
+      }
+    }
+#endif  // !NDEBUG
+
     status = sub_compact->builder->Add(key, value);
     if (!status.ok()) {
       break;

@@ -615,6 +615,7 @@ class PosixEnv : public Env {
     struct stat sbuf;
     if (stat(fname.c_str(), &sbuf) != 0) {
       *size = 0;
+      assert(false);
       s = IOError("while stat a file for size", fname, errno);
     } else {
       *size = sbuf.st_size;

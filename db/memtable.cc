@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <limits>
 #include <memory>
-#include <iostream>
 
 #include "db/dbformat.h"
 #include "db/merge_context.h"
@@ -885,10 +884,8 @@ void MemTable::Update(SequenceNumber seq, const Slice& key,
 
   // key doesn't exist
   bool add_res __attribute__((__unused__));
-  Slice parts[] = {value};
-  add_res =
-      Add(seq, kTypeValue, key,
-          SliceParts(parts, 1));  // when inplace update, do not separate kv
+  // when inplace update, do not separate kv
+  add_res = Add(seq, kTypeValue, key, value);
   // We already checked unused != seq above. In that case, Add should not fail.
   assert(add_res);
 }
