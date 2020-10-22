@@ -841,20 +841,20 @@ void DBImpl::UnpackBatch(const WriteThread::WriteGroup& wg,
       const_cast<WriteThread::WriteGroup&>(wg);
   assert(write_group.leader == *(write_group.begin()));
 
-  uint64_t log_number = merged_batch->GetLogNumber();
+  uint64_t log_number = merged_batch->GetWalPosition().log_number;
 
-  size_t ahead_offset = merged_batch->GetDataOffsetInWal();
+  size_t ahead_offset = merged_batch->GetWalPosition().wal_offset_of_wb_content;
   size_t ahead_batch_size = 0;
   for (auto writer : write_group) {
     if (writer->CallbackFailed()) {
       continue;
     }
-    if (writer->batch->GetDataOffsetInWal() == uint64_t(-1))
+    if (writer->batch->WalPositionInvalid() &&
+        writer->batch->GetWalTerminationPoint().is_cleared()) {
       writer->batch->SetWalPosition(
           GetPhysicalOffset(ahead_offset, ahead_batch_size, log::kHeaderSize),
           log_number);
-    assert(writer != write_group.leader ||
-           writer->batch->GetDataOffsetInWal() == ahead_offset);
+    }
 
     const SavePoint& batch_end = writer->batch->GetWalTerminationPoint();
     uint32_t src_len;
@@ -871,6 +871,7 @@ void DBImpl::UnpackBatch(const WriteThread::WriteGroup& wg,
 Status DBImpl::WriteToWAL(const WriteBatch& merged_batch,
                           log::Writer* log_writer, uint64_t* log_used,
                           uint64_t* log_size, WriteThread::Writer& w) {
+  assert(w.log_used == log_writer->get_log_number());
   assert(log_size != nullptr);
   Slice log_entry = WriteBatchInternal::Contents(&merged_batch);
   size_t num_entries = merged_batch.Count();
@@ -900,9 +901,10 @@ Status DBImpl::WriteToWAL(const WriteBatch& merged_batch,
   if (log_used != nullptr) {
     *log_used = logfile_number_;
   }
-  if (merged_batch.GetDataOffsetInWal() == uint64_t(-1))
+  if (merged_batch.WalPositionInvalid()) {
     const_cast<WriteBatch&>(merged_batch)
-        .SetWalPosition(content_offset_in_wal, logfile_number_);
+        .SetWalPosition(content_offset_in_wal, log_writer->get_log_number());
+  }
   total_log_size_ += log_entry.size();
   // TODO(myabandeh): it might be unsafe to access alive_log_files_.back() here
   // since alive_log_files_ might be modified concurrently
@@ -1015,6 +1017,8 @@ Status DBImpl::ConcurrentWriteToWAL(const WriteThread::WriteGroup& write_group,
   uint64_t log_size = 0;
   status = WriteToWAL(*merged_batch, log_writer, log_used, &log_size, w);
   if (status.ok() && log_size != 0) {
+    assert(merged_batch->GetWalPosition().log_number ==
+           log_writer->get_log_number());
     UnpackBatch(write_group, merged_batch);
   }
   if (to_be_cached_state) {

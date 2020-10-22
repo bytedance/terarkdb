@@ -104,7 +104,7 @@ struct ValueIndexBuf {
                           value.data() - batch_content, wal_record_header_size);
 #ifndef NDEBUG
 #warning "debug code"
-    assert(log_number != 27 || physical_offset == 967);
+    // assert(log_number != 27 || physical_offset == 967);
 #endif  // !NDEBUG
     EncodeFixed64(buf_ + 8, physical_offset);
     assert(value.size() != 0 && value.size() < size_t{port::kMaxUint32});
@@ -263,6 +263,7 @@ void WriteBatch::Clear() {
   }
 
   wal_term_point_.clear();
+  wal_position_.Clear();
 }
 
 int WriteBatch::Count() const { return WriteBatchInternal::Count(this); }
@@ -1299,7 +1300,8 @@ class MemTableInserter : public WriteBatch::Handler {
       if (enable_kv_separate_ && value.size() > get_cf_blob_size()) {
         // TODO add blob_large_key_ratio_lsh16_ checking?
         value_index_buf.Fill(value, wal_offset_of_wb_content_,
-                             wal_record_header_size_, batch_content_addr_, log_used_
+                             wal_record_header_size_, batch_content_addr_,
+                             log_used_
 #ifndef NDEBUG
                              ,
                              db_->immutable_db_options()
@@ -1646,7 +1648,8 @@ class MemTableInserter : public WriteBatch::Handler {
       bool mem_res = false;
       if (enable_kv_separate_ && value.size() > get_cf_blob_size()) {
         value_index_buf.Fill(value, wal_offset_of_wb_content_,
-                             wal_record_header_size_, batch_content_addr_, log_used_
+                             wal_record_header_size_, batch_content_addr_,
+                             log_used_
 #ifndef NDEBUG
                              ,
                              db_->immutable_db_options()
@@ -1868,14 +1871,17 @@ Status WriteBatchInternal::InsertInto(
     SetSequence(w->batch, inserter.sequence());
     inserter.set_log_number_ref(w->log_ref);
     if (w->batch->GetWalTerminationPoint().is_cleared()) {
-      inserter.SetContext(w->batch->GetDataOffsetInWal(), log::kHeaderSize,
+      inserter.SetContext(w->batch->GetWalPosition().wal_offset_of_wb_content,
+                          log::kHeaderSize,
                           w->batch->Data().data() + WriteBatchInternal::kHeader,
-                          enable_kv_separate, w->log_used);
+                          enable_kv_separate && w->batch->CanSeperate(),
+                          w->batch->GetWalPosition().log_number);
     } else {
       inserter.SetContext(
-          w->batch->GetDataOffsetInWal(), log::kHeaderSize,
+          w->batch->GetWalPosition().wal_offset_of_wb_content, log::kHeaderSize,
           w->batch->Data().data() + w->batch->GetWalTerminationPoint().size,
-          enable_kv_separate, w->log_used);
+          enable_kv_separate && w->batch->CanSeperate(),
+          w->batch->GetWalPosition().log_number);
     }
     w->status = w->batch->Iterate(&inserter);
     if (!w->status.ok()) {
@@ -1905,14 +1911,17 @@ Status WriteBatchInternal::InsertInto(
   inserter.set_log_number_ref(writer->log_ref);
   if (writer->batch->GetWalTerminationPoint().is_cleared()) {
     inserter.SetContext(
-        writer->batch->GetDataOffsetInWal(), log::kHeaderSize,
+        writer->batch->GetWalPosition().wal_offset_of_wb_content,
+        log::kHeaderSize,
         writer->batch->Data().data() + WriteBatchInternal::kHeader,
-        enable_kv_separate, writer->log_used);
+        enable_kv_separate && writer->batch->CanSeperate(), writer->log_used);
   } else {
-    inserter.SetContext(writer->batch->GetDataOffsetInWal(), log::kHeaderSize,
-                        writer->batch->Data().data() +
-                            writer->batch->GetWalTerminationPoint().size,
-                        enable_kv_separate, writer->log_used);
+    inserter.SetContext(
+        writer->batch->GetWalPosition().wal_offset_of_wb_content,
+        log::kHeaderSize,
+        writer->batch->Data().data() +
+            writer->batch->GetWalTerminationPoint().size,
+        enable_kv_separate && writer->batch->CanSeperate(), writer->log_used);
   }
 
   Status s = writer->batch->Iterate(&inserter);
@@ -1941,12 +1950,12 @@ Status WriteBatchInternal::InsertInto(
   if (batch->GetWalTerminationPoint().is_cleared()) {
     inserter.SetContext(batch_content_wal_offset, wal_header_size,
                         batch->Data().data() + WriteBatchInternal::kHeader,
-                        enable_kv_separate, log_number);
+                        enable_kv_separate && batch->CanSeperate(), log_number);
   } else {
     inserter.SetContext(
         batch_content_wal_offset, wal_header_size,
         batch->Data().data() + batch->GetWalTerminationPoint().size,
-        enable_kv_separate, log_number);
+        enable_kv_separate && batch->CanSeperate(), log_number);
   }
   Status s = batch->Iterate(&inserter);
   if (next_seq != nullptr) {

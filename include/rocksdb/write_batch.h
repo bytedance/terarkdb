@@ -67,6 +67,10 @@ struct WalPosition {
       : wal_offset_of_wb_content(uint64_t(-1)), log_number(uint64_t(-1)) {}
   WalPosition(uint64_t offset, uint64_t no)
       : wal_offset_of_wb_content(offset), log_number(no) {}
+  void Clear() {
+    wal_offset_of_wb_content = uint64_t(-1);
+    log_number = uint64_t(-1);
+  }
 };
 
 class WriteBatch : public WriteBatchBase {
@@ -286,14 +290,22 @@ class WriteBatch : public WriteBatchBase {
 
   // Retrieve data size of the batch.
   size_t GetDataSize() const { return rep_.size(); }
-  uint64_t GetDataOffsetInWal() const {
-    return wal_position_.wal_offset_of_wb_content;
-  }
-  uint64_t GetLogNumber() const { return wal_position_.log_number; }
+  WalPosition GetWalPosition() const { return wal_position_; }
   void SetWalPosition(uint64_t offset, uint64_t no) {
     wal_position_.wal_offset_of_wb_content = offset;
     wal_position_.log_number = no;
+    TurnOnSeperate();
   }
+  bool WalPositionInvalid() const {
+    return wal_position_.wal_offset_of_wb_content == uint64_t(-1) &&
+           wal_position_.log_number == uint64_t(-1);
+  }
+
+  bool CanSeperate() const { return seperate_forbidden; }
+
+  void TurnOnSeperate() { seperate_forbidden = true; }
+
+  void TurnOffSeperate() { seperate_forbidden = false; }
 
   // Returns the number of updates in the batch
   int Count() const;
@@ -379,6 +391,7 @@ class WriteBatch : public WriteBatchBase {
  protected:
 
   WalPosition wal_position_;
+  bool seperate_forbidden = false;
   std::string rep_;  // See comment in write_batch.cc for the format of rep_
 
   // Intentionally copyable

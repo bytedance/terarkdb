@@ -1018,6 +1018,16 @@ LazyBuffer CompactionSeparateHelper::TransToCombined(
   // move original value into new value's state
   auto self = const_cast<CompactionSeparateHelper*>(this);
   auto state = self->AllocState();
+
+#ifndef NDEBUG
+  auto status = original_value.fetch();
+  if (!status.ok()) {
+    return LazyBuffer(std::move(status));
+  }
+  ValueIndex _value_index(original_value.slice());
+  assert(_value_index.file_number < 300000);
+#endif  // !NDEBUG
+
   state->value() = std::move(original_value);
   state->value().pin(LazyBufferPinLevel::Internal);
   auto s = state->value().fetch();
@@ -1057,6 +1067,7 @@ LazyBuffer CompactionSeparateHelper::TransToCombined(
   // keep current separate helper in state so that when state destoryed, helper
   // can reclaim state
   combined_value.wrap_state(state);
+  assert(combined_value.file_number()< 300000);
   return combined_value;
 }
 }  // namespace rocksdb

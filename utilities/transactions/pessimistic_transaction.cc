@@ -361,9 +361,11 @@ Status WriteCommittedTxn::CommitInternal() {
   // in non recovery mode and simply insert the values
   WriteBatch* prepared_batch = GetWriteBatch()->GetWriteBatch();
   WriteBatchInternal::Append(working_batch, prepared_batch);
-  working_batch->SetWalPosition(prepared_batch->GetDataOffsetInWal(),
-                                prepared_batch->GetLogNumber());
-  assert(prepared_batch->GetDataOffsetInWal() != uint64_t(-1));
+  if (!prepared_batch->WalPositionInvalid()) {
+    working_batch->SetWalPosition(
+        prepared_batch->GetWalPosition().wal_offset_of_wb_content,
+        prepared_batch->GetWalPosition().log_number);
+  }
 
   uint64_t seq_used = kMaxSequenceNumber;
   auto s =
