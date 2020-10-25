@@ -10,7 +10,6 @@
 
 #include <stdint.h>
 
-#include <iostream>
 #include <memory>
 #include <queue>
 #include <string>
@@ -228,26 +227,12 @@ class Writer {
                   bool manual_flush = false);
   ~Writer();
 
-  Status AddRecord(const Slice& slice, size_t num_entries, uint64_t* wal_offset
-#ifndef NDEBUG
-                   ,
-                   const ImmutableDBOptions& idbo
-#endif
-  );
+  Status AddRecord(const Slice& slice, size_t num_entries,
+                   uint64_t* wal_offset);
 
-  Status AddRecord(const Slice& slice
-#ifndef NDEBUG
-                   ,
-                   const ImmutableDBOptions& idbo
-#endif
-  ) {
+  Status AddRecord(const Slice& slice) {
     // if do not have write thread, then do not need update num_entries
-    return AddRecord(slice, 0, nullptr
-#ifndef NDEBUG
-                     ,
-                     idbo
-#endif  // !NDEBUG
-    );
+    return AddRecord(slice, 0, nullptr);
   }
 
   WritableFileWriter* file() { return dest_.get(); }

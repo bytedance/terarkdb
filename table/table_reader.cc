@@ -8,7 +8,6 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "table_reader.h"
-
 #include "rocksdb/statistics.h"
 #include "table/get_context.h"
 #include "table/scoped_arena_iterator.h"

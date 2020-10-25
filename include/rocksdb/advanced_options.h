@@ -212,7 +212,7 @@ struct AdvancedColumnFamilyOptions {
   int max_write_buffer_number_to_maintain = 0;
 
   // LazyCompaction
-  bool enable_lazy_compaction = false;
+  bool enable_lazy_compaction = true;
 
   // Read TableProperties from file if false
   bool pin_table_properties_in_reader = true;

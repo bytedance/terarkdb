@@ -3316,12 +3316,7 @@ Status VersionSet::ProcessManifestWrites(
         }
         TEST_KILL_RANDOM("VersionSet::LogAndApply:BeforeAddRecord",
                          rocksdb_kill_odds * REDUCE_ODDS2);
-        s = descriptor_log_->AddRecord(record
-#ifndef NDEBUG
-                                       ,
-                                       *db_options_
-#endif  // !NDEBUG
-        );
+        s = descriptor_log_->AddRecord(record);
         if (!s.ok()) {
           break;
         }
@@ -4420,12 +4415,7 @@ Status VersionSet::WriteSnapshot(log::Writer* log) {
         return Status::Corruption("Unable to Encode VersionEdit:" +
                                   edit.DebugString(true));
       }
-      Status s = log->AddRecord(record
-#ifndef NDEBUG
-                                ,
-                                *db_options_
-#endif  // !NDEBUG
-      );
+      Status s = log->AddRecord(record);
       if (!s.ok()) {
         return s;
       }
@@ -4451,12 +4441,7 @@ Status VersionSet::WriteSnapshot(log::Writer* log) {
         return Status::Corruption("Unable to Encode VersionEdit:" +
                                   edit.DebugString(true));
       }
-      Status s = log->AddRecord(record
-#ifndef NDEBUG
-                                ,
-                                *db_options_
-#endif  // !NDEBUG
-      );
+      Status s = log->AddRecord(record);
       if (!s.ok()) {
         return s;
       }

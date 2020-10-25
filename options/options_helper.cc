@@ -67,7 +67,7 @@ DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
   options.max_log_file_size = immutable_db_options.max_log_file_size;
   options.log_file_time_to_roll = immutable_db_options.log_file_time_to_roll;
   options.keep_log_file_num = immutable_db_options.keep_log_file_num;
-  options.recycle_log_file_num = 0; // XXX forbid
+  options.recycle_log_file_num = 0; // forbid
   options.prepare_log_writer_num = immutable_db_options.prepare_log_writer_num;
   options.max_manifest_file_size = immutable_db_options.max_manifest_file_size;
   options.max_manifest_edit_count =

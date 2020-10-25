@@ -300,8 +300,7 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // Don't separate Value if value.size < blob_size
   // Set size_t(-1) to disable Key Value separation
   // valid [8 , size_t(-1)]
-#warning "debug code"
-  size_t blob_size = 32;
+  size_t blob_size = 512;
 
   // Don't separate Value if key.size > value.size * blob_large_key_ratio
   // valid [0 , 1]
@@ -1270,7 +1269,7 @@ struct WriteOptions {
   // Default: false
   bool low_pri;
 
-  // Default: -1, disable KV separation
+  // Default: false, disable KV separation
   bool enable_kv_separate;
 
   WriteOptions()

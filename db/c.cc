@@ -2384,7 +2384,7 @@ void rocksdb_options_set_keep_log_file_num(rocksdb_options_t* opt, size_t v) {
 
 void rocksdb_options_set_recycle_log_file_num(rocksdb_options_t* opt,
                                               size_t v) {
-  opt->rep.recycle_log_file_num = 0; // forbid
+  opt->rep.recycle_log_file_num = 0; // conflict with blob-in-wal, forbid
 }
 
 void rocksdb_options_set_prepare_log_writer_num(rocksdb_options_t* opt,

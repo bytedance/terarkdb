@@ -65,12 +65,7 @@ Writer::~Writer() { WriteBuffer(); }
 Status Writer::WriteBuffer() { return dest_->Flush(); }
 
 Status Writer::AddRecord(const Slice& slice, size_t num_entries,
-                         uint64_t* wal_offset
-#ifndef NDEBUG
-                         ,
-                         const ImmutableDBOptions& idbo
-#endif
-) {
+                         uint64_t* wal_offset) {
   assert(!recycle_log_files_);  // wal recycle conflict with blob in wal
   const int header_size = kHeaderSize;
 

@@ -43,7 +43,7 @@ ImmutableDBOptions::ImmutableDBOptions(const DBOptions& options)
       max_log_file_size(options.max_log_file_size),
       log_file_time_to_roll(options.log_file_time_to_roll),
       keep_log_file_num(options.keep_log_file_num),
-      recycle_log_file_num(0), // XXX forbid
+      recycle_log_file_num(0), // forbid
       prepare_log_writer_num(options.prepare_log_writer_num),
       max_manifest_file_size(options.max_manifest_file_size),
       max_manifest_edit_count(options.max_manifest_edit_count),

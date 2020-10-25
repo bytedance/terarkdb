@@ -265,12 +265,7 @@ Status DBImpl::NewDB() {
     log::Writer log(std::move(file_writer), 0, false, versions_.get());
     std::string record;
     new_db.EncodeTo(&record);
-    s = log.AddRecord(record
-#ifndef NDEBUG
-                      ,
-                      immutable_db_options_
-#endif  // !NDEBUG
-    );
+    s = log.AddRecord(record);
     if (s.ok()) {
       s = SyncManifest(env_, &immutable_db_options_, log.file());
     }

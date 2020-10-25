@@ -1209,7 +1209,6 @@ class EnvWrapper : public Env {
                            const EnvOptions& options) override {
     return target_->NewSequentialFile(f, r, options);
   }
-
   Status NewRandomAccessFile(const std::string& f,
                              std::unique_ptr<RandomAccessFile>* r,
                              const EnvOptions& options) override {

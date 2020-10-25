@@ -120,8 +120,6 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
   }
 
   if (immutable_db_options_.enable_pipelined_write) {
-#warning "decode code"
-    assert(false);
     return PipelinedWriteImpl(write_options, my_batch, callback, log_used,
                               log_ref, disable_memtable, seq_used);
   }
@@ -889,12 +887,7 @@ Status DBImpl::WriteToWAL(const WriteBatch& merged_batch,
   }
   uint64_t content_offset_in_wal = uint64_t(-1);
   Status status =
-      log_writer->AddRecord(log_entry, num_entries, &content_offset_in_wal
-#ifndef NDEBUG
-                            ,
-                            immutable_db_options_
-#endif  // !NDEBUG
-      );
+      log_writer->AddRecord(log_entry, num_entries, &content_offset_in_wal);
   if (UNLIKELY(needs_locking)) {
     log_write_mutex_.Unlock();
   }

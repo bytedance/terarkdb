@@ -17,8 +17,6 @@
 #include <inttypes.h>
 #include <stdio.h>
 
-#include <iostream>
-
 #include "db/log_writer.h"
 #include "db/write_batch_internal.h"
 #include "monitoring/perf_context_imp.h"

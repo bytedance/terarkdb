@@ -26,8 +26,8 @@ class LazyBufferBuilder;
 
 enum class LazyBufferPinLevel {
   Internal,  // detach life cycle from iterator or temporary object, still
-  // depend SuperVersion
-  DB,  // detach life cycle from SuperVersion, still depend DB
+             // depend SuperVersion
+  DB,        // detach life cycle from SuperVersion, still depend DB
 };
 
 struct LazyBufferContext {
@@ -47,7 +47,7 @@ class LazyBufferState {
   virtual void destroy(LazyBuffer* buffer) const = 0;
 
   // Resize buffer
-  virtual void uninitialized_resize(LazyBuffer* buffer, size_t size) const;
+  virtual void uninitialized_resize(LazyBuffer* _buffer, size_t size) const;
 
   // Save slice into buffer
   virtual void assign_slice(LazyBuffer* buffer, const Slice& slice) const;

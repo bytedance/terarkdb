@@ -8,7 +8,6 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "rocksdb/iterator.h"
-
 #include "db/dbformat.h"
 #include "table/internal_iterator.h"
 #include "table/iterator_wrapper.h"

@@ -1056,10 +1056,10 @@ LazyBuffer CompactionSeparateHelper::TransToCombined(
     // COMPACT job
     combined_value = separate_helper->TransToCombined(
         user_key, sequence, LazyBufferReference(state->value()));
-    auto s = combined_value.fetch();
-    if (!s.ok()) {
-      combined_value.reset(std::move(s));
-    }
+  }
+  s = combined_value.fetch();
+  if (!s.ok()) {
+    combined_value.reset(std::move(s));
   }
   // combined_value is a lazybuffer pointing to blob-sst or blob-wal, if it from
   // blob-wal, state save the original value's log_handle for latter separating.

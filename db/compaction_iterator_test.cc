@@ -8,7 +8,6 @@
 #include <string>
 #include <vector>
 
-#include "dbformat.h"
 #include "port/port.h"
 #include "util/string_util.h"
 #include "util/testharness.h"

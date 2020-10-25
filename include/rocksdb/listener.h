@@ -122,7 +122,6 @@ enum class BackgroundErrorReason {
   kCompaction,
   kWriteCallback,
   kMemTable,
-  kWalIndexCreation,
 };
 
 enum class WriteStallCondition {
