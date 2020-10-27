@@ -385,14 +385,17 @@ Status FlushJob::WriteLevel0Table() {
           current_time, oldest_key_time, write_hint);
       LogFlush(db_options_.info_log);
     }
-    ROCKS_LOG_INFO(db_options_.info_log,
-                   "[%s] [JOB %d] Level-0 flush table #%" PRIu64 ": %" PRIu64
-                   " bytes %s"
-                   "%s",
-                   cfd_->GetName().c_str(), job_context_->job_id,
-                   meta_[0].fd.GetNumber(), meta_[0].fd.GetFileSize(),
-                   s.ToString().c_str(),
-                   meta_[0].marked_for_compaction ? " (needs compaction)" : "");
+    for (auto m : meta_) {
+      ROCKS_LOG_INFO(db_options_.info_log,
+                     "[%s] [JOB %d] Level-0 flush table #%" PRIu64 ": %" PRIu64
+                     " bytes %s"
+                     " (%s), "
+                     "%s",
+                     cfd_->GetName().c_str(), job_context_->job_id,
+                     m.fd.GetNumber(), m.fd.GetFileSize(),
+                     m.prop.is_blob_wal() ? "wal" : "sst", s.ToString().c_str(),
+                     m.marked_for_compaction ? " (needs compaction)" : "");
+    }
 
     if (s.ok() && output_file_directory_ != nullptr && sync_output_directory_) {
       s = output_file_directory_->Fsync();

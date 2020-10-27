@@ -2560,6 +2560,8 @@ void DBImpl::BackgroundCallWalIndexCreation() {
   num_running_wal_index_creations_++;
 
   assert(bg_wal_index_creation_scheduled_);
+  ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                 "WalIndex Creation starting\n");
   Status s = BackgroundWalIndexCreation(&job_context, &log_buffer);
   TEST_SYNC_POINT("BackgroundWalIndexCreation:1");
   if (!s.ok() && !s.IsShutdownInProgress()) {
@@ -3219,6 +3221,9 @@ Status DBImpl::BackgroundWalIndexCreation(JobContext* job_context,
   TEST_SYNC_POINT("DBImpl::BackgroundWalIndexCreation:PickWalFiles");
   std::vector<FileMetaData*> picked_wals;
   if (versions_->PickBlobWalWithoutIndex(&picked_wals, &mutex_)) {
+    ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                   "WalIndex Creation started, Pick %" PRId64 " wals\n",
+                   picked_wals.size());
     // 2. CreateWalIndex respectively, NO LOCK
     mutex_.Unlock();
     TEST_SYNC_POINT("DBImpl::BackgroundWalIndexCreation:CreateIndexes");

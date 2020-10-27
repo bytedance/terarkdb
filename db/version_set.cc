@@ -3253,6 +3253,9 @@ Status VersionSet::ProcessManifestWrites(
               blob_wal_dependence_map);
         }
         SetWalWithoutIndex(true);
+        ROCKS_LOG_INFO(db_options_->info_log,
+                       "Set Wal Without Index #%" PRId64 "\n",
+                       blob_wal_dependence_map.size());
       }
     }
 

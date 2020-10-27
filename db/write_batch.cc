@@ -83,12 +83,7 @@ struct ValueIndexBuf {
   ~ValueIndexBuf() {}
   void Fill(const Slice& value, uint64_t wal_offset_of_wb_content,
             uint64_t wal_record_header_size, const char* batch_content,
-            uint64_t log_number
-#ifndef NDEBUG
-            ,
-            const ImmutableDBOptions& dbo
-#endif  // !NDEBUG
-  ) {
+            uint64_t log_number) {
     // add value index in front of data,
     assert(log_number != 0 && log_number >> 62 == 0);
     assert(batch_content);
@@ -102,10 +97,6 @@ struct ValueIndexBuf {
     uint64_t physical_offset =
         GetPhysicalOffset(wal_offset_of_wb_content,
                           value.data() - batch_content, wal_record_header_size);
-#ifndef NDEBUG
-#warning "debug code"
-    // assert(log_number != 27 || physical_offset == 967);
-#endif  // !NDEBUG
     EncodeFixed64(buf_ + 8, physical_offset);
     assert(value.size() != 0 && value.size() < size_t{port::kMaxUint32});
     EncodeFixed32(buf_ + 16, (uint32_t)value.size());
@@ -440,7 +431,7 @@ Status ReadRecordFromWriteBatch(Slice* input, char* tag,
   return Status::OK();
 }
 
-Status WriteBatch::Iterate(Handler* handler) const {
+Status WriteBatch::Iterate(Handler* handler, bool is_mem_inserter) const {
   Slice input(rep_);
   if (input.size() < WriteBatchInternal::kHeader) {
     return Status::Corruption("malformed WriteBatch (too small)");
@@ -544,11 +535,13 @@ Status WriteBatch::Iterate(Handler* handler) const {
         assert(false);
         break;
       case kTypeLogData:
+        if (!is_mem_inserter) break;
         handler->LogData(blob);
         // A batch might have nothing but LogData. It is still a batch.
         empty_batch = false;
         break;
       case kTypeBeginPrepareXID:
+        if (!is_mem_inserter) break;
         assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_BEGIN_PREPARE));
         handler->MarkBeginPrepare();
@@ -568,6 +561,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
         }
         break;
       case kTypeBeginPersistedPrepareXID:
+        if (!is_mem_inserter) break;
         assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_BEGIN_PREPARE));
         handler->MarkBeginPrepare();
@@ -581,6 +575,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
         }
         break;
       case kTypeBeginUnprepareXID:
+        if (!is_mem_inserter) break;
         assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_BEGIN_UNPREPARE));
         handler->MarkBeginPrepare(true /* unprepared */);
@@ -600,24 +595,28 @@ Status WriteBatch::Iterate(Handler* handler) const {
         }
         break;
       case kTypeEndPrepareXID:
+        if (!is_mem_inserter) break;
         assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_END_PREPARE));
         handler->MarkEndPrepare(xid);
         empty_batch = true;
         break;
       case kTypeCommitXID:
+        if (!is_mem_inserter) break;
         assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_COMMIT));
         handler->MarkCommit(xid);
         empty_batch = true;
         break;
       case kTypeRollbackXID:
+        if (!is_mem_inserter) break;
         assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_ROLLBACK));
         handler->MarkRollback(xid);
         empty_batch = true;
         break;
       case kTypeNoop:
+        if (!is_mem_inserter) break;
         handler->MarkNoop(empty_batch);
         empty_batch = true;
         break;
@@ -1301,12 +1300,7 @@ class MemTableInserter : public WriteBatch::Handler {
         // TODO add blob_large_key_ratio_lsh16_ checking?
         value_index_buf.Fill(value, wal_offset_of_wb_content_,
                              wal_record_header_size_, batch_content_addr_,
-                             log_used_
-#ifndef NDEBUG
-                             ,
-                             db_->immutable_db_options()
-#endif  // !NDEBUG
-        );
+                             log_used_);
         Slice parts[] = {Slice(value_index_buf.data(), value_index_buf.size()),
                          value};
         SliceParts value_parts(parts, 2);
@@ -1649,12 +1643,7 @@ class MemTableInserter : public WriteBatch::Handler {
       if (enable_kv_separate_ && value.size() > get_cf_blob_size()) {
         value_index_buf.Fill(value, wal_offset_of_wb_content_,
                              wal_record_header_size_, batch_content_addr_,
-                             log_used_
-#ifndef NDEBUG
-                             ,
-                             db_->immutable_db_options()
-#endif  // !NDEBUG
-        );
+                             log_used_);
         Slice parts[] = {Slice(value_index_buf.data(), value_index_buf.size()),
                          value};
         SliceParts value_parts(parts, 2);
@@ -2133,7 +2122,7 @@ Status WriteBatchInternal::SeparateCFData(
   WalIndexCreater creater(batch, arena, batch_content_physical_offset,
                           wal_header_size, wal_entry_map);
 
-  Status s = batch->Iterate(&creater);
+  Status s = batch->Iterate(&creater, false);
   return s;
 }
 

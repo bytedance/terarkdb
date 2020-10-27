@@ -281,7 +281,7 @@ class WriteBatch : public WriteBatchBase {
     virtual bool WriteAfterCommit() const { return true; }
     virtual bool WriteBeforePrepare() const { return false; }
   };
-  Status Iterate(Handler* handler) const;
+  Status Iterate(Handler* handler, bool is_mem_inserter = true) const;
 
   // Retrieve the serialized version of this batch.
   const std::string& Data() const { return rep_; }
