@@ -125,7 +125,6 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
   }
 
   PERF_TIMER_GUARD(write_pre_and_post_process_time);
-  uint64_t cur_log_size = logs_.back().writer->file()->GetFileSize();
   WriteThread::Writer w(write_options, my_batch, callback, log_ref,
                         disable_memtable, batch_cnt, pre_release_callback);
 
@@ -431,7 +430,6 @@ Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
   StopWatch write_sw(env_, immutable_db_options_.statistics.get(), DB_WRITE);
 
   WriteContext write_context;
-  uint64_t cur_log_size = logs_.back().writer->file()->GetFileSize();
   WriteThread::Writer w(write_options, my_batch, callback, log_ref,
                         disable_memtable);
   write_thread_.JoinBatchGroup(&w);
@@ -1485,7 +1483,7 @@ Status DBImpl::NewLogWriter(std::unique_ptr<log::Writer>* new_log,
         std::move(lfile), log_fname, opt_env_opt, nullptr /* stats */,
         immutable_db_options_.listeners));
     new_log->reset(new log::Writer(std::move(file_writer), new_log_number,
-                                   false, versions_.get(), manual_wal_flush_));
+                                   false, manual_wal_flush_));
   }
   return s;
 }

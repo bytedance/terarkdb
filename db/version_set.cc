@@ -362,6 +362,10 @@ Version::~Version() {
         if (f->prop.is_blob_wal()) {
           vset_->obsolete_files_.push_back(
               ObsoleteFileInfo(f, cfd_->GetWalDir()));
+#ifndef NDEBUG
+          ROCKS_LOG_INFO(vset_->db_options_->info_log, "PushBackWal #%" PRIu64,
+                         f->fd.GetNumber());
+#endif  // !NDEBUG
         } else {
           vset_->obsolete_files_.push_back(
               ObsoleteFileInfo(f, cfd_->ioptions()->cf_paths[path_id].path));
@@ -1341,8 +1345,11 @@ LazyBuffer Version::TransToCombined(const Slice& user_key, uint64_t sequence,
     context.data[2] = sequence;
   }
   context.data[3] = reinterpret_cast<uint64_t>(&*find);
-  return LazyBuffer(this, context, Slice::Invalid(),
-                    find->second->fd.GetNumber());
+  uint64_t value_file_no = find->second->fd.GetNumber();
+#ifndef NDEBUG
+  assert(value_file_no != uint64_t(-1));
+#endif  // !NDEBUG
+  return LazyBuffer(this, context, Slice::Invalid(), value_file_no);
 }
 
 void Version::Get(const ReadOptions& read_options, const Slice& user_key,
@@ -3404,6 +3411,11 @@ Status VersionSet::ProcessManifestWrites(
 
       if (last_min_log_number_to_keep != 0) {
         // Should only be set in 2PC mode.
+#ifndef NDEBUG
+        ROCKS_LOG_INFO(db_options_->info_log,
+                       "Update MinLogNumberToKeep2PC: %" PRId64,
+                       last_min_log_number_to_keep);
+#endif  // !NDEBUG
         MarkMinLogNumberToKeep2PC(last_min_log_number_to_keep);
       }
 

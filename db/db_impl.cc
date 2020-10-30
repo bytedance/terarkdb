@@ -263,7 +263,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       manual_wal_flush_(options.manual_wal_flush),
       seq_per_batch_(seq_per_batch),
       batch_per_txn_(batch_per_txn),
-      // last_sequencee_ is always maintained by the main queue that also writes
+      // last_sequence_ is always maintained by the main queue that also writes
       // to the memtable. When two_write_queues_ is disabled last seq in
       // memtable is the same as last seq published to the readers. When it is
       // enabled but seq_per_batch_ is disabled, last seq in memtable still
@@ -1326,7 +1326,7 @@ Status DBImpl::CreateWalIndex(uint64_t log_number) {
     return status;
   }
 
-  uint64_t wal_header_size = log::kHeaderSize;
+  constexpr uint64_t wal_header_size = log::kHeaderSize;
   // Open the log file
   std::string fname = LogFileName(immutable_db_options_.wal_dir, log_number);
   std::unique_ptr<SequentialFile> file;
@@ -1338,8 +1338,16 @@ Status DBImpl::CreateWalIndex(uint64_t log_number) {
       return status;
     }
   }
+  // reader wal and collect cf data
   std::unique_ptr<SequentialFileReader> file_reader(
       new SequentialFileReader(std::move(file), fname));
+  log::Reader reader(immutable_db_options_.info_log, std::move(file_reader),
+                     nullptr, true, log_number, false);
+  auto arena_size = mutable_db_options_.max_wal_size / 8;
+  Arena arena(arena_size);
+  std::map<uint32_t, std::vector<std::pair<ParsedInternalKey, WalEntry>>>
+      wal_entry_map;
+
 
 #ifndef NDEBUG
   std::unique_ptr<RandomAccessFile> rd_file;
@@ -1349,59 +1357,58 @@ Status DBImpl::CreateWalIndex(uint64_t log_number) {
   }
   std::unique_ptr<RandomAccessFileReader> rd_file_reader(
       new RandomAccessFileReader(std::move(rd_file), fname, env_));
-  char tmp_scratch[10];
-  Slice content;
 #endif
 
-  // reader wal and collect cf data
-  log::Reader reader(immutable_db_options_.info_log, std::move(file_reader),
-                     nullptr, true, log_number, false);
-  auto arena_size = mutable_db_options_.max_wal_size / 8;
-  Arena arena(arena_size);
-  std::map<uint32_t, std::vector<std::pair<ParsedInternalKey, WalEntry>>>
-      wal_entry_map;
+  // TODO do not reuse log::reader, rewrite one for create wal index.
   std::string scratch;
   Slice record;
   while (reader.ReadRecord(&record, &scratch)) {
     assert(reader.LastRecordOffset() == 0 ||
            reader.LastRecordOffset() >= log::kHeaderSize);
     assert(record.size() >= WriteBatchInternal::kHeader);
+    // Get WriteBatchContentOffset(aka. FirstEntryPhysicalOffset)
+    uint64_t ahead_records_size = reader.LastRecordOffset();
+    // check whether current Block need pad, get record actual start offset
+    uint64_t leftover = log::kBlockSize - ahead_records_size % log::kBlockSize;
+    uint64_t ahead_data_size = (leftover <= wal_header_size)
+                                   ? ahead_records_size + leftover
+                                   : ahead_records_size;
+    // check whether WriteBatchHeader cross blocks, get batch content actual
+    // start offset
+    uint64_t cur_block_avail =
+        log::kBlockSize - ahead_data_size % log::kBlockSize - wal_header_size;
+    uint64_t batch_content_offset = GetFirstEntryPhysicalOffset(
+        ahead_data_size, wal_header_size, cur_block_avail);
 
     WriteBatch batch;
     WriteBatchInternal::SetContents(&batch, record);
-
-    auto batch_content_offset = [&] {
-      uint64_t physical_record_offset = reader.LastRecordOffset();
-      // 1. check whether need padding
-      uint64_t cur_block_avail =
-          log::kBlockSize - reader.LastRecordOffset() % log::kBlockSize;
-      if (cur_block_avail <= wal_header_size) {
-        assert(wal_header_size == log::kHeaderSize);
-        physical_record_offset += cur_block_avail;
-      }
-
-      // 2. check whether WriteBatchHeader cross block
-      uint64_t write_batch_offset = physical_record_offset + wal_header_size;
-      cur_block_avail = log::kBlockSize - write_batch_offset % log::kBlockSize;
-      if (cur_block_avail <= WriteBatchInternal::kHeader) {
-        return write_batch_offset + WriteBatchInternal::kHeader +
-               wal_header_size;
-      }
-      return write_batch_offset + WriteBatchInternal::kHeader;
-    };
-
-    uint64_t bco = batch_content_offset();
-#ifdef NDEBUG
-    if (log::kBlockSize - bco % log::kBlockSize >= 10) {
-      auto s = rd_file_reader->Read(bco, 10, &content, &tmp_scratch[0]);
+#ifndef NDEBUG
+    if (log::kBlockSize - batch_content_offset % log::kBlockSize >
+        record.size() - WriteBatchInternal::kHeader) {
+      // checking whether batch_content_offset correct for DEBUG
+      // skip cross-block cases
+      char tmp_scratch[record.size()];
+      Slice batch_content_from_file;
+      auto s = rd_file_reader->Read(batch_content_offset,
+                                    record.size() - WriteBatchInternal::kHeader,
+                                    &batch_content_from_file, tmp_scratch);
       assert(s.ok());
-      assert(content.compare(Slice(
-                 batch.Data().c_str() + WriteBatchInternal::kHeader, 10)) == 0);
+      Slice batch_content_from_reader(
+          batch.Data().c_str() + WriteBatchInternal::kHeader,
+          record.size() - WriteBatchInternal::kHeader);
+      assert((batch_content_from_file.size() == 0 &&
+              batch_content_from_reader.size() == 0) ||
+             batch_content_from_reader.compare(batch_content_from_file) == 0);
     }
 #endif
-
     status = WriteBatchInternal::SeparateCFData(
-        &batch, &arena, bco, wal_header_size, &wal_entry_map);
+        &batch, &arena, batch_content_offset, wal_header_size, &wal_entry_map,
+        versions_->GetColumnFamilySet(), seq_per_batch_
+#ifndef NDEBUG
+        ,
+        rd_file_reader
+#endif  //
+    );
     if (!status.ok()) {
       return status;
     }
@@ -1416,8 +1423,8 @@ Status DBImpl::CreateWalIndex(uint64_t log_number) {
   }
   index_file->SetIOPriority(Env::IOPriority::IO_LOW);
 
-  log::WalIndexWriter wi(std::move(index_file), tmp_idx_fname, env_options_,
-                         immutable_db_options_);
+  log::WalIndexWriter wal_index_writer(std::move(index_file), tmp_idx_fname,
+                                       env_options_, immutable_db_options_);
   for (auto& cf_entries : wal_entry_map) {
     uint32_t cf_id = cf_entries.first;
     auto get_ic = [&]() -> const InternalKeyComparator* {
@@ -1438,7 +1445,7 @@ Status DBImpl::CreateWalIndex(uint64_t log_number) {
       // sort by internal key
       std::stable_sort(cf_entries.second.begin(), cf_entries.second.end(), cmp);
       // write to index file
-      status = wi.WriteCF(cf_id, cf_entries.second);
+      status = wal_index_writer.WriteCF(cf_id, cf_entries.second);
     } catch (const std::bad_alloc& ex) {
       status = Status::BadAlloc();
     }
@@ -1447,7 +1454,7 @@ Status DBImpl::CreateWalIndex(uint64_t log_number) {
     }
   }
   if (status.ok()) {
-    status = wi.Finish();
+    status = wal_index_writer.Finish();
   }
   if (status.ok()) {
     status = env_->RenameFile(tmp_idx_fname, idx_fname);

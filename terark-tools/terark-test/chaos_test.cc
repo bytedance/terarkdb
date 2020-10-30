@@ -788,14 +788,14 @@ class ChaosTest {
       options.write_buffer_size = size_t(file_size_base * 1.2);
       options.enable_lazy_compaction = false;
       cfDescriptors.emplace_back(rocksdb::kDefaultColumnFamilyName, options);
-      options.compaction_style = rocksdb::kCompactionStyleUniversal;
-      options.write_buffer_size = size_t(file_size_base * 1.1);
-      options.enable_lazy_compaction = true;
-      cfDescriptors.emplace_back("universal" + std::to_string(i), options);
-      options.compaction_style = rocksdb::kCompactionStyleLevel;
-      options.write_buffer_size = size_t(file_size_base / 1.1);
-      options.enable_lazy_compaction = true;
-      cfDescriptors.emplace_back("level" + std::to_string(i), options);
+//      options.compaction_style = rocksdb::kCompactionStyleUniversal;
+//      options.write_buffer_size = size_t(file_size_base * 1.1);
+//      options.enable_lazy_compaction = true;
+//      cfDescriptors.emplace_back("universal" + std::to_string(i), options);
+//      options.compaction_style = rocksdb::kCompactionStyleLevel;
+//      options.write_buffer_size = size_t(file_size_base / 1.1);
+//      options.enable_lazy_compaction = true;
+//      cfDescriptors.emplace_back("level" + std::to_string(i), options);
     }
     if (flags_ & TestWorker) {
       options.compaction_dispatcher.reset(

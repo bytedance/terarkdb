@@ -2085,7 +2085,7 @@ void DBImpl::SchedulePendingCompaction(ColumnFamilyData* cfd) {
 
 void DBImpl::SchedulePendingGarbageCollection() {
   for (auto cfd : *versions_->GetColumnFamilySet()) {
-    if (cfd->IsDropped() || !cfd->queued_for_garbage_collection() ||
+    if (cfd->IsDropped() || cfd->queued_for_garbage_collection() ||
         !cfd->NeedsGarbageCollection()) {
       continue;
     }
@@ -2560,8 +2560,6 @@ void DBImpl::BackgroundCallWalIndexCreation() {
   num_running_wal_index_creations_++;
 
   assert(bg_wal_index_creation_scheduled_);
-  ROCKS_LOG_INFO(immutable_db_options_.info_log,
-                 "WalIndex Creation starting\n");
   Status s = BackgroundWalIndexCreation(&job_context, &log_buffer);
   TEST_SYNC_POINT("BackgroundWalIndexCreation:1");
   if (!s.ok() && !s.IsShutdownInProgress()) {
@@ -3221,14 +3219,13 @@ Status DBImpl::BackgroundWalIndexCreation(JobContext* job_context,
   TEST_SYNC_POINT("DBImpl::BackgroundWalIndexCreation:PickWalFiles");
   std::vector<FileMetaData*> picked_wals;
   if (versions_->PickBlobWalWithoutIndex(&picked_wals, &mutex_)) {
-    ROCKS_LOG_INFO(immutable_db_options_.info_log,
-                   "WalIndex Creation started, Pick %" PRId64 " wals\n",
-                   picked_wals.size());
     // 2. CreateWalIndex respectively, NO LOCK
     mutex_.Unlock();
     TEST_SYNC_POINT("DBImpl::BackgroundWalIndexCreation:CreateIndexes");
     std::unordered_set<uint64_t> failed_wal;
     for (auto& f : picked_wals) {
+      ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                     "%d WalIndexCreation Started", f->fd.GetNumber());
       Status s = CreateWalIndex(f->fd.GetNumber());
       if (UNLIKELY(!s.ok())) {
         failed_wal.insert(f->fd.GetNumber());
@@ -3243,6 +3240,8 @@ Status DBImpl::BackgroundWalIndexCreation(JobContext* job_context,
         // index_creating_ongoing_wals
         continue;
       }
+      ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                     "%d WalIndexCreation Success", f->fd.GetNumber());
     }
 
     // 3. broadcast wal gc_status

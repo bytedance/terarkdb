@@ -1251,7 +1251,6 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
             new log::Writer(
                 std::move(file_writer), new_log_number,
                 impl->immutable_db_options_.recycle_log_file_num > 0,
-                impl->versions_.get(),
                 impl->immutable_db_options_.manual_wal_flush));
       }
 

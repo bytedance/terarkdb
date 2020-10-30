@@ -431,7 +431,7 @@ Status ReadRecordFromWriteBatch(Slice* input, char* tag,
   return Status::OK();
 }
 
-Status WriteBatch::Iterate(Handler* handler, bool is_mem_inserter) const {
+Status WriteBatch::Iterate(Handler* handler, bool only_memdata) const {
   Slice input(rep_);
   if (input.size() < WriteBatchInternal::kHeader) {
     return Status::Corruption("malformed WriteBatch (too small)");
@@ -535,13 +535,11 @@ Status WriteBatch::Iterate(Handler* handler, bool is_mem_inserter) const {
         assert(false);
         break;
       case kTypeLogData:
-        if (!is_mem_inserter) break;
         handler->LogData(blob);
         // A batch might have nothing but LogData. It is still a batch.
         empty_batch = false;
         break;
       case kTypeBeginPrepareXID:
-        if (!is_mem_inserter) break;
         assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_BEGIN_PREPARE));
         handler->MarkBeginPrepare();
@@ -561,11 +559,11 @@ Status WriteBatch::Iterate(Handler* handler, bool is_mem_inserter) const {
         }
         break;
       case kTypeBeginPersistedPrepareXID:
-        if (!is_mem_inserter) break;
         assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_BEGIN_PREPARE));
         handler->MarkBeginPrepare();
         empty_batch = false;
+        if (!only_memdata) break;
         if (handler->WriteAfterCommit()) {
           s = Status::NotSupported(
               "WritePrepared/WriteUnprepared txn tag when write_after_commit_ "
@@ -575,11 +573,11 @@ Status WriteBatch::Iterate(Handler* handler, bool is_mem_inserter) const {
         }
         break;
       case kTypeBeginUnprepareXID:
-        if (!is_mem_inserter) break;
         assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_BEGIN_UNPREPARE));
         handler->MarkBeginPrepare(true /* unprepared */);
         empty_batch = false;
+        if (!only_memdata) break;
         if (handler->WriteAfterCommit()) {
           s = Status::NotSupported(
               "WriteUnprepared txn tag when write_after_commit_ is enabled (in "
@@ -595,28 +593,24 @@ Status WriteBatch::Iterate(Handler* handler, bool is_mem_inserter) const {
         }
         break;
       case kTypeEndPrepareXID:
-        if (!is_mem_inserter) break;
         assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_END_PREPARE));
         handler->MarkEndPrepare(xid);
         empty_batch = true;
         break;
       case kTypeCommitXID:
-        if (!is_mem_inserter) break;
         assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_COMMIT));
         handler->MarkCommit(xid);
         empty_batch = true;
         break;
       case kTypeRollbackXID:
-        if (!is_mem_inserter) break;
         assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_ROLLBACK));
         handler->MarkRollback(xid);
         empty_batch = true;
         break;
       case kTypeNoop:
-        if (!is_mem_inserter) break;
         handler->MarkNoop(empty_batch);
         empty_batch = true;
         break;
@@ -1116,6 +1110,14 @@ class MemTableInserter : public WriteBatch::Handler {
     return reinterpret_cast<DuplicateDetector*>(&duplicate_detector_)
         ->IsDuplicateKeySeq(column_family_id, key, sequence_);
   }
+  uint32_t cf_blob_size() {
+    if (cf_mems_ && cf_mems_->current() &&
+        cf_mems_->current()->GetCurrentMutableCFOptions()) {
+      assert(cf_mems_->current()->GetCurrentMutableCFOptions()->blob_size >= 8);
+      return cf_mems_->current()->GetCurrentMutableCFOptions()->blob_size;
+    } else
+      return (uint32_t)-1;
+  };
 
  protected:
   virtual bool WriteBeforePrepare() const override {
@@ -1278,15 +1280,6 @@ class MemTableInserter : public WriteBatch::Handler {
       return seek_status;
     }
     Status ret_status;
-    auto get_cf_blob_size = [&]() {
-      if (cf_mems_ && cf_mems_->current() &&
-          cf_mems_->current()->GetLatestMutableCFOptions()) {
-        assert(cf_mems_->current()->GetLatestMutableCFOptions()->blob_size >=
-               8);
-        return cf_mems_->current()->GetLatestMutableCFOptions()->blob_size;
-      } else
-        return (uint64_t)-1;
-    };
     MemTable* mem = cf_mems_->GetMemTable();
     auto* moptions = mem->GetImmutableMemTableOptions();
     // inplace_update_support is inconsistent with snapshots, and therefore with
@@ -1296,7 +1289,8 @@ class MemTableInserter : public WriteBatch::Handler {
       // now separate kv only happen on non-inplace-update-support
       ValueIndexBuf value_index_buf;
       bool mem_res = false;
-      if (enable_kv_separate_ && value.size() > get_cf_blob_size()) {
+      if (enable_kv_separate_ && !write_after_commit_ &&
+          value.size() >= cf_blob_size()) {
         // TODO add blob_large_key_ratio_lsh16_ checking?
         value_index_buf.Fill(value, wal_offset_of_wb_content_,
                              wal_record_header_size_, batch_content_addr_,
@@ -1628,19 +1622,11 @@ class MemTableInserter : public WriteBatch::Handler {
         }
       }
     }
-    auto get_cf_blob_size = [&]() {
-      if (cf_mems_ && cf_mems_->current() &&
-          cf_mems_->current()->GetLatestMutableCFOptions()) {
-        assert(cf_mems_->current()->GetLatestMutableCFOptions()->blob_size >=
-               8);
-        return cf_mems_->current()->GetLatestMutableCFOptions()->blob_size;
-      } else
-        return (uint64_t)-1;
-    };
     if (!perform_merge) {
       ValueIndexBuf value_index_buf;
       bool mem_res = false;
-      if (enable_kv_separate_ && value.size() > get_cf_blob_size()) {
+      if (enable_kv_separate_ && !write_after_commit_ &&
+          value.size() >= cf_blob_size()) {
         value_index_buf.Fill(value, wal_offset_of_wb_content_,
                              wal_record_header_size_, batch_content_addr_,
                              log_used_);
@@ -2001,39 +1987,46 @@ size_t WriteBatchInternal::AppendedByteSize(size_t leftByteSize,
 
 // in each Put/Merge, append it into wal index and collect summary info.
 // then destruct current object append summary to wal index footer
+// (TODO) 1. handle duplicate key when use seq_per_batch, use DuplicateDetector
+// (TODO) 2. Support WriteCommit policy
 class WalIndexCreater : public WriteBatch::Handler {
  public:
   Status PutCF(uint32_t column_family_id, const Slice& key /*user key*/,
                const Slice& value) override {
     assert(value.data() > key.data());
-    CollectInfo(column_family_id, key, value, kTypeValue);
+    CollectColumnFamilyBlobHandles(column_family_id, key, value, kTypeValue);
 
-    ++seq_;
+    bool batch_boundary = false;
+    MaybeAdvanceSeq(batch_boundary);
     return Status::OK();
   }
   Status MergeCF(uint32_t column_family_id, const Slice& key,
                  const Slice& value) override {
     assert(value.data() > key.data());
-    CollectInfo(column_family_id, key, value, kTypeMerge);
+    CollectColumnFamilyBlobHandles(column_family_id, key, value, kTypeMerge);
 
-    ++seq_;
-    return Status::OK();
+    bool batch_boundary = false;
+    MaybeAdvanceSeq(batch_boundary);
+   return Status::OK();
   }
 
-  // behind type just increase seq_ and  skip
+  // behind type just increase sequence_ and  skip
   Status DeleteCF(uint32_t /*column_family_id*/,
                   const Slice& /*key*/) override {
-    ++seq_;
+    bool batch_boundary = false;
+    MaybeAdvanceSeq(batch_boundary);
     return Status::OK();
   }
   Status SingleDeleteCF(uint32_t, const Slice&) override {
-    ++seq_;
+    bool batch_boundary = false;
+    MaybeAdvanceSeq(batch_boundary);
     return Status::OK();
   }
   Status DeleteRangeCF(uint32_t /*column_family_id*/,
                        const Slice& /*begin_key*/,
                        const Slice& /*end_key*/) override {
-    ++seq_;
+    bool batch_boundary = false;
+    MaybeAdvanceSeq(batch_boundary);
     return Status::OK();
   }
 
@@ -2041,30 +2034,89 @@ class WalIndexCreater : public WriteBatch::Handler {
       const WriteBatch* b, Arena* a, uint64_t physical_offset,
       uint64_t head_size,
       std::map<uint32_t, std::vector<std::pair<ParsedInternalKey, WalEntry>>>*
-          wal_entry_map)
+          wal_entry_map,
+      const ColumnFamilySet* cfs, bool seq_per_batch
+#ifndef NDEBUG
+      ,
+      std::unique_ptr<RandomAccessFileReader>& rd_file_reader
+#endif  // !NDEBUG
+      )
       : batch_(b),
         arena_(a),
         batch_content_physical_offset_(physical_offset),
         wal_record_header_size_(head_size),
-        seq_(WriteBatchInternal::Sequence(b)),
-        wal_entry_map_(wal_entry_map) {}
-  ~WalIndexCreater() {}
+        sequence_(WriteBatchInternal::Sequence(b)),
+        wal_entry_map_(wal_entry_map),
+        cfs_(cfs),
+        seq_per_batch_(seq_per_batch)
+#ifndef NDEBUG
+        ,
+        wal_file_reader_(rd_file_reader)
+#endif
+  {
+  }
+  ~WalIndexCreater() {
+    assert(seq_per_batch_ || WriteBatchInternal::Count(batch_) +
+                                     WriteBatchInternal::Sequence(batch_) ==
+                                 sequence_);
+  }
 
-  // behind type only in wal just skip
-  // TODO(liuyangming) for transactiondb, seq_per_batch = true and this batch is
+  // for transactiondb, seq_per_batch = true and this batch is
   // merged batch, need increate seq when found trx Commit
   Status MarkBeginPrepare(bool = false) override { return Status::OK(); }
-  Status MarkEndPrepare(const Slice& /*xid*/) override { return Status::OK(); }
-  Status MarkNoop(bool /*empty_batch*/) override { return Status::OK(); }
-  Status MarkRollback(const Slice& /*xid*/) override { return Status::OK(); }
-  Status MarkCommit(const Slice& /*xid*/) override { return Status::OK(); }
+  Status MarkEndPrepare(const Slice& /*xid*/) override {
+    const bool batch_boundry = true;
+    MaybeAdvanceSeq(batch_boundry);
+    return Status::OK();
+  }
+  Status MarkNoop(bool empty_batch) override {
+    if (!empty_batch) {
+      // In the absence of Prepare markers, a kTypeNoop tag indicates the end of
+      // a batch. This happens when write batch commits skipping the prepare
+      // phase.
+      const bool batch_boundry = true;
+      MaybeAdvanceSeq(batch_boundry);
+    }
+    return Status::OK();
+  }
+  Status MarkRollback(const Slice& /*xid*/) override {
+    const bool batch_boundry = true;
+    MaybeAdvanceSeq(batch_boundry);
+    return Status::OK();
+  }
+  Status MarkCommit(const Slice& /*xid*/) override {
+    const bool batch_boundry = true;
+    MaybeAdvanceSeq(batch_boundry);
+    return Status::OK();
+  }
 
  protected:
   friend class WriteBatch;
 
  private:
-  void CollectInfo(uint32_t column_family_id, const Slice& key /*user key*/,
-                   const Slice& value, ValueType type) {
+  void MaybeAdvanceSeq(bool batch_boundry = false) {
+    if (batch_boundry == seq_per_batch_) {
+      sequence_++;
+    }
+  }
+  uint32_t cf_blob_size(uint32_t cf_id) {
+    auto cfd = cfs_->GetColumnFamily(cf_id);
+    if (cfd == nullptr) return uint32_t(-1);
+    return cfd->GetLatestMutableCFOptions()->blob_size;
+  }
+  void CollectColumnFamilyBlobHandles(uint32_t column_family_id,
+                                      const Slice& key /*user key*/,
+                                      const Slice& value, ValueType type) {
+    uint32_t blob_size = cf_blob_size(column_family_id);
+    // TODO maybe wal idx only index blob value?
+    // but if blob_size change bigger later, value handle in
+    // sst-file may lose corresponding value in wal after garbage collection of
+    // wal into sst
+    // if (blob_size == uint32_t(-1) || value.size() < blob_size) {
+    //  // skip non-blob value
+    //  return;
+    //}
+    // assert(blob_size > 8 && value.size() >= blob_size);
     assert(key.data() < value.data());  // value next to key
     assert(wal_record_header_size_ == log::kHeaderSize);
     size_t kBlockAvailSize = log::kBlockSize - wal_record_header_size_;
@@ -2075,10 +2127,21 @@ class WalIndexCreater : public WriteBatch::Handler {
         wal_record_header_size_);
     uint64_t k_head_size = std::min<uint64_t>(
         log::kBlockSize - key_offset % log::kBlockSize, key.size());
-    size_t k_tail_size = 0;
+    uint64_t k_tail_size = 0;
     if (key.size() > k_head_size) {
       k_tail_size = (key.size() - k_head_size) % kBlockAvailSize;
     }
+#ifndef NDEBUG
+    if (k_tail_size == 0) {
+      // check whether key offset correct
+      char key_scratch[k_head_size];
+      Slice _key;
+      auto _s =
+          wal_file_reader_->Read(key_offset, k_head_size, &_key, key_scratch);
+      assert(_s.ok());
+      assert(_key.size() == k_head_size && _key.compare(key) == 0);
+    }
+#endif  // !NDEBUG
     uint16_t k_head_crc = terark::Crc16c_update(0, key.data(), k_head_size);
     uint16_t k_tail_crc = terark::Crc16c_update(
         0, key.data() + key.size() - k_tail_size, k_tail_size);
@@ -2099,28 +2162,44 @@ class WalIndexCreater : public WriteBatch::Handler {
         0, value.data() + value.size() - v_tail_size, v_tail_size);
 
     (*wal_entry_map_)[column_family_id].push_back(std::make_pair(
-        ParsedInternalKey(ArenaPinSlice(key, arena_), seq_, type),
+        ParsedInternalKey(ArenaPinSlice(key, arena_), sequence_, type),
         WalEntry(key_offset, val_offset, uint32_t(key.size()),
                  uint32_t(value.size()), k_head_crc, k_tail_crc, v_head_crc,
-                 v_tail_crc, seq_, type)));
+                 v_tail_crc, sequence_, type)));
   }
 
   const WriteBatch* batch_;
   Arena* arena_;
   uint64_t batch_content_physical_offset_;
   uint64_t wal_record_header_size_;
-  SequenceNumber seq_;
+  SequenceNumber sequence_;
+  bool seq_per_batch_{false};
   std::map<uint32_t, std::vector<std::pair<ParsedInternalKey, WalEntry>>>*
       wal_entry_map_;
+  const ColumnFamilySet* cfs_;
+#ifndef NDEBUG
+  std::unique_ptr<RandomAccessFileReader>& wal_file_reader_;
+#endif  // !NDEBUG
 };
 
 Status WriteBatchInternal::SeparateCFData(
     const WriteBatch* batch, Arena* arena,
     uint64_t batch_content_physical_offset, uint64_t wal_header_size,
     std::map<uint32_t, std::vector<std::pair<ParsedInternalKey, WalEntry>>>*
-        wal_entry_map) {
+        wal_entry_map,
+    const ColumnFamilySet* cfs, bool seq_per_batch
+#ifndef NDEBUG
+    ,
+    std::unique_ptr<RandomAccessFileReader>& rd_file_reader
+#endif
+) {
   WalIndexCreater creater(batch, arena, batch_content_physical_offset,
-                          wal_header_size, wal_entry_map);
+                          wal_header_size, wal_entry_map, cfs, seq_per_batch
+#ifndef NDEBUG
+                          ,
+                          rd_file_reader
+#endif
+  );
 
   Status s = batch->Iterate(&creater, false);
   return s;

@@ -586,6 +586,9 @@ Status TableCache::Get(const ReadOptions& options,
       case kLogSst: {
         // value in wal
         s = t->GetFromHandle(options, k, get_context);
+#ifndef NDEBUG
+        assert(s.ok());
+#endif  // !NDEBUG
       } break;
     }
   } else if (options.read_tier == kBlockCacheTier && s.IsIncomplete()) {

@@ -995,7 +995,9 @@ bool ColumnFamilyData::NeedsCompaction() const {
 bool ColumnFamilyData::NeedsGarbageCollection() const {
   auto vstorage = current_->storage_info();
   return !vstorage->IsPickGarbageCollectionFail() &&
-         vstorage->total_garbage_ratio() >= mutable_cf_options_.blob_gc_ratio;
+         (vstorage->total_garbage_ratio() >=
+              mutable_cf_options_.blob_gc_ratio ||
+          !vstorage->blob_wal_dependence().empty());
 }
 
 Compaction* ColumnFamilyData::PickCompaction(

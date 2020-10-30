@@ -1090,13 +1090,7 @@ class VersionSet {
   void LogAndApplyHelper(ColumnFamilyData* cfd, VersionBuilder* b, Version* v,
                          VersionEdit* edit, InstrumentedMutex* mu,
                          bool apply = true);
-  uint64_t MinLogNumberToKeep() {
-    if (db_options_->allow_2pc) {
-      return min_log_number_to_keep_2pc();
-    } else {
-      return MinLogNumberWithUnflushedData();
-    }
-  }
+
   Status CacheWalMeta(uint64_t log_no, FileMetaData fm);
   Status ReleaseWalMeta(uint64_t log_no);
   FileMetaData GetWalMeta(uint64_t log_no);

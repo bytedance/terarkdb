@@ -824,6 +824,69 @@ TEST_P(RetriableLogTest, TailLog_FullHeader) {
 
 INSTANTIATE_TEST_CASE_P(bool, RetriableLogTest, ::testing::Values(0, 2));
 
+class LogIndexTest : public ::testing::TestWithParam<int> {
+  class ReportCollector : public Reader::Reporter {
+   public:
+    size_t dropped_bytes_;
+    std::string message_;
+
+    ReportCollector() : dropped_bytes_(0) { }
+    virtual void Corruption(size_t bytes, const Status& status) override {
+      dropped_bytes_ += bytes;
+      message_.append(status.ToString());
+    }
+  };
+};
+
+TEST_P(LogIndexTest, CreateIndexAndIter) {
+  std::random_device rd;
+  std::mt19937_64 mt(rd());
+  auto uid_g = std::uniform_int_distribution<char>(0, 255);
+  auto klen_g = std::uniform_int_distribution<uint32_t>(1, 32);
+  auto vlen_g = std::uniform_int_distribution<uint32_t>(0, 1024);
+  auto batch_size_g =
+      std::uniform_int_distribution<uint32_t>(0, log::kBlockSize);
+
+  auto gene_batch_kv = [&](std::map<std::string, std::string>& _map,
+                           WriteBatch& wb) {
+    auto batch_size = batch_size_g(mt);
+    for (auto i = 0; i < batch_size; ++i) {
+      auto klen = klen_g(mt);
+      auto vlen = vlen_g(mt);
+      std::string key("", klen), val("", vlen);
+      std::generate(key.begin(), key.end(), std::bind(uid_g, mt));
+      std::generate(val.begin(), val.end(), std::bind(uid_g, mt));
+      _map[key] = val;
+      wb.Put(key, val);
+    }
+  };
+  // 1. create batch of multi cf-kv and insert into wal
+  constexpr uint32_t kBatchCount = 3;
+  constexpr uint64_t kLogNumber = 1;
+
+  std::string log_fname = LogFileName("", kLogNumber);
+  auto env(Env::Default());
+  EnvOptions env_opt;
+  std::unique_ptr<WritableFile> lfile;
+  auto s = NewWritableFile(env, log_fname, &lfile, env_opt);
+  assert(s.ok());
+  std::unique_ptr<WritableFileWriter> file_writer(
+      new WritableFileWriter(std::move(lfile), log_fname, env_opt));
+  log::Writer new_log(std::move(file_writer), 1, false);
+
+  std::vector<std::map<std::string, std::string>> batch_kv_map(kBatchCount);
+  std::vector<WriteBatch> writebatchs(kBatchCount);
+  for (auto i = 0; i < kBatchCount; ++i) {
+    gene_batch_kv(batch_kv_map[i], writebatchs[i]);
+    new_log.AddRecord(writebatchs[0].Data());
+  }
+
+  // 2. create index over created wal
+  
+
+  // 3. iter wal check equals
+}
+
 }  // namespace log
 }  // namespace rocksdb
 

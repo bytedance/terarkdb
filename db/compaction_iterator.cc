@@ -887,6 +887,8 @@ inline bool CompactionIterator::ikeyNotNeededForIncrementalSnapshot() {
 std::string CompactionSeparateHelper::GetValueMeta(const Slice& internal_key,
                                                    const LazyBuffer& value) {
   std::string value_meta;
+  auto s = value.fetch();                                              
+  assert(s.ok());
   bool value_is_separated =
       (GetInternalKeyType(internal_key) == kTypeValueIndex ||
        GetInternalKeyType(internal_key) == kTypeMergeIndex);
@@ -908,7 +910,7 @@ std::string CompactionSeparateHelper::GetValueMeta(const Slice& internal_key,
     }
 
     // extractor value meta of current value
-    auto s = value_meta_extractor->Extract(
+    s = value_meta_extractor->Extract(
         ExtractUserKey(internal_key),
         Slice(value.slice().data(), value.slice().size()), &value_meta);
     assert(s.ok());
@@ -1025,7 +1027,6 @@ LazyBuffer CompactionSeparateHelper::TransToCombined(
     return LazyBuffer(std::move(status));
   }
   ValueIndex _value_index(original_value.slice());
-  assert(_value_index.file_number < 300000);
 #endif  // !NDEBUG
 
   state->value() = std::move(original_value);
@@ -1067,7 +1068,6 @@ LazyBuffer CompactionSeparateHelper::TransToCombined(
   // keep current separate helper in state so that when state destoryed, helper
   // can reclaim state
   combined_value.wrap_state(state);
-  assert(combined_value.file_number()< 300000);
   return combined_value;
 }
 }  // namespace rocksdb

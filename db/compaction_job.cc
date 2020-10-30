@@ -2862,7 +2862,8 @@ void CompactionJob::LogCompaction() {
       stream << ("files_L" + ToString(compaction->level(i)));
       stream.StartArray();
       for (auto f : *compaction->inputs(i)) {
-        stream << f->fd.GetNumber();
+        stream << std::to_string(f->fd.GetNumber()) +
+                      (f->prop.is_blob_wal() ? "(wal)" : "(sst)");
       }
       stream.EndArray();
     }

@@ -71,7 +71,7 @@ void PushCandidateFile(
 };
 };  // namespace
 
-// * Returns the list of live files in 'sst_live'
+// * Returns the list of live files in 'file_live'
 // If it's doing full scan:
 // * Returns the list of all files in the filesystem in
 // 'full_scan_candidate_files'.
@@ -214,6 +214,20 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
   job_context->pending_manifest_file_number =
       versions_->pending_manifest_file_number();
   job_context->log_number = MinLogNumberToKeep();
+#ifndef NDEBUG
+  ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                 "GetMinLogNumberToKeep %" PRIu64 "\n",
+                 job_context->log_number);
+  ROCKS_LOG_INFO(immutable_db_options_.info_log, "alive_log_file content: ");
+  for (auto _log : alive_log_files_) {
+    ROCKS_LOG_INFO(immutable_db_options_.info_log, " %" PRIu64, _log.number);
+  }
+  ROCKS_LOG_INFO(immutable_db_options_.info_log, "logs_ content: ");
+  for (auto _log : logs_) {
+    ROCKS_LOG_INFO(immutable_db_options_.info_log, " %" PRIu64, _log.number);
+  }
+  assert(immutable_db_options_.recycle_log_file_num == 0);
+#endif  // !NDEBUG
   job_context->prev_log_number = versions_->prev_log_number();
 
   // logs_ is empty when called during recovery, in which case there can't yet
@@ -310,8 +324,15 @@ void DBImpl::DeleteObsoleteFileImpl(int job_id, const std::string& fname,
     file_deletion_status =
         DeleteSSTFile(&immutable_db_options_, fname, path_to_sync);
   } else if (type == kLogFile) {
-    file_deletion_status =
-        DeleteWalFile(&immutable_db_options_, fname, path_to_sync);
+    if (!immutable_db_options_.env->FileExists(fname).IsNotFound()) {
+      file_deletion_status =
+          DeleteWalFile(&immutable_db_options_, fname, path_to_sync);
+      ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                     "[JOB %d] WalFile %s delete succeed", job_id, fname);
+    } else {
+      ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                     "[JOB %d] WalFile %s already deleted", job_id, fname);
+    }
   } else {
     file_deletion_status = env_->DeleteFile(fname);
   }
@@ -356,12 +377,12 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
 
   // Now, convert live list to an unordered map, WITHOUT mutex held;
   // set is slow.
-  std::unordered_set<uint64_t> sst_live;
+  std::unordered_set<uint64_t> file_live;
   for (auto v : state.version_ref) {
     auto vstorage = v->storage_info();
     for (int i = -1; i < vstorage->num_levels(); ++i) {
       for (auto f : vstorage->LevelFiles(i)) {
-        sst_live.emplace(f->fd.GetNumber());
+        file_live.emplace(f->fd.GetNumber());
       }
     }
   }
@@ -469,9 +490,31 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
       case kLogFile:
         keep = ((number >= state.log_number) ||
                 (number == state.prev_log_number) ||
-                (sst_live.find(number) != sst_live.end()) ||
+                (file_live.find(number) != file_live.end()) ||
                 (log_recycle_files_set.find(number) !=
                  log_recycle_files_set.end()));
+#ifndef NDEBUG
+        if ((number >= state.log_number) || (number == state.prev_log_number)) {
+          ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                         "[JOB %d] Try to delete WAL Number %" PRIu64
+                         ",  decision is keep, reason is number, %" PRIu64
+                         " %" PRIu64 " %" PRIu64,
+                         state.job_id, number, state.log_number,
+                         state.prev_log_number);
+        }
+        if (file_live.find(number) != file_live.end()) {
+          ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                         "[JOB %d] Try to delete WAL Number %" PRIu64
+                         ",  decision is keep, reason is file_live",
+                         state.job_id, number);
+        }
+        if (log_recycle_files_set.find(number) != log_recycle_files_set.end()) {
+          ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                         "[JOB %d] Try to delete WAL Number %" PRIu64
+                         ",  decision is keep, reason is recycle",
+                         state.job_id, number);
+        }
+#endif  // !NDEBUG
         break;
       case kDescriptorFile:
         // Keep my manifest file, and any newer incarnations'
@@ -481,7 +524,7 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
       case kTableFile:
         // If the second condition is not there, this makes
         // DontDeletePendingOutputs fail
-        keep = (sst_live.find(number) != sst_live.end()) ||
+        keep = (file_live.find(number) != file_live.end()) ||
                number >= state.min_pending_output;
         break;
       case kTempFile:
@@ -493,7 +536,7 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
         //
         // TODO(yhchiang): carefully modify the third condition to safely
         //                 remove the temp options files.
-        keep = (sst_live.find(number) != sst_live.end()) ||
+        keep = (file_live.find(number) != file_live.end()) ||
                (number == state.pending_manifest_file_number) ||
                (to_delete.find(kOptionsFileNamePrefix) != std::string::npos);
         break;

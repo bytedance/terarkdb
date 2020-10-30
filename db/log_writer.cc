@@ -30,22 +30,6 @@ namespace rocksdb {
 namespace log {
 
 Writer::Writer(std::unique_ptr<WritableFileWriter>&& dest, uint64_t log_number,
-               bool recycle_log_files, VersionSet* vs, bool manual_flush)
-    : dest_(std::move(dest)),
-      block_offset_(0),
-      num_entries_(0),
-      block_counts_(0),
-      log_number_(log_number),
-      recycle_log_files_(recycle_log_files),
-      manual_flush_(manual_flush),
-      vs_(vs) {
-  for (int i = 0; i <= kMaxRecordType; i++) {
-    char t = static_cast<char>(i);
-    type_crc_[i] = crc32c::Value(&t, 1);
-  }
-}
-
-Writer::Writer(std::unique_ptr<WritableFileWriter>&& dest, uint64_t log_number,
                bool recycle_log_files, bool manual_flush)
     : dest_(std::move(dest)),
       block_offset_(0),
@@ -247,19 +231,6 @@ void DeleteCachedEntry(const Slice& /*key*/, void* Blob) {
   delete entry;
 }
 
-// generate an id from the file
-void WalBlobReader::GenerateCacheUniqueId(const Slice& log_handle,
-                                          std::string& uid) const {
-  char prefix_id[kMaxCacheKeyPrefixSize];
-  size_t prefix_length =
-      src_->GetUniqueId(&prefix_id[0], kMaxCacheKeyPrefixSize);
-
-  uid.append(&prefix_id[0], prefix_length);
-  assert(prefix_length == uid.size() &&
-         memcmp(uid.data(), prefix_id, prefix_length) == 0);
-  uid.append(log_handle.data(), log_handle.size());
-}
-
 Status WalBlobReader::GetBlob(const Slice& log_handle,
                               LazyBuffer* lazy_blob) const {
   assert(lazy_blob);
@@ -306,8 +277,7 @@ Status WalBlobReader::GetBlob(const Slice& log_handle,
   if (!status.ok()) {
     return status;
   }
-  assert(blob->slice_.size() != 0 &&
-         blob->slice_.size() == blob_physical_length);
+  assert(blob->slice_.size() == blob_physical_length);
   if (head_size != 0) {
     uint32_t head_crc =
         terark::Crc16c_update(0, blob->slice_.data(), head_size);
@@ -359,31 +329,48 @@ Status WalBlobReader::GetBlob(const Slice& log_handle,
   return status;
 }
 
-void WalBlobReader::GetCFWalTupleOffsets(uint32_t cf_id, uint64_t* cf_offset,
-                                         uint64_t* cf_entries) {
-  const WalIndexFooter* wif = reinterpret_cast<const WalIndexFooter*>(
-      index_file_data_.data() + index_file_data_.size() -
-      sizeof(WalIndexFooter));
-
-  uint32_t cf_phy_index_size = wif->count_ * sizeof(WalCfIndex);
-  Slice footer(index_file_data_.data() + index_file_data_.size() -
-                   sizeof(WalIndexFooter) - cf_phy_index_size,
-               cf_phy_index_size);
-
-  bool find = false;
-  for (uint32_t i = 0; i < wif->count_; ++i) {
-    const WalCfIndex* wci = reinterpret_cast<const WalCfIndex*>(
-        footer.data() + i * sizeof(WalCfIndex));
-    if (wci->id_ == cf_id) {
-      *cf_offset = wci->offset_;
-      *cf_entries = wci->count_;
-      find = true;
+const CFKvHandlesEntry* WalBlobReader::GetCFKvHandlesEntry(uint32_t cf_id) {
+  const WalIndexFooter* wal_index_footer = GetWalIndexFooter();
+  for (uint32_t i = 0; i < wal_index_footer->count_; ++i) {
+    auto cf_entry_offset = [&]() {
+      return index_file_data_.data() + index_file_data_.size() -
+             sizeof(WalIndexFooter) - (i + 1) * (sizeof(CFKvHandlesEntry));
+    };
+    const CFKvHandlesEntry* entry =
+        reinterpret_cast<const CFKvHandlesEntry*>(cf_entry_offset());
+    if (entry->id_ == cf_id) {
+      return entry;
     }
   }
-  // TODO maybe skip not founded and return status
-  assert(find || wif->count_ == 0);
+  return nullptr;  // not found
 }
 
+Status WalBlobReader::CheckIndexFileCrc(uint32_t cf_id) {
+  assert(index_file_data_.valid());
+  auto footer_ptr = GetWalIndexFooter();
+  uint64_t footer_size =
+      footer_ptr->count_ * sizeof(CFKvHandlesEntry) + sizeof(WalIndexFooter);
+  auto footer_content_offset = [&]() {
+    return footer_ptr - sizeof(CFKvHandlesEntry) * footer_ptr->count_;
+  };
+
+  uint32_t footer_crc = terark::Crc16c_update(0, footer_content_offset(),
+                                              footer_size - sizeof(uint32_t));
+  if (footer_crc != footer_ptr->crc32_) {
+    return Status::IOError("WalIndex CheckSum Wrong(footer checksum mismatch)");
+  }
+
+  auto cf_entry_ptr = GetCFKvHandlesEntry(cf_id);
+  uint32_t cf_kv_handles_crc =
+      terark::Crc16c_update(0, index_file_data_.data() + cf_entry_ptr->offset_,
+                            cf_entry_ptr->count_ * kWalEntrySize);
+  if (cf_kv_handles_crc != cf_entry_ptr->crc32_) {
+    return Status::IOError(
+        "WalIndex CheckSum Wrong(handles group checksum mismatch");
+  }
+
+  return Status::OK();
+}
 InternalIterator* WalBlobReader::NewIteratorWithCF(
     const ReadOptions&, uint32_t cf_id, const ImmutableCFOptions& ioptions,
     Arena* arena) {
@@ -395,8 +382,9 @@ InternalIterator* WalBlobReader::NewIteratorWithCF(
   }
 
   if (s.ok() && (!index_file_data_.valid() || index_file_data_.empty())) {
-    // since many cf may shared same wal, but only mmap index file into
-    // index_file_data once
+    // since many cf may shared same wal, index_file_data_ maybe shared with
+    // other cf iter
+    // FIXME use mmap for convenience here, fix it maybe
     EnvOptions env_options_for_index = env_options_;
     env_options_for_index.use_mmap_reads = true;
     env_options_for_index.use_direct_reads = false;
@@ -405,6 +393,7 @@ InternalIterator* WalBlobReader::NewIteratorWithCF(
     if (s.ok()) {
       s = src_idx_->Read(0, file_size, &index_file_data_,
                          nullptr /*mmap read*/);
+      CheckIndexFileCrc(cf_id);
     }
   }
   if (s.ok() && index_file_data_.size() != file_size) {
@@ -414,15 +403,21 @@ InternalIterator* WalBlobReader::NewIteratorWithCF(
     return NewErrorInternalIterator(s, arena);
   }
 
-  uint64_t cf_offset = 0;
-  uint64_t cf_entries = 0;
-  GetCFWalTupleOffsets(cf_id, &cf_offset, &cf_entries);
-  assert(cf_offset % kWalEntrySize == 0);
+  auto entry_ptr = GetCFKvHandlesEntry(cf_id);
+  assert(entry_ptr->offset_ % kWalEntrySize == 0);
   if (arena == nullptr) {
-    return new WalBlobIterator(this, ioptions, cf_offset, cf_entries);
+#ifndef NDEBUG
+    return new WalBlobIterator(this, entry_ptr, ioptions);
+#else
+    return new WalBlobIterator(this, entry_ptr);
+#endif  // NDEBUG
   } else {
     auto* mem = arena->AllocateAligned(sizeof(WalBlobIterator));
-    return new (mem) WalBlobIterator(this, ioptions, cf_offset, cf_entries);
+#ifndef NDEBUG
+    return new WalBlobIterator(this, entry_ptr, ioptions);
+#else
+    return new WalBlobIterator(this, entry_ptr);
+#endif  // NDEBUG
   }
 }
 
@@ -450,6 +445,7 @@ void WalBlobIterator::Next() {
 #ifndef NDEBUG
     if (!last_key_.empty()) {
       (void)ioptions_;
+      // NO repeated internal_key, since there is no same seq even in trx
       assert(ioptions_.internal_comparator.Compare(iter_key_.GetKey(),
                                                    Slice(last_key_)) > 0);
     }
@@ -495,7 +491,7 @@ Status WalIndexWriter::WriteCF(
     const std::vector<std::pair<ParsedInternalKey, WalEntry>>& sorted_entries) {
   uint32_t crc32 = 0;
 
-  WalCfIndex wci;
+  CFKvHandlesEntry wci;
   wci.id_ = cf_id;
   wci.offset_ = index_file_->GetFileSize();
   assert(wci.offset_ % sizeof(WalEntry) == 0);
@@ -519,19 +515,22 @@ Status WalIndexWriter::WriteCF(
 }
 
 Status WalIndexWriter::WriteFooter() {
-  uint32_t crc32 = 0;
+  uint32_t footer_crc = 0;
   for (auto& i : cf_indexes_) {
-    auto s = index_file_->Append(Slice((char*)&i, sizeof(WalCfIndex)));
+    auto s = index_file_->Append(Slice((char*)&i, sizeof(CFKvHandlesEntry)));
     if (!s.ok()) {
       return s;
     }
-    crc32 = crc32c::Extend(crc32, (char*)&i, sizeof(WalCfIndex));
+    footer_crc =
+        crc32c::Extend(footer_crc, (char*)&i, sizeof(CFKvHandlesEntry));
   }
 
-  WalIndexFooter wif;
-  wif.count_ = static_cast<uint32_t>(cf_indexes_.size());
-  wif.crc32_ = crc32c::Extend(crc32, (char*)&wif.count_, 4);
-  auto s = index_file_->Append(Slice((char*)&wif, sizeof(wif)));
+  WalIndexFooter wal_index_footer;
+  wal_index_footer.count_ = static_cast<uint32_t>(cf_indexes_.size());
+  wal_index_footer.crc32_ =
+      crc32c::Extend(footer_crc, (char*)&wal_index_footer.count_, 4);
+  auto s = index_file_->Append(
+      Slice((char*)&wal_index_footer, sizeof(wal_index_footer)));
   if (!s.ok()) {
     return s;
   }

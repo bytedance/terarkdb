@@ -100,8 +100,11 @@ class Reader {
   size_t eof_offset_;
 
   // Offset of the last record returned by ReadRecord.
-  // XXX  for example, there are two wb which is two record in wal,
-  // LastRecordOffset of wb1 is the end offset of wb0's ending+1
+  // NOTE for example, there are two wb which is two record in wal,
+  // *       +-----+-------------+--+----+----------+------+-- ··· ----+
+  // * Wal   | r0  |        r1   |P | r2 |    r3    |  r4  |           |
+  // *       +-----+-------------+--+----+----------+------+-- ··· ----+
+  // LastRecordOffset of r1 is the end offset of r0's ending
   uint64_t last_record_offset_;
   // Offset of the first location past the end of buffer_.
   uint64_t end_of_buffer_offset_;

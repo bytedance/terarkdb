@@ -77,54 +77,61 @@ namespace log {
  * records written by the most recent log writer vs a previous one.
  */
 
+// inheriting TableReader is for put it in table cache, but only implement
+// GetFromHande(for Get BlobVal) and NewIterator(for GC)
 class WalBlobReader : public TableReader {
  public:
   explicit WalBlobReader(std::unique_ptr<RandomAccessFile>&& src,
                          uint64_t log_no, const ImmutableDBOptions& idbo,
                          const EnvOptions& eo);
   ~WalBlobReader() {}
+  InternalIterator* NewIteratorWithCF(const ReadOptions&, uint32_t cf_id,
+                                      const ImmutableCFOptions& ioptions,
+                                      Arena* arena) override;
+  Status GetFromHandle(const ReadOptions& readOptions, const Slice& handle,
+                       GetContext* get_context) override;
 
+  // no implement yet
   InternalIterator* NewIterator(const ReadOptions&, const SliceTransform*,
                                 Arena*, bool, bool) override {
     return NewErrorInternalIterator(Status::NotSupported());
   }
-
-  InternalIterator* NewIteratorWithCF(const ReadOptions&, uint32_t cf_id,
-                                      const ImmutableCFOptions& ioptions,
-                                      Arena* arena) override;
-
   uint64_t ApproximateOffsetOf(const Slice&) override { return 0; }
-
   void SetupForCompaction() override {}
-
   std::shared_ptr<const TableProperties> GetTableProperties() const override {
     return std::make_shared<const TableProperties>();
   }
-
   size_t ApproximateMemoryUsage() const override { return 0; }
-
   uint64_t FileNumber() const override { return log_number_; }
-
   Status Get(const ReadOptions&, const Slice&, GetContext*,
              const SliceTransform*, bool) override {
     return Status::NotSupported();
   }
 
-  Status GetFromHandle(const ReadOptions& readOptions, const Slice& handle,
-                       GetContext* get_context) override;
-
-  Slice FileData() const { return index_file_data_; }
-
-  Status GetBlob(const Slice& value_content, LazyBuffer* blob) const;
-
- protected:
-  void GenerateCacheUniqueId(const Slice& log_handle, std::string&) const;
-
-  static const size_t kMaxCacheKeyPrefixSize = kMaxVarint64Length * 3 + 1;
-
  private:
-  void GetCFWalTupleOffsets(uint32_t cf_id, uint64_t* cf_offset,
-                            uint64_t* cf_entries);
+  friend class WalBlobIterator;
+
+  // generate an id from the file
+  void GenerateCacheUniqueId(const Slice& log_handle, std::string& uid) const {
+    char prefix_id[kMaxCacheKeyPrefixSize];
+    size_t prefix_length =
+        src_->GetUniqueId(&prefix_id[0], kMaxCacheKeyPrefixSize);
+
+    uid.append(&prefix_id[0], prefix_length);
+    assert(prefix_length == uid.size() &&
+           memcmp(uid.data(), prefix_id, prefix_length) == 0);
+    uid.append(log_handle.data(), log_handle.size());
+  }
+
+  const WalIndexFooter* GetWalIndexFooter() {
+    assert(index_file_data_.valid());
+    return reinterpret_cast<const WalIndexFooter*>(index_file_data_.data() +
+                                                   index_file_data_.size() -
+                                                   sizeof(WalIndexFooter));
+  }
+  Status CheckIndexFileCrc(uint32_t);
+  Status GetBlob(const Slice& value_content, LazyBuffer* blob) const;
+  const CFKvHandlesEntry* GetCFKvHandlesEntry(uint32_t cf_id);
   std::shared_ptr<Cache> blob_cache_ = nullptr;
 
   uint64_t wal_header_size_;
@@ -135,25 +142,35 @@ class WalBlobReader : public TableReader {
   const EnvOptions& env_options_;
 
   Slice index_file_data_;
+
+  static const size_t kMaxCacheKeyPrefixSize = kMaxVarint64Length * 3 + 1;
 };
 
 class WalBlobIterator : public InternalIteratorBase<LazyBuffer> {
  public:
-  WalBlobIterator(const WalBlobReader* reader,
-                  const ImmutableCFOptions& ioptions, uint64_t cf_start_offset,
-                  uint64_t cf_entries)
-      : cf_entries_(cf_entries),
+#ifndef NDEBUG
+  WalBlobIterator(const WalBlobReader* reader, const CFKvHandlesEntry* cfe,
+                  const ImmutableCFOptions& ioptions)
+      : cf_entry_ptr_(cfe),
         i_(0),
         reader_(reader),
-        cf_data_(reader->FileData().data() + cf_start_offset,
-                 kWalEntrySize * cf_entries),
-#ifndef NDEBUG
+        cf_data_(reader->index_file_data_.data() + cfe->offset_,
+                 kWalEntrySize * cfe->count_),
         ioptions_(ioptions)
+#else
+  WalBlobIterator(const WalBlobReader* reader, const CFKvHandlesEntry* cfe)
+      : cf_entry_ptr_(cfe),
+        i_(0),
+        reader_(reader),
+        cf_data_(reader->index_file_data_.data() + cfe->offset_,
+                 kWalEntrySize * cfe->count_)
 #endif
   {
     SeekToFirst();
   }
-  bool Valid() const override { return i_ < cf_entries_ && status_.ok(); }
+  bool Valid() const override {
+    return i_ < cf_entry_ptr_->count_ && status_.ok();
+  }
   Status status() const override { return status_; }
   Slice key() const override {
     // return internal key
@@ -165,41 +182,49 @@ class WalBlobIterator : public InternalIteratorBase<LazyBuffer> {
     return LazyBuffer(value_.slice(), false, reader_->FileNumber());
   }
   void SeekToFirst() override {
-    i_ = 0;
 #ifndef NDEBUG
+    i_ = 0;
     last_key_.clear();
-#endif
     status_ = Status::OK();
     if (Valid()) {
       status_ = FetchKV();
-#ifndef NDEBUG
       if (status_.ok()) {
         last_key_.assign(iter_key_.GetKey().data(), iter_key_.GetKey().size());
       }
-#endif
     }
+#else
+    i_ = 0;
+    status_ = Status::OK();
+    if (Valid()) {
+      status_ = FetchKV();
+    }
+#endif
   }
 
   void Next() override;
 
   // NOT support now
   void SeekToLast() override {
+    assert(false);
     status_ = Status::NotSupported("WalBlobIterator::SeekToLast");
   }
   void Seek(const Slice& /*target*/) override {
+    assert(false);
     status_ = Status::NotSupported("WalBlobIterator::Seek");
   }
   void SeekForPrev(const Slice& /*target*/) override {
+    assert(false);
     status_ = Status::NotSupported("WalBlobIterator::SeekForPrev");
   }
   void Prev() override {
+    assert(false);
     status_ = Status::NotSupported("WalBlobIterator::Prev");
   }
 
  private:
   Status FetchKV();
 
-  const uint64_t cf_entries_;
+  const CFKvHandlesEntry* cf_entry_ptr_;
   uint64_t i_;
   const WalBlobReader* reader_;
   Slice cf_data_;
@@ -219,12 +244,9 @@ class Writer {
   // "*dest" must be initially empty.
   // "*dest" must remain live while this Writer is in use.
   explicit Writer(std::unique_ptr<WritableFileWriter>&& dest,
-                  uint64_t log_number, bool recycle_log_files, VersionSet* vs,
-                  bool manual_flush = false);
-
-  explicit Writer(std::unique_ptr<WritableFileWriter>&& dest,
                   uint64_t log_number, bool recycle_log_files,
                   bool manual_flush = false);
+
   ~Writer();
 
   Status AddRecord(const Slice& slice, size_t num_entries,
@@ -266,8 +288,6 @@ class Writer {
   // upper layer to manually does the flush by calling ::WriteBuffer()
   bool manual_flush_;
 
-  VersionSet* vs_ = nullptr;  // global version set reference
-
   // No copying allowed
   Writer(const Writer&);
   void operator=(const Writer&);
@@ -298,7 +318,7 @@ class WalIndexWriter {
  private:
   Status WriteFooter();
   std::unique_ptr<WritableFileWriter> index_file_ = nullptr;
-  std::vector<WalCfIndex> cf_indexes_;
+  std::vector<CFKvHandlesEntry> cf_indexes_;
 };
 
 class WalIndexReader {

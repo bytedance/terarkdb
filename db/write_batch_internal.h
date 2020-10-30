@@ -23,6 +23,7 @@ namespace rocksdb {
 class MemTable;
 class FlushScheduler;
 class ColumnFamilyData;
+class ColumnFamilySet;
 
 class ColumnFamilyMemTables {
  public:
@@ -198,7 +199,14 @@ class WriteBatchInternal {
       const WriteBatch* batch, Arena* arena,
       uint64_t batch_content_physical_offset, uint64_t wal_header_size,
       std::map<uint32_t, std::vector<std::pair<ParsedInternalKey, WalEntry>>>*
-          wal_entry_map);
+          wal_entry_map,
+      const ColumnFamilySet* cfs,
+      bool seq_per_batch
+#ifndef NDEBUG
+      ,
+      std::unique_ptr<RandomAccessFileReader>& rd_file_reader
+#endif
+  );
 };
 
 // LocalSavePoint is similar to a scope guard

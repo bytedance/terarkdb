@@ -395,8 +395,14 @@ Status MemTableList::TryInstallMemtableFlushResults(
         assert(edit_list.size() > 0);
         // We piggyback the information of  earliest log file to keep in the
         // manifest entry for the last file flushed.
-        edit_list.back()->SetMinLogNumberToKeep(PrecomputeMinLogNumberToKeep(
-            vset, *cfd, edit_list, memtables_to_flush, prep_tracker));
+        auto _log_number = PrecomputeMinLogNumberToKeep(
+            vset, *cfd, edit_list, memtables_to_flush, prep_tracker);
+#ifndef NDEBUG
+        ROCKS_LOG_BUFFER(log_buffer,
+                         "SetMinLogNumberToKeep, log_number #%" PRIu64,
+                         _log_number);
+#endif
+        edit_list.back()->SetMinLogNumberToKeep(_log_number);
       }
 #ifndef NDEBUG
       bool apply_callback_called = false;

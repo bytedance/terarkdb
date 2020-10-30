@@ -846,8 +846,13 @@ Compaction* CompactionPicker::PickGarbageCollection(
   uint64_t num_antiquation = gc_files.front().f->num_antiquation;
   for (auto it = std::next(gc_files.begin()); it != gc_files.end(); ++it) {
     auto& info = *it;
-    if (total_estimate_size + info.estimate_size > max_file_size ||
-        total_pick_size + info.f->num_antiquation > max_pick_size) {
+    if ((total_estimate_size + info.estimate_size > max_file_size ||
+         total_pick_size + info.f->num_antiquation > max_pick_size)
+#ifndef NDEBUG
+        // triger wal gc aggressively in debug
+        && !info.f->prop.is_blob_wal()
+#endif  // !NDEBUG
+    ) {
       continue;
     }
     total_estimate_size += info.estimate_size;
