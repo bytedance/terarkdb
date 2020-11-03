@@ -513,8 +513,7 @@ include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/include)
 find_package(Threads REQUIRED)
 
-
-
+SET(TERARK_ZIP_LIB terark-zip-${BUILD_SUFFIX})
 if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   LIST(APPEND TERARK_SHARED_DEPENDS pthread gomp aio rt dl)
   if ((${CMAKE_BUILD_TYPE} STREQUAL "Debug") AND (${WITH_ASAN}))
