@@ -557,6 +557,7 @@ if(NOT TARGET gtest)
     add_subdirectory(third-party/gtest-1.7.0/fused-src/gtest)
   endif()
 else()
+  include_directories(SYSTEM ${PROJECT_SOURCE_DIR}/third-party/gtest-1.7.0/fused-src)
   MESSAGE("[terarkdb] gtest target provided, skip build") 
 endif()
 
