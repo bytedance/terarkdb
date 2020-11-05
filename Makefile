@@ -132,8 +132,8 @@ ifeq (${DEBUG_LEVEL},2)
   DBG_OR_RLS=d
 endif
 
-BMI2 ?= $(shell bash cpu_has_bmi2.sh)
-BUILD_NAME := $(shell bash get_terark_build_name.sh ${CXX} ${BMI2})
+BMI2 ?= $(shell bash scripts/cpu_has_bmi2.sh)
+BUILD_NAME := $(shell bash scripts/get_terark_build_name.sh ${CXX} ${BMI2})
 BUILD_ROOT := build/${BUILD_NAME}
 xdir:=${BUILD_ROOT}/dbg-${DEBUG_LEVEL}
 
