@@ -37,6 +37,7 @@ option(WITH_TESTS "build with tests" OFF)
 option(WITH_TOOLS "build with tools" OFF)
 option(WITH_TERARK_ZIP "build with TerarkZipTable support" OFF)
 option(WITH_BOOSTLIB "build with boost, if WITH_TERARK_ZIP is ON, this will also set to ON" OFF)
+option(FORCE_RELEASE_BUILD "ignore outside cmake_build_type" OFF)
 
 option(BUILD_SUFFIX "library sufix" "d")
 option(FORCE_TERARKDB_RELEASE_BUILD "ignore outside cmake_build_type" OFF)
