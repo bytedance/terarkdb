@@ -37,7 +37,7 @@ option(WITH_TESTS "build with tests" OFF)
 option(WITH_TOOLS "build with tools" OFF)
 option(WITH_TERARK_ZIP "build with TerarkZipTable support" OFF)
 option(WITH_BOOSTLIB "build with boost, if WITH_TERARK_ZIP is ON, this will also set to ON" OFF)
-option(FORCE_RELEASE_BUILD "ignore outside cmake_build_type" OFF)
+option(FORCE_TERARKDB_RELEASE_BUILD "ignore outside cmake_build_type" OFF)
 
 option(BUILD_SUFFIX "library sufix" "d")
 option(FORCE_TERARKDB_RELEASE_BUILD "ignore outside cmake_build_type" OFF)
@@ -1149,6 +1149,7 @@ if(WITH_TOOLS)
     table/table_reader_bench.cc
     utilities/column_aware_encoding_exp.cc
     utilities/persistent_cache/hash_table_bench.cc)
+  add_library(testharness OBJECT util/testharness.cc)
   foreach(sourcefile ${BENCHMARKS})
     get_filename_component(exename ${sourcefile} NAME_WE)
     add_executable(${exename}${ARTIFACT_SUFFIX} ${sourcefile}
