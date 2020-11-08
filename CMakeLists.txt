@@ -74,7 +74,7 @@ if(WITH_JEMALLOC)
   add_definitions(-DROCKSDB_JEMALLOC -DJEMALLOC_NO_DEMANGLE)
   get_target_property(jemalloc_INCLUDE_DIR jemalloc INCLUDE_DIRECTORIES)
   include_directories(${jemalloc_INCLUDE_DIR})
-  list(APPEND THIRDPARTY_LIBS jemalloc)
+  list(APPEND THIRDPARTY_LIBS jemalloc pthread)
   message("[terarkdb] jemalloc include dir: ${jemalloc_INCLUDE_DIR}")
 endif()
 
@@ -189,7 +189,7 @@ if(MSVC)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /FC /d2Zi+ /W4 /wd4127 /wd4800 /wd4996 /wd4351 /wd4100 /wd4204 /wd4324")
 else()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -W -Wextra -Wall")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wsign-compare -Wno-shadow -Wno-unused-parameter -Wno-unused-variable -Woverloaded-virtual -Wnon-virtual-dtor -Wno-missing-field-initializers -Wno-strict-aliasing")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-sign-compare -Wno-shadow -Wno-unused-parameter -Wno-unused-variable -Woverloaded-virtual -Wnon-virtual-dtor -Wno-missing-field-initializers -Wno-strict-aliasing")
   if(MINGW)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-format")
   endif()
@@ -480,7 +480,7 @@ find_package(Threads REQUIRED)
 
 
 
-SET(TERARK_CORE_LIB terark-zip-${BUILD_SUFFIX})
+SET(TERARK_ZIP_LIB terark-zip-${BUILD_SUFFIX})
 if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   LIST(APPEND TERARK_SHARED_DEPENDS pthread gomp aio rt dl)
   if ((${CMAKE_BUILD_TYPE} STREQUAL "Debug") AND (${WITH_ASAN}))
@@ -797,7 +797,7 @@ else()
     set(SYSTEM_LIBS ${CMAKE_THREAD_LIBS_INIT})
     set(LIBS ${ROCKSDB_SHARED_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS})
     add_library(${ROCKSDB_SHARED_LIB} SHARED ${SOURCES})
-    target_link_libraries(${ROCKSDB_SHARED_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_CORE_LIB} ${TERARK_SHARED_DEPENDS})
+    target_link_libraries(${ROCKSDB_SHARED_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_ZIP_LIB} ${TERARK_SHARED_DEPENDS})
     target_include_directories(${ROCKSDB_SHARED_LIB} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
     set_target_properties(${ROCKSDB_SHARED_LIB} PROPERTIES
                           LINKER_LANGUAGE CXX
@@ -810,14 +810,14 @@ endif()
 
 # static terarkdb lib
 add_library(${ROCKSDB_STATIC_LIB} STATIC ${SOURCES})
-target_link_libraries(${ROCKSDB_STATIC_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_CORE_LIB} ${TERARK_SHARED_DEPENDS})
+target_link_libraries(${ROCKSDB_STATIC_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_ZIP_LIB} ${TERARK_SHARED_DEPENDS})
 target_include_directories(${ROCKSDB_STATIC_LIB} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                                                         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 
 if(WIN32)
   # imported terarkdb lib
   add_library(${ROCKSDB_IMPORT_LIB} SHARED ${SOURCES})
-  target_link_libraries(${ROCKSDB_IMPORT_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_CORE_LIB})
+  target_link_libraries(${ROCKSDB_IMPORT_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_ZIP_LIB})
   target_include_directories(${ROCKSDB_IMPORT_LIB} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
   set_target_properties(${ROCKSDB_IMPORT_LIB} PROPERTIES
     COMPILE_DEFINITIONS "ROCKSDB_DLL;ROCKSDB_LIBRARY_EXPORTS")
