@@ -10,4 +10,4 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
 
 add_executable(rocksdb_test chaos_test.cc)
 
-target_link_libraries(rocksdb_test rocksdb)
+target_link_libraries(rocksdb_test terarkdb gtest)

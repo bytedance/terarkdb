@@ -10,7 +10,7 @@ config:
     - cd /data00/builds && rm -rf terarkdb && git clone git@code.byted.org:storage/terarkdb.git
     - echo $CI_COMMIT_SHA && cd terarkdb && git checkout $CI_COMMIT_SHA
     - git submodule update --init --recursive
-    - mkdir build && cd build && cmake ../ -DCMAKE_BUILD_TYPE=Debug
+    - mkdir build && cd build && cmake ../ -DCMAKE_BUILD_TYPE=Debug -DWITH_TOOLS=ON -DWITH_TESTS=ON
   tags: 
     - terark
 

@@ -75,7 +75,7 @@ if(WITH_JEMALLOC)
   get_target_property(jemalloc_INCLUDE_DIR jemalloc INCLUDE_DIRECTORIES)
   include_directories(${jemalloc_INCLUDE_DIR})
   list(APPEND THIRDPARTY_LIBS jemalloc)
-  message("[terarkdb] jemalloc include dir: ${jemmaloc_INCLUDE_DIR}")
+  message("[terarkdb] jemalloc include dir: ${jemalloc_INCLUDE_DIR}")
 endif()
 
 if(WITH_GFLAGS)
@@ -1143,9 +1143,5 @@ if(WITH_TOOLS AND WITH_TESTS)
   endforeach(sourcefile ${BENCHMARKS})
 
   add_subdirectory(tools)
-
-  # chaos test require some debug-only content, need to be fixed in the future
-  #if(WITH_TESTS)
-  #  add_subdirectory(terark-tools/terark-test)
-  #endif()
+  add_subdirectory(terark-tools/terark-test)
 endif()
