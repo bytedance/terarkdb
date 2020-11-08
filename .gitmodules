@@ -1,7 +1,3 @@
-[submodule "terark-core"]
-	path = terark-core
-	url = git@code.byted.org:storage/terark-core.git
-	branch = dev
 [submodule "third-party/metrics2-cmake"]
 	path = third-party/metrics2-cmake
 	url = git@code.byted.org:storage/metrics2-cmake.git
@@ -23,3 +19,6 @@
 [submodule "third-party/gflags"]
 	path = third-party/gflags
 	url = git@code.byted.org:storage/gflags.git
+[submodule "third-party/terark-zip"]
+	path = third-party/terark-zip
+	url = ssh://git@code.byted.org/storage/terark-zip.git

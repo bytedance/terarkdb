@@ -1,39 +1,5 @@
-# Prerequisites for Windows:
-#     This cmake build is for Windows 64-bit only.
-#
-# Prerequisites:
-#     You must have at least Visual Studio 2015 Update 3. Start the Developer Command Prompt window that is a part of Visual Studio installation.
-#     Run the build commands from within the Developer Command Prompt window to have paths to the compiler and runtime libraries set.
-#     You must have git.exe in your %PATH% environment variable.
-#
-# To build Rocksdb for Windows is as easy as 1-2-3-4-5:
-#
-# 1. Update paths to third-party libraries in thirdparty.inc file
-# 2. Create a new directory for build artifacts
-#        mkdir build
-#        cd build
-# 3. Run cmake to generate project files for Windows, add more options to enable required third-party libraries.
-#    See thirdparty.inc for more information.
-#        sample command: cmake -G "Visual Studio 15 Win64" -DWITH_GFLAGS=1 -DWITH_SNAPPY=1 -DWITH_JEMALLOC=1 -DWITH_JNI=1 ..
-# 4. Then build the project in debug mode (you may want to add /m[:<N>] flag to run msbuild in <N> parallel threads
-#                                          or simply /m to use all avail cores)
-#        msbuild rocksdb.sln
-#
-#        rocksdb.sln build features exclusions of test only code in Release. If you build ALL_BUILD then everything
-#        will be attempted but test only code does not build in Release mode.
-#
-# 5. And release mode (/m[:<N>] is also supported)
-#        msbuild rocksdb.sln /p:Configuration=Release
-#
-# Linux:
-#
-# 1. Install a recent toolchain such as devtoolset-3 if you're on a older distro. C++11 required.
-# 2. mkdir build; cd build
-# 3. cmake ..
-# 4. make -j
-
 cmake_minimum_required(VERSION 3.4)
-project(rocksdb)
+project(terarkdb)
 enable_language(CXX)
 enable_language(C)
 enable_language(ASM)
@@ -60,18 +26,17 @@ option(WITH_ZLIB "build with zlib" ON)
 option(WITH_ZSTD "build with zstd" ON)
 option(WITH_BZ2 "build with bzip2" ON)
 option(WITH_WINDOWS_UTF8_FILENAMES "use UTF8 as characterset for opening files, regardles of the system code page" OFF)
-option(WITH_METRICS "build with metrics" ON)
+option(WITH_BYTEDANCE_METRICS "build with bytedance internal metrics" ON)
 option(WITH_ASAN "build with ASAN" ON)
 option(WITH_GFLAGS "build with GFlags" ON)
+option(WITH_TESTS "build with tests" OFF)
+option(WITH_TOOLS "build with tools" OFF)
 
-ADD_SUBDIRECTORY(third-party)
+option(BUILD_SUFFIX "library sufix" "d")
+option(FORCE_TERARKDB_RELEASE_BUILD "ignore outside cmake_build_type" OFF)
 
-if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-  set(WITH_ASAN  OFF)
-endif()
-
-# We don't need asan for Release build
-if (CMAKE_BUILD_TYPE STREQUAL "Release")
+#----------------------- Global Options
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin" OR CMAKE_BUILD_TYPE STREQUAL "Release" OR WITH_JEMALLOC)
   set(WITH_ASAN OFF)
 endif()
 
@@ -79,139 +44,107 @@ if (WITH_WINDOWS_UTF8_FILENAMES)
   add_definitions(-DROCKSDB_WINDOWS_UTF8_FILENAMES)
 endif()
 
-SET(BUILD_SUFFIX "d")
+if (FORCE_TERARKDB_RELEASE_BUILD)
+  set(CMAKE_BUILD_TYPE "Release")
+endif()
+
 IF(NOT ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-  MESSAGE("-- build with release")
   SET(BUILD_SUFFIX "r")
 ELSE()
-  SET(CMAKE_BUILD_TYPE "Debug")
-  MESSAGE("-- build with debug")
+  SET(CMAKE_BUILD_TYPE "Debug" CACHE BOOL OFF)
+  SET(BUILD_SUFFIX "d")
 ENDIF()
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/terark-core/boost-include)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/terark-core/src)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/terark-core/3rdparty/zstd)
+#-------------------------- Print Global Options
+message("[terarkdb] force_release_build = ${FORCE_TERARKDB_RELEASE_BUILD}, cmake_build_type = ${CMAKE_BUILD_TYPE}")
+message("[terarkdb] WITH_TOOLS = ${WITH_TOOLS}, WITH_ASAN = ${WITH_ASAN}, WITH_TESTS = ${WITH_TESTS}")
+message("[terarkdb] WITH_JEMALLOC = ${WITH_JEMALLOC}")
+MESSAGE("[terarkdb] CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}, BUILD_SUFFIX=${BUILD_SUFFIX}")
 
-if(MSVC)
-  # Defaults currently different for GFLAGS.
-  #  We will address find_package work a little later
-  option(WITH_GFLAGS "build with GFlags" OFF)
-  option(WITH_XPRESS "build with windows built in compression" OFF)
-  include(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty.inc)
-else()
-  if(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
-    # FreeBSD has jemalloc as default malloc
-    # but it does not have all the jemalloc files in include/...
-    set(WITH_JEMALLOC ON)
-  else()
-    if(WITH_JEMALLOC)
-      find_package(jemalloc QUIET)
-      if(NOT jemalloc_FOUND)
-        MESSAGE("[terarkdb] jemalloc find_package failed, let's build it!")
-      else()
-        MESSAGE("[terarkdb] jemalloc find_package success!")
-      endif()
-      add_definitions(-DROCKSDB_JEMALLOC -DJEMALLOC_NO_DEMANGLE)
-      get_target_property(jemalloc_INCLUDE_DIR jemalloc INCLUDE_DIRECTORIES)
-      include_directories(${jemalloc_INCLUDE_DIR})
-      list(APPEND THIRDPARTY_LIBS jemalloc)
-    endif()
-  endif()
 
-  # No config file for this
-  if(WITH_GFLAGS)
-    add_definitions(-DGFLAGS=1)
-    if(NOT TARGET gflags)
-      find_package(gflags QUIET)
-      if(NOT gflags_FOUND)
-        MESSAGE("[terarkdb] gflags find_package failed!")
-      else()
-        MESSAGE("[terarkdb] gflags find_package success!")
-      endif()
-    else()
-      message("[terarkdb] gflags target existed!")
-    endif()
+#-------------------------- Third-party Libraries
+SET(USE_RTTI ON) # terark-zip use RTTI, to be refined
+ADD_SUBDIRECTORY(third-party)
+GET_TARGET_PROPERTY(terark_zip_include_dir terark-zip-${BUILD_SUFFIX} INCLUDE_DIRECTORIES)
+INCLUDE_DIRECTORIES(${terark_zip_include_dir})
 
-    #include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/gflags/include)
-    #include_directories(${CMAKE_BINARY_DIR}/include)
-    if(NOT gflags_INCLUDE_DIR)
-      get_target_property(gflags_INCLUDE_DIR gflags INCLUDE_DIRECTORIES)
-    endif()
-    include_directories(${gflags_INCLUDE_DIR})
-    # message(${gflags_INCLUDE_DIR})
-    list(APPEND THIRDPARTY_LIBS gflags)
-  endif()
 
-  if(WITH_SNAPPY)
-    add_definitions(-DSNAPPY)
-    if(NOT TARGET snappy)
-        find_package(snappy QUIET)
-        if(NOT snappy_FOUND)
-            message("[terarkdb] snappy find package failed!")
-        else()
-            message("[terarkdb] snappy find package success!")
-        endif()
-    else()
-        message("[terarkdb] snappy target existed!")
-    endif()
-    get_target_property(snappy_INCLUDE_DIR snappy INCLUDE_DIRECTORIES)
-    include_directories(${snappy_INCLUDE_DIR})
-    message("[terarkdb] snappy include dir : ${snappy_INCLUDE_DIR}")
-    list(APPEND THIRDPARTY_LIBS snappy)
-  endif()
+#-------------------------- Third-party Library Flags for RocksDB
+if(WITH_JEMALLOC)
+  add_definitions(-DROCKSDB_JEMALLOC -DJEMALLOC_NO_DEMANGLE)
+  get_target_property(jemalloc_INCLUDE_DIR jemalloc INCLUDE_DIRECTORIES)
+  include_directories(${jemalloc_INCLUDE_DIR})
+  list(APPEND THIRDPARTY_LIBS jemalloc)
+  message("[terarkdb] jemalloc include dir: ${jemmaloc_INCLUDE_DIR}")
+endif()
 
-  if(WITH_ZLIB)
-    add_definitions(-DZLIB)
-    include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/zlib/include)
-    list(APPEND THIRDPARTY_LIBS zlib)
-  endif()
+if(WITH_GFLAGS)
+  add_definitions(-DGFLAGS=1)
+  get_target_property(gflags_INCLUDE_DIR gflags INCLUDE_DIRECTORIES)
+  include_directories(${gflags_INCLUDE_DIR})
+  list(APPEND THIRDPARTY_LIBS gflags)
+  message("[terarkdb] gflags include dir: ${gflags_INCLUDE_DIR}")
+endif()
 
-  if(WITH_BZ2)
-    add_definitions(-DBZIP2)
-    if(NOT TARGET bzip2)
-        find_package(bzip2 QUIET)
-        if(NOT bzip2_FOUND)
-            message("[terarkdb] bzip2 find package failed!")
-        else()
-            message("[terarkdb] bzip2 find package success!")
-        endif()
-    else()
-        message("[terarkdb] bzip2 target existed!")
-    endif()
-    get_target_property(bzip2_INCLUDE_DIR bzip2 INCLUDE_DIRECTORIES)
-    include_directories(${bzip2_INCLUDE_DIR})
-    message("[terarkdb] bzip2 include dir : ${bzip2_INCLUDE_DIR}")
-    list(APPEND THIRDPARTY_LIBS bzip2)
-  endif()
+if(WITH_TESTS OR WITH_TOOLS)
+  get_target_property(gtest_INCLUDE_DIR gtest INCLUDE_DIRECTORIES)
+  include_directories(${gtest_INCLUDE_DIR})
+  message("[terarkdb] gtest include dir: ${gtest_INCLUDE_DIR}")
+endif()
 
-  if(WITH_LZ4)
-    add_definitions(-DLZ4)
-    include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/lz4/include)
-    # The previous include_directories should worked but it doesn't, don't know why
-    # So we append the headers directory from its source dir
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third-party/lz4/lib)
-    list(APPEND THIRDPARTY_LIBS lz4)
-  endif()
+if(WITH_SNAPPY)
+  add_definitions(-DSNAPPY)
+  get_target_property(snappy_INCLUDE_DIR snappy INCLUDE_DIRECTORIES)
+  include_directories(${snappy_INCLUDE_DIR})
+  list(APPEND THIRDPARTY_LIBS snappy)
+  message("[terarkdb] snappy include dir: ${snappy_INCLUDE_DIR}")
+endif()
 
-  if(WITH_ZSTD)
-    add_definitions(-DZSTD)
-    include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/zstd/include
-                        ${CMAKE_CURRENT_SOURCE_DIR}/third-party/zstd/lib/dictBuilder
-                        ${CMAKE_CURRENT_SOURCE_DIR}/third-party/zstd/lib)
-    # terark-core already linked with zstd, so we ignore it here (for now)
-  endif()
+if(WITH_ZLIB)
+  add_definitions(-DZLIB)
+  get_target_property(zlib_INCLUDE_DIR zlib INCLUDE_DIRECTORIES)
+  include_directories(${zlib_INCLUDE_DIR})
+  list(APPEND THIRDPARTY_LIBS zlib)
+  message("[terarkdb] zlib include dir: ${zlib_INCLUDE_DIR}")
+endif()
 
-  if (WITH_METRICS)
-    add_definitions(-DTERARKDB_ENABLE_METRICS)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third-party/metrics2-cmake)
-    list(APPEND THIRDPARTY_LIBS metrics2)
-  endif()
+if(WITH_BZ2)
+  add_definitions(-DBZIP2)
+  get_target_property(bzip2_INCLUDE_DIR bzip2 INCLUDE_DIRECTORIES)
+  include_directories(${bzip2_INCLUDE_DIR})
+  list(APPEND THIRDPARTY_LIBS bzip2)
+  message("[terarkdb] bzip2 include dir : ${bzip2_INCLUDE_DIR}")
+endif()
+
+if(WITH_LZ4)
+  add_definitions(-DLZ4)
+  get_target_property(lz4_INCLUDE_DIR lz4 INCLUDE_DIRECTORIES)
+  include_directories(${lz4_INCLUDE_DIR})
+  list(APPEND THIRDPARTY_LIBS lz4)
+  message("[terarkdb] lz4 include dir : ${lz4_INCLUDE_DIR}")
+endif()
+
+if(WITH_ZSTD)
+  add_definitions(-DZSTD)
+  get_target_property(zstd_INCLUDE_DIR zstd INCLUDE_DIRECTORIES)
+  include_directories(${zstd_INCLUDE_DIR})
+  list(APPEND THIRDPARTY_LIBS zstd)
+  message("[terarkdb] zstd include dir : ${zstd_INCLUDE_DIR}")
+endif()
+
+if(WITH_BYTEDANCE_METRICS)
+  add_definitions(-DTERARKDB_ENABLE_METRICS)
+  get_target_property(metrics2_INCLUDE_DIR metrics2 INCLUDE_DIRECTORIES)
+  include_directories(${metrics2_INCLUDE_DIR})
+  list(APPEND THIRDPARTY_LIBS metrics2)
+  message("[terarkdb] bytedance_metrics2 include dir : ${metrics2_INCLUDE_DIR}")
 endif()
 
 string(TIMESTAMP GIT_DATE_TIME "%Y/%m/%d %H:%M:%S" UTC)
 
-find_package(Git)
 
+#----------------------- Version Information
+find_package(Git)
 if(GIT_FOUND AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
   if(WIN32)
     execute_process(COMMAND $ENV{COMSPEC} /C ${GIT_EXECUTABLE} -C ${CMAKE_CURRENT_SOURCE_DIR} rev-parse HEAD OUTPUT_VARIABLE GIT_SHA)
@@ -224,7 +157,6 @@ endif()
 
 string(REGEX REPLACE "[^0-9a-f]+" "" GIT_SHA "${GIT_SHA}")
 
-
 # Read rocksdb version from version.h header file.
 file(READ include/rocksdb/version.h version_header_file)
 string(REGEX MATCH "#define ROCKSDB_MAJOR ([0-9]+)" _ ${version_header_file})
@@ -236,6 +168,8 @@ set(ROCKSDB_VERSION_PATCH ${CMAKE_MATCH_1})
 set(ROCKSDB_VERSION ${ROCKSDB_VERSION_MAJOR}.${ROCKSDB_VERSION_MINOR}.${ROCKSDB_VERSION_PATCH})
 
 
+#-------------------------- Compiler Options
+
 option(WITH_MD_LIBRARY "build with MD" ON)
 if(WIN32 AND MSVC)
   if(WITH_MD_LIBRARY)
@@ -245,10 +179,10 @@ if(WIN32 AND MSVC)
   endif()
 endif()
 
-set(BUILD_VERSION_CC ${CMAKE_BINARY_DIR}/build_version.cc)
-configure_file(util/build_version.cc.in ${BUILD_VERSION_CC} @ONLY)
-add_library(build_version OBJECT ${BUILD_VERSION_CC})
-target_include_directories(build_version PRIVATE
+set(ROCKSDB_BUILD_VERSION_CC ${CMAKE_CURRENT_SOURCE_DIR}/util/build_version.cc)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/util/build_version.cc.in ${ROCKSDB_BUILD_VERSION_CC} @ONLY)
+add_library(rocksdb_build_version OBJECT ${ROCKSDB_BUILD_VERSION_CC})
+target_include_directories(rocksdb_build_version PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/util)
 if(MSVC)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zi /nologo /EHsc /GS /Gd /GR /GF /fp:precise /Zc:wchar_t /Zc:forScope /errorReport:queue")
@@ -402,8 +336,6 @@ if(DISABLE_STALL_NOTIF)
   add_definitions(-DROCKSDB_DISABLE_STALL_NOTIFICATION)
 endif()
 
-# terark-core uses typeid() so we can't disable it.
-SET(USE_RTTI ON)
 if(DEFINED USE_RTTI)
   if(USE_RTTI)
     message(STATUS "Enabling RTTI")
@@ -546,26 +478,12 @@ include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/include)
 find_package(Threads REQUIRED)
 
-if(NOT TARGET gtest)
-  find_package(gtest QUIET)
-  if(gtest_FOUND)
-    MESSAGE("[terarkdb] gtest found, skip build")
-    include_directories(${gtest_INCLUDE_DIR})
-  else()
-    MESSAGE("[terarkdb] gtest not found, building...")
-    include_directories(SYSTEM ${PROJECT_SOURCE_DIR}/third-party/gtest-1.7.0/fused-src)
-    add_subdirectory(third-party/gtest-1.7.0/fused-src/gtest)
-  endif()
-else()
-  include_directories(SYSTEM ${PROJECT_SOURCE_DIR}/third-party/gtest-1.7.0/fused-src)
-  MESSAGE("[terarkdb] gtest target provided, skip build") 
-endif()
 
-ADD_SUBDIRECTORY(terark-core)
-SET(TERARK_CORE_LIB terark-core-${BUILD_SUFFIX})
+
+SET(TERARK_CORE_LIB terark-zip-${BUILD_SUFFIX})
 if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   LIST(APPEND TERARK_SHARED_DEPENDS pthread gomp aio rt dl)
-  if (${CMAKE_BUILD_TYPE} STREQUAL "Debug" AND ${WITH_ASAN})
+  if ((${CMAKE_BUILD_TYPE} STREQUAL "Debug") AND (${WITH_ASAN}))
     message("[terarkdb] build terarkdb with asan")
     LIST(APPEND TERARK_SHARED_DEPENDS asan)
   endif()
@@ -753,9 +671,6 @@ set(SOURCES
         util/transaction_test_util.cc
         util/xxhash.cc
         utilities/backupable/backupable_db.cc
-        utilities/cassandra/cassandra_compaction_filter.cc
-        utilities/cassandra/format.cc
-        utilities/cassandra/merge_operator.cc
         utilities/checkpoint/checkpoint_impl.cc
         utilities/col_buf_decoder.cc
         utilities/col_buf_encoder.cc
@@ -810,12 +725,18 @@ set(SOURCES
         utilities/ttl/db_ttl_impl.cc
         utilities/write_batch_with_index/write_batch_with_index.cc
         utilities/write_batch_with_index/write_batch_with_index_internal.cc
-        $<TARGET_OBJECTS:build_version>)
+        $<TARGET_OBJECTS:rocksdb_build_version>)
 
-# scan more sources
-file(GLOB CONSOLE_SOURCES utilities/console/*.cc)
-file(GLOB TEST_CONSOLE_SOURCES utilities/console/*_test.cc)
-# LIST(REMOVE_ITEM CONSOLE_SOURCES ${TEST_CONSOLE_SOURCES})
+IF(WITH_TESTS OR WITH_TOOLS)
+  LIST(APPEND SOURCES utilities/cassandra/cassandra_compaction_filter.cc
+                      utilities/cassandra/format.cc
+                      utilities/cassandra/merge_operator.cc)
+ENDIF()
+
+# Scan more sources
+FILE(GLOB CONSOLE_SOURCES utilities/console/*.cc)
+FILE(GLOB TEST_CONSOLE_SOURCES utilities/console/*_test.cc)
+LIST(REMOVE_ITEM CONSOLE_SOURCES "${TEST_CONSOLE_SOURCES}")
 LIST(APPEND SOURCES ${CONSOLE_SOURCES})
 
 
@@ -857,8 +778,8 @@ if(WIN32)
       env/io_posix.cc)
 endif()
 
-set(ROCKSDB_STATIC_LIB rocksdb${ARTIFACT_SUFFIX})
-set(ROCKSDB_SHARED_LIB rocksdb-shared${ARTIFACT_SUFFIX})
+set(ROCKSDB_STATIC_LIB terarkdb${ARTIFACT_SUFFIX})
+set(ROCKSDB_SHARED_LIB terarkdb-shared${ARTIFACT_SUFFIX})
 set(ROCKSDB_IMPORT_LIB ${ROCKSDB_SHARED_LIB})
 
 option(WITH_LIBRADOS "Build with librados" OFF)
@@ -983,10 +904,9 @@ if(NOT WIN32 OR ROCKSDB_INSTALL_ON_WINDOWS)
   )
 endif()
 
-option(WITH_TESTS "build with tests" ON)
 # Lots of RocksDB test cases could only run under debug mode, so we should disable test cases for Release build.
 if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
-  SET(WITH_TESTS OFF)
+  SET(WITH_TESTS OFF CACHE BOOL OFF)
 endif()
 
 if(WITH_TESTS)
@@ -1138,12 +1058,9 @@ if(WITH_TESTS)
         utilities/write_batch_with_index/write_batch_with_index_test.cc
   )
 
-
-
   if(WITH_LIBRADOS)
     list(APPEND TESTS utilities/env_librados_test.cc)
   endif()
-
 
   # For test util library that is build only in DEBUG mode
   # and linked to tests. Add test only code that is not #ifdefed for Release here.
@@ -1171,6 +1088,7 @@ if(WITH_TESTS)
 
   # Tests are excluded from Release builds
   set(TEST_EXES ${TESTS})
+  add_library(testharness OBJECT util/testharness.cc)
 
   foreach(sourcefile ${TEST_EXES})
       get_filename_component(exename ${sourcefile} NAME_WE)
@@ -1208,28 +1126,26 @@ if(WITH_TESTS)
   endforeach(sourcefile ${C_TEST_EXES})
 endif()
 
-# build benchmark tool
-set(BENCHMARKS
-  cache/cache_bench.cc
-  memtable/memtablerep_bench.cc
-  db/range_del_aggregator_bench.cc
-  tools/db_bench.cc
-  table/table_reader_bench.cc
-  utilities/column_aware_encoding_exp.cc
-  utilities/persistent_cache/hash_table_bench.cc)
-add_library(testharness OBJECT util/testharness.cc)
-foreach(sourcefile ${BENCHMARKS})
-  get_filename_component(exename ${sourcefile} NAME_WE)
-  add_executable(${exename}${ARTIFACT_SUFFIX} ${sourcefile}
-    $<TARGET_OBJECTS:testharness>)
-  target_link_libraries(${exename}${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
-endforeach(sourcefile ${BENCHMARKS})
+if(WITH_TOOLS AND WITH_TESTS)
+  set(BENCHMARKS
+    cache/cache_bench.cc
+    memtable/memtablerep_bench.cc
+    db/range_del_aggregator_bench.cc
+    tools/db_bench.cc
+    table/table_reader_bench.cc
+    utilities/column_aware_encoding_exp.cc
+    utilities/persistent_cache/hash_table_bench.cc)
+  foreach(sourcefile ${BENCHMARKS})
+    get_filename_component(exename ${sourcefile} NAME_WE)
+    add_executable(${exename}${ARTIFACT_SUFFIX} ${sourcefile}
+      $<TARGET_OBJECTS:testharness>)
+    target_link_libraries(${exename}${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
+  endforeach(sourcefile ${BENCHMARKS})
 
-option(WITH_TOOLS "build with tools" ON)
-if(WITH_TOOLS)
   add_subdirectory(tools)
+
   # chaos test require some debug-only content, need to be fixed in the future
-  if(WITH_TESTS)
-    add_subdirectory(terark-tools/terark-test)
-  endif()
+  #if(WITH_TESTS)
+  #  add_subdirectory(terark-tools/terark-test)
+  #endif()
 endif()
