@@ -18,6 +18,7 @@ SET(CMAKE_INSTALL_BINDIR ${CMAKE_BINARY_DIR}/bin)
 SET(CMAKE_INSTALL_INCLUDEDIR ${CMAKE_BINARY_DIR}/include)
 
 option(BUILD_SHARED_LIB "build shared lib" OFF)
+option(WITH_COVERAGE "build with gcov support" OFF)
 option(WITH_JEMALLOC "build with JeMalloc" ON)
 option(WITH_SNAPPY "build with SNAPPY" ON)
 option(WITH_LZ4 "build with lz4" ON)
@@ -59,11 +60,16 @@ ELSE()
   SET(BUILD_SUFFIX "d")
 ENDIF()
 
+IF(WITH_COVERAGE)
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
+ENDIF()
+
 #-------------------------- Print Global Options
 message("[terarkdb] force_release_build = ${FORCE_TERARKDB_RELEASE_BUILD}, cmake_build_type = ${CMAKE_BUILD_TYPE}")
 message("[terarkdb] WITH_TOOLS = ${WITH_TOOLS}, WITH_ASAN = ${WITH_ASAN}, WITH_TESTS = ${WITH_TESTS}")
-message("[terarkdb] WITH_JEMALLOC = ${WITH_JEMALLOC}")
+message("[terarkdb] WITH_JEMALLOC = ${WITH_JEMALLOC}, WITH_COVERAGE=${WITH_COVERAGE}")
 MESSAGE("[terarkdb] CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}, BUILD_SUFFIX=${BUILD_SUFFIX}")
+MESSAGE("[terarkdb] CMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}")
 
 
 #-------------------------- Third-party Libraries

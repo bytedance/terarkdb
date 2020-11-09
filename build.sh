@@ -1,38 +1,21 @@
-#!/usr/bin/env bash
+#!/bin/bash
 #
-# usage:
-#
-#   USE_VALGRIND=1 ./build.sh
+# WITH_TESTS=1 ./build_cmake.sh
 #
 
-set -e
+BASE=$PWD
+OUTPUT=output
+mkdir -p $OUTPUT
 
-VALGRIND=0
-if [ "$USE_VALGRIND" == "1" ]; then
-  VALGRIND=1
-fi
-
-PORTABLE=1
-if [ "$PORTABLE_BUILD" == "0" ]; then
-  PORTABLE=
-fi
-
-TERARKDB_ENABLE_METRICS=1
-if [ "$ENABLE_METRICS_BUILD" == "0" ]; then
-  TERARKDB_ENABLE_METRICS=0
-fi
-
-TERARKDB_ENABLE_CONSOLE=1
-if [ "$ENABLE_CONSOLE_BUILD" == "0" ]; then
-  TERARKDB_ENABLE_CONSOLE=0
-fi
-
-if [ `uname` == Darwin ]; then
-	cpuNum=`sysctl -n machdep.cpu.thread_count`
+BUILD_TYPE=Release
+if [ "$WITH_TESTS" == "1" ];then
+  BUILD_TYPE=Debug
+  WITH_TESTS=ON
 else
-	cpuNum=`nproc`
+  WITH_TESTS=OFF
 fi
-WITH_BMI2=1
+
+echo "build $BUILD_TYPE, with_tests = $WITH_TESTS"
 
 if test -n "$BUILD_BRANCH"; then
     # this script is run in SCM auto build
@@ -43,118 +26,7 @@ else
     echo you must ensure libaio-dev have been installed
 fi
 
-if test -z "$NO_INIT"; then
-  if [ ! -f "terark-core.got" ]; then
-    git submodule update --init --recursive
-  fi
-fi
+git submodule update --init --recursive
 
-JEMALLOC=0
-if [ "$USE_JEMALLOC" == "1" ]; then
-  JEMALLOC=1
-fi
-
-export BUNDLE_ALL_TERARK_STATIC=${BUNDLE_ALL_TERARK_STATIC:-1}
-
-# build targets
-make LINK_TERARK=static \
-     EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
-     BMI2=$WITH_BMI2 \
-     DISABLE_WARNING_AS_ERROR=1 \
-     USE_JEMALLOC=$JEMALLOC \
-     TERARKDB_ENABLE_METRICS=$TERARKDB_ENABLE_METRICS \
-     TERARKDB_ENABLE_CONSOLE=$TERARKDB_ENABLE_CONSOLE \
-     PORTABLE=$PORTABLE \
-     DEBUG_LEVEL=0 shared_lib -j $cpuNum
-
-make LINK_TERARK=static \
-     EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
-     BMI2=$WITH_BMI2 \
-     DISABLE_WARNING_AS_ERROR=1 \
-     USE_JEMALLOC=$JEMALLOC \
-     TERARKDB_ENABLE_METRICS=$TERARKDB_ENABLE_METRICS \
-     TERARKDB_ENABLE_CONSOLE=$TERARKDB_ENABLE_CONSOLE \
-     PORTABLE=$PORTABLE \
-     DEBUG_LEVEL=1 shared_lib -j $cpuNum
-
-make LINK_TERARK=static \
-     EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
-     BMI2=$WITH_BMI2 \
-     DISABLE_WARNING_AS_ERROR=1 \
-     USE_JEMALLOC=$JEMALLOC \
-     TERARKDB_ENABLE_METRICS=$TERARKDB_ENABLE_METRICS \
-     TERARKDB_ENABLE_CONSOLE=$TERARKDB_ENABLE_CONSOLE \
-     PORTABLE=$PORTABLE \
-     DEBUG_LEVEL=2 shared_lib -j $cpuNum
-
-# static library
-make LINK_TERARK=static \
-     EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
-     BMI2=$WITH_BMI2 \
-     DISABLE_WARNING_AS_ERROR=1 \
-     USE_JEMALLOC=$JEMALLOC \
-     TERARKDB_ENABLE_METRICS=$TERARKDB_ENABLE_METRICS \
-     TERARKDB_ENABLE_CONSOLE=$TERARKDB_ENABLE_CONSOLE \
-     PORTABLE=$PORTABLE \
-     DEBUG_LEVEL=0 static_lib -j $cpuNum
-
-make LINK_TERARK=static \
-     EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
-     BMI2=$WITH_BMI2 \
-     DISABLE_WARNING_AS_ERROR=1 \
-     USE_JEMALLOC=$JEMALLOC \
-     TERARKDB_ENABLE_METRICS=$TERARKDB_ENABLE_METRICS \
-     TERARKDB_ENABLE_CONSOLE=$TERARKDB_ENABLE_CONSOLE \
-     PORTABLE=$PORTABLE \
-     DEBUG_LEVEL=1 static_lib -j $cpuNum
-
-make LINK_TERARK=static \
-     EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
-     BMI2=$WITH_BMI2 \
-     DISABLE_WARNING_AS_ERROR=1 \
-     USE_JEMALLOC=$JEMALLOC \
-     TERARKDB_ENABLE_METRICS=$TERARKDB_ENABLE_METRICS \
-     TERARKDB_ENABLE_CONSOLE=$TERARKDB_ENABLE_CONSOLE \
-     PORTABLE=$PORTABLE \
-     DEBUG_LEVEL=2 static_lib -j $cpuNum
-
-pkgdir=output
-rm -rf $pkgdir
-
-# copy all header files
-mkdir -p $pkgdir
-mkdir -p $pkgdir/lib
-mkdir -p $pkgdir/lib_static
-
-cp -r include      $pkgdir
-cp -r db           $pkgdir/include
-cp -r env          $pkgdir/include
-cp -r memtable     $pkgdir/include
-cp -r port         $pkgdir/include
-cp -r table        $pkgdir/include
-cp -r util         $pkgdir/include
-cp -r utilities    $pkgdir/include
-cp -r options      $pkgdir/include
-cp -r monitoring   $pkgdir/include
-cp -r terark-core/src/terark $pkgdir/include
-cp -r terark-core/boost-include/boost $pkgdir/include
-
-rm -f `find $pkgdir -name '*.cc' -o -name '*.d' -o -name '*.o'`
-
-# detect output dir name
-SYSTEM=`uname -m -s | sed 's:[ /]:-:g'`
-tmpfile=`mktemp compiler-XXXXXX`
-COMPILER=`${CXX:-gcc} terark-tools/detect-compiler.cpp -o $tmpfile.exe && ./$tmpfile.exe && rm -f $tmpfile*`
-PLATFORM_DIR=$SYSTEM-$COMPILER-bmi2-$WITH_BMI2
-
-#echo build/$PLATFORM_DIR/shared_lib/dbg-0/
-
-# copy terark-rocksdb dynamic lib
-cp -a shared-objects/build/$PLATFORM_DIR/dbg-0/librocksdb* $pkgdir/lib
-cp -a shared-objects/build/$PLATFORM_DIR/dbg-1/librocksdb* $pkgdir/lib
-cp -a shared-objects/build/$PLATFORM_DIR/dbg-2/librocksdb* $pkgdir/lib
-cp -a librocksdb*.a $pkgdir/lib_static
-cp -a liblz4.a $pkgdir/lib_static
-cp -a libsnappy.a $pkgdir/lib_static
-
-echo "build and package successful!"
+cd $BASE/$OUTPUT && cmake ../ -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DWITH_TESTS=$WITH_TESTS
+cd $BASE/$OUTPUT && make -j $(nproc) && make install

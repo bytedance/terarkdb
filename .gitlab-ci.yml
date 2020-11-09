@@ -1,5 +1,6 @@
 stages:
   - test_and_benchmark
+  - benchmark
 
 compile:
   stage: test_and_benchmark
@@ -12,25 +13,27 @@ compile:
   tags: 
     - terark
 
+# only stage allow to run unit test
 unittest:
   stage: test_and_benchmark
   script:
-    - echo "./run_all_ut_tests.py"
+    - cd build && make test
+  only:
+    refs:
+      - stage
   tags:
     - terark
 
-# benchmarks are built and executed on another disk with limited CPUs
-# Since the benchmark is too slow, we will do it manully on the test server
-# benchmark:
-#   stage: benchmark
-#   script:
-#     - cd /data01/builds && rm -rf terarkdb && git clone git@code.byted.org:storage/terarkdb.git
-#     - cd /data01/builds/terarkdb/build
-#     - cmake ../ -DWITH_TESTS=OFF -DWITH_ASAN=OFF -DCMAKE_BUILD_TYPE=Release
-#     - cd /data01/builds/terarkdb/terark-tools/benchmarks
-#     - ./bench_baseline.py 10 20 256,4096
-#   tags:
-#     - terark
-#   only:
-#     refs:
-#       - stage
+# only master branch allow to run benchmark
+benchmark:
+  stage: benchmark
+  script:
+    - git submodule update --init --recursive
+    - mkdir build && cd build
+    - cmake ../ -DWITH_TESTS=OFF -DWITH_ASAN=OFF -DCMAKE_BUILD_TYPE=Release
+    - cd terark-tools/benchmarks && ./bench_baseline.py 10 20 256,4096
+  only:
+    refs:
+      - master
+  tags:
+    - terark
