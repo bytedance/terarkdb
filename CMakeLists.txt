@@ -40,6 +40,11 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin" OR CMAKE_BUILD_TYPE STREQUAL "Release"
   set(WITH_ASAN OFF)
 endif()
 
+# RocksDB's UT has to be run under debug mode
+if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+  SET(WITH_TESTS OFF CACHE BOOL OFF)
+endif()
+
 if (WITH_WINDOWS_UTF8_FILENAMES)
   add_definitions(-DROCKSDB_WINDOWS_UTF8_FILENAMES)
 endif()
@@ -902,11 +907,6 @@ if(NOT WIN32 OR ROCKSDB_INSTALL_ON_WINDOWS)
     COMPONENT devel
     DESTINATION ${package_config_destination}
   )
-endif()
-
-# Lots of RocksDB test cases could only run under debug mode, so we should disable test cases for Release build.
-if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
-  SET(WITH_TESTS OFF CACHE BOOL OFF)
 endif()
 
 if(WITH_TESTS)
