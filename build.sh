@@ -21,7 +21,7 @@ if test -n "$BUILD_BRANCH"; then
     # this script is run in SCM auto build
     git checkout "$BUILD_BRANCH"
     sudo apt-get update
-    sudo apt-get install libaio-dev
+    sudo apt-get install libaio-dev -y
 else
     echo you must ensure libaio-dev have been installed
 fi
