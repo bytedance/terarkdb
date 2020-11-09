@@ -1,32 +1,23 @@
 stages:
-  - prepare
-  - build
-  - unittest
-  - benchmark
+  - test_and_benchmark
 
-config:
-  stage: prepare
+compile:
+  stage: test_and_benchmark
   script:
-    - cd /data00/builds && rm -rf terarkdb && git clone git@code.byted.org:storage/terarkdb.git
-    - echo $CI_COMMIT_SHA && cd terarkdb && git checkout $CI_COMMIT_SHA
+    - echo $CI_COMMIT_SHA && git checkout $CI_COMMIT_SHA
     - git submodule update --init --recursive
-    - mkdir build && cd build && cmake ../ -DCMAKE_BUILD_TYPE=Debug -DWITH_TOOLS=ON -DWITH_TESTS=ON -DCMAKE_VERBOSE_MAKEFILE=ON
+    - mkdir build && cd build
+    - cmake ../ -DCMAKE_BUILD_TYPE=Release -DWITH_TOOLS=ON -DWITH_TESTS=ON -DCMAKE_VERBOSE_MAKEFILE=ON
+    - make -j $(nproc)
   tags: 
     - terark
 
-build:
-  stage: build
+unittest:
+  stage: test_and_benchmark
   script:
-    - cd /data00/builds/terarkdb/build && make -j $(nproc)
-  tags: 
+    - echo "./run_all_ut_tests.py"
+  tags:
     - terark
-
-# unittest:
-#   stage: unittest
-#   script:
-#     - cd /data00/builds/terarkdb/ && ./run_all_ut_tests.py
-#   tags:
-#     - terark
 
 # benchmarks are built and executed on another disk with limited CPUs
 # Since the benchmark is too slow, we will do it manully on the test server
