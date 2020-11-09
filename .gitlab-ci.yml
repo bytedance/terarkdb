@@ -1,9 +1,9 @@
 stages:
-  - test_and_benchmark
+  - compile_and_test
   - benchmark
 
 compile:
-  stage: test_and_benchmark
+  stage: compile_and_test
   script:
     - echo $CI_COMMIT_SHA && git checkout $CI_COMMIT_SHA
     - git submodule update --init --recursive
@@ -15,9 +15,9 @@ compile:
 
 # only stage allow to run unit test
 unittest:
-  stage: test_and_benchmark
+  stage: compile_and_test
   script:
-    - cd build && make test
+    - make test
   only:
     refs:
       - stage
