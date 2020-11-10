@@ -353,6 +353,19 @@ TableBuilder* TerarkZipTableFactory::NewTableBuilder(
               "TerarkZipTableFactory::NewTableBuilder(): "
               "user comparator must be 'leveldb.BytewiseComparator'");
   }
+  if (table_options_.terarkZipMinLevel == -2) {
+    if (!fallback_factory_) {
+      THROW_STD(invalid_argument,
+                "TerarkZipTableFactory::NewTableBuilder(): "
+                "set terarkZipMinLevel = -2 but fallback_factory is null");
+    }
+    return fallback_factory_->NewTableBuilder(table_builder_options,
+                                              column_family_id, file);
+  } else if (table_options_.terarkZipMinLevel < -2) {
+    THROW_STD(invalid_argument,
+              "TerarkZipTableFactory::NewTableBuilder(): "
+              "bad terarkZipMinLevel");
+  }
   int curlevel = table_builder_options.level;
   int numlevel = table_builder_options.ioptions.num_levels;
   int minlevel = table_options_.terarkZipMinLevel;
