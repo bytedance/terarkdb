@@ -1149,7 +1149,6 @@ if(WITH_TOOLS)
     table/table_reader_bench.cc
     utilities/column_aware_encoding_exp.cc
     utilities/persistent_cache/hash_table_bench.cc)
-  add_library(testharness OBJECT util/testharness.cc)
   foreach(sourcefile ${BENCHMARKS})
     get_filename_component(exename ${sourcefile} NAME_WE)
     add_executable(${exename}${ARTIFACT_SUFFIX} ${sourcefile}
