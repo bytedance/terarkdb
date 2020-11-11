@@ -776,10 +776,10 @@ class ChaosTest {
     set_options();
     exit_ = false;
     for (int i = 0; i < cf_num; ++i) {
-      options.compaction_style = rocksdb::kCompactionStyleFIFO;
+      options.compaction_style = rocksdb::kCompactionStyleLevel;
       options.write_buffer_size = size_t(file_size_base * 1.2);
       options.enable_lazy_compaction = true;
-      cfDescriptors.emplace_back("fifo" + std::to_string(i), options);
+      cfDescriptors.emplace_back(rocksdb::kDefaultColumnFamilyName, options);
       options.compaction_style = rocksdb::kCompactionStyleUniversal;
       options.write_buffer_size = size_t(file_size_base * 1.1);
       options.enable_lazy_compaction = true;
