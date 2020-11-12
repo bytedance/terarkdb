@@ -2,35 +2,65 @@
 
 # 1. CMake Build
 
-## Method 1: As a CMake submodule (Recommend)
-- clone terarkdb && git submodule update --init --recursive
-- add_subdirectory(terarkdb) in your CMakeLists.txt
-- For your executable, link `rocksdb` and it should works directly
+## Method 1: As a CMake subdirectory (Recommend)
 
-### Example
+1) Clone
+
 ```
-cmake ../ \
-  -DCMAKE_BUILD_TYPE=Release
-  -DWITH_TESTS=OFF
-  -DWITH_ASAN=OFF
+cd {YOUR_PROJECT_DIR}
+git submodule add git@code.byted.org:storage/terarkdb.git && cd terarkdb &&  git submodule update --init --recursive
 ```
+
+2) Edit your CMakeLists.txt
+
+```
+add_subdirectory(terarkdb)
+target_link_libraries({YOUR_TARGET} terarkdb)
+```
+3) Important Default Options
+
+- CMAKE_BUILD_TYPE: Debug
+- WITH_JEMALLOC: ON
+- WITH_TESTS: OFF
+
+It SHOULD works now, if it doesn't please contact us.
+
 
 ### Notes
 - TerarkDB is built with zstd, lz4, snappy, zlib, gtest, boost by default, if you need these libraries, you can remove them from your higher level application.
-- By using `add_subdirectory(terarkdb)` you should able to use these third-party libraries' header file, contact us if you can't.
-  - Or you can include_directory their absolute file path for quick use.
-- In some cases, you cmake may not recognize the header files exposed by our CMakeLists, you can get include directories manually
-  - `get_target_property(terarkdb_INC_DIR, terarkdb, INCLUDE_DIRECTORIES)`
-  - `INCLUDE_DIRECTORIES(${terarkdb_INC_DIR})`
 
 
-## Method 2: As a Standalone Library
-- clone terarkdb && git submodule update --init --recursive
-- mkdir build && cd build && cmake ../ -DCMAKE_BUILD_TYPE=Release -DWITH_TESTS=OFF
-- make install
-- Now you shoud have a `build/lib` and `build/include` directory
-- Add `build/lib` to your library path and link all libraries inside it
-  - `-Wl,-Bstatic -lterarkdb -lbz2 -ljemalloc -llz4 -lmetrics2 -lsnappy -lz -lterark-core-r -lzstd -lboost_context -lboost_fiber -lboost_filesystem -lboost_system -Wl,-Bdynamic`
+## Method 2: Manully import to your existing project
+
+1) clone & build
+
+```
+git clone git@code.byted.org:storage/terarkdb.git && cd terarkdb && git submodule update --init --recursive
+./build.sh
+```
+
+2) linking
+
+Directory:
+
+```
+  terarkdb/
+        \___ output/
+                \_____ include/
+                \_____ lib/
+                         \___ libterarkdb.a
+                         \___ libzstd.a
+                         \___ ...
+```
+
+We didn't archieve all static libraries together yet, so you have to pack all libraries to your target:
+
+```
+-Wl,-Bstatic \
+-lterarkdb -lbz2 -ljemalloc -llz4 -lmetrics2 -lsnappy -lz -lterark-zip-r -lzstd \
+-lboost_context -lboost_fiber -lboost_filesystem -lboost_system \
+-Wl,-Bdynamic -pthread
+```
 
 
 

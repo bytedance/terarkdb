@@ -17,7 +17,6 @@ SET(CMAKE_INSTALL_LIBDIR ${CMAKE_BINARY_DIR}/lib)
 SET(CMAKE_INSTALL_BINDIR ${CMAKE_BINARY_DIR}/bin)
 SET(CMAKE_INSTALL_INCLUDEDIR ${CMAKE_BINARY_DIR}/include)
 
-option(BUILD_SHARED_LIB "build shared lib" OFF)
 option(WITH_COVERAGE "build with gcov support" OFF)
 option(WITH_JEMALLOC "build with JeMalloc" ON)
 option(WITH_SNAPPY "build with SNAPPY" ON)
@@ -802,27 +801,14 @@ endif()
 if(WIN32)
   set(SYSTEM_LIBS ${SYSTEM_LIBS} Shlwapi.lib Rpcrt4.lib)
   set(LIBS ${ROCKSDB_STATIC_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS})
-else()
-  if(BUILD_SHARED_LIB)
-    set(SYSTEM_LIBS ${CMAKE_THREAD_LIBS_INIT})
-    set(LIBS ${ROCKSDB_SHARED_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS})
-    add_library(${ROCKSDB_SHARED_LIB} SHARED ${SOURCES})
-    target_link_libraries(${ROCKSDB_SHARED_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_ZIP_LIB} ${TERARK_SHARED_DEPENDS})
-    target_include_directories(${ROCKSDB_SHARED_LIB} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
-    set_target_properties(${ROCKSDB_SHARED_LIB} PROPERTIES
-                          LINKER_LANGUAGE CXX
-                          VERSION ${ROCKSDB_VERSION}
-                          SOVERSION ${ROCKSDB_VERSION_MAJOR}
-                          CXX_STANDARD 14
-                          OUTPUT_NAME "rocksdb")
-  endif()
 endif()
 
-# static terarkdb lib
+# Static terarkdb lib
 add_library(${ROCKSDB_STATIC_LIB} STATIC ${SOURCES})
 target_link_libraries(${ROCKSDB_STATIC_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_ZIP_LIB} ${TERARK_SHARED_DEPENDS})
 target_include_directories(${ROCKSDB_STATIC_LIB} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-                                                        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+                                                        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+                                                        $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>)
 
 if(WIN32)
   # imported terarkdb lib
@@ -886,17 +872,6 @@ if(NOT WIN32 OR ROCKSDB_INSTALL_ON_WINDOWS)
         COMPONENT devel
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   )
-
-  if(BUILD_SHARED_LIB)
-    install(
-      TARGETS ${ROCKSDB_SHARED_LIB}
-      EXPORT RocksDBTargets
-      COMPONENT runtime
-      RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-      LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-      INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-    )
-  endif()
 
   #install(
   #  EXPORT RocksDBTargets
