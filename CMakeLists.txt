@@ -8,6 +8,11 @@ if(POLICY CMP0042)
   cmake_policy(SET CMP0042 NEW)
 endif()
 
+# Default build type
+IF(CMAKE_BUILD_TYPE STREQUAL "")
+  SET(CMAKE_BUILD_TYPE "Debug")
+ENDIF()
+
 # Add a new build type `RelWithDebug`, flags: `-g2 -O2 -DDEBUG`
 string(REGEX REPLACE "-DNDEBUG " "" CMAKE_CXX_FLAGS_RELWITHDEBUG "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -DDEBUG" )
 string(REGEX REPLACE "-DNDEBUG " "" CMAKE_C_FLAGS_RELWITHDEBUG "${CMAKE_C_FLAGS_RELWITHDEBINFO} -DDEBUG" )
@@ -48,14 +53,13 @@ if (WITH_WINDOWS_UTF8_FILENAMES)
   add_definitions(-DROCKSDB_WINDOWS_UTF8_FILENAMES)
 endif()
 
-if (FORCE_TERARKDB_RELEASE_BUILD)
-  set(CMAKE_BUILD_TYPE "Release")
-endif()
+IF(FORCE_TERARKDB_RELEASE_BUILD)
+  SET(CMAKE_BUILD_TYPE "Release")
+ENDIF()
 
-IF(NOT ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+IF(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
   SET(BUILD_SUFFIX "r")
 ELSE()
-  SET(CMAKE_BUILD_TYPE "Debug" CACHE BOOL OFF)
   SET(BUILD_SUFFIX "d")
 ENDIF()
 
@@ -889,6 +893,12 @@ if(NOT WIN32 OR ROCKSDB_INSTALL_ON_WINDOWS)
   )
 endif()
 
+
+IF(WITH_TESTS OR WITH_TOOLS)
+  add_library(testharness OBJECT util/testharness.cc)
+ENDIF()
+
+
 if(WITH_TESTS)
   set(TESTS
         cache/cache_test.cc
@@ -1068,7 +1078,6 @@ if(WITH_TESTS)
 
   # Tests are excluded from Release builds
   set(TEST_EXES ${TESTS})
-  add_library(testharness OBJECT util/testharness.cc)
 
   foreach(sourcefile ${TEST_EXES})
       get_filename_component(exename ${sourcefile} NAME_WE)
@@ -1106,7 +1115,7 @@ if(WITH_TESTS)
   endforeach(sourcefile ${C_TEST_EXES})
 endif()
 
-if(WITH_TOOLS AND WITH_TESTS)
+if(WITH_TOOLS)
   set(BENCHMARKS
     cache/cache_bench.cc
     memtable/memtablerep_bench.cc
@@ -1124,4 +1133,5 @@ if(WITH_TOOLS AND WITH_TESTS)
 
   add_subdirectory(tools)
   add_subdirectory(terark-tools/terark-test)
+  add_subdirectory(terark-tools/batch-write-bench)
 endif()

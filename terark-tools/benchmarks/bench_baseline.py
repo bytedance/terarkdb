@@ -24,13 +24,14 @@ TOTAL_MEM_IN_GB = 64
 THREADS = 16
 DB_DIR = ""
 LOG_RESULT_FNAME = "log.txt"
+DB_BENCH_PATH = '../../build/db_bench'
 
 # MALLOC_CONF="prof:true,lg_prof_interval:32,prof_prefix:jeprof.out" \
 #LD_PRELOAD="/usr/local/lib/libjemalloc.so"  MALLOC_CONF="prof_leak:true,lg_prof_sample:0,prof_final:true,prof_prefix:jeprof.out" \
 def bench(records, value_size, bench_type, exist_db):
     cmd = """
             TerarkConfigString='{config_string}' \
-           ../../build/db_bench \
+           {db_bench} \
            --benchmarks={bench_type}
 	   --use_existing_db={exist_db}
            --sync=0
@@ -73,7 +74,8 @@ def bench(records, value_size, bench_type, exist_db):
                       bench_type=bench_type, 
                       exist_db=exist_db,
                       threads=THREADS,
-                      config_string=TERARK_CONFIG_STRING)
+                      config_string=TERARK_CONFIG_STRING,
+                      db_bench=DB_BENCH_PATH)
 
     cmd = cmd.replace('\n',' ')
     filename = 'log_%s_%s.txt' % (bench_type, value_size)
@@ -157,6 +159,10 @@ def get_git_hash():
     return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'])
 
 if __name__=='__main__':
+    if not os.path.isfile(DB_BENCH_PATH):
+        print 'db_bench not found, please check: %s' % DB_BENCH_PATH
+        sys.exit()
+
     if len(sys.argv) != 5:
         print 'usage: ./bench_baseline.py [DB_DIR] [GB_PER_THREAD] [THREADS] [VALUE_SIZES, e.g. "512,4096"]'
         sys.exit()
