@@ -901,17 +901,12 @@ class PosixEnv : public Env {
   // Allow increasing the number of worker threads.
   virtual void SetBackgroundThreads(int num, Priority pri) override {
     assert(pri >= Priority::BOTTOM && pri <= Priority::HIGH);
-    thread_pools_[pri].SetBackgroundThreads(num, 0);
+    thread_pools_[pri].SetBackgroundThreads(num);
   }
 
   virtual int GetBackgroundThreads(Priority pri) override {
     assert(pri >= Priority::BOTTOM && pri <= Priority::HIGH);
     return thread_pools_[pri].GetBackgroundThreads();
-  }
-
-  virtual void SetMaxTaskPerThread(int num, Priority pri) override {
-    assert(pri >= Priority::BOTTOM && pri <= Priority::HIGH);
-    thread_pools_[pri].SetBackgroundThreads(-1, num);
   }
 
   virtual Status SetAllowNonOwnerAccess(bool allow_non_owner_access) override {

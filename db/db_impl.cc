@@ -968,8 +968,6 @@ Status DBImpl::SetDBOptions(
                                            Env::Priority::HIGH);
         MaybeScheduleFlushOrCompaction();
       }
-      env_->SetMaxTaskPerThread(new_options.max_task_per_thread,
-                                Env::Priority::LOW);
       if (new_options.stats_dump_period_sec !=
           mutable_db_options_.stats_dump_period_sec) {
         if (thread_dump_stats_) {

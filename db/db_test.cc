@@ -3701,7 +3701,6 @@ TEST_F(DBTest, DynamicMemtableOptions) {
   // Block compaction thread, which will also block the flushes because
   // max_background_flushes == 0, so flushes are getting executed by the
   // compaction thread
-  env_->SetMaxTaskPerThread(1, Env::LOW);
   env_->SetBackgroundThreads(1, Env::LOW);
   test::SleepingBackgroundTask sleeping_task_low;
   env_->Schedule(&test::SleepingBackgroundTask::DoSleepTask, &sleeping_task_low,
@@ -3710,7 +3709,6 @@ TEST_F(DBTest, DynamicMemtableOptions) {
   // during compaction but trigger is pretty high
   options.disable_auto_compactions = true;
   DestroyAndReopen(options);
-  env_->SetMaxTaskPerThread(1, Env::LOW);
   env_->SetBackgroundThreads(1, Env::LOW);
   env_->SetBackgroundThreads(0, Env::HIGH);
 
@@ -4473,9 +4471,7 @@ TEST_F(DBTest, DynamicCompactionOptions) {
   options.blob_size = -1;
   // Block flush thread and disable compaction thread
   DestroyAndReopen(options);
-  env_->SetMaxTaskPerThread(1, Env::LOW);
   env_->SetBackgroundThreads(1, Env::LOW);
-  env_->SetMaxTaskPerThread(1, Env::HIGH);
   env_->SetBackgroundThreads(1, Env::HIGH);
 
   auto gen_l0_kb = [this](int start, int size, int stride) {
@@ -5643,7 +5639,6 @@ TEST_F(DBTest, DelayedWriteRate) {
 
   CreateAndReopenWithCF({"pikachu"}, options);
 
-  env_->SetMaxTaskPerThread(1, Env::LOW);
   env_->SetBackgroundThreads(1, Env::LOW);
   // Block compactions
   test::SleepingBackgroundTask sleeping_task_low;
@@ -5839,7 +5834,6 @@ TEST_F(DBTest, SoftLimit) {
 
   test::SleepingBackgroundTask sleeping_task_low;
   // Block compactions
-  env_->SetMaxTaskPerThread(1, Env::LOW);
   env_->SetBackgroundThreads(1, Env::LOW);
   env_->Schedule(&test::SleepingBackgroundTask::DoSleepTask, &sleeping_task_low,
                  Env::Priority::LOW);

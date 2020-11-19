@@ -345,11 +345,6 @@ DEFINE_int32(max_background_jobs,
              "The maximum number of concurrent background jobs that can occur "
              "in parallel.");
 
-
-DEFINE_int32(max_task_per_thread,
-             rocksdb::Options().max_task_per_thread,
-             "The maximum number of task pre thread");
-
 DEFINE_int32(num_bottom_pri_threads, 0,
              "The number of threads in the bottom-priority thread pool (used "
              "by universal compaction only).");
@@ -3173,7 +3168,6 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     options.max_write_buffer_number_to_maintain =
         FLAGS_max_write_buffer_number_to_maintain;
     options.max_background_jobs = FLAGS_max_background_jobs;
-    options.max_task_per_thread = FLAGS_max_task_per_thread;
     options.max_background_compactions = FLAGS_max_background_compactions;
     options.max_subcompactions = static_cast<uint32_t>(FLAGS_subcompactions);
     options.max_background_flushes = FLAGS_max_background_flushes;

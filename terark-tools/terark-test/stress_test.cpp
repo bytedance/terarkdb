@@ -315,7 +315,6 @@ void get_options(int argc, const char *argv[], rocksdb::Options &options,
   options.WAL_size_limit_MB = 0;
   options.use_aio_reads = false;
   options.max_background_jobs = 32;
-  options.max_task_per_thread = 1;
   options.WAL_ttl_seconds = 0;
   options.enable_thread_tracking = true;
   options.error_if_exists = false;

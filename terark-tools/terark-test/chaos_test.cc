@@ -54,7 +54,6 @@ class ChaosTest {
     options.WAL_size_limit_MB = 0;
     options.use_aio_reads = true;
     options.max_background_jobs = 32;
-    options.max_task_per_thread = 1;
     options.WAL_ttl_seconds = 0;
     options.enable_thread_tracking = true;
     options.error_if_exists = false;
@@ -113,8 +112,6 @@ class ChaosTest {
                                       rocksdb::Env::LOW);
     options.env->SetBackgroundThreads(options.max_background_flushes,
                                       rocksdb::Env::HIGH);
-    options.env->SetMaxTaskPerThread(options.max_task_per_thread,
-                                     rocksdb::Env::LOW);
     bbto.pin_top_level_index_and_filter = true;
     bbto.pin_l0_filter_and_index_blocks_in_cache = true;
     bbto.filter_policy.reset(NewBloomFilterPolicy(10, true));
@@ -308,7 +305,7 @@ class ChaosTest {
         preserve_deletes_seqnum_, &log_buffer, nullptr, nullptr, nullptr,
         &mutex_, &error_handler_, snapshots, earliest_write_conflict_snapshot,
         snapshot_checker, nullptr, &event_logger, false, false, dbname_,
-        &compaction_job_stats_, 8 /* max_task_per_thread */);
+        &compaction_job_stats_);
     int sub_compaction_used =
         compaction_job.Prepare(0 /* sub_compaction_slots */);
     s = compaction_job.Run();

@@ -373,8 +373,7 @@ CompactionJob::CompactionJob(
     SequenceNumber earliest_write_conflict_snapshot,
     const SnapshotChecker* snapshot_checker, std::shared_ptr<Cache> table_cache,
     EventLogger* event_logger, bool paranoid_file_checks, bool measure_io_stats,
-    const std::string& dbname, CompactionJobStats* compaction_job_stats,
-    int max_task_per_thread)
+    const std::string& dbname, CompactionJobStats* compaction_job_stats)
     : job_id_(job_id),
       compact_(new CompactionState(compaction)),
       compaction_job_stats_(compaction_job_stats),
@@ -402,7 +401,6 @@ CompactionJob::CompactionJob(
       bottommost_level_(false),
       paranoid_file_checks_(paranoid_file_checks),
       measure_io_stats_(measure_io_stats),
-      max_task_per_thread_(max_task_per_thread),
       write_hint_(Env::WLTH_NOT_SET) {
   assert(log_buffer_ != nullptr);
   const auto* cfd = compact_->compaction->column_family_data();
@@ -1436,9 +1434,6 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
 
   size_t yield_count = 0;
   while (status.ok() && !cfd->IsDropped() && c_iter->Valid()) {
-    if (max_task_per_thread_ > 1 && ++yield_count % 128 == 0) {
-      boost::this_fiber::yield();
-    }
     // Invariant: c_iter.status() is guaranteed to be OK if c_iter->Valid()
     // returns true.
     const Slice& key = c_iter->key();
@@ -1766,9 +1761,6 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
   } counter;
   while (status.ok() && !cfd->IsDropped() && input->Valid()) {
     ++counter.input;
-    if (max_task_per_thread_ > 1 && counter.input % 32 == 0) {
-      boost::this_fiber::yield();
-    }
     Slice curr_key = input->key();
     uint64_t curr_file_number = uint64_t(-1);
     if (!ParseInternalKey(curr_key, &ikey)) {

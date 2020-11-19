@@ -8,14 +8,13 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #pragma once
 
-#include "rocksdb/threadpool.h"
-#include "rocksdb/env.h"
-
-#include <memory>
 #include <functional>
+#include <memory>
+
+#include "rocksdb/env.h"
+#include "rocksdb/threadpool.h"
 
 namespace rocksdb {
-
 
 class ThreadPoolImpl : public ThreadPool {
  public:
@@ -35,7 +34,7 @@ class ThreadPoolImpl : public ThreadPool {
 
   // Set the number of background threads that will be executing the
   // scheduled jobs.
-  void SetBackgroundThreads(int num, int max_task_per_thread) override;
+  void SetBackgroundThreads(int num) override;
   int GetBackgroundThreads() override;
 
   // Get the number of jobs scheduled in the ThreadPool queue.
@@ -94,20 +93,20 @@ class ThreadPoolImpl : public ThreadPool {
   struct Impl;
 
  private:
-
-   // Current public virtual interface does not provide usable
-   // functionality and thus can not be used internally to
-   // facade different implementations.
-   //
-   // We propose a pimpl idiom in order to easily replace the thread pool impl
-   // w/o touching the header file but providing a different .cc potentially
-   // CMake option driven.
-   //
-   // Another option is to introduce a Env::MakeThreadPool() virtual interface
-   // and override the environment. This would require refactoring ThreadPool usage.
-   //
-   // We can also combine these two approaches
-   std::unique_ptr<Impl>   impl_;
+  // Current public virtual interface does not provide usable
+  // functionality and thus can not be used internally to
+  // facade different implementations.
+  //
+  // We propose a pimpl idiom in order to easily replace the thread pool impl
+  // w/o touching the header file but providing a different .cc potentially
+  // CMake option driven.
+  //
+  // Another option is to introduce a Env::MakeThreadPool() virtual interface
+  // and override the environment. This would require refactoring ThreadPool
+  // usage.
+  //
+  // We can also combine these two approaches
+  std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace rocksdb
