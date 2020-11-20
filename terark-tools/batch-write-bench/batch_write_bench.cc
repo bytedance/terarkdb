@@ -3,35 +3,44 @@
 //
 // guokuankuan@bytedance.com
 //
-#include <cstdio>
-#include <memory>
-#include <vector>
-#include <string>
-#include <random>
-
-#include <util/gflags_compat.h>
-
-#include <rocksdb/lazy_buffer.h>
-#include <rocksdb/rate_limiter.h>
 #include <rocksdb/db.h>
 #include <rocksdb/filter_policy.h>
-#include <rocksdb/slice.h>
-#include <rocksdb/table.h>
+#include <rocksdb/iostats_context.h>
+#include <rocksdb/lazy_buffer.h>
 #include <rocksdb/options.h>
-#include <table/terark_zip_table.h>
+#include <rocksdb/perf_context.h>
+#include <rocksdb/perf_level.h>
+#include <rocksdb/rate_limiter.h>
+#include <rocksdb/slice.h>
 #include <rocksdb/sst_file_manager.h>
+#include <rocksdb/table.h>
+#include <table/terark_zip_table.h>
+#include <util/gflags_compat.h>
 
+#include <cstdio>
+#include <memory>
+#include <random>
+#include <string>
+#include <vector>
 
-void init_db_options(rocksdb::DBOptions& db_options_, // NOLINT
+DEFINE_string(db_path, "", "data dir");
+DEFINE_uint64(gb_per_thread, 1, "data size in GB");
+DEFINE_uint64(threads, 1, "thread count");
+DEFINE_uint64(batch_size, 64, "batch size");
+DEFINE_uint64(value_size, 16384, "batch size");
+DEFINE_int32(perf_level, rocksdb::PerfLevel::kDisable,
+             "Level of perf collection");
+
+void init_db_options(rocksdb::DBOptions& db_options_,  // NOLINT
                      const std::string& work_dir_,
                      std::shared_ptr<rocksdb::SstFileManager> sst_file_manager_,
                      std::shared_ptr<rocksdb::RateLimiter> rate_limiter_) {
   db_options_.create_if_missing = true;
   db_options_.create_missing_column_families = true;
 
-  db_options_.bytes_per_sync = 65536;
-  db_options_.wal_bytes_per_sync = 65536;
-  db_options_.max_background_flushes = 4;
+  //db_options_.bytes_per_sync = 32768;
+  //db_options_.wal_bytes_per_sync = 32768;
+  db_options_.max_background_flushes = 8;
   db_options_.base_background_compactions = 4;
   db_options_.max_background_compactions = 10;
   db_options_.max_background_garbage_collections = 4;
@@ -39,21 +48,18 @@ void init_db_options(rocksdb::DBOptions& db_options_, // NOLINT
   // db_options_.max_background_jobs = 12;
   db_options_.max_open_files = -1;
   db_options_.allow_mmap_reads = true;
-  db_options_.delayed_write_rate = 200ULL<<20;
-  db_options_.avoid_unnecessary_blocking_io = true;
+  db_options_.delayed_write_rate = 200ULL << 20;
 
-  rate_limiter_.reset(rocksdb::NewGenericRateLimiter(400ULL<<20, 1000 /* refill_period_us */));
-  db_options_.rate_limiter = rate_limiter_;
+  // db_options_.avoid_unnecessary_blocking_io = true;
+  // rate_limiter_.reset(rocksdb::NewGenericRateLimiter(200ULL << 20, 1000));
+  // db_options_.rate_limiter = rate_limiter_;
+  // sst_file_manager_.reset(rocksdb::NewSstFileManager(
+  //     rocksdb::Env::Default(), db_options_.info_log, std::string(),
+  //     200ULL << 20, true, nullptr, 1, 32 << 20));
+  // db_options_.sst_file_manager = sst_file_manager_;
 
-  sst_file_manager_.reset(rocksdb::NewSstFileManager(rocksdb::Env::Default(), db_options_.info_log,
-                                                     std::string() /* trash_dir */, 400ULL<<20,
-                                                     true /* delete_existing_trash */, nullptr /* status */,
-                                                     1 /* max_trash_db_ratio */,
-                                                     32 << 20 /* bytes_max_delete_chunk */));
-  db_options_.sst_file_manager = sst_file_manager_;
-
-  db_options_.max_wal_size = uint64_t(256ULL<<21);
-  db_options_.max_total_wal_size = 256ULL<<22;
+  // db_options_.max_wal_size = 512ULL << 20;
+  // db_options_.max_total_wal_size = 1024ULL << 20;
 
   rocksdb::TerarkZipDeleteTempFiles(work_dir_);  // call once
   assert(db_options_.env == rocksdb::Env::Default());
@@ -63,23 +69,26 @@ void init_db_options(rocksdb::DBOptions& db_options_, // NOLINT
     int num_db_instance = 1;
     double reserve_factor = 0.3;
     // compaction线程配置
-    int num_low_pri = static_cast<int>((reserve_factor * num_db_instance + 1) * 20);
+    int num_low_pri =
+        static_cast<int>((reserve_factor * num_db_instance + 1) * 20);
     // flush线程配置
-    int num_high_pri = static_cast<int>((reserve_factor * num_db_instance + 1) * 6);
+    int num_high_pri =
+        static_cast<int>((reserve_factor * num_db_instance + 1) * 6);
     env->IncBackgroundThreadsIfNeeded(num_low_pri, rocksdb::Env::Priority::LOW);
-    env->IncBackgroundThreadsIfNeeded(num_high_pri, rocksdb::Env::Priority::HIGH);
+    env->IncBackgroundThreadsIfNeeded(num_high_pri,
+                                      rocksdb::Env::Priority::HIGH);
   });
 }
 
-
-void init_cf_options(std::vector<rocksdb::ColumnFamilyOptions>& cf_options, // NOLINT
-                     const std::string& work_dir_) {
+void init_cf_options(
+    std::vector<rocksdb::ColumnFamilyOptions>& cf_options,  // NOLINT
+    const std::string& work_dir_) {
   cf_options.resize(1);
 
   std::shared_ptr<rocksdb::TableFactory> table_factory;
 
   rocksdb::BlockBasedTableOptions table_options;
-  table_options.block_cache = rocksdb::NewLRUCache(128ULL<<30, 8, false);
+  table_options.block_cache = rocksdb::NewLRUCache(128ULL << 30, 8, false);
   table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
   table_options.block_size = 8ULL << 10;
   table_options.cache_index_and_filter_blocks = true;
@@ -120,10 +129,11 @@ void init_cf_options(std::vector<rocksdb::ColumnFamilyOptions>& cf_options, // N
   table_factory.reset(rocksdb::NewTerarkZipTableFactory(tzto, table_factory));
 
   auto page_cf_option = rocksdb::ColumnFamilyOptions();
-  page_cf_option.write_buffer_size = 256ULL<<20;
-  page_cf_option.max_write_buffer_number = 10;
+  page_cf_option.write_buffer_size = 256ULL << 20;
+  page_cf_option.max_write_buffer_number = 100;
   page_cf_option.target_file_size_base = 128ULL << 20;
-  page_cf_option.max_bytes_for_level_base = page_cf_option.target_file_size_base * 4;
+  page_cf_option.max_bytes_for_level_base =
+      page_cf_option.target_file_size_base * 4;
   page_cf_option.table_factory = table_factory;
   page_cf_option.compaction_style = rocksdb::kCompactionStyleLevel;
   page_cf_option.num_levels = 6;
@@ -144,11 +154,14 @@ void init_cf_options(std::vector<rocksdb::ColumnFamilyOptions>& cf_options, // N
   cf_options[0] = page_cf_option;
 }
 
-
-void batch_write(rocksdb::DB* db, int record_bytes, int batch_size, size_t total_bytes) {
+void batch_write(rocksdb::DB* db, int record_bytes, int batch_size,
+                 size_t total_bytes) {
   int loops = total_bytes / (record_bytes * batch_size);
-  printf("total write loops: %d, batch = %d * %d KB, total bytes(MB) : %zd\n", 
-                          loops, batch_size, record_bytes>>10, total_bytes>>20);
+  printf("total write loops: %d, batch = %d * %d KB, total bytes(MB) : %zd\n",
+         loops, batch_size, record_bytes >> 10, total_bytes >> 20);
+
+  SetPerfLevel(static_cast<rocksdb::PerfLevel>(FLAGS_perf_level));
+  rocksdb::get_perf_context()->EnablePerLevelPerfContext();
 
   std::random_device device;
   std::mt19937 generator(device());
@@ -158,22 +171,36 @@ void batch_write(rocksdb::DB* db, int record_bytes, int batch_size, size_t total
     rocksdb::WriteBatch batch;
     for (size_t idx = 0; idx < batch_size; ++idx) {
       char key[16];
-      char value[16<<10];
+      char value[16 << 10];
       for (auto i = 0; i < 16; ++i) {
         key[i] = 'a' + dist(generator);
       }
-      for (auto i = 0; i < 16<<10; ++i) {
+      for (auto i = 0; i < FLAGS_value_size; ++i) {
         value[i] = 'a' + dist(generator);
       }
 
-      batch.Put(rocksdb::Slice(key, 16), rocksdb::Slice(value, 16<<10));
+      batch.Put(rocksdb::Slice(key, 16),
+                rocksdb::Slice(value, FLAGS_value_size));
     }
 
     rocksdb::WriteOptions woptions = rocksdb::WriteOptions();
-    // woptions.sync = 
+    woptions.sync = true;
+
+    rocksdb::get_perf_context()->Reset();
+    rocksdb::get_iostats_context()->Reset();
+    auto now = std::chrono::high_resolution_clock::now();
     auto s = db->Write(woptions, &batch);
+    if (std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::high_resolution_clock::now() - now)
+            .count() > 1000) {
+      printf("PerfContext: %s\n",
+             rocksdb::get_perf_context()->ToString(true).c_str());
+      printf("IOContext: %s\n",
+             rocksdb::get_iostats_context()->ToString(true).c_str());
+    }
     if (!s.ok()) {
-      printf("write batch failed, code = %d, msg = %s\n", s.code(), s.getState());
+      printf("write batch failed, code = %d, msg = %s\n", s.code(),
+             s.getState());
       return;
     }
 
@@ -183,11 +210,10 @@ void batch_write(rocksdb::DB* db, int record_bytes, int batch_size, size_t total
   }
 }
 
-DEFINE_string(db_path, "", "data dir");
-DEFINE_uint64(data_size_gb, 1, "data size in GB");
-
 void print_help() {
-  printf("usage: ./batch_write_bench --db_path=$PWD/data --data_size_gb=10 \n");
+  printf(
+      "usage: ./batch_write_bench --db_path=$PWD/data --gb_per_thread=1 "
+      "--threads=1 --batch_size=64 --value_size=16384 --perf_level=0\n");
 }
 
 int main(int argc, char** argv) {
@@ -198,7 +224,11 @@ int main(int argc, char** argv) {
   }
 
   printf("db path: %s\n", FLAGS_db_path.data());
-  printf("data size: %zd GB\n", FLAGS_data_size_gb);
+  printf("gb_per_thread: %zd GB\n", FLAGS_gb_per_thread);
+  printf("threads: %zd \n", FLAGS_threads);
+  printf("batch_size: %zd \n", FLAGS_batch_size);
+  printf("value_size: %zd \n", FLAGS_value_size);
+  printf("perf_level: %d \n", FLAGS_perf_level);
 
   std::string work_dir = FLAGS_db_path;
 
@@ -213,16 +243,18 @@ int main(int argc, char** argv) {
   std::shared_ptr<rocksdb::SstFileManager> sst_file_manager;
   std::shared_ptr<rocksdb::RateLimiter> rate_limiter;
 
-  init_db_options(db_options, work_dir, sst_file_manager, rate_limiter); 
+  init_db_options(db_options, work_dir, sst_file_manager, rate_limiter);
   init_cf_options(cf_options, work_dir);
 
   column_families.resize(1);
   for (auto i = 0; i < cf_options.size(); ++i) {
-    column_families[i] = rocksdb::ColumnFamilyDescriptor(cf_names[i], cf_options[i]);
+    column_families[i] =
+        rocksdb::ColumnFamilyDescriptor(cf_names[i], cf_options[i]);
   }
 
   cf_handles.resize(1);
-  auto s = rocksdb::DB::Open(db_options, work_dir, column_families,  &cf_handles, &db);
+  auto s = rocksdb::DB::Open(db_options, work_dir, column_families, &cf_handles,
+                             &db);
   if (!s.ok()) {
     printf("Open db failed, code = %d, msg = %s\n", s.code(), s.getState());
     exit(0);
@@ -230,7 +262,16 @@ int main(int argc, char** argv) {
 
   printf("start writing...\n");
 
-  batch_write(db, 16<<10, 64, FLAGS_data_size_gb<<30);
+  std::vector<std::thread> threads;
+  for (int i = 0; i < FLAGS_threads; ++i) {
+    threads.emplace_back([&]() {
+      batch_write(db, 16 + FLAGS_value_size, 64, FLAGS_gb_per_thread << 30);
+    });
+  }
+
+  for (auto& t : threads) {
+    t.join();
+  }
 
   for (auto i = 0; i < cf_options.size(); ++i) {
     delete cf_handles[i];

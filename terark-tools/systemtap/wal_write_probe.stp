@@ -1,0 +1,50 @@
+//
+// probe sync_file_range size in both user space and kernel space.
+//
+// usage: sudo stap -g sync_prob.stp -x {pid}
+//
+// guokuankuan@bytedance.com
+//
+
+global fdatasync_io_times
+global wal_records
+
+probe begin
+{
+  printf ("start sync probe......\n")
+}
+
+// function timestamp:long() { return gettimeofday_us() - start_time }
+
+function get_last_number:string(parms_s:string)
+%{
+  const char* ptr  = strrchr(STAP_ARG_parms_s, '=');
+  const char* end_ptr = ptr + 1;
+  while(*end_ptr != '\0' && *end_ptr != '}'){
+    end_ptr++;
+  }
+  strncpy(STAP_RETVALUE, ptr+1, end_ptr - ptr - 1);
+%}
+
+probe process.function ("AddRecord@*/log_writer.cc")
+{
+  nbytes = get_last_number($$parms$)
+  wal_records[pid(), nbytes] <<< 1
+}
+
+probe process.function ("Sync@*/io_posix.cc").return
+{
+  fdatasync_io_times <<< gettimeofday_us() - @entry(gettimeofday_us())
+}
+
+
+probe timer.s(5)
+{
+  printf("------------- AddRecord(log_writer.cc) ----------------\n")
+  foreach ([pid, bytes] in wal_records- limit 10)
+    printf("pid = %d, bytes = %-10s cnt = %-8d\n", pid, bytes, @count(wal_records[pid, bytes]))
+  printf("------------- fdatasync io time -------------------\n")
+  if(@count(fdatasync_io_times) > 0)
+    print(@hist_log(fdatasync_io_times))
+    // delete fdatasync_io_times
+}
