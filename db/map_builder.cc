@@ -32,6 +32,7 @@
 #include "util/c_style_callback.h"
 #include "util/iterator_cache.h"
 #include "util/sst_file_manager_impl.h"
+#include "util/sync_point.h"
 #include "version_set.h"
 
 namespace TERARKDB_NAMESPACE {
@@ -1210,6 +1211,8 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
       }
       sst_live.emplace(range.dependence.front().file_number, f);
     }
+    TEST_SYNC_POINT_CALLBACK("MapBuilder::Build::build_map_sst",
+                             &build_map_sst);
     if (!build_map_sst) {
       // unnecessary build map sst
       for (auto& input_level : inputs) {
@@ -1475,6 +1478,9 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
         }
         sst_live.emplace(range.dependence.front().file_number, f);
       }
+
+      TEST_SYNC_POINT_CALLBACK("MapBuilder::Build::build_map_sst",
+                               &build_map_sst);
       if (!build_map_sst) {
         // unnecessary build map sst
         if (level_ranges.inputs != nullptr) {
