@@ -37,7 +37,7 @@ def bench(records, value_size, bench_type, exist_db):
            --sync=0
 	   --db={db_dir}
 	   --wal_dir={db_dir}
-           --wal_bytes_per_sync=4194304
+           --wal_bytes_per_sync=65536
            --num={records}
            --threads={threads}
 	   --num_levels=6
@@ -47,7 +47,7 @@ def bench(records, value_size, bench_type, exist_db):
 	   --value_size={value_size}
 	   --cache_numshardbits=6
 	   --level_compaction_dynamic_level_bytes=true
-	   --bytes_per_sync=8388608
+	   --bytes_per_sync=65536
 	   --cache_index_and_filter_blocks=0
 	   --pin_l0_filter_and_index_blocks_in_cache=1
 	   --benchmark_write_rate_limit=0
@@ -175,14 +175,14 @@ if __name__=='__main__':
     LOG_RESULT_FNAME = 'rst_%s_gb_%s_thds.txt' % (GB_PER_THREAD, THREADS)
 
     with open(LOG_RESULT_FNAME, 'a') as f:
-        f.write('[%s] GB_PER_THREAD: %s, THREADS = %s, VSIZE = %s \n' % (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), GB_PER_THREAD, THREADS, VALUE_SIZES) )
+        f.write('[%s] GB_PER_THREAD: %s, THREADS = %s, VSIZE = %s, DB_DIR = %s \n' % (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), GB_PER_THREAD, THREADS, VALUE_SIZES, DB_DIR) )
 
 
     with open(LOG_RESULT_FNAME, 'a') as f:
-        f.write('vvvvvvvvvv config vvvvvvvvvv\n')
-        f.write(TERARK_CONFIG_STRING)
+        #f.write('vvvvvvvvvv config vvvvvvvvvv\n')
+        #f.write(TERARK_CONFIG_STRING)
         f.write('\n\n')
 
     run()
     gather_result()
-    send_to_bot(LOG_RESULT_FNAME)
+    #send_to_bot(LOG_RESULT_FNAME)
