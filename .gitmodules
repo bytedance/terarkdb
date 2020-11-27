@@ -21,4 +21,4 @@
 	url = git@code.byted.org:storage/gflags.git
 [submodule "third-party/terark-zip"]
 	path = third-party/terark-zip
-	url = ssh://git@code.byted.org/storage/terark-zip.git
+	url = git@code.byted.org:storage/terark-zip.git
