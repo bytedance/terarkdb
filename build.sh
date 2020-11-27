@@ -7,9 +7,7 @@ BASE=$PWD
 OUTPUT=output
 mkdir -p $OUTPUT
 
-BUILD_TYPE=Release
 if [ "$WITH_TESTS" == "1" ];then
-  BUILD_TYPE=Debug
   WITH_TESTS=ON
 else
   WITH_TESTS=OFF
@@ -28,5 +26,5 @@ fi
 
 git submodule update --init --recursive
 
-cd $BASE/$OUTPUT && cmake ../ -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DWITH_TESTS=$WITH_TESTS
+cd $BASE/$OUTPUT && cmake ../ -DCMAKE_BUILD_TYPE=RelWithDebInfo -DWITH_TESTS=${WITH_TESTS} -DWITH_TOOLS=ON
 cd $BASE/$OUTPUT && make -j $(nproc) && make install

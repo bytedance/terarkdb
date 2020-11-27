@@ -8,7 +8,7 @@ compile:
     - echo $CI_COMMIT_SHA && git checkout $CI_COMMIT_SHA
     - git submodule update --init --recursive
     - mkdir build && cd build
-    - cmake ../ -DCMAKE_BUILD_TYPE=RelWithDebug -DWITH_TOOLS=ON -DWITH_TESTS=ON -DCMAKE_VERBOSE_MAKEFILE=ON
+    - cmake ../ -DCMAKE_BUILD_TYPE=RelWithDebInfo -DWITH_TOOLS=ON -DWITH_TESTS=ON -DCMAKE_VERBOSE_MAKEFILE=ON
     - make -j $(nproc)
   tags: 
     - terark
@@ -23,7 +23,7 @@ unittest:
   script:
     - git submodule update --init --recursive
     - mkdir build && cd build
-    - cmake ../ -DCMAKE_BUILD_TYPE=RelWithDebug -DWITH_TOOLS=ON -DWITH_TESTS=ON -DCMAKE_VERBOSE_MAKEFILE=ON
+    - cmake ../ -DCMAKE_BUILD_TYPE=RelWithDebInfo -DWITH_TOOLS=ON -DWITH_TESTS=ON -DCMAKE_VERBOSE_MAKEFILE=ON
     - make -j $(nproc) && make test
   only:
     refs:
