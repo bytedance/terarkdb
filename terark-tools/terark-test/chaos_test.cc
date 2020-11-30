@@ -957,10 +957,10 @@ int main(int argc, char **argv) {
   rocksdb::ChaosTest test(flags);
   test.Open(cf_num);
   for (int j = 0; j < read_thread; ++j) {
-    thread_vec.emplace_back(&rocksdb::ChaosTest::ReadFunc, std::ref(test), j);
+    thread_vec.emplace_back([&test, j] { test.ReadFunc(j); });
   }
   for (int j = 0; j < write_thread; ++j) {
-    thread_vec.emplace_back(&rocksdb::ChaosTest::WriteFunc, std::ref(test), j);
+    thread_vec.emplace_back([&test, j] { test.WriteFunc(j); });
   }
   for (auto &t : thread_vec) {
     t.join();
