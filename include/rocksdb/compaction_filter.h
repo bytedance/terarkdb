@@ -33,6 +33,8 @@ struct CompactionFilterContext {
   // Is this compaction requested by the client (true),
   // or is it occurring as an automatic compaction process
   bool is_manual_compaction;
+  // Is this compaction creating a file in the bottom most level?
+  bool is_bottommost_level;
   // Which column family this compaction is for.
   uint32_t column_family_id;
 
