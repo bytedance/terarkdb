@@ -59,7 +59,7 @@ We didn't archieve all static libraries together yet, so you have to pack all li
 -Wl,-Bstatic \
 -lterarkdb -lbz2 -ljemalloc -llz4 -lmetrics2 -lsnappy -lz -lterark-zip-r -lzstd \
 -lboost_context -lboost_fiber -lboost_filesystem -lboost_system \
--Wl,-Bdynamic -pthread -lgomp
+-Wl,-Bdynamic -pthread -lgomp -lrt -ldl -laio
 ```
 
 
