@@ -338,24 +338,6 @@ unsigned int Reader::ReadPhysicalRecord(Slice* result, size_t* drop_size) {
     const unsigned int type = header[6];
     const uint32_t length = a | (b << 8);
     int header_size = kHeaderSize;
-    if (type >= kRecyclableFullType && type <= kRecyclableLastType) {
-      if (end_of_buffer_offset_ - buffer_.size() == 0) {
-        recycled_ = true;
-      }
-      header_size = kRecyclableHeaderSize;
-      // We need enough for the larger header
-      if (buffer_.size() < static_cast<size_t>(kRecyclableHeaderSize)) {
-        int r = kEof;
-        if (!ReadMore(drop_size, &r)) {
-          return r;
-        }
-        continue;
-      }
-      const uint32_t log_num = DecodeFixed32(header + 7);
-      if (log_num != log_number_) {
-        return kOldRecord;
-      }
-    }
     if (header_size + length > buffer_.size()) {
       if (!retry_after_eof_) {
         *drop_size = buffer_.size();

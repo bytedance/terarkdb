@@ -523,7 +523,7 @@ Options DBTestBase::GetOptions(
       break;
     }
     case kRecycleLogFiles: {
-      options.recycle_log_file_num = 2;
+      // nothing
       break;
     }
     case kLevelSubcompactions: {

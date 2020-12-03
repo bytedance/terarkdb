@@ -226,7 +226,6 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
   for (auto _log : logs_) {
     ROCKS_LOG_INFO(immutable_db_options_.info_log, " %" PRIu64, _log.number);
   }
-  assert(immutable_db_options_.recycle_log_file_num == 0);
 #endif  // !NDEBUG
   job_context->prev_log_number = versions_->prev_log_number();
 

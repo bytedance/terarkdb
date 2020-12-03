@@ -644,6 +644,9 @@ TEST_F(PerfContextTest, MergeOperatorTime) {
   Options options;
   options.create_if_missing = true;
   options.merge_operator = MergeOperators::CreateStringAppendOperator();
+  // turn off lazy, if enable lazy compactrange will change MergeType to
+  // ValueType thoroughly
+  options.enable_lazy_compaction = false;
   Status s = DB::Open(options, kDbName, &db);
   EXPECT_OK(s);
 

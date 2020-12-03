@@ -777,6 +777,8 @@ TEST_F(DBSSTTest, OpenDBWithInfiniteMaxOpenFiles) {
     options.write_buffer_size = 100000;
     options.disable_auto_compactions = true;
     options.max_open_files = -1;
+    options.enable_lazy_compaction =
+        false;  // CompactRange in lazy maybe merge file into one thoroughly
     if (iter == 0) {
       options.max_file_opening_threads = 1;
     } else {

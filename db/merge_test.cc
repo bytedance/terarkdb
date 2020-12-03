@@ -83,12 +83,14 @@ class CountMergeOperator : public AssociativeMergeOperator {
 };
 
 std::shared_ptr<DB> OpenDb(const std::string& dbname, const bool ttl = false,
-                           const size_t max_successive_merges = 0) {
+                           const size_t max_successive_merges = 0,
+                           bool lazy = true) {
   DB* db;
   Options options;
   options.create_if_missing = true;
   options.merge_operator = std::make_shared<CountMergeOperator>();
   options.max_successive_merges = max_successive_merges;
+  options.enable_lazy_compaction = lazy;
   Status s;
   DestroyDB(dbname, Options());
 // DBWithTTL is not supported in ROCKSDB_LITE
@@ -455,9 +457,18 @@ void runTest(const std::string& dbname, const bool use_ttl = false) {
     }
   }
 
+  /* Temporary remove this test in TerarkDB, Error of "merge-operator not set"
+  only set when meet MergeType, since already execute CompactRange, MergeType
+  should merge into ValueType, reopening is not support check mergeopeator (but
+  in rocksdb, compactrange just do "trivial_move" which do not changewhy
+  table_cache get a MergeType from the only file after flush which is not
+  reasonable
+  */
   {
     {
-      auto db = OpenDb(dbname);
+      // turn off lazy, if enable lazy compactrange will change MergeType to
+      // ValueType thoroughly
+      auto db = OpenDb(dbname, false, 0 ,false);
       MergeBasedCounters counters(db, 0);
       counters.add("test-key", 1);
       counters.add("test-key", 1);

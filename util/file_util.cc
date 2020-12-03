@@ -101,7 +101,7 @@ Status DeleteWalFile(const ImmutableDBOptions* db_options,
   if (status.ok()) {
     status = db_options->env->DeleteFile(idx_fname);
   }
-  return DeleteDBFile(db_options, fname, dir_to_sync, false);
+  return db_options->env->DeleteFile(fname);
 }
 
 Status DeleteSSTFile(const ImmutableDBOptions* db_options,

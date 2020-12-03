@@ -2205,7 +2205,8 @@ Status DBImpl::BackgroundFlush(bool* made_progress, JobContext* job_context,
     for (const auto& iter : flush_req) {
       ColumnFamilyData* cfd = iter.first;
       if (cfd->IsDropped() || !cfd->imm()->IsFlushPending()) {
-        cfd->dec_queued_for_flush();
+        // TODO fix myrocks db_proprioty_test
+        // cfd->dec_queued_for_flush();
         // can't flush this CF, try next one
         cfd->dec_queued_for_flush();
         if (cfd->Unref()) {

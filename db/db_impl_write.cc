@@ -867,7 +867,6 @@ void DBImpl::UnpackBatch(const WriteThread::WriteGroup& wg,
 Status DBImpl::WriteToWAL(const WriteBatch& merged_batch,
                           log::Writer* log_writer, uint64_t* log_used,
                           uint64_t* log_size, WriteThread::Writer& w) {
-  assert(w.log_used == log_writer->get_log_number());
   assert(log_size != nullptr);
   Slice log_entry = WriteBatchInternal::Contents(&merged_batch);
   size_t num_entries = merged_batch.Count();

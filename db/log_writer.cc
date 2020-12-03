@@ -36,7 +36,6 @@ Writer::Writer(std::unique_ptr<WritableFileWriter>&& dest, uint64_t log_number,
       num_entries_(0),
       block_counts_(0),
       log_number_(log_number),
-      recycle_log_files_(recycle_log_files),
       manual_flush_(manual_flush) {
   for (int i = 0; i <= kMaxRecordType; i++) {
     char t = static_cast<char>(i);
@@ -50,7 +49,6 @@ Status Writer::WriteBuffer() { return dest_->Flush(); }
 
 Status Writer::AddRecord(const Slice& slice, size_t num_entries,
                          uint64_t* wal_offset) {
-  assert(!recycle_log_files_);  // wal recycle conflict with blob in wal
   const int header_size = kHeaderSize;
 
   const char* ptr = slice.data();
@@ -88,13 +86,13 @@ Status Writer::AddRecord(const Slice& slice, size_t num_entries,
     RecordType type;
     const bool end = (left == fragment_length);
     if (begin && end) {
-      type = recycle_log_files_ ? kRecyclableFullType : kFullType;
+      type = kFullType;
     } else if (begin) {
-      type = recycle_log_files_ ? kRecyclableFirstType : kFirstType;
+      type = kFirstType;
     } else if (end) {
-      type = recycle_log_files_ ? kRecyclableLastType : kLastType;
+      type = kLastType;
     } else {
-      type = recycle_log_files_ ? kRecyclableMiddleType : kMiddleType;
+      type = kMiddleType;
     }
 
     uint64_t ahead_data_size = dest_->GetFileSize();
@@ -121,7 +119,7 @@ Status Writer::EmitPhysicalRecord(RecordType t, const char* ptr, size_t n) {
   assert(n <= 0xffff);  // Must fit in two bytes
 
   size_t header_size;
-  char buf[kRecyclableHeaderSize];
+  char buf[kHeaderSize];
 
   // Format the header
   buf[4] = static_cast<char>(n & 0xff);
@@ -133,18 +131,6 @@ Status Writer::EmitPhysicalRecord(RecordType t, const char* ptr, size_t n) {
     // Legacy record format
     assert(block_offset_ + kHeaderSize + n <= kBlockSize);
     header_size = kHeaderSize;
-  } else {
-    // Recyclable record format
-    assert(block_offset_ + kRecyclableHeaderSize + n <= kBlockSize);
-    header_size = kRecyclableHeaderSize;
-
-    // Only encode low 32-bits of the 64-bit log number.  This means
-    // we will fail to detect an old record if we recycled a log from
-    // ~4 billion logs ago, but that is effectively impossible, and
-    // even if it were we'dbe far more likely to see a false positive
-    // on the 32-bit CRC.
-    EncodeFixed32(buf + 7, static_cast<uint32_t>(log_number_));
-    crc = crc32c::Extend(crc, buf + 7, 4);
   }
 
   // Compute the crc of the record type and the payload.
@@ -171,8 +157,7 @@ WalBlobReader::WalBlobReader(std::unique_ptr<RandomAccessFile>&& src,
                              uint64_t log_no, const ImmutableDBOptions& idbo,
                              const EnvOptions& eo)
     : blob_cache_(idbo.blob_cache),
-      wal_header_size_(idbo.recycle_log_file_num > 0 ? kRecyclableHeaderSize
-                                                     : kHeaderSize),
+      wal_header_size_(kHeaderSize),
       log_number_(log_no),
       src_(std::move(src)),
       ioptions_(idbo),

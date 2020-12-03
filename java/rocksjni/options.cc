@@ -875,8 +875,7 @@ void Java_org_rocksdb_Options_setRecycleLogFileNum(JNIEnv* env,
                                                    jlong recycle_log_file_num) {
   rocksdb::Status s = rocksdb::check_if_jlong_fits_size_t(recycle_log_file_num);
   if (s.ok()) {
-    reinterpret_cast<rocksdb::Options*>(jhandle)->recycle_log_file_num =
-        recycle_log_file_num;
+    // nothing
   } else {
     rocksdb::IllegalArgumentExceptionJni::ThrowNew(env, s);
   }
@@ -5188,8 +5187,7 @@ void Java_org_rocksdb_DBOptions_setRecycleLogFileNum(
     jlong recycle_log_file_num) {
   rocksdb::Status s = rocksdb::check_if_jlong_fits_size_t(recycle_log_file_num);
   if (s.ok()) {
-    reinterpret_cast<rocksdb::DBOptions*>(jhandle)->recycle_log_file_num =
-        recycle_log_file_num;
+    // nothing
   } else {
     rocksdb::IllegalArgumentExceptionJni::ThrowNew(env, s);
   }

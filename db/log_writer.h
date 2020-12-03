@@ -244,7 +244,7 @@ class Writer {
   // "*dest" must be initially empty.
   // "*dest" must remain live while this Writer is in use.
   explicit Writer(std::unique_ptr<WritableFileWriter>&& dest,
-                  uint64_t log_number, bool recycle_log_files,
+                  uint64_t log_number, bool recycle_log_files = false,
                   bool manual_flush = false);
 
   ~Writer();
@@ -275,7 +275,6 @@ class Writer {
   size_t num_entries_;   // Current KV-entry in  file
   size_t block_counts_;  // Current block number in log file
   uint64_t log_number_;
-  bool recycle_log_files_;
 
   // crc32c values for all supported record types.  These are
   // pre-computed to reduce the overhead of computing the crc of the
