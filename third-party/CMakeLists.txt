@@ -29,7 +29,7 @@ IF(WITH_SNAPPY)
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/snappy
         CONFIGURE_COMMAND mkdir -p build
         BUILD_IN_SOURCE 1
-        BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} -DSNAPPY_BUILD_TESTS=OFF -DHAVE_LIBLZO2=OFF && make -j 10
+        BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DSNAPPY_BUILD_TESTS=OFF -DHAVE_LIBLZO2=OFF && make -j 10
         INSTALL_COMMAND cd build && ls -l && make install && cd ../ && rm -rf build)
     ADD_LIBRARY(snappy STATIC IMPORTED GLOBAL)
     ADD_DEPENDENCIES(snappy snappy-project)
@@ -49,7 +49,7 @@ IF(WITH_BYTEDANCE_METRICS)
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/metrics2-cmake
         CONFIGURE_COMMAND rm -rf cmake-build && mkdir -p cmake-build && mkdir -p ${CMAKE_BINARY_DIR}/lib
         BUILD_IN_SOURCE 1
-        BUILD_COMMAND cd cmake-build && cmake ../ && make -j $(nproc)
+        BUILD_COMMAND cd cmake-build && cmake ../ -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} && make -j $(nproc)
         # metrics2 doesn't have a install instruction, so we have to manully install it
         INSTALL_COMMAND cp cmake-build/libmetrics2.a ${CMAKE_BINARY_DIR}/lib/)
     ADD_LIBRARY(metrics2 STATIC IMPORTED GLOBAL)
@@ -70,7 +70,7 @@ IF(WITH_ZLIB)
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/zlib
         CONFIGURE_COMMAND rm -rf build && mkdir -p build
         BUILD_IN_SOURCE 1
-        BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} && make
+        BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} && make
         # zlib compile will produce some dirty files, we need to clean them.
         INSTALL_COMMAND cd build && make install && cd ../ && rm -rf build zconf.h.included && git checkout . )
     ADD_LIBRARY(zlib STATIC IMPORTED GLOBAL)
@@ -91,7 +91,7 @@ IF(WITH_GFLAGS)
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/gflags
         CONFIGURE_COMMAND rm -rf build-cmake && mkdir -p build-cmake
         BUILD_IN_SOURCE 1
-        BUILD_COMMAND cd build-cmake && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} && make
+        BUILD_COMMAND cd build-cmake && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} && make
         INSTALL_COMMAND cd build-cmake && make install)
     ADD_LIBRARY(gflags STATIC IMPORTED GLOBAL)
     ADD_DEPENDENCIES(gflags gflags-project)
