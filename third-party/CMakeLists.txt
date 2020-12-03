@@ -27,9 +27,9 @@ IF(WITH_SNAPPY)
     MESSAGE("[terarkdb/third-party] snappy target not exist, let's build it!")
     ExternalProject_Add(snappy-project
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/snappy
-        CONFIGURE_COMMAND mkdir -p build
+        CONFIGURE_COMMAND rm -rf build && mkdir -p build
         BUILD_IN_SOURCE 1
-        BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DSNAPPY_BUILD_TESTS=OFF -DHAVE_LIBLZO2=OFF && make -j 10
+        BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} -DCMAKE_BUILD_TYPE=Release -DSNAPPY_BUILD_TESTS=OFF -DHAVE_LIBLZO2=OFF && make -j 10
         INSTALL_COMMAND cd build && ls -l && make install && cd ../ && rm -rf build)
     ADD_LIBRARY(snappy STATIC IMPORTED GLOBAL)
     ADD_DEPENDENCIES(snappy snappy-project)
@@ -70,7 +70,7 @@ IF(WITH_ZLIB)
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/zlib
         CONFIGURE_COMMAND rm -rf build && mkdir -p build
         BUILD_IN_SOURCE 1
-        BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} && make
+        BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} -DCMAKE_BUILD_TYPE=Release && make
         # zlib compile will produce some dirty files, we need to clean them.
         INSTALL_COMMAND cd build && make install && cd ../ && rm -rf build zconf.h.included && git checkout . )
     ADD_LIBRARY(zlib STATIC IMPORTED GLOBAL)
@@ -91,7 +91,7 @@ IF(WITH_GFLAGS)
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/gflags
         CONFIGURE_COMMAND rm -rf build-cmake && mkdir -p build-cmake
         BUILD_IN_SOURCE 1
-        BUILD_COMMAND cd build-cmake && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} && make
+        BUILD_COMMAND cd build-cmake && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} -DCMAKE_BUILD_TYPE=Release && make -j 10
         INSTALL_COMMAND cd build-cmake && make install)
     ADD_LIBRARY(gflags STATIC IMPORTED GLOBAL)
     ADD_DEPENDENCIES(gflags gflags-project)
@@ -111,7 +111,7 @@ IF(WITH_ZSTD)
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/zstd
         CONFIGURE_COMMAND ""
         BUILD_IN_SOURCE 1
-        BUILD_COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/zstd && make "CXXFLAGS=-fPIC -O2" "CFLAGS=-fPIC -O2"
+        BUILD_COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/zstd && make "CXXFLAGS=-fPIC -O2" "CFLAGS=-fPIC -O2" -j 10
         INSTALL_COMMAND prefix=${CMAKE_BINARY_DIR} make install)
     ADD_LIBRARY(zstd STATIC IMPORTED GLOBAL)
     ADD_DEPENDENCIES(zstd zstd-project)
@@ -132,7 +132,7 @@ IF(WITH_LZ4)
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lz4
         CONFIGURE_COMMAND ""
         BUILD_IN_SOURCE 1
-        BUILD_COMMAND make "CXXFLAGS=-fPIC -O2" "CFLAGS=-fPIC -O2"
+        BUILD_COMMAND make "CXXFLAGS=-fPIC -O2" "CFLAGS=-fPIC -O2" -j 10
         INSTALL_COMMAND prefix=${CMAKE_BINARY_DIR} make install)
     ADD_LIBRARY(lz4 STATIC IMPORTED GLOBAL)
     ADD_DEPENDENCIES(lz4 lz4-project)
