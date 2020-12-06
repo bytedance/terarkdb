@@ -80,7 +80,11 @@ TODO
 # 3. Real-world Performance Improvement
 TerarkDB has been deployed in lots of applications in Bytedance, in most cases TerarkDB can help to reduce overall latency and improve throughput tremendously.
 
-TODO
+### Disk Write
+![](docs/static/images/performance/disk_write.png)
+
+### Get Latency
+![](docs/static/images/performance/get_latency.png)
 
 
 
