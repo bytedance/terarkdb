@@ -3,7 +3,11 @@
 # found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 # Inherit some settings from environment variables, if available
-
+#
+#
+# This `Makefile` is deprecated, please use `CMakeLists.txt` instead, we will
+# fix the `Makefile` in the future, sorry for the unconvinient.
+#
 #-----------------------------------------------
 USE_RTTI = 1
 
