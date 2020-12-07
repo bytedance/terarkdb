@@ -3570,7 +3570,8 @@ Status VersionSet::ApplyOneVersionEdit(
       }
     }
     if (edit.has_comparator_ &&
-        edit.comparator_ != cfd->user_comparator()->Name()) {
+        edit.comparator_ != cfd->user_comparator()->Name() &&
+        !cfd->user_comparator()->IsAlias(edit.comparator_)) {
       return Status::InvalidArgument(
           cfd->user_comparator()->Name(),
           "does not match existing comparator " + edit.comparator_);

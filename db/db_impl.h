@@ -1712,7 +1712,7 @@ class DBImpl : public DB {
   LatencyReporter prev_latency_reporter_;
 
   ThroughputReporter write_throughput_reporter_;
-  DistributionReporter write_batch_size_reporter_
+  DistributionReporter write_batch_size_reporter_;
 };
 
 extern Options SanitizeOptions(const std::string& db, const Options& src);

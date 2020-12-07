@@ -199,7 +199,8 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
       {offsetof(struct DBOptions, listeners),
        sizeof(std::vector<std::shared_ptr<EventListener>>)},
       {offsetof(struct DBOptions, row_cache), sizeof(std::shared_ptr<Cache>)},
-      {offsetof(struct DBOptions, metrics_reporter_factory), sizeof(std::shared_ptr<MetricsReporterFactory>)},
+      {offsetof(struct DBOptions, metrics_reporter_factory),
+       sizeof(std::shared_ptr<MetricsReporterFactory>)},
       {offsetof(struct DBOptions, wal_filter), sizeof(const WalFilter*)},
   };
 
