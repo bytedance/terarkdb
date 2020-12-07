@@ -1,10 +1,12 @@
 # What is TerarkDB
-TerarkDB is a better RocksDB replacement in terms of tail latency and write throughput, compression etc. In most cases you can migirate your existing RocksDB instance to TerarkDB without any
+TerarkDB is a RocksDB replacement with optimized tail latency, throughput and compression etc. In most cases you can migirate your existing RocksDB instance to TerarkDB without any
 drawbacks.
 
+
 **NOTES**
-- TerarkDB was only tested under Linux platform
-- Existing data can be migirated from RocksDB directly to TerarkDB, but cannot the other way around
+- TerarkDB was only tested under Linux platform.
+- Existing data can be migirated from RocksDB directly to TerarkDB, but cannot migrate back to RocksDB.
+- TerarkDB was forked from RocksDB v5.18.3.
 
 # 1. Build TerarkDB
 
@@ -87,6 +89,17 @@ TerarkDB has been deployed in lots of applications in Bytedance, in most cases T
 ![](docs/static/images/performance/get_latency.png)
 
 
+# 4. Contributing
+- TerarkDB uses Github issues and pull requests to manage features and bug fixes.
+- All PRs are welcome including code formatting and refactoring.
 
-# 4. License
-TerarkDB is licensed under GPLv2 (Inherited from original [RocksDB](https://github.com/facebook/rocksdb))
+
+# 5. License
+- TerarkDB uses the same license policy with original [RocksDB](https://github.com/facebook/rocksdb))
+- Dual License: Apache2.0 and GPLv2
+
+# 6. Users
+
+Please let us know if you are using TerarkDB, thanks!
+
+- ByteDance (core online services)
