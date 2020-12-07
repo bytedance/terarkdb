@@ -79,6 +79,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
   LatencyHistGuard guard(&write_latency_reporter_);
   write_qps_reporter_.AddCount(WriteBatchInternal::Count(my_batch));
   write_throughput_reporter_.AddCount(WriteBatchInternal::ByteSize(my_batch));
+  write_batch_size_reporter_.AddRecord(WriteBatchInternal::ByteSize(my_batch));
 
   assert(!seq_per_batch_ || batch_cnt != 0);
   if (my_batch == nullptr) {
