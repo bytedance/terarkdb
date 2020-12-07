@@ -655,6 +655,7 @@ class DBImpl : public DB {
   LatencyReporter prev_latency_reporter() { return prev_latency_reporter_; }
 
   using ThroughputReporter = CountReporterHandle&;
+  using DistributionReporter = HistReporterHandle&;
 
   std::unordered_map<std::string, RecoveredTransaction*>
   recovered_transactions() {
@@ -1711,6 +1712,7 @@ class DBImpl : public DB {
   LatencyReporter prev_latency_reporter_;
 
   ThroughputReporter write_throughput_reporter_;
+  DistributionReporter write_batch_size_reporter_
 };
 
 extern Options SanitizeOptions(const std::string& db, const Options& src);

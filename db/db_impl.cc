@@ -188,6 +188,7 @@ static std::string seekforprev_latency_metric_name =
 static std::string prev_latency_metric_name = "dbiter_prev_latency";
 
 static std::string write_throughput_metric_name = "dbimpl_writeimpl_throughput";
+static std::string write_batch_size_metric_name = "dbimpl_writeimpl_batch_size";
 
 DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
                const bool seq_per_batch, const bool batch_per_txn)
@@ -333,6 +334,9 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
           immutable_db_options_.info_log.get())),
       write_throughput_reporter_(*metrics_reporter_factory_->BuildCountReporter(
           write_throughput_metric_name, bytedance_tags_,
+          immutable_db_options_.info_log.get())),
+      write_batch_size_reporter_(*metrics_reporter_factory_->BuildHistReporter(
+          write_batch_size_metric_name, bytedance_tags_,
           immutable_db_options_.info_log.get())) {
   // !batch_per_trx_ implies seq_per_batch_ because it is only unset for
   // WriteUnprepared, which should use seq_per_batch_.
