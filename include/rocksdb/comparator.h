@@ -54,6 +54,9 @@ class Comparator : public terark::Factoryable<const Comparator*> {
   // by any clients of this package.
   virtual const char* Name() const = 0;
 
+  // For compatibility
+  virtual bool IsAlias(const Slice& name) const { return false; }
+
   // Advanced functions: these are used to reduce the space requirements
   // for internal data structures like index blocks.
 
