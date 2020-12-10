@@ -8,6 +8,18 @@ drawbacks.
 - Existing data can be migirated from RocksDB directly to TerarkDB, but cannot migrate back to RocksDB.
 - TerarkDB was forked from RocksDB v5.18.3.
 
+
+### Performance Overview
+- RocksDB v6.12
+- Bench Enviroment
+  - use `db_bench`
+  - 10 client threads, 20GB requests per thread
+  - key = 24 bytes, value = 2000 bytes
+  - `heavy_write` means 90% write operations
+  - `heavy_read` means 90% read operations
+
+![](docs/static/images/performance/compare_rocksdb.png)
+
 # 1. Build TerarkDB
 
 ## Method 1: As a CMake subdirectory (Recommend)
