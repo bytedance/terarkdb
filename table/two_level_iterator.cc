@@ -9,8 +9,6 @@
 
 #include "table/two_level_iterator.h"
 
-#include <terark/util/function.hpp>
-
 #include "db/version_edit.h"
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
@@ -18,6 +16,7 @@
 #include "table/format.h"
 #include "util/arena.h"
 #include "util/heap.h"
+#include "utilities/util/function.hpp"
 
 namespace rocksdb {
 
@@ -521,7 +520,7 @@ class MapSstIterator final : public InternalIterator {
       auto& icomp = min_heap_.comparator().internal_comparator();
       if (max_heap_.empty() ||
           icomp.Compare(smallest_key_, max_heap_.top().key) >=
-          include_smallest_) {
+              include_smallest_) {
         // out of smallest bound
         first_level_value_.reset();
         first_level_iter_->Prev();

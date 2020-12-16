@@ -16,16 +16,18 @@
 #include <stdlib.h>
 
 #include <algorithm>
+#ifdef BOOSTLIB
 #include <boost/range/algorithm.hpp>
+#endif
 #include <cmath>
 #include <sstream>
 #include <string>
-#include <terark/util/function.hpp>
 #include <utility>
 #include <vector>
 
 #include "rocksdb/env.h"
 #include "rocksdb/slice.h"
+#include "utilities/util/function.hpp"
 
 namespace rocksdb {
 
@@ -190,7 +192,12 @@ using CharMap = std::pair<char, char>;
 char UnescapeChar(const char c) {
   static const CharMap convert_map[] = {{'r', '\r'}, {'n', '\n'}};
 
+#ifdef BOOSTLIB
   auto iter = boost::find_if(convert_map, TERARK_GET(.first) == c);
+#else
+  auto iter = std::find_if(std::begin(convert_map), std::end(convert_map),
+                           TERARK_GET(.first) == c);
+#endif
 
   if (iter == std::end(convert_map)) {
     return c;
@@ -201,7 +208,12 @@ char UnescapeChar(const char c) {
 char EscapeChar(const char c) {
   static const CharMap convert_map[] = {{'\n', 'n'}, {'\r', 'r'}};
 
+#ifdef BOOSTLIB
   auto iter = boost::find_if(convert_map, TERARK_GET(.first) == c);
+#else
+  auto iter = std::find_if(std::begin(convert_map), std::end(convert_map),
+                           TERARK_GET(.first) == c);
+#endif
 
   if (iter == std::end(convert_map)) {
     return c;

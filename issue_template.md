@@ -1,4 +1,4 @@
-> Note: Please use Issues only for bug reports. For questions, discussions, feature requests, etc. post to dev group: https://www.facebook.com/groups/rocksdb.dev
+> Note: Please use Issues only for bug reports. For questions, discussions, feature requests, etc. post to git hub issuses.
 
 ### Expected behavior
 

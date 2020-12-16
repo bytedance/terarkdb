@@ -8,11 +8,11 @@
 #include <map>
 #include <memory>
 #include <string>
-#include <terark/util/factory.hpp>
 #include <vector>
 
 #include "rocksdb/status.h"
 #include "rocksdb/types.h"
+#include "utilities/util/factory.h"
 
 namespace rocksdb {
 
@@ -125,7 +125,7 @@ class TablePropertiesCollector {
 // TablePropertiesCollector for each new table
 class TablePropertiesCollectorFactory
     : public std::enable_shared_from_this<TablePropertiesCollectorFactory>,
-      public terark::Factoryable<TablePropertiesCollectorFactory*> {
+      public bytedance_terark::Factoryable<TablePropertiesCollectorFactory*> {
  public:
   struct Context {
     uint32_t column_family_id;
@@ -248,14 +248,11 @@ struct TablePropertiesBase {
   // Inheritance chain
   std::vector<uint64_t> inheritance_chain;
 
-
   // convert this object to a human readable form
   //   @prop_delim: delimiter for each property.
   std::string ToString(const std::string& prop_delim = "; ",
                        const std::string& kv_delim = "=") const;
-
 };
-
 
 struct TableProperties : public TablePropertiesBase {
   // user collected properties

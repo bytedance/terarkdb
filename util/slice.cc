@@ -12,11 +12,11 @@
 #include <stdio.h>
 
 #include <algorithm>
-#include <terark/util/factory.ipp>
 
 #include "rocksdb/slice_transform.h"
 #include "table/format.h"
 #include "util/string_util.h"
+#include "utilities/util/factory.h"
 
 namespace rocksdb {
 
@@ -244,5 +244,7 @@ TERARK_FACTORY_REGISTER_EX(NoopTransform, "rocksdb.Noop", &S_NewNoopTransform);
 
 }  // namespace rocksdb
 
-TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::SliceTransform*, const std::string&);
-TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::ValueExtractorFactory*, rocksdb::Slice);
+BYTEDANCE_TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::SliceTransform*,
+                                         const std::string&);
+BYTEDANCE_TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::ValueExtractorFactory*,
+                                         rocksdb::Slice);

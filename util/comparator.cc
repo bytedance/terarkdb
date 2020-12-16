@@ -13,11 +13,11 @@
 
 #include <algorithm>
 #include <memory>
-#include <terark/util/factory.ipp>
 
 #include "port/port.h"
 #include "rocksdb/slice.h"
 #include "util/logging.h"
+#include "utilities/util/factory.h"
 
 namespace rocksdb {
 
@@ -213,21 +213,19 @@ const Comparator* ReverseBytewiseComparator() {
   return &rbytewise;
 }
 
-TERARK_FACTORY_REGISTER_EX(BytewiseComparatorImpl,
-                           "leveldb.BytewiseComparator",
+TERARK_FACTORY_REGISTER_EX(BytewiseComparatorImpl, "leveldb.BytewiseComparator",
                            &BytewiseComparator);
 
-TERARK_FACTORY_REGISTER_EX(BytewiseComparatorImpl,
-                           "RocksDB_SE_v3.10", &BytewiseComparator);
+TERARK_FACTORY_REGISTER_EX(BytewiseComparatorImpl, "RocksDB_SE_v3.10",
+                           &BytewiseComparator);
 
 TERARK_FACTORY_REGISTER_EX(ReverseBytewiseComparatorImpl,
                            "rocksdb.ReverseBytewiseComparator",
                            &ReverseBytewiseComparator);
 
 TERARK_FACTORY_REGISTER_EX(ReverseBytewiseComparatorImpl,
-                           "rev:RocksDB_SE_v3.10",
-                           &ReverseBytewiseComparator);
+                           "rev:RocksDB_SE_v3.10", &ReverseBytewiseComparator);
 
 }  // namespace rocksdb
 
-TERARK_FACTORY_INSTANTIATE_GNS(const rocksdb::Comparator*);
+BYTEDANCE_TERARK_FACTORY_INSTANTIATE_GNS(const rocksdb::Comparator*);

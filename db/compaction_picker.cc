@@ -15,25 +15,22 @@
 
 #include <inttypes.h>
 
-#include <boost/range/algorithm.hpp>
-#include <boost/range/algorithm_ext/is_sorted.hpp>
 #include <limits>
 #include <queue>
 #include <string>
-#include <terark/util/function.hpp>
 #include <utility>
 #include <vector>
 
 #include "db/column_family.h"
 #include "db/map_builder.h"
 #include "monitoring/statistics.h"
-#include "terark/valvec.hpp"
 #include "util/c_style_callback.h"
 #include "util/filename.h"
 #include "util/log_buffer.h"
 #include "util/random.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
+#include "utilities/util/function.hpp"
 
 namespace rocksdb {
 
@@ -361,9 +358,12 @@ bool CompactionPicker::FixInputRange(std::vector<SelectedRange>& input_range,
       }
     }
   }
-  assert(boost::is_sorted(input_range, TERARK_FIELD(start) < *uc));
-  assert(boost::is_sorted(input_range, TERARK_FIELD(limit) < *uc));
-  assert(boost::find_if(input_range, [uc](const RangeStorage& r) {
+  assert(std::is_sorted(input_range.begin(), input_range.end(),
+                        TERARK_FIELD(start) < *uc));
+  assert(std::is_sorted(input_range.begin(), input_range.end(),
+                        TERARK_FIELD(limit) < *uc));
+  assert(std::find_if(input_range.begin(), input_range.end(),
+                      [uc](const RangeStorage& r) {
            return uc->Compare(r.start, r.limit) > 0;
          }) == input_range.end());
   return !input_range.empty();
@@ -816,7 +816,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
   }
 
   // Sorting by ratio decreasing.
-  terark::sort_a(gc_files, TERARK_CMP(score, >));
+  std::sort(gc_files.begin(), gc_files.end(), TERARK_CMP(score, >));
 
   // Return nullptr if
   //   1. Got empty section.
@@ -2678,7 +2678,7 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
         }
         fn_new_section();
       } else {
-        terark::sort_a(sections, TERARK_CMP(weight, >));
+        std::sort(sections.begin(), sections.end(), TERARK_CMP(weight, >));
       }
       src_size = 0;
       for (size_t i = 0; i < sections.size(); ++i) {
@@ -2765,7 +2765,7 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
     }
     return Status::OK();
   };
-  
+
   for (int i = 1; i < bottommost_level; ++i) {
     if (!vstorage_->has_range_deletion(i)) {
       continue;

@@ -12,7 +12,9 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
 #endif
+#ifdef BOOSTLIB
 #include <boost/fiber/future.hpp>
+#endif
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
@@ -23,8 +25,13 @@ namespace rocksdb {
 template <typename T>
 class AsyncTask {
  private:
+#ifdef BOOSTLIB
   boost::fibers::promise<T> promise;
   boost::fibers::future<T> future;
+#else
+  std::promise<T> promise;
+  std::future<T> future;
+#endif
   std::function<T()> func;
 
  public:

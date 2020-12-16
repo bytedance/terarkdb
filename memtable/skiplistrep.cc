@@ -6,7 +6,7 @@
 #include "db/memtable.h"
 #include "memtable/inlineskiplist.h"
 #include "rocksdb/memtablerep.h"
-#include "table/terark_zip_internal.h"
+// #include "table/terark_zip_internal.h"
 #include "util/arena.h"
 #include "util/string_util.h"
 
@@ -278,11 +278,13 @@ class SkipListRep : public MemTableRep {
     if (lookahead_ > 0) {
       void* mem =
           arena ? arena->AllocateAligned(sizeof(SkipListRep::LookaheadIterator))
-                : operator new(sizeof(SkipListRep::LookaheadIterator));
+                :
+                operator new(sizeof(SkipListRep::LookaheadIterator));
       return new (mem) SkipListRep::LookaheadIterator(*this);
     } else {
       void* mem = arena ? arena->AllocateAligned(sizeof(SkipListRep::Iterator))
-                        : operator new(sizeof(SkipListRep::Iterator));
+                        :
+                        operator new(sizeof(SkipListRep::Iterator));
       return new (mem) SkipListRep::Iterator(&skip_list_);
     }
   }
@@ -362,6 +364,24 @@ struct ReverseBytewiseKeyComparator {
   const InternalKeyComparator* icomparator() const { return &comparator; }
 };
 }  // namespace
+bool IsForwardBytewiseComparator(const Slice name) {
+  if (name.ToString().find("RocksDB_SE_") == 0) {
+    return true;
+  }
+  return name == "leveldb.BytewiseComparator";
+}
+inline bool IsForwardBytewiseComparator(const Comparator* cmp) {
+  return IsForwardBytewiseComparator(cmp->Name());
+}
+bool IsBackwardBytewiseComparator(const Slice name) {
+  if (name.ToString().find("rev:RocksDB_SE_") == 0) {
+    return true;
+  }
+  return name == "rocksdb.ReverseBytewiseComparator";
+}
+inline bool IsBackwardBytewiseComparator(const Comparator* cmp) {
+  return IsBackwardBytewiseComparator(cmp->Name());
+}
 
 MemTableRep* SkipListFactory::CreateMemTableRep(
     const MemTableRep::KeyComparator& compare, bool /*needs_dup_key_check*/,

@@ -16,6 +16,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
 //#include <terark/thread/fiber_future.hpp>
 //#include <boost/fiber/future.hpp>
 #include "rocksdb/iterator.h"
@@ -39,18 +40,18 @@
 #elif _WIN32
 #define ROCKSDB_DEPRECATED_FUNC __declspec(deprecated)
 #endif
-
+#ifdef BOOSTLIB
 namespace boost {
 namespace fibers {
 template <typename>
 class future;  // forward declaration
 }
 }  // namespace boost
+#endif
 
 namespace rocksdb {
 
-using boost::fibers::future;
-
+using std::future;
 struct Options;
 struct DBOptions;
 struct ColumnFamilyOptions;
@@ -374,7 +375,7 @@ class DB {
                      std::string* value) {
     return Get(options, DefaultColumnFamily(), key, value);
   }
-
+#ifdef BOOSTLIB
   static void CallOnMainStack(const std::function<void()>&);
   static void SubmitAsyncTask(std::function<void()>);
   static void SubmitAsyncTask(std::function<void()>, size_t concurrency);
@@ -395,6 +396,7 @@ class DB {
 
   static int WaitAsync(int timeout_us);
   static int WaitAsync();
+#endif  // BOOSTLIB
 
 #if defined(TERARKDB_WITH_AIO_FUTURE)
   future<std::tuple<Status, std::string, std::string*>> GetFuture(
@@ -1071,7 +1073,7 @@ class DB {
           TransactionLogIterator::ReadOptions()) = 0;
 
   virtual void SetGuardSeqno(SequenceNumber /*guard_seqno*/) {}
-  
+
 // Windows API macro interference
 #undef DeleteFile
   // Delete the file name from the db directory and update the internal state to
@@ -1241,9 +1243,10 @@ class DB {
   virtual Status GetPropertiesOfAllTables(TablePropertiesCollection* props) {
     return GetPropertiesOfAllTables(DefaultColumnFamily(), props);
   }
-  virtual Status GetPropertiesOfTablesInRange(
-      ColumnFamilyHandle* column_family, const Range* range, std::size_t n,
-      TablePropertiesCollection* props, bool include_blob = true) = 0;
+  virtual Status GetPropertiesOfTablesInRange(ColumnFamilyHandle* column_family,
+                                              const Range* range, std::size_t n,
+                                              TablePropertiesCollection* props,
+                                              bool include_blob = true) = 0;
 
   virtual Status SuggestCompactRange(ColumnFamilyHandle* /*column_family*/,
                                      const Slice* /*begin*/,

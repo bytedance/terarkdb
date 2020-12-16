@@ -16,7 +16,6 @@
 #include <inttypes.h>
 
 #include <algorithm>
-#include <boost/range/algorithm_ext/is_sorted.hpp>
 #include <list>
 #include <string>
 #include <unordered_map>
@@ -29,7 +28,6 @@
 #include "monitoring/thread_status_util.h"
 #include "table/merging_iterator.h"
 #include "table/two_level_iterator.h"
-#include "terark/valvec.hpp"
 #include "util/c_style_callback.h"
 #include "util/iterator_cache.h"
 #include "util/sst_file_manager_impl.h"
@@ -998,7 +996,8 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
         if (!s.ok()) {
           return s;
         }
-        assert(boost::is_sorted(ranges, TERARK_FIELD(point[1]) < icomp));
+        assert(std::is_sorted(ranges.begin(), ranges.end(),
+                              TERARK_FIELD(point[1]) < icomp));
         input_range_count += ranges.size();
         level_ranges.emplace_back(std::move(ranges));
       }
@@ -1010,15 +1009,16 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
         }
       }
       std::vector<RangeWithDepend> ranges;
-      assert(
-          boost::is_sorted(level_files.files, TERARK_FIELD_P(largest) < icomp));
+      assert(std::is_sorted(level_files.files.begin(), level_files.files.end(),
+                            TERARK_FIELD_P(largest) < icomp));
       s = LoadRangeWithDepend(ranges, arena, &bound_builder, iterator_cache,
                               level_files.files.data(),
                               level_files.files.size());
       if (!s.ok()) {
         return s;
       }
-      assert(boost::is_sorted(ranges, TERARK_FIELD(point[1]) < icomp));
+      assert(std::is_sorted(ranges.begin(), ranges.end(),
+                            TERARK_FIELD(point[1]) < icomp));
       input_range_count += ranges.size();
       level_ranges.emplace_back(std::move(ranges));
     }
@@ -1053,7 +1053,8 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     for (auto& r : deleted_range) {
       ranges.emplace_back(r, arena);
     }
-    assert(boost::is_sorted(ranges, TERARK_FIELD(point[1]) < icomp));
+    assert(std::is_sorted(ranges.begin(), ranges.end(),
+                          TERARK_FIELD(point[1]) < icomp));
     level_ranges.front() = PartitionRangeWithDepend(
         level_ranges.front(), ranges, cfd->internal_comparator(),
         PartitionType::kDelete);
@@ -1078,7 +1079,8 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     std::vector<std::unique_ptr<TruncatedRangeDelIterator>>
         added_range_del_iter_vec;
     std::vector<RangeWithDepend> ranges;
-    assert(boost::is_sorted(added_files, TERARK_FIELD_P(largest) < icomp));
+    assert(std::is_sorted(added_files.begin(), added_files.end(),
+                          TERARK_FIELD_P(largest) < icomp));
     for (auto f : added_files) {
       iterator_cache.PutFileMetaData(f);
     }
@@ -1264,9 +1266,8 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
 
   MapSstElementIterator output_iter(ranges, iterator_cache,
                                     cfd->internal_comparator());
-
-  assert(boost::is_sorted(ranges, TERARK_FIELD(point[1]) < icomp));
-
+  assert(std::is_sorted(ranges.begin(), ranges.end(),
+                        TERARK_FIELD(point[1]) < icomp));
   FileMetaData file_meta;
   std::unique_ptr<TableProperties> prop;
 
@@ -1323,8 +1324,8 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   for (auto& r : push_range) {
     push_ranges.emplace_back(r, arena);
   }
-  assert(boost::is_sorted(push_ranges, TERARK_FIELD(point[1]) < icomp));
-
+  assert(std::is_sorted(push_ranges.begin(), push_ranges.end(),
+                        TERARK_FIELD(point[1]) < icomp));
   // load input files into level_ranges
   for (auto& level_files : inputs) {
     if (level_files.files.empty()) {
@@ -1345,7 +1346,8 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
         if (!s.ok()) {
           return s;
         }
-        assert(boost::is_sorted(ranges, TERARK_FIELD(point[1]) < icomp));
+        assert(std::is_sorted(ranges.begin(), ranges.end(),
+                              TERARK_FIELD(point[1]) < icomp));
         if (range_items.empty()) {
           range_items.emplace_back(FileMetaDataBoundBuilder(nullptr), 0,
                                    f->prop.is_map_sst(), std::move(ranges));
@@ -1537,9 +1539,9 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
       tombstone_iter.set(builder.Finish());
     }
 
-    assert(
-        boost::is_sorted(level_ranges.ranges, TERARK_FIELD(point[1]) < icomp));
-
+    assert(std::is_sorted(level_ranges.ranges.begin(),
+                          level_ranges.ranges.end(),
+                          TERARK_FIELD(point[1]) < icomp));
     MapBuilderOutput output_item;
     s = WriteOutputFile(level_ranges.bound_builder, &output_iter,
                         tombstone_iter.get(), output_path_id, cfd,
@@ -1673,7 +1675,7 @@ Status MapBuilder::WriteOutputFile(
   for (auto& pair : dependence_build) {
     dependence.emplace_back(Dependence{pair.first, pair.second});
   }
-  terark::sort_a(dependence, TERARK_CMP(file_number, <));
+  std::sort(dependence.begin(), dependence.end(), TERARK_CMP(file_number, <));
 
   // Map sst don't write tombstones
   if (s.ok()) {
@@ -1749,8 +1751,11 @@ struct MapElementIterator : public InternalIterator {
   virtual bool Valid() const override { return where_ < meta_size_; }
   virtual void Seek(const Slice& target) override {
     where_ =
-        terark::lower_bound_ex_0(meta_array_, meta_size_, target,
-                                 TERARK_FIELD_P(largest.Encode()), "" < *icmp_);
+        std::lower_bound(meta_array_, meta_array_ + meta_size_, target,
+                         [this](const FileMetaData* f, const Slice& t) {
+                           return icmp_->Compare(f->largest.Encode(), t) < 0;
+                         }) -
+        meta_array_;
     if (where_ == meta_size_) {
       ResetIter();
       return;
@@ -1779,8 +1784,11 @@ struct MapElementIterator : public InternalIterator {
   }
   virtual void SeekForPrev(const Slice& target) override {
     where_ =
-        terark::upper_bound_ex_0(meta_array_, meta_size_, target,
-                                 TERARK_FIELD_P(largest.Encode()), "" < *icmp_);
+        std::upper_bound(meta_array_, meta_array_ + meta_size_, target,
+                         [this](const Slice& t, const FileMetaData* f) {
+                           return icmp_->Compare(t, f->largest.Encode()) < 0;
+                         }) -
+        meta_array_;
     if (where_-- == 0) {
       where_ = meta_size_;
       ResetIter();

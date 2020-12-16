@@ -9,9 +9,10 @@
 #pragma once
 
 #include <string>
-#include <terark/util/factory.hpp>
-#include <terark/util/function.hpp>
+
 #include "comparator_lambda.h"
+#include "utilities/util/factory.h"
+#include "utilities/util/function.hpp"
 
 namespace rocksdb {
 
@@ -21,7 +22,7 @@ class Slice;
 // used as keys in an sstable or a database.  A Comparator implementation
 // must be thread-safe since rocksdb may invoke its methods concurrently
 // from multiple threads.
-class Comparator : public terark::Factoryable<const Comparator*> {
+class Comparator : public bytedance_terark::Factoryable<const Comparator*> {
  public:
   virtual ~Comparator() {}
 

@@ -8,7 +8,6 @@
 
 #include <limits>
 #include <string>
-#include <terark/valvec.hpp>
 #include <utility>
 
 #include "db/column_family.h"
@@ -24,6 +23,7 @@
 #include "table/merging_iterator.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
+#include "utilities/util/valvec.hpp"
 
 namespace rocksdb {
 
@@ -839,7 +839,7 @@ bool ForwardIterator::TEST_CheckDeletedIters(int* pdeleted_iters,
 uint32_t ForwardIterator::FindFileInRange(
     const std::vector<FileMetaData*>& files, const Slice& internal_key,
     uint32_t left, uint32_t right) {
-  return static_cast<uint32_t>(terark::lower_bound_ex_n(
+  return static_cast<uint32_t>(bytedance_terark::lower_bound_ex_n(
       files.begin(), left, right, internal_key,
       TERARK_FIELD_P(largest.Encode()), "" < cfd_->internal_comparator()));
 }

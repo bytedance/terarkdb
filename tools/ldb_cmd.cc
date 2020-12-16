@@ -12,7 +12,9 @@
 
 #include <inttypes.h>
 
+#ifdef BOOSTLIB
 #include <boost/range/algorithm.hpp>
+#endif
 #include <cstdlib>
 #include <ctime>
 #include <fstream>
@@ -22,7 +24,6 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <terark/util/function.hpp>
 
 #include "db/db_impl.h"
 #include "db/dbformat.h"
@@ -47,6 +48,7 @@
 #include "util/stderr_logger.h"
 #include "util/string_util.h"
 #include "utilities/ttl/db_ttl_impl.h"
+#include "utilities/util/function.hpp"
 
 namespace rocksdb {
 
@@ -502,8 +504,14 @@ bool LDBCommand::ParseStringOption(
 
 Options LDBCommand::PrepareOptionsForOpenDB() {
   ColumnFamilyOptions* cf_opts;
+#ifdef BOOSTLIB
   auto column_families_iter = boost::find_if(
       column_families_, TERARK_GET(.name) == std::cref(column_family_name_));
+#else
+  auto column_families_iter =
+      std::find_if(column_families_.begin(), column_families_.end(),
+                   TERARK_GET(.name) == std::cref(column_family_name_));
+#endif
   if (column_families_iter != column_families_.end()) {
     cf_opts = &column_families_iter->options;
   } else {

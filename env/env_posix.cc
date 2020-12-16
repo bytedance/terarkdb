@@ -62,7 +62,6 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
 #endif
-#include <boost/fiber/operations.hpp>
 #if __clang__
 #pragma clang diagnostic pop
 #endif
@@ -857,8 +856,7 @@ class PosixEnv : public Env {
   }
 
   virtual void SleepForMicroseconds(int micros) override {
-    boost::this_fiber::sleep_for(std::chrono::microseconds(micros));
-    // usleep(micros);
+    usleep(micros);
   }
 
   virtual Status GetHostName(char* name, uint64_t len) override {

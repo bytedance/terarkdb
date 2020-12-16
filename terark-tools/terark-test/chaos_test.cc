@@ -175,6 +175,7 @@ class ChaosTest {
     options.create_missing_column_families = true;
     options.use_aio_reads = (flags_ & TestAsync) ? true : false;
     options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(bbto));
+#ifdef BYTEDANCE_TERARK_ZIP
     if (flags_ & TestTerark) {
       tzto.localTempDir = dbname_;
       tzto.indexNestLevel = 3;
@@ -212,6 +213,7 @@ class ChaosTest {
       options.table_factory.reset(
           rocksdb::NewTerarkZipTableFactory(tzto, options.table_factory));
     }
+#endif
   }
 
   std::pair<std::string, std::string> get_ran_range_pair(
@@ -299,13 +301,13 @@ class ChaosTest {
     EventLogger event_logger(db_options_.info_log.get());
     SnapshotChecker *snapshot_checker = nullptr;
     std::shared_ptr<Cache> table_cache(dbfull->TEST_table_cache());
-    CompactionJob compaction_job(
-        0, &compaction, db_options_, env_options_,
-        cfd->current()->version_set(), &shutting_down_,
-        preserve_deletes_seqnum_, &log_buffer, nullptr, nullptr, nullptr,
-        &mutex_, &error_handler_, snapshots, earliest_write_conflict_snapshot,
-        snapshot_checker, nullptr, &event_logger, false, false, dbname_,
-        &compaction_job_stats_);
+    CompactionJob compaction_job(0, &compaction, db_options_, env_options_,
+                                 cfd->current()->version_set(), &shutting_down_,
+                                 preserve_deletes_seqnum_, &log_buffer, nullptr,
+                                 nullptr, nullptr, &mutex_, &error_handler_,
+                                 snapshots, earliest_write_conflict_snapshot,
+                                 snapshot_checker, nullptr, &event_logger,
+                                 false, false, dbname_, &compaction_job_stats_);
     int sub_compaction_used =
         compaction_job.Prepare(0 /* sub_compaction_slots */);
     s = compaction_job.Run();
@@ -318,9 +320,14 @@ class ChaosTest {
 
   void WriteFunc(int seed) {
     if (flags_ & ReadOnly) return;
-    auto index_factory = (flags_ & TestTerark)
-                             ? patricia_WriteBatchEntryIndexFactory()
-                             : nullptr;
+#ifdef BYTEDANCE_TERARK_ZIP
+    auto index_factory =
+        (flags_ & TestTerark) ? patricia_WriteBatchEntryIndexFactory() :
+#else
+    auto index_factory =
+#endif
+                              nullptr;
+
     WriteBatchWithIndex b(rocksdb::BytewiseComparator(), 0, false, 0,
                           index_factory);
     std::string key, value;
@@ -660,6 +667,7 @@ class ChaosTest {
       for (auto &k : ctx.keys) {
         k = ctx.key;
       }
+#ifdef BOOSTLIB
       for (size_t i = 0; i < hs.size(); ++i) {
         ctx.ss[i] = db->Get(ctx.ro, hs[i], ctx.keys[i], &(ctx.values[i]));
         db->GetAsync(
@@ -703,6 +711,7 @@ class ChaosTest {
                     "Get vs GetFuture");
 #endif
       }
+#endif  // BOOSTLIB
     }
   }
 

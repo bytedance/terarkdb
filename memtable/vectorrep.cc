@@ -5,7 +5,6 @@
 //
 #ifndef ROCKSDB_LITE
 #include <algorithm>
-#include <boost/range/algorithm.hpp>
 #include <memory>
 #include <set>
 #include <type_traits>
@@ -223,7 +222,8 @@ void VectorRep::Iterator::Seek(const Slice& user_key,
   // Do binary search to find first value not less than the target
   const char* encoded_key =
       (memtable_key != nullptr) ? memtable_key : EncodeKey(&tmp_, user_key);
-  cit_ = boost::lower_bound(*bucket_, encoded_key, "" < compare_);
+  cit_ = std::lower_bound(bucket_->begin(), bucket_->end(), encoded_key,
+                          "" < compare_);
 }
 
 // Advance to the first entry with a key <= target
@@ -233,7 +233,8 @@ void VectorRep::Iterator::SeekForPrev(const Slice& user_key,
   // Do binary search to find last value not greater than the target
   const char* encoded_key =
       (memtable_key != nullptr) ? memtable_key : EncodeKey(&tmp_, user_key);
-  cit_ = boost::upper_bound(*bucket_, encoded_key, "" < compare_);
+  cit_ = std::upper_bound(bucket_->begin(), bucket_->end(), encoded_key,
+                          "" < compare_);
   Prev();
 }
 

@@ -186,7 +186,9 @@ Status DB::OpenForReadOnly(
           "env TerarkZipTable_localTempDir",
           terarkdb_localTempDir);
     }
+#ifdef BYTEDANCE_TERARK_ZIP
     TerarkZipMultiCFOptionsFromEnv(db_options, column_families, dbname);
+#endif
   }
 #endif
   DBImplReadOnly* impl = new DBImplReadOnly(db_options, dbname);

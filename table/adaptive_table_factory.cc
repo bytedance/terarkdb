@@ -5,11 +5,10 @@
 #ifndef ROCKSDB_LITE
 #include "table/adaptive_table_factory.h"
 
-#include <terark/util/factory.ipp>
-
 #include "port/port.h"
 #include "table/format.h"
 #include "table/table_builder.h"
+#include "utilities/util/factory.h"
 
 namespace rocksdb {
 
@@ -132,7 +131,7 @@ extern TableFactory* NewAdaptiveTableFactory(
 
 }  // namespace rocksdb
 
-TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::TableFactory*, const std::string&,
-                               rocksdb::Status*);
+BYTEDANCE_TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::TableFactory*,
+                                         const std::string&, rocksdb::Status*);
 
 #endif  // ROCKSDB_LITE

@@ -15,7 +15,6 @@
 
 #include <inttypes.h>
 
-#include <terark/util/factory.ipp>
 #include <vector>
 
 #include "db/column_family.h"
@@ -23,6 +22,7 @@
 #include "rocksdb/compaction_filter.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
+#include "utilities/util/factory.h"
 
 namespace rocksdb {
 
@@ -543,6 +543,6 @@ int Compaction::GetInputBaseLevel() const {
 }  // namespace rocksdb
 
 using namespace rocksdb;
-TERARK_FACTORY_INSTANTIATE_GNS(CompactionFilter*, Slice,
-                               CompactionFilterContext);
-TERARK_FACTORY_INSTANTIATE_GNS(CompactionFilterFactory*, Slice);
+BYTEDANCE_TERARK_FACTORY_INSTANTIATE_GNS(CompactionFilter*, Slice,
+                                         CompactionFilterContext);
+BYTEDANCE_TERARK_FACTORY_INSTANTIATE_GNS(CompactionFilterFactory*, Slice);

@@ -14,13 +14,13 @@
 #include <inttypes.h>
 
 #include <set>
-#include <terark/valvec.hpp>
 #include <unordered_set>
 
 #include "db/event_helpers.h"
 #include "db/memtable_list.h"
 #include "util/file_util.h"
 #include "util/sst_file_manager_impl.h"
+#include "utilities/util/valvec.hpp"
 
 namespace rocksdb {
 
@@ -395,9 +395,10 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
 
   // dedup state.candidate_files so we don't try to delete the same
   // file twice
-  terark::sort_a(candidate_files, CompareCandidateFile);
-  candidate_files.resize(terark::unique_a(candidate_files, EqualCandidateFile));
-  terark::sort_a(state.skip_candidate_files);
+  bytedance_terark::sort_a(candidate_files, CompareCandidateFile);
+  candidate_files.resize(
+      bytedance_terark::unique_a(candidate_files, EqualCandidateFile));
+  bytedance_terark::sort_a(state.skip_candidate_files);
 
   if (state.prev_total_log_size > 0) {
     ROCKS_LOG_INFO(immutable_db_options_.info_log,
@@ -426,8 +427,8 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
     // 1. remove if we cannot parse
     // 2. remove if file number in skip_candidate_files
     if (!ParseFileName(fname, &number, info_log_prefix.prefix, &type) ||
-        (type != kInfoLogFile &&
-         terark::binary_search_a(state.skip_candidate_files, number))) {
+        (type != kInfoLogFile && bytedance_terark::binary_search_a(
+                                     state.skip_candidate_files, number))) {
       // erase this candidate_files
       candidate_files[i] = std::move(candidate_files.back());
       candidate_files.pop_back();

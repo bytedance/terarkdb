@@ -14,10 +14,7 @@
 #include <inttypes.h>
 
 #include <algorithm>
-#include <boost/range/algorithm.hpp>
 #include <string>
-#include <terark/util/function.hpp>
-#include <terark/valvec.hpp>
 #include <vector>
 
 #include "db/version_edit.h"
@@ -29,6 +26,7 @@
 #include "util/file_util.h"
 #include "util/stop_watch.h"
 #include "util/sync_point.h"
+#include "utilities/util/function.hpp"
 
 namespace rocksdb {
 
@@ -66,8 +64,8 @@ Status ExternalSstFileIngestionJob::Prepare(
     for (size_t i = 0; i < num_files; i++) {
       sorted_files.push_back(&files_to_ingest_[i]);
     }
-
-    terark::sort_a(sorted_files, TERARK_FIELD_P(smallest_user_key) < *ucmp);
+    std::sort(sorted_files.begin(), sorted_files.end(),
+              TERARK_FIELD_P(smallest_user_key) < *ucmp);
 
     for (size_t i = 0; i < num_files - 1; i++) {
       if (ucmp->Compare(sorted_files[i]->largest_user_key,
@@ -473,8 +471,8 @@ Status ExternalSstFileIngestionJob::AssignLevelAndSeqnoForIngestedFile(
         const std::vector<FileMetaData*>& level_files =
             vstorage->LevelFiles(lvl);
         const SequenceNumber level_largest_seqno =
-            (*boost::max_element(level_files,
-                                 TERARK_CMP_P(fd.largest_seqno, <)))
+            (*std::max_element(level_files.begin(), level_files.end(),
+                               TERARK_CMP_P(fd.largest_seqno, <)))
                 ->fd.largest_seqno;
         // should only assign seqno to current level's largest seqno when
         // the file fits

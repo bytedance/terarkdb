@@ -1,7 +1,8 @@
 #pragma once
 
 #include <string>
-#include <terark/util/factory.hpp>
+
+#include "utilities/util/factory.h"
 
 namespace rocksdb {
 
@@ -24,7 +25,7 @@ class ValueExtractor {
 };
 
 class ValueExtractorFactory
-    : public terark::Factoryable<ValueExtractorFactory*, Slice> {
+    : public bytedance_terark::Factoryable<ValueExtractorFactory*, Slice> {
  public:
   virtual ~ValueExtractorFactory() {}
 

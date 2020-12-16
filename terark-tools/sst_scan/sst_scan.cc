@@ -1,6 +1,14 @@
 #include "sst_scan.hpp"
 
+#ifdef BOOSTLIB
 #include <boost/filesystem.hpp>
+// #else
+// #if __cplusplus <= 201402L
+// #include <experimental/filesystem>
+// #else
+// #include <filesystem>
+// #endif
+#endif
 #include <stack>
 #include <unordered_map>
 
@@ -120,7 +128,7 @@ Status KeyPathAnalysis::GetTableReader(const std::string& sst_fname) {
 /**
  * If you are using the keys printed from listkeys, please add
  * `FFFFFFFFFFFFFFFF`(seq + type) behind the key to get the value.
- * 
+ *
  * `Get` will return the largest seq record <= `seq + type`
  */
 void KeyPathAnalysis::Get(const std::string& sst_fname, const Slice& key) {
@@ -309,7 +317,7 @@ void KeyPathAnalysis::GetSize(const std::string& sst_fname) {
   std::string name = table_properties_->column_family_name;
   size_t size = table_properties_->data_size;
   auto it = sz.find(name);
-  if (it != sz.end()){
+  if (it != sz.end()) {
     it->second += size;
   } else {
     sz.insert({name, size});
@@ -383,6 +391,7 @@ int main(const int argc, const char** argv) {
 
   if (memcmp(command, "listkeys", 8) == 0) {
     if (dir) {
+#ifdef BOOSTLIB
       for (auto& p : boost::filesystem::directory_iterator(target_sst)) {
         auto fname = p.path().string().c_str();
         if (strncmp(boost::filesystem::extension(fname).c_str(), ".sst", 4) ==
@@ -391,6 +400,7 @@ int main(const int argc, const char** argv) {
           kp->ListKeys(fname, val);
         }
       }
+#endif
     } else {
       kp->ListKeys(target_sst, val);
     }
@@ -400,6 +410,7 @@ int main(const int argc, const char** argv) {
     std::cout << "Get(" << target_key << ") from " << target_sst << std::endl;
     // if input target is a directory
     if (dir) {
+#ifdef BOOSTLIB
       for (auto& p : boost::filesystem::directory_iterator(target_sst)) {
         auto fname = p.path().string().c_str();
         if (strncmp(boost::filesystem::extension(fname).c_str(), ".sst", 4) ==
@@ -408,6 +419,7 @@ int main(const int argc, const char** argv) {
           kp->Get(fname, target_key_slice);
         }
       }
+#endif
     } else {
       kp->Get(target_sst, target_key_slice);
     }
@@ -462,7 +474,7 @@ int main(const int argc, const char** argv) {
         kp->GetSize(fname);
       }
     }
-    for(auto& it : kp->sz) {
+    for (auto& it : kp->sz) {
       std::cout << it.first << " : " << it.second << std::endl;
     }
   } else {

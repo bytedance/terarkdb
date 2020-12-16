@@ -9,12 +9,10 @@
 
 #include <algorithm>
 #include <atomic>
-#include <boost/range/algorithm.hpp>
 #include <limits>
 #include <memory>
 #include <queue>
 #include <string>
-#include <terark/valvec.hpp>
 #include <vector>
 
 #include "db/memtable.h"
@@ -24,6 +22,7 @@
 #include "rocksdb/memtablerep.h"
 #include "util/murmurhash.h"
 #include "util/string_util.h"
+#include "utilities/util/valvec.hpp"
 
 namespace rocksdb {
 namespace {
@@ -550,7 +549,7 @@ HashCuckooRep::Iterator::Iterator(
 
 void HashCuckooRep::Iterator::DoSort() const {
   if (!sorted_) {
-    terark::sort_a(*bucket_, "" < compare_);
+    bytedance_terark::sort_a(*bucket_, "" < compare_);
     cit_ = bucket_->begin();
     sorted_ = true;
   }
@@ -597,7 +596,8 @@ void HashCuckooRep::Iterator::Seek(const Slice& user_key,
   // Do binary search to find first value not less than the target
   const char* encoded_key =
       (memtable_key != nullptr) ? memtable_key : EncodeKey(&tmp_, user_key);
-  cit_ = boost::lower_bound(*bucket_, encoded_key, "" < compare_);
+  cit_ = std::lower_bound(bucket_->begin(), bucket_->end(), encoded_key,
+                          "" < compare_);
 }
 
 // Retreat to the last entry with a key <= target
@@ -607,7 +607,8 @@ void HashCuckooRep::Iterator::SeekForPrev(const Slice& user_key,
   // Do binary search to find first value not less than the target
   const char* encoded_key =
       (memtable_key != nullptr) ? memtable_key : EncodeKey(&tmp_, user_key);
-  cit_ = boost::upper_bound(*bucket_, encoded_key, "" < compare_);
+  cit_ = std::upper_bound(bucket_->begin(), bucket_->end(), encoded_key,
+                          "" < compare_);
   Prev();
 }
 

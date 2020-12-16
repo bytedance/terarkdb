@@ -1,15 +1,16 @@
-# What is TerarkDB
+# 0. What is TerarkDB
 TerarkDB is a RocksDB replacement with optimized tail latency, throughput and compression etc. In most cases you can migirate your existing RocksDB instance to TerarkDB without any
 drawbacks.
 
 
 **NOTES**
-- TerarkDB was only tested under Linux platform.
+- TerarkDB was only tested and production ready under Linux platform
+- Language bindings except C/C++ are not fully tested yet.
 - Existing data can be migirated from RocksDB directly to TerarkDB, but cannot migrate back to RocksDB.
 - TerarkDB was forked from RocksDB v5.18.3.
 
 
-### Performance Overview
+## Performance Overview
 - RocksDB v6.12
 - Bench Enviroment
   - use `db_bench`
@@ -18,44 +19,58 @@ drawbacks.
   - `heavy_write` means 90% write operations
   - `heavy_read` means 90% read operations
 
+### Documentation
+
+[TerarkDB all-in-one Docs](https://bytedance.feishu.cn/docs/doccnZmYFqHBm06BbvYgjsHHcKc#)
+
 ![](docs/static/images/performance/compare_rocksdb.png)
 
-# 1. Build TerarkDB
+<<<<<<< HEAD
+## Full Document
+[All-in-one Documentation](https://bytedance.feishu.cn/docs/doccnZmYFqHBm06BbvYgjsHHcKc#)
 
-## Method 1: As a CMake subdirectory (Recommend)
+
+# 1. Use TerarkDB
+
+## Method 1: Use CMake subdirectory (Recommend)
 
 1) Clone
 
 ```
 cd {YOUR_PROJECT_DIR}
-git submodule add git@code.byted.org:storage/terarkdb.git && cd terarkdb &&  git submodule update --init --recursive
+git submodule add https://github.com/bytedance/terarkdb.git
+
+cd terarkdb && git submodule update --init --recursive
 ```
 
-2) Edit your CMakeLists.txt
+2) Edit your Top Project's CMakeLists.txt
 
 ```
 add_subdirectory(terarkdb)
 target_link_libraries({YOUR_TARGET} terarkdb)
 ```
+
 3) Important Default Options
 
 - CMAKE_BUILD_TYPE: Debug
 - WITH_JEMALLOC: ON
 - WITH_TESTS: OFF
-
-It SHOULD works now, if it doesn't please contact us.
+- WITH_TOOLS: OFF
 
 
 ### Notes
 - TerarkDB is built with zstd, lz4, snappy, zlib, gtest, boost by default, if you need these libraries, you can remove them from your higher level application.
 
 
-## Method 2: Manully import to your existing project
+## Method 2: Link as static library
 
 1) clone & build
 
 ```
-git clone git@code.byted.org:storage/terarkdb.git && cd terarkdb && git submodule update --init --recursive
+git clone https://github.com/bytedance/terarkdb.git
+
+cd terarkdb && git submodule update --init --recursive
+
 ./build.sh
 ```
 
@@ -103,7 +118,7 @@ TerarkDB has been deployed in lots of applications in Bytedance, in most cases T
 
 # 4. Contributing
 - TerarkDB uses Github issues and pull requests to manage features and bug fixes.
-- All PRs are welcome including code formatting and refactoring.
+- All PRs are welcome including code formating and refactoring.
 
 
 # 5. License

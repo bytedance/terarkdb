@@ -5,11 +5,10 @@
 
 #include "db/table_properties_collector.h"
 
-#include <terark/util/factory.ipp>
-
 #include "db/dbformat.h"
 #include "util/coding.h"
 #include "util/string_util.h"
+#include "utilities/util/factory.h"
 
 namespace rocksdb {
 namespace {
@@ -66,4 +65,5 @@ uint64_t GetMergeOperands(const UserCollectedProperties& props,
 
 }  // namespace rocksdb
 
-TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::TablePropertiesCollectorFactory*);
+BYTEDANCE_TERARK_FACTORY_INSTANTIATE_GNS(
+    rocksdb::TablePropertiesCollectorFactory*);

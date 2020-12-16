@@ -13,7 +13,6 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
 #endif
-#include <boost/fiber/future.hpp>
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
@@ -102,8 +101,8 @@ class CompactionJob {
   struct ProcessArg {
     CompactionJob* job;
     int task_id;
-    boost::fibers::promise<bool> finished;
-    boost::fibers::future<bool> future;
+    std::promise<bool> finished;
+    std::future<bool> future;
   };
 
   static void CallProcessCompaction(void* arg);

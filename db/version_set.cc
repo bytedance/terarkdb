@@ -21,7 +21,6 @@
 #include <map>
 #include <set>
 #include <string>
-#include <terark/valvec.hpp>
 #include <unordered_map>
 #include <vector>
 
@@ -55,6 +54,7 @@
 #include "util/stop_watch.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
+#include "utilities/util/valvec.hpp"
 
 namespace rocksdb {
 
@@ -66,8 +66,8 @@ int FindFileInRange(const InternalKeyComparator& icmp,
                     const LevelFilesBrief& file_level, const Slice& key,
                     uint32_t left, uint32_t right) {
   return static_cast<int>(
-      terark::lower_bound_ex_n(file_level.files, left, right, key,
-                               TERARK_FIELD(largest_key), "" < icmp));
+      bytedance_terark::lower_bound_ex_n(file_level.files, left, right, key,
+                                         TERARK_FIELD(largest_key), "" < icmp));
 }
 
 Status OverlapWithIterator(const Comparator* ucmp,
@@ -2040,7 +2040,7 @@ void SortFileByOverlappingRatio(
         overlapping_bytes * 1024u / file->fd.file_size;
   }
 
-  terark::sort_ex_a(*temp, [&](const Fsize& f) {
+  bytedance_terark::sort_ex_a(*temp, [&](const Fsize& f) {
     return file_to_order[f.file->fd.GetNumber()];
   });
 }
@@ -2078,10 +2078,10 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
                           TERARK_CMP(file->compensated_file_size, >));
         break;
       case kOldestLargestSeqFirst:
-        terark::sort_a(temp, TERARK_CMP(file->fd.largest_seqno, <));
+        bytedance_terark::sort_a(temp, TERARK_CMP(file->fd.largest_seqno, <));
         break;
       case kOldestSmallestSeqFirst:
-        terark::sort_a(temp, TERARK_CMP(file->fd.smallest_seqno, <));
+        bytedance_terark::sort_a(temp, TERARK_CMP(file->fd.smallest_seqno, <));
         break;
       case kMinOverlappingRatio:
         SortFileByOverlappingRatio(*internal_comparator_, files_[level],
@@ -2113,7 +2113,8 @@ void VersionStorageInfo::GenerateLevel0NonOverlapping() {
       level_files_brief_[0].files,
       level_files_brief_[0].files + level_files_brief_[0].num_files);
   auto icmp = internal_comparator_;
-  terark::sort_a(level0_sorted_file, TERARK_FIELD(smallest_key) < *icmp);
+  bytedance_terark::sort_a(level0_sorted_file,
+                           TERARK_FIELD(smallest_key) < *icmp);
 
   for (size_t i = 1; i < level0_sorted_file.size(); ++i) {
     FdWithKeyRange& f = level0_sorted_file[i];

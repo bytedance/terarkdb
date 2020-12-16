@@ -11,7 +11,9 @@
 #include "db/range_del_aggregator.h"
 #include "port/stack_trace.h"
 #include "rocksdb/memtablerep.h"
+#ifdef BYTEDANCE_TERARK_ZIP
 #include "memtable/terark_zip_memtable.h"
+#endif
 #include "rocksdb/slice_transform.h"
 
 namespace rocksdb {
@@ -78,9 +80,8 @@ class MockMemTableRepFactory : public MemTableRepFactory {
                                          const SliceTransform* transform,
                                          Logger* logger) override {
     SkipListFactory factory;
-    MemTableRep* skiplist_rep =
-        factory.CreateMemTableRep(cmp, needs_dup_key_check, allocator,
-                                  transform, logger);
+    MemTableRep* skiplist_rep = factory.CreateMemTableRep(
+        cmp, needs_dup_key_check, allocator, transform, logger);
     mock_rep_ = new MockMemTableRep(allocator, skiplist_rep);
     return mock_rep_;
   }
@@ -272,7 +273,8 @@ TEST_F(DBMemTableTest, ColumnFamilyId) {
   }
 }
 
-TEST(PatriciaMemTableTest, Normal){
+#ifdef BYTEDANCE_TERARK_ZIP
+TEST(PatriciaMemTableTest, Normal) {
   SequenceNumber seq = 123;
   std::string value;
   Status s;
@@ -309,6 +311,7 @@ TEST(PatriciaMemTableTest, Normal){
 
   delete mem;
 }
+#endif
 
 }  // namespace rocksdb
 

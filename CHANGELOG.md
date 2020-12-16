@@ -1,70 +1,58 @@
 ## CHANGELOG
 
-- 版本号：v1.2.12
-- 日期：2020-09-18
-- 发版说明：
-  - 计划内例行发版
-- 功能变更：
-  - 增加选项 DBOptions::max_wal_size 控制最大单个 WAL 文件大小
-  - SstFileManager 增加 DisableTruncate/EnableTruncate 接口
-    - 允许暂时禁用 DeleteScheduler 的 Truncate 调用
-- 修复问题：
-  - 修复开区 KV 分离后 SstFileManager 空间计算错误的问题
-  - 修复多 CF 下内存管控导致疯狂 Flush 单个 CF 导致写 Stop 的问题
-- 已知问题：
-  - 使用 LazyUniversalCompaction 有极低概率触发无效 TrivialMove 导致写阻塞
+### 2020-12-11
 
-- 版本号：v1.2.11
-- 日期：2020-08-28
-- 发版说明：
-  - 计划内例行发版
-- 功能变更：
-  - 无
-- 修复问题：
-  - 修复短时间删除大量 WAL 挤占 IO 导致长尾的问题（继承自原版 RocksDB）
-  - 修复 SST 文件过多，锁内时间失控导致长尾的问题（继承自原版 RocksDB）
-  - 修复多 CF 下 DumpStats 锁内时间时空导致长尾的问题（继承自原版 RocksDB）
-- 已知问题：
-  - 使用 LazyUniversalCompaction 有极低概率触发无效 TrivialMove 导致写阻塞
+### 2020-09-18
+- v1.2.12
+- Release Note
+  - Add `DBOptions::max_wal_size` for WAL size control
+  - Add DisableTruncate/EnableTruncate API for SstFileManager
+    - Allow users disablng `DeleteScheduler`'s `Truncate` function
+  - Fix the calculation of used space in `SstFileManager`(not accurate) after enabling KV separetion
+  - Fix memory usage problem uder multi-CF
+- Known Issues:
+  - Use of `LazyUniversalCompaction` may have a extremely low probability trigger write stop.
 
-- 版本号：v1.2.10
-- 日期：2020-08-07
-- 发版说明：
-  - 计划内例行发版
-- 功能变更：
-  - 无
-- 修复问题：
-  - 修复开启 prepare_log_writer_num 之后有风险导致 WAL 错续的问题
-  - 修复 WalManager::GetUpdatesSince 的两处问题（继承自原版 RocksDB）
-  - 修复开启 MemTable InplaceUpdate 之后可能脏读的问题（继承自原版 RocksDB）
-- 已知问题：
-  - 使用 LazyUniversalCompaction 有极低概率触发无效 TrivialMove 导致写阻塞
+### 2020-08-28
+- v1.2.11
+- Release Note
+  - [Bug Fix] Large WAL deletion triggers latency spike due to IO content
+  - [Bug Fix] Move lots of code outside db mutex lock for better performance when SST file number is huge.
+  - [Bug Fix] DumpStats cost too much time inside mutex when there are too many CFs
+- Known Issues：
+  - Use of `LazyUniversalCompaction` may have a extremely low probability trigger write stop.
 
-- 版本号：v1.2.9
-- 日期：2020-07-24
-- 发版说明：
-  - 计划内例行发版
-- 功能变更：
-  - 降低 SkipList MemTable 比较器成本，优化性能
-  - 支持 PatriciaTrie MemTable
-  - 支持 CMake 集成构建
-  - 支持 avoid_unnecessary_blocking_io 选项，降低长尾
-  - 减少调用链中的内存拷贝，降低大 Value 读取成本
-  - ValueMetaExtractor 重构，支持取得 Key 与 CF_ID
-  - Metrics 新增 Latency 的 Avg 与 Max 上报
-- 修复问题：
-  - 修复 VersionBuilder 在锁内执行逻辑过复杂导致的长尾问题
-  - 修复删除迭代器时，清理 MemTable 内存导致长尾的问题
-  - 修复后台在锁内执行目录扫描导致长尾的问题
-  - 修复 ReadOptions::tailing 为 true 导致野指针访问的 BUG
-  - 修复 promise 生存周期管控导致 Crash 的 BUG
-  - 修复后台创建 WAL 引入 WriteStop 风险的 BUG
-  - 修复读取空 Value 失败的 BUG
-- 已知问题：
-  - 使用 LazyUniversalCompaction 有极低概率触发无效 TrivialMove 导致写阻塞
+### 2020-08-07
+- v1.2.10
+- Release Note：
+  - [Bug Fix] WAL may corruput when enabling prepare_log_writer_num 
+  - [Bug Fix] WalManager::GetUpdatesSince
+  - [Bug Fix] Dirty Read problem after enabling `MemTable InplaceUpdate`
+- Known Issues：
+  - Use of `LazyUniversalCompaction` may have a extremely low probability trigger write stop.
 
+### 2020-07-24
+- v1.2.9
+- Release Note：
+  - [Performance] Optimize comparator performance in SkipList MemTable
+  - [Performance] Reduce memory copies in lots of place, reduce value reading cost
+  - [Feature] Add a new `PatriciaTrie MemTable` for better performance
+  - [Feature] Add `avoid_unnecessary_blocking_io`, reduce tail lantency
+  - [Feature] Refactor ValueMetaExtractor, allow users to extract `Key` and `CF_ID`
+  - [Build] Change to CMake build
+  - [Stats] Add Avg and Max latency for Metrics module
+  - [Bug Fix] Reduce mutex cost in `VersionBuilder` which triggers latency spike
+  - [Bug Fix] Deletion of `Iterators` trigger latency spike in some cases
+  - [Bug Fix] Mutex costs too much during background directory scanning
+  - [Bug Fix] Bad pointer ReadOptions::tailing  true 导致野指针访问的 BUG
+  - [Bug Fix] Lifcycle management of `Promise` may crash application in some cases
+  - [Bug Fix] WAL creation in background may trigger write stop
+  - [Bug Fix] Empty Value reading may fail in some cases
+- Know issues：
+  - Use of `LazyUniversalCompaction` may have a extremely low probability trigger write stop.
+
+### 2020-06-04
 - 版本号：v1.2.8
-- 日期：2020-06-04
 - 发版说明：
   - 计划内例行发版
 - 功能变更：
@@ -263,4 +251,3 @@
 
 2019-08-21
 - add co-routina by using boost fiber
-

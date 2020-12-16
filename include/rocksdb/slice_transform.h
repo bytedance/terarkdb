@@ -15,7 +15,8 @@
 #pragma once
 
 #include <string>
-#include <terark/util/factory.hpp>
+
+#include "utilities/util/factory.h"
 
 namespace rocksdb {
 
@@ -28,7 +29,8 @@ class Slice;
  * ColumnFamilyOptions.
  */
 class SliceTransform
-    : public terark::Factoryable<SliceTransform*, const std::string&> {
+    : public bytedance_terark::Factoryable<SliceTransform*,
+                                           const std::string&> {
  public:
   virtual ~SliceTransform(){};
 

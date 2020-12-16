@@ -8,19 +8,23 @@
 
 #pragma once
 
-#include <boost/noncopyable.hpp>
 #include <functional>
 #include <future>
 #include <string>
 
+#include "utilities/util/terark_boost.hpp"
 #include "rocksdb/env.h"
 
 namespace rocksdb {
-
+// using terark_boost::noncopyable;
 struct CompactionWorkerContext;
 struct CompactionWorkerResult;
 
+#ifdef BOOSTLIB
 class CompactionDispatcher : boost::noncopyable {
+#else
+class CompactionDispatcher : terark_boost::noncopyable {
+#endif
  public:
   virtual ~CompactionDispatcher() = default;
 
@@ -38,8 +42,11 @@ class RemoteCompactionDispatcher : public CompactionDispatcher {
   virtual const char* Name() const override;
 
   virtual std::future<std::string> DoCompaction(std::string data) = 0;
-
+#ifdef BOOSTLIB
   class Worker : boost::noncopyable {
+#else
+  class Worker : terark_boost::noncopyable {
+#endif
    public:
     Worker(EnvOptions env_options, Env* env);
     virtual ~Worker();

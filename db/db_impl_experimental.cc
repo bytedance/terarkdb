@@ -15,13 +15,13 @@
 
 #include <inttypes.h>
 
-#include <terark/valvec.hpp>
 #include <vector>
 
 #include "db/column_family.h"
 #include "db/job_context.h"
 #include "db/version_set.h"
 #include "rocksdb/status.h"
+#include "utilities/util/valvec.hpp"
 
 namespace rocksdb {
 
@@ -89,7 +89,7 @@ Status DBImpl::PromoteL0(ColumnFamilyHandle* column_family, int target_level) {
     // Sort L0 files by range.
     const InternalKeyComparator* icmp = &cfd->internal_comparator();
     auto l0_files = vstorage->LevelFiles(0);
-    terark::sort_a(l0_files, TERARK_FIELD_P(largest) < *icmp);
+    bytedance_terark::sort_a(l0_files, TERARK_FIELD_P(largest) < *icmp);
 
     // Check that no L0 file is being compacted and that they have
     // non-overlapping ranges.

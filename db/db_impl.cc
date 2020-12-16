@@ -99,9 +99,9 @@
 #include "utilities/trace/bytedance_metrics_reporter.h"
 #if !defined(_MSC_VER) && !defined(__APPLE__)
 #include <sys/unistd.h>
-#include <table/terark_zip_table.h>
+// #include <table/terark_zip_table.h>
 #endif
-#include <terark/valvec.hpp>
+#include "utilities/util/valvec.hpp"
 
 #ifdef __GNUC__
 #pragma GCC diagnostic push
@@ -109,9 +109,11 @@
 #endif
 
 //#include <terark/util/fiber_pool.hpp>
+#ifdef BOOSTLIB
 #include <boost/fiber/all.hpp>
+#endif
 //#include <boost/context/pooled_fixedsize_stack.hpp>
-#include <terark/thread/fiber_yield.hpp>
+// #include <terark/thread/fiber_yield.hpp>
 
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
@@ -1532,6 +1534,7 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
   return s;
 }
 
+#ifdef BOOSTLIB
 struct SimpleFiberTls {
   static constexpr intptr_t MAX_QUEUE_LEN = 256;
   static constexpr intptr_t DEFAULT_FIBER_CNT = 8;
@@ -1622,6 +1625,7 @@ struct SimpleFiberTls {
 // because SimpleFiberTls.channel must be destructed first
 static thread_local SimpleFiberTls gt_fibers(
     boost::fibers::context::active_pp());
+#endif  // BOOSTLIB
 
 std::vector<Status> DBImpl::MultiGet(
     const ReadOptions& read_options,
@@ -1725,7 +1729,7 @@ std::vector<Status> DBImpl::MultiGet(
     }
     counting--;
   };
-
+#ifdef BOOSTLIB
   if (read_options.aio_concurrency && immutable_db_options_.use_aio_reads) {
 #if 0
     static thread_local terark::RunOnceFiberPool fiber_pool(16);
@@ -1748,10 +1752,13 @@ std::vector<Status> DBImpl::MultiGet(
     }
 #endif
   } else {
+#endif
     for (size_t i = 0; i < num_keys; ++i) {
       get_one(i);
     }
+#ifdef BOOSTLIB
   }
+#endif
 
   // Post processing (decrement reference counts and record statistics)
   PERF_TIMER_GUARD(get_post_process_time);
@@ -1784,7 +1791,7 @@ std::vector<Status> DBImpl::MultiGet(
   PERF_TIMER_STOP(get_post_process_time);
 
   return stat_list;
-}
+}  // namespace rocksdb
 
 Status DBImpl::CreateColumnFamily(const ColumnFamilyOptions& cf_options,
                                   const std::string& column_family,
@@ -1871,10 +1878,12 @@ Status DBImpl::CreateColumnFamilyImpl(const ColumnFamilyOptions& cf_options,
           "env TerarkZipTable_localTempDir",
           terarkdb_localTempDir);
     }
+#ifdef BYTEDANCE_TERARK_ZIP
     if (!TerarkZipIsBlackListCF(column_family_name)) {
       TerarkZipCFOptionsFromEnv(const_cast<ColumnFamilyOptions&>(cf_options),
                                 dbname_);
     }
+#endif
   }
 #endif
 
@@ -2940,7 +2949,7 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
         deleted_range.push_back(deleted);
       }
       // sort & merge ranges
-      terark::sort_a(deleted_range, TERARK_FIELD(start) < *uc);
+      bytedance_terark::sort_a(deleted_range, TERARK_FIELD(start) < *uc);
       size_t c = 0;
       n = deleted_range.size();
       for (size_t i = 1; i < n; ++i) {
@@ -3214,6 +3223,7 @@ Status DB::DestroyColumnFamilyHandle(ColumnFamilyHandle* column_family) {
 
 DB::~DB() {}
 
+#ifdef BOOSTLIB
 void DB::CallOnMainStack(const std::function<void()>& fn) {
   gt_fibers.m_fy.sched()->call_on_main_stack(fn);
 }
@@ -3284,6 +3294,7 @@ void DB::GetAsync(const ReadOptions& ro, std::string key, GetAsyncCallback cb) {
 int DB::WaitAsync(int timeout_us) { return gt_fibers.wait(timeout_us); }
 
 int DB::WaitAsync() { return gt_fibers.wait(); }
+#endif  // BOOSTLIB
 
 // using future needs boost symbols to be exported, but we don't want to
 // export boost symbols

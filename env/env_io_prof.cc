@@ -1,6 +1,11 @@
 #include <rocksdb/env.h>
-#include <utilities/ioprof/ioprof.h>
+
+#include "utilities/ioprof/ioprof.h"
+#ifdef BOOSTLIB
 #include <boost/current_function.hpp>
+#else
+#define BOOST_CURRENT_FUNCTION "(unknown)"
+#endif
 
 namespace rocksdb {
 
@@ -152,8 +157,7 @@ class IOProfEnv : public EnvWrapper {
     return s;
   }
 
-  Status NewRandomRWFile(const std::string& f,
-                         std::unique_ptr<RandomRWFile>* r,
+  Status NewRandomRWFile(const std::string& f, std::unique_ptr<RandomRWFile>* r,
                          const EnvOptions& options) override {
     std::unique_ptr<RandomRWFile> rt;
     IOProfiler::Scope _scope_(BOOST_CURRENT_FUNCTION);

@@ -13,7 +13,9 @@
 
 #include <inttypes.h>
 
+#ifdef BOOSTLIB
 #include <boost/range/algorithm.hpp>
+#endif
 #include <iostream>
 #include <map>
 #include <memory>
@@ -299,7 +301,9 @@ Status SstFileDumper::SetTableOptionsByMagicNumber(
           "env TerarkZipTable_localTempDir",
           terarkdb_localTempDir);
     }
+#ifdef BYTEDANCE_TERARK_ZIP
     TerarkZipConfigFromEnv(options_, options_);
+#endif
 #endif
   } else {
     char error_msg_buffer[80];
@@ -513,8 +517,14 @@ int SSTDumpTool::Run(int argc, char** argv) {
       std::istringstream iss(compression_types_csv);
       std::string compression_type;
       while (std::getline(iss, compression_type, ',')) {
+#ifdef BOOSTLIB
         auto iter = boost::find_if(
             kCompressions, TERARK_GET(.second) == std::cref(compression_type));
+#else
+        auto iter =
+            std::find_if(kCompressions.begin(), kCompressions.end(),
+                         TERARK_GET(.second) == std::cref(compression_type));
+#endif
         if (iter == kCompressions.end()) {
           fprintf(stderr, "%s is not a valid CompressionType\n",
                   compression_type.c_str());

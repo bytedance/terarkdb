@@ -9,7 +9,6 @@
 
 #include "rocksdb/env.h"
 
-#include <terark/fstring.hpp>
 #include <thread>
 
 #include "options/db_options.h"
@@ -18,7 +17,8 @@
 #include "rocksdb/options.h"
 #include "util/arena.h"
 #include "util/autovector.h"
-
+#include "utilities/util/factory.h"
+#include "utilities/util/function.hpp"
 namespace rocksdb {
 
 Env::~Env() {}
@@ -421,8 +421,9 @@ EnvOptions::EnvOptions() {
   AssignEnvOptions(this, options);
 }
 
-#define FROM_ENV_bool(field) \
-  field = terark::getEnvBool("EnvOptions_" TERARK_PP_STR(field), field)
+#define FROM_ENV_bool(field)                                                \
+  (field = bytedance_terark::getEnvBool("EnvOptions_" TERARK_PP_STR(field), \
+                                        field))
 
 void EnvOptions::InitFromEnvVar() {
   FROM_ENV_bool(use_aio_reads);

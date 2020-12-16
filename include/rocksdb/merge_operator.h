@@ -8,11 +8,11 @@
 #include <deque>
 #include <memory>
 #include <string>
-#include <terark/util/factory.hpp>
 #include <vector>
 
 #include "rocksdb/lazy_buffer.h"
 #include "rocksdb/status.h"
+#include "utilities/util/factory.h"
 
 namespace rocksdb {
 
@@ -46,7 +46,7 @@ class Logger;
 // Refer to rocksdb-merge wiki for more details and example implementations.
 //
 class MergeOperator
-    : public terark::Factoryable<MergeOperator*, const std::string&> {
+    : public bytedance_terark::Factoryable<MergeOperator*, const std::string&> {
  protected:
   static bool Fetch(const LazyBuffer& buffer, LazyBuffer* new_value) {
     auto s = buffer.fetch();

@@ -1,5 +1,4 @@
 This document lists users of RocksDB and their use cases. If you are using RocksDB, please open a pull request and add yourself to the list.
-
 ## Facebook
 At Facebook, we use RocksDB as storage engines in multiple data management services and a backend for many different stateful services, including:
 

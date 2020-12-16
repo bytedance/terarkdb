@@ -1,3 +1,8 @@
+# TerarkDB authors
+Bytedance Inc.
+Bytedance Engineering Team
+
+# RocksDB authors
 Facebook Inc.
 Facebook Engineering Team
 
@@ -10,6 +15,3 @@ Sanjay Ghemawat <sanjay@google.com>
 Kevin Regan <kevin.d.regan@gmail.com>
 Johan Bilien <jobi@litl.com>
 Matthew Von-Maszewski <https://github.com/matthewvon> (Basho Technologies)
-
-Bytedance Inc.
-Bytedance Engineering Team

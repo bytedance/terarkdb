@@ -74,11 +74,12 @@ int main() {
 #if !(defined NDEBUG) || !defined(OS_WIN)
 #include "util/sync_point.h"
 #endif  // !(defined NDEBUG) || !defined(OS_WIN)
+#ifdef BOOSTLIB
 #include <boost/range/algorithm.hpp>
-#include <terark/util/function.hpp>
-
+#endif
 #include "util/testutil.h"
 #include "utilities/merge_operators.h"
+#include "utilities/util/function.hpp"
 
 using GFLAGS_NAMESPACE::ParseCommandLineFlags;
 using GFLAGS_NAMESPACE::RegisterFlagValidator;
@@ -535,8 +536,10 @@ enum rocksdb::ChecksumType StringToChecksumType(const char* ctype) {
 }
 
 std::string ChecksumTypeToString(rocksdb::ChecksumType ctype) {
-  auto iter = boost::find_if(rocksdb::checksum_type_string_map,
-                             TERARK_GET(.second) == ctype);
+  auto iter = std::find_if(rocksdb::checksum_type_string_map.begin(),
+                           rocksdb::checksum_type_string_map.end(),
+                           TERARK_GET(.second) == ctype);
+
   assert(iter != rocksdb::checksum_type_string_map.end());
   return iter->first;
 }
@@ -783,13 +786,20 @@ class Stats {
     done_++;
     if (FLAGS_progress_reports) {
       if (done_ >= next_report_) {
-        if      (next_report_ < 1000)   next_report_ += 100;
-        else if (next_report_ < 5000)   next_report_ += 500;
-        else if (next_report_ < 10000)  next_report_ += 1000;
-        else if (next_report_ < 50000)  next_report_ += 5000;
-        else if (next_report_ < 100000) next_report_ += 10000;
-        else if (next_report_ < 500000) next_report_ += 50000;
-        else                            next_report_ += 100000;
+        if (next_report_ < 1000)
+          next_report_ += 100;
+        else if (next_report_ < 5000)
+          next_report_ += 500;
+        else if (next_report_ < 10000)
+          next_report_ += 1000;
+        else if (next_report_ < 50000)
+          next_report_ += 5000;
+        else if (next_report_ < 100000)
+          next_report_ += 10000;
+        else if (next_report_ < 500000)
+          next_report_ += 50000;
+        else
+          next_report_ += 100000;
         fprintf(stdout, "... finished %ld ops%30s\r", done_, "");
       }
     }
@@ -2510,8 +2520,9 @@ class StressTest {
         // this is a reopen. just assert that existing column_family_names are
         // equivalent to what we remember
         auto sorted_cfn = column_family_names_;
-        boost::sort(sorted_cfn);
-        boost::sort(existing_column_families);
+        std::sort(sorted_cfn.begin(), sorted_cfn.end());
+        std::sort(existing_column_families.begin(),
+                  existing_column_families.end());
         if (sorted_cfn != existing_column_families) {
           fprintf(stderr,
                   "Expected column families differ from the existing:\n");

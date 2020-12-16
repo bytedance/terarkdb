@@ -39,27 +39,6 @@ IF(WITH_SNAPPY)
   ENDIF()
 ENDIF()
 
-# Metrics
-IF(WITH_BYTEDANCE_METRICS)
-  IF(TARGET metrics2)
-    MESSAGE("[terarkdb/third-party] bytedance_metrics2 target exist, re-use it!")
-  ELSE()
-    MESSAGE("[terarkdb/third-party] bytedance_metrics2 target not exist, let's build it!")
-    ExternalProject_Add(metrics2-project
-        SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/metrics2-cmake
-        CONFIGURE_COMMAND rm -rf cmake-build && mkdir -p cmake-build && mkdir -p ${CMAKE_BINARY_DIR}/lib
-        BUILD_IN_SOURCE 1
-        BUILD_COMMAND cd cmake-build && cmake ../ -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} && make -j $(nproc)
-        # metrics2 doesn't have a install instruction, so we have to manully install it
-        INSTALL_COMMAND cp cmake-build/libmetrics2.a ${CMAKE_BINARY_DIR}/lib/)
-    ADD_LIBRARY(metrics2 STATIC IMPORTED GLOBAL)
-    ADD_DEPENDENCIES(metrics2 metrics2-project)
-    SET_TARGET_PROPERTIES(metrics2 PROPERTIES
-        IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/lib/libmetrics2.a
-        INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/metrics2-cmake/)
-  ENDIF()
-ENDIF()
-
 # Zlib
 IF(WITH_ZLIB)
   IF(TARGET zlib)
@@ -183,4 +162,4 @@ IF(WITH_JEMALLOC)
 ENDIF()
 
 # terark-zip
-add_subdirectory(terark-zip)
+# add_subdirectory(terark-zip)

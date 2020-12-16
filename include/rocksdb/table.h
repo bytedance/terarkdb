@@ -19,7 +19,6 @@
 
 #include <memory>
 #include <string>
-#include <terark/util/factory.hpp>
 #include <unordered_map>
 
 #include "rocksdb/cache.h"
@@ -27,6 +26,7 @@
 #include "rocksdb/iterator.h"
 #include "rocksdb/options.h"
 #include "rocksdb/status.h"
+#include "utilities/util/factory.h"
 
 namespace rocksdb {
 
@@ -434,7 +434,8 @@ class RandomAccessFileReader;
 
 // A base class for table factories.
 class TableFactory
-    : public terark::Factoryable<TableFactory*, const std::string&, Status*> {
+    : public bytedance_terark::Factoryable<TableFactory*, const std::string&,
+                                           Status*> {
  public:
   virtual ~TableFactory() {}
 

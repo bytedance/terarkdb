@@ -24,7 +24,9 @@
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #endif
 
+#ifdef BOOSTLIB
 #include <boost/fiber/all.hpp>
+#endif
 
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
@@ -36,13 +38,12 @@
 #include <memory>
 #include <random>
 #include <set>
-#include <terark/util/function.hpp>
-#include <terark/valvec.hpp>
 #include <thread>
 #include <utility>
 #include <vector>
 
 #include "db/builder.h"
+// #include "db/compaction_dispatcher.cc"
 #include "db/db_impl.h"
 #include "db/db_iter.h"
 #include "db/dbformat.h"
@@ -86,6 +87,8 @@
 #include "util/stop_watch.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
+#include "utilities/util/function.hpp"
+#include "utilities/util/valvec.hpp"
 
 namespace rocksdb {
 
@@ -483,7 +486,8 @@ int CompactionJob::Prepare(int sub_compaction_slots) {
       std::nth_element(input_range.begin(), input_range.begin() + n,
                        input_range.end(), TERARK_CMP(weight, >));
       input_range.resize(n);
-      terark::sort_a(input_range, TERARK_FIELD(start) < *uc);
+      std::sort(input_range.begin(), input_range.end(),
+                TERARK_FIELD(start) < *uc);
     }
     for (size_t i = 0; i < n; ++i) {
       Slice* start = &boundaries_[i * 2];
@@ -595,11 +599,12 @@ void CompactionJob::GenSubcompactionBoundaries(int max_usable_threads) {
       }
     }
   }
-
-  terark::sort_a(bounds, &ExtractUserKey < *cfd_comparator);
+  bytedance_terark::sort_a(bounds, &ExtractUserKey < *cfd_comparator);
 
   // Remove duplicated entries from bounds
-  bounds.resize(terark::unique_a(bounds, &ExtractUserKey == *cfd_comparator));
+  // bounds.resize(terark::unique_a(bounds, &ExtractUserKey ==
+  // *cfd_comparator));
+  bounds.resize(bytedance_terark::unique_a(bounds, &ExtractUserKey == *cfd_comparator));
 
   // Combine consecutive pairs of boundaries into ranges with an approximate
   // size of data covered by keys in that range
@@ -672,14 +677,18 @@ void CompactionJob::GenSubcompactionBoundaries(int max_usable_threads) {
 static std::shared_ptr<CompactionDispatcher> GetCmdLineDispatcher() {
   const char* cmdline = getenv("TerarkDB_compactionWorkerCommandLine");
   if (cmdline) {
+#ifdef BYTEDANCE_TERARK_ZIP
     return NewCommandLineCompactionDispatcher(cmdline);
+#endif
   }
   return {};
 }
 
 Status CompactionJob::Run() {
   TEST_SYNC_POINT("CompactionJob::Run():OuterStart");
+#ifdef BYTEDANCE_TERARK_ZIP
   assert(!IsCompactionWorkerNode());
+#endif
   ColumnFamilyData* cfd = compact_->compaction->column_family_data();
   CompactionDispatcher* dispatcher = cfd->ioptions()->compaction_dispatcher;
   Compaction* c = compact_->compaction;
@@ -2071,7 +2080,8 @@ Status CompactionJob::FinishCompactionOutputFile(
     for (auto& pair : dependence) {
       meta->prop.dependence.emplace_back(Dependence{pair.first, pair.second});
     }
-    terark::sort_a(meta->prop.dependence, TERARK_CMP(file_number, <));
+    std::sort(meta->prop.dependence.begin(), meta->prop.dependence.end(),
+              TERARK_CMP(file_number, <));
 
     auto shrinked_snapshots = meta->ShrinkSnapshot(existing_snapshots_);
     s = sub_compact->builder->Finish(&meta->prop, &shrinked_snapshots);

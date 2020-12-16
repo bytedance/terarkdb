@@ -35,7 +35,7 @@
 #include "util/coding.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
-#include <terark/thread/fiber_aio.hpp>
+// #include <terark/thread/fiber_aio.hpp>
 
 #if defined(OS_LINUX) && !defined(F_SET_RW_HINT)
 #define F_LINUX_SPECIFIC_BASE 1024
@@ -333,8 +333,8 @@ static Status PosixFsRead(uint64_t offset, size_t n, Slice* result,
   size_t left = n;
   char* ptr = scratch;
   while (left > 0) {
-    if (use_aio_reads_) {
-      r = terark::fiber_aio_read(fd_, ptr, left, static_cast<off_t>(offset));
+    if (false && use_aio_reads_) {
+      // r = terark::fiber_aio_read(fd_, ptr, left, static_cast<off_t>(offset));
     }
     else {
       r = pread(fd_, ptr, left, static_cast<off_t>(offset));

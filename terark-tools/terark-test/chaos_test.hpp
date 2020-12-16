@@ -1,4 +1,5 @@
 #include <sys/epoll.h>
+
 #include <cctype>
 #include <chrono>
 #include <cinttypes>
@@ -34,13 +35,18 @@ typedef struct epoll_event Event;
 #include <table/iterator_wrapper.h>
 #include <table/table_builder.h>
 #include <table/table_reader.h>
+#ifdef BYTEDANCE_TERARK_ZIP
 #include <terark/zbs/sufarr_inducedsort.h>
-#include <util/gflags_compat.h>
+#endif
 #include <util/coding.h>
 #include <util/filename.h>
+#include <util/gflags_compat.h>
 #include <utilities/merge_operators/string_append/stringappend.h>
 #include <utilities/merge_operators/string_append/stringappend2.h>
+#ifdef BOOSTLIB
 #include <boost/fiber/future.hpp>
+#endif
+#ifdef BYTEDANCE_TERARK_ZIP
 #include <terark/fsa/cspptrie.inl>
 #include <terark/io/FileStream.hpp>
 #include <terark/lcast.hpp>
@@ -50,8 +56,10 @@ typedef struct epoll_event Event;
 #include <terark/util/mmap.hpp>
 #include <terark/zbs/dict_zip_blob_store.hpp>
 #include <terark/zbs/zip_reorder_map.hpp>
+#endif
 // worker test
 #include <rocksdb/compaction_dispatcher.h>
+
 #include "db/column_family.h"
 #include "db/compaction_job.h"
 #include "db/db_impl.h"
@@ -59,9 +67,12 @@ typedef struct epoll_event Event;
 #include "db/memtable.h"
 
 // terark test
+#ifdef BYTEDANCE_TERARK_ZIP
 #include <table/terark_zip_common.h>
 #include <table/terark_zip_table.h>
+
 #include <terark/idx/terark_zip_index.hpp>
+#endif
 
 DEFINE_bool(get, true, "test Get");
 DEFINE_bool(iter, false, "test Iterator");
@@ -201,9 +212,15 @@ struct ReadContext {
   std::vector<rocksdb::Status> ss;
   std::vector<rocksdb::Slice> keys;
   std::vector<std::string> values;
+#ifdef BOOSTLIB
   std::vector<boost::fibers::future<
       std::tuple<rocksdb::Status, std::string, std::string>>>
       futures;
+#else
+  std::vector<
+      std::future<std::tuple<rocksdb::Status, std::string, std::string>>>
+      futures;
+#endif
   std::vector<std::string> async_values;
   std::vector<rocksdb::Status> async_status;
   std::vector<std::string> multi_values;

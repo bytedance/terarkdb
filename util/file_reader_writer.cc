@@ -19,6 +19,7 @@
 #include "util/rate_limiter.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
+#include "utilities/util/factory.h"
 
 #undef min
 
@@ -95,7 +96,7 @@ RandomAccessFileReader::RandomAccessFileReader(
 #else  // !ROCKSDB_LITE
   (void)listeners;
 #endif
-  use_fsread_ = terark::getEnvBool("TerarkDB_FileReaderUseFsRead");
+  use_fsread_ = bytedance_terark::getEnvBool("TerarkDB_FileReaderUseFsRead");
 }
 
 Status RandomAccessFileReader::Read(uint64_t offset, size_t n, Slice* result,

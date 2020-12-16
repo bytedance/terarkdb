@@ -11,11 +11,11 @@
 #include <cassert>
 #include <memory>
 #include <string>
-#include <terark/util/factory.hpp>
 #include <vector>
 
 #include "rocksdb/lazy_buffer.h"
 #include "rocksdb/status.h"
+#include "utilities/util/factory.h"
 
 namespace rocksdb {
 
@@ -43,7 +43,8 @@ class CompactionFilter
     : public
       /// CompactionFilter can also be created by new factory mechanism.
       /// CompactionFilterFactory the old factory mechanism are also kept.
-      terark::Factoryable<CompactionFilter*, Slice, CompactionFilterContext> {
+      bytedance_terark::Factoryable<CompactionFilter*, Slice,
+                                    CompactionFilterContext> {
  public:
   enum ValueType {
     kValue,
@@ -213,7 +214,7 @@ class CompactionFilter
 // Each compaction will create a new CompactionFilter allowing the
 // application to know about different compactions
 class CompactionFilterFactory
-    : public terark::Factoryable<CompactionFilterFactory*, Slice> {
+    : public bytedance_terark::Factoryable<CompactionFilterFactory*, Slice> {
  public:
   virtual ~CompactionFilterFactory() {}
 

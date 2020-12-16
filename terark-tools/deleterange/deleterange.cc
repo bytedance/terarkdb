@@ -1,10 +1,15 @@
 #include "deleterange.hpp"
-#include <boost/range/iterator_range.hpp>
-#include "boost/filesystem.hpp"
 
+#ifdef BOOSTLIB
+#include <boost/range/iterator_range.hpp>
+
+#include "boost/filesystem.hpp"
+#endif
 namespace terark {
 
+#ifdef BOOSTLIB
 using namespace boost::filesystem;
+#endif
 
 int CountRangeDeletions(const char* sst_fname, int& deletion_cnt) {
   auto s = DeleteRange::GetTableReader(sst_fname, deletion_cnt);
@@ -15,9 +20,12 @@ int CountRangeDeletions(const char* sst_fname, int& deletion_cnt) {
 
 void ScanRangeDeletions(const char* db_path) {
   std::cout << "sst files from: " << db_path << std::endl;
+#ifdef BOOSTLIB
   boost::filesystem::path p(db_path);
+#endif
   int deletions = 0;
   int cnt = 0;
+#ifdef BOOSTLIB
   for (auto& entry : boost::make_iterator_range(directory_iterator(p), {})) {
     auto ext = boost::filesystem::extension(entry);
     if (ext == ".sst") {
@@ -26,6 +34,7 @@ void ScanRangeDeletions(const char* db_path) {
       CountRangeDeletions(entry.path().string().data(), deletions);
     }
   }
+#endif
   std::cout << "=====================" << std::endl;
   std::cout << "deletion count: " << deletions << std::endl;
 }

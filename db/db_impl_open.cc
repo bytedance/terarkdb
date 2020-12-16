@@ -1167,7 +1167,9 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
           "env TerarkZipTable_localTempDir",
           terarkdb_localTempDir);
     }
+#ifdef BYTEDANCE_TERARK_ZIP
     TerarkZipMultiCFOptionsFromEnv(db_options, column_families, dbname);
+#endif
   }
 #endif
   for (auto& cf : column_families) {

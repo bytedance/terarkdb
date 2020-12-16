@@ -30,11 +30,11 @@ option(WITH_ZLIB "build with zlib" ON)
 option(WITH_ZSTD "build with zstd" ON)
 option(WITH_BZ2 "build with bzip2" ON)
 option(WITH_WINDOWS_UTF8_FILENAMES "use UTF8 as characterset for opening files, regardles of the system code page" OFF)
-option(WITH_BYTEDANCE_METRICS "build with bytedance internal metrics" ON)
 option(WITH_ASAN "build with ASAN" ON)
 option(WITH_GFLAGS "build with GFlags" ON)
 option(WITH_TESTS "build with tests" OFF)
 option(WITH_TOOLS "build with tools" OFF)
+option(WITH_BOOSTLIB "build with boost" OFF)
 
 option(BUILD_SUFFIX "library sufix" "d")
 option(FORCE_TERARKDB_RELEASE_BUILD "ignore outside cmake_build_type" OFF)
@@ -82,8 +82,8 @@ MESSAGE("[terarkdb] CMAKE_THREAD_LIBS_INIT=${CMAKE_THREAD_LIBS_INIT}")
 #-------------------------- Third-party Libraries
 SET(USE_RTTI ON) # terark-zip use RTTI, to be refined
 ADD_SUBDIRECTORY(third-party)
-GET_TARGET_PROPERTY(terark_zip_include_dir terark-zip-${BUILD_SUFFIX} INCLUDE_DIRECTORIES)
-INCLUDE_DIRECTORIES(${terark_zip_include_dir})
+#GET_TARGET_PROPERTY(terark_zip_include_dir terark-zip-${BUILD_SUFFIX} INCLUDE_DIRECTORIES)
+#INCLUDE_DIRECTORIES(${terark_zip_include_dir})
 
 
 #-------------------------- Third-party Library Flags for RocksDB
@@ -101,6 +101,13 @@ if(WITH_GFLAGS)
   include_directories(${gflags_INCLUDE_DIR})
   list(APPEND THIRDPARTY_LIBS gflags)
   message("[terarkdb] gflags include dir: ${gflags_INCLUDE_DIR}")
+endif()
+
+if(WITH_BOOSTLIB)
+  add_definitions(-DBOOSTLIB=1)
+  message("[terarkdb] with boost")
+else()
+  message("[terarkdb] without boost")
 endif()
 
 if(WITH_TESTS OR WITH_TOOLS)
@@ -147,14 +154,6 @@ if(WITH_ZSTD)
   include_directories(${zstd_INCLUDE_DIR})
   list(APPEND THIRDPARTY_LIBS zstd)
   message("[terarkdb] zstd include dir : ${zstd_INCLUDE_DIR}")
-endif()
-
-if(WITH_BYTEDANCE_METRICS)
-  add_definitions(-DTERARKDB_ENABLE_METRICS)
-  get_target_property(metrics2_INCLUDE_DIR metrics2 INCLUDE_DIRECTORIES)
-  include_directories(${metrics2_INCLUDE_DIR})
-  list(APPEND THIRDPARTY_LIBS metrics2)
-  message("[terarkdb] bytedance_metrics2 include dir : ${metrics2_INCLUDE_DIR}")
 endif()
 
 string(TIMESTAMP GIT_DATE_TIME "%Y/%m/%d %H:%M:%S" UTC)
@@ -523,7 +522,6 @@ set(SOURCES
         db/compaction_picker.cc
         db/compaction_picker_fifo.cc
         db/compaction_picker_universal.cc
-        db/compaction_dispatcher.cc
         db/convenience.cc
         db/db_filesnapshot.cc
         db/db_impl.cc
@@ -582,8 +580,6 @@ set(SOURCES
         memtable/hash_linklist_rep.cc
         memtable/hash_skiplist_rep.cc
         memtable/skiplistrep.cc
-        memtable/terark_zip_entry_index.cc
-        memtable/terark_zip_memtable.cc
         memtable/vectorrep.cc
         memtable/write_buffer_manager.cc
         monitoring/histogram.cc
@@ -638,11 +634,6 @@ set(SOURCES
         table/sst_file_writer.cc
         table/table_properties.cc
         table/table_reader.cc
-        table/terark_zip_common.cc
-        table/terark_zip_config.cc
-        table/terark_zip_table_builder.cc
-        table/terark_zip_table_reader.cc
-        table/terark_zip_table.cc
         table/two_level_iterator.cc
         tools/db_bench_tool.cc
         tools/dump/db_dump_tool.cc
@@ -650,7 +641,6 @@ set(SOURCES
         tools/ldb_tool.cc
         tools/sst_dump_tool.cc
         tools/trace_analyzer_tool.cc
-        tools/remote_compaction_worker_101.cc
         util/arena.cc
         util/auto_roll_logger.cc
         util/bloom.cc
@@ -742,6 +732,7 @@ set(SOURCES
         utilities/ttl/db_ttl_impl.cc
         utilities/write_batch_with_index/write_batch_with_index.cc
         utilities/write_batch_with_index/write_batch_with_index_internal.cc
+        utilities/util/factory.cc
         $<TARGET_OBJECTS:rocksdb_build_version>)
 
 IF(WITH_TESTS OR WITH_TOOLS)
@@ -813,7 +804,7 @@ endif()
 
 # Static terarkdb lib
 add_library(${ROCKSDB_STATIC_LIB} STATIC ${SOURCES})
-target_link_libraries(${ROCKSDB_STATIC_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_ZIP_LIB} ${TERARK_SHARED_DEPENDS})
+target_link_libraries(${ROCKSDB_STATIC_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_SHARED_DEPENDS})
 target_include_directories(${ROCKSDB_STATIC_LIB} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                                                         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
                                                         $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>)
@@ -821,7 +812,7 @@ target_include_directories(${ROCKSDB_STATIC_LIB} PUBLIC $<BUILD_INTERFACE:${CMAK
 if(WIN32)
   # imported terarkdb lib
   add_library(${ROCKSDB_IMPORT_LIB} SHARED ${SOURCES})
-  target_link_libraries(${ROCKSDB_IMPORT_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_ZIP_LIB})
+  target_link_libraries(${ROCKSDB_IMPORT_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS})
   target_include_directories(${ROCKSDB_IMPORT_LIB} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
   set_target_properties(${ROCKSDB_IMPORT_LIB} PROPERTIES
     COMPILE_DEFINITIONS "ROCKSDB_DLL;ROCKSDB_LIBRARY_EXPORTS")
@@ -1136,6 +1127,6 @@ if(WITH_TOOLS)
   endforeach(sourcefile ${BENCHMARKS})
 
   add_subdirectory(tools)
-  add_subdirectory(terark-tools/terark-test)
+  #add_subdirectory(terark-tools/terark-test)
   add_subdirectory(terark-tools/batch-write-bench)
 endif()

@@ -1,4 +1,6 @@
+#ifdef BOOSTLIB
 #include <boost/filesystem.hpp>
+#endif
 
 #include "key_path_analysis.hpp"
 
@@ -299,6 +301,7 @@ int main(const int argc, const char** argv) {
     assert(target_key);
     // if input target is a directory
     if (argv[4] && strncmp("--dir", argv[4], 5) == 0) {
+#ifdef BOOSTLIB
       std::cout << "Get(" << key_slice.ToString(true) << ") from " << target_sst
                 << std::endl;
       boost::filesystem::recursive_directory_iterator p(target_sst), end;
@@ -312,6 +315,7 @@ int main(const int argc, const char** argv) {
         }
         ++p;
       }
+#endif
     } else {
       std::cout << "Get from single file" << std::endl;
       kp->Get(target_sst, key_slice);
@@ -322,6 +326,7 @@ int main(const int argc, const char** argv) {
     assert(target_key);
     // if input target is a directory
     if (argv[4] && strncmp("--dir", argv[4], 5) == 0) {
+#ifdef BOOSTLIB
       std::cout << "Seek(" << target_key << ") from " << target_sst
                 << std::endl;
       for (auto& p :
@@ -335,6 +340,7 @@ int main(const int argc, const char** argv) {
           kp->Seek(fname, key_slice);
         }
       }
+#endif
     } else {
       std::cout << "Seek(" << target_key << ") from single file " << target_sst
                 << std::endl;

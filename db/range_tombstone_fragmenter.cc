@@ -10,14 +10,13 @@
 #include <string.h>
 
 #include <algorithm>
-#include <boost/range/algorithm.hpp>
 #include <functional>
 #include <set>
-#include <terark/valvec.hpp>
 
 #include "util/autovector.h"
 #include "util/kv_map.h"
 #include "util/vector_iterator.h"
+#include "utilities/util/valvec.hpp"
 
 namespace rocksdb {
 
@@ -118,7 +117,8 @@ void FragmentedRangeTombstoneList::FragmentTombstones(
       for (auto flush_it = it; flush_it != cur_end_keys.end(); ++flush_it) {
         seqnums_to_flush.push_back(flush_it->sequence);
       }
-      terark::sort_a(seqnums_to_flush, std::greater<SequenceNumber>());
+      bytedance_terark::sort_a(seqnums_to_flush,
+                               std::greater<SequenceNumber>());
 
       size_t start_idx = tombstone_seqs_.size();
       size_t end_idx = start_idx + seqnums_to_flush.size();
@@ -281,7 +281,8 @@ void FragmentedRangeTombstoneIterator::SeekForPrev(const Slice& target) {
 
 void FragmentedRangeTombstoneIterator::SeekToCoveringTombstone(
     const Slice& target) {
-  pos_ = boost::upper_bound(*tombstones_, target, tombstone_end_cmp_);
+  pos_ = std::upper_bound(tombstones_->begin(), tombstones_->end(), target,
+                          tombstone_end_cmp_);
   if (pos_ == tombstones_->end()) {
     // All tombstones end before target.
     seq_pos_ = tombstones_->seq_end();
@@ -298,7 +299,8 @@ void FragmentedRangeTombstoneIterator::SeekForPrevToCoveringTombstone(
     Invalidate();
     return;
   }
-  pos_ = boost::upper_bound(*tombstones_, target, tombstone_start_cmp_);
+  pos_ = std::upper_bound(tombstones_->begin(), tombstones_->end(), target,
+                          tombstone_start_cmp_);
   if (pos_ == tombstones_->begin()) {
     // All tombstones start after target.
     Invalidate();

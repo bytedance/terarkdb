@@ -20,7 +20,7 @@
 #include "port/port.h"
 #include "util/mutexlock.h"
 
-#define MY_USE_FIBER_LOCAL_STORAGE 1
+#define MY_USE_FIBER_LOCAL_STORAGE 0  // drop boost lib
 
 #if MY_USE_FIBER_LOCAL_STORAGE
 #include <boost/fiber/fss.hpp>

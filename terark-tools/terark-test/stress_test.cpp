@@ -12,7 +12,9 @@
 #include <utility>
 #include <vector>
 
+#ifdef BOOSTLIB
 #include <boost/fiber/future.hpp>
+#endif
 #include <db/memtable.h>
 #include <rocksdb/compaction_filter.h>
 #include <rocksdb/convenience.h>
@@ -31,6 +33,12 @@
 #include <table/iterator_wrapper.h>
 #include <table/table_builder.h>
 #include <table/table_reader.h>
+#include <terark/zbs/sufarr_inducedsort.h>
+#include <util/coding.h>
+#include <util/filename.h>
+#include <utilities/merge_operators/string_append/stringappend.h>
+#include <utilities/merge_operators/string_append/stringappend2.h>
+
 #include <terark/fsa/cspptrie.inl>
 #include <terark/io/FileStream.hpp>
 #include <terark/lcast.hpp>
@@ -39,12 +47,7 @@
 #include <terark/stdtypes.hpp>
 #include <terark/util/mmap.hpp>
 #include <terark/zbs/dict_zip_blob_store.hpp>
-#include <terark/zbs/sufarr_inducedsort.h>
 #include <terark/zbs/zip_reorder_map.hpp>
-#include <util/coding.h>
-#include <util/filename.h>
-#include <utilities/merge_operators/string_append/stringappend.h>
-#include <utilities/merge_operators/string_append/stringappend2.h>
 //#include "split_iterator.h"
 
 #define TEST_TERARK 1
@@ -52,11 +55,12 @@
 #if TEST_TERARK
 #include <table/terark_zip_common.h>
 #include <table/terark_zip_table.h>
+
 #include <terark/idx/terark_zip_index.hpp>
 #else
 namespace rocksdb {
 struct TerarkZipTableOptions {};
-} // namespace rocksdb
+}  // namespace rocksdb
 #endif
 
 size_t file_size_base = 64ull << 20;
@@ -76,7 +80,7 @@ size_t rand_key_times = 500;
 #define READ_ONLY_TEST_SEQ 12983622
 
 class ComparatorRename : public rocksdb::Comparator {
-public:
+ public:
   virtual const char *Name() const override { return n; }
 
   virtual int Compare(const rocksdb::Slice &a,
@@ -88,9 +92,8 @@ public:
                      const rocksdb::Slice &b) const override {
     return c->Equal(a, b);
   }
-  virtual void
-  FindShortestSeparator(std::string *start,
-                        const rocksdb::Slice &limit) const override {
+  virtual void FindShortestSeparator(
+      std::string *start, const rocksdb::Slice &limit) const override {
     c->FindShortestSeparator(start, limit);
   }
 
@@ -116,14 +119,15 @@ void set_snapshot_seqno(const rocksdb::Snapshot *s, uint64_t seqno) {
 #include <rocksdb/compaction_dispatcher.h>
 
 class AsyncCompactionDispatcher : public rocksdb::RemoteCompactionDispatcher {
-public:
+ public:
   class AsyncWorker : public rocksdb::RemoteCompactionDispatcher::Worker {
-  public:
+   public:
     AsyncWorker(const rocksdb::Options &options, std::string working_dir,
                 uint64_t seed)
         : rocksdb::RemoteCompactionDispatcher::Worker(
               rocksdb::EnvOptions(options), options.env),
-          working_dir_(working_dir), seed_(seed) {}
+          working_dir_(working_dir),
+          seed_(seed) {}
     virtual std::string GenerateOutputFileName(size_t file_index) {
       uint64_t name_seed = seed_++;
       char name[40];
@@ -131,7 +135,7 @@ public:
       return working_dir_ + name;
     }
 
-  private:
+   private:
     std::string working_dir_;
     uint64_t seed_;
   };
@@ -175,7 +179,7 @@ public:
 #endif
 // class TestMergeOperator : public rocksdb::StringAppendOperator {
 class TestMergeOperator : public rocksdb::StringAppendTESTOperator {
-public:
+ public:
   // TestMergeOperator(char delim_char) :
   // rocksdb::StringAppendOperator(delim_char) {}
   TestMergeOperator(char delim_char)
@@ -184,8 +188,8 @@ public:
   virtual rocksdb::Status Serialize(std::string * /*bytes*/) const override {
     return rocksdb::Status::OK();
   }
-  virtual rocksdb::Status
-  Deserialize(const rocksdb::Slice & /*bytes*/) override {
+  virtual rocksdb::Status Deserialize(
+      const rocksdb::Slice & /*bytes*/) override {
     return rocksdb::Status::OK();
   }
 };
@@ -205,13 +209,13 @@ class TestCompactionFilter : public rocksdb::CompactionFilter {
 #endif
 
 #undef assert
-#define assert(exp)                                                            \
-  do {                                                                         \
-    if (!(exp))                                                                \
-      DebugBreak();                                                            \
+#define assert(exp)           \
+  do {                        \
+    if (!(exp)) DebugBreak(); \
   } while (false)
 
-template <class T, class F> bool IsSame(std::vector<T> &arr, F &&f) {
+template <class T, class F>
+bool IsSame(std::vector<T> &arr, F &&f) {
   for (size_t i = 1; i < arr.size(); ++i) {
     if (!f(arr[i - 1], arr[i])) {
       return false;
@@ -219,7 +223,8 @@ template <class T, class F> bool IsSame(std::vector<T> &arr, F &&f) {
   }
   return true;
 }
-template <class T, class F> bool IsAny(std::vector<T> &arr, F &&f) {
+template <class T, class F>
+bool IsAny(std::vector<T> &arr, F &&f) {
   for (auto &t : arr) {
     if (f(t)) {
       return true;
@@ -227,7 +232,8 @@ template <class T, class F> bool IsAny(std::vector<T> &arr, F &&f) {
   }
   return false;
 }
-template <class T, class F> bool IsAll(std::vector<T> &arr, F &&f) {
+template <class T, class F>
+bool IsAll(std::vector<T> &arr, F &&f) {
   for (auto &t : arr) {
     if (!f(t)) {
       return false;
@@ -238,8 +244,7 @@ template <class T, class F> bool IsAll(std::vector<T> &arr, F &&f) {
 
 template <class T, class V, class F>
 bool AllSame(std::vector<T> &left, std::vector<V> &right, F &&f) {
-  if (left.size() != right.size())
-    return false;
+  if (left.size() != right.size()) return false;
   for (size_t i = 0; i < left.size(); ++i) {
     if (!f(left[i], right[i])) {
       return false;
@@ -301,7 +306,6 @@ std::string get_value(size_t i) {
 void get_options(int argc, const char *argv[], rocksdb::Options &options,
                  rocksdb::BlockBasedTableOptions &bbto,
                  rocksdb::TerarkZipTableOptions &tzto) {
-
   options.atomic_flush = false;
   options.allow_mmap_reads = true;
   options.max_open_files = 8192;
@@ -462,17 +466,17 @@ void get_options(int argc, const char *argv[], rocksdb::Options &options,
   tzto.indexType = "Mixed_XL_256_32_FL";
   tzto.softZipWorkingMemLimit = 128ull << 30;
   tzto.hardZipWorkingMemLimit = 256ull << 30;
-  tzto.smallTaskMemory = 1200 << 20; // 1.2G
+  tzto.smallTaskMemory = 1200 << 20;  // 1.2G
   tzto.minDictZipValueSize = 15;
   // tzto.keyPrefixLen = 1; // for IndexID
   tzto.indexCacheRatio = 0.001;
   tzto.singleIndexMinSize = 8ULL << 20;
-  tzto.singleIndexMaxSize = 0x1E0000000; // 7.5G
+  tzto.singleIndexMaxSize = 0x1E0000000;  // 7.5G
   // tzto.singleIndexMinSize = 768ULL << 10;
   // tzto.singleIndexMaxSize = 2ULL << 29;
   tzto.minPreadLen = -1;
-  tzto.cacheShards = 17;       // to reduce lock competition
-  tzto.cacheCapacityBytes = 0; // non-zero implies direct io read
+  tzto.cacheShards = 17;        // to reduce lock competition
+  tzto.cacheCapacityBytes = 0;  // non-zero implies direct io read
   tzto.disableCompressDict = false;
   tzto.optimizeCpuL3Cache = false;
   tzto.forceMetaInMemory = false;
@@ -1358,9 +1362,14 @@ DEBUG: 1st pass => '00000007' seq:4, type:1 / 000100000101
     std::vector<rocksdb::Slice> keys;
     std::vector<std::string> values;
 #if ASYNC_TEST
+#ifdef BOOSTLIB
     std::vector<
         boost::fibers::future<std::tuple<Status, std::string, std::string>>>
         futures;
+#else
+    std::vector<std::future<std::tuple<Status, std::string, std::string>>>
+        futures;
+#endif
     std::vector<std::string> async_values;
     std::vector<Status> async_status;
 #endif
@@ -1797,6 +1806,7 @@ DEBUG: 1st pass => '00000007' seq:4, type:1 / 000100000101
           for (auto &k : keys) {
             k = key;
           }
+#ifdef BOOSTLIB
           for (size_t i = 0; i < hs.size(); ++i) {
             ss[i] = db->Get(ro, hs[i], keys[i], &values[i]);
             db->GetAsync(ro, hs[i], keys[i].ToString(), &async_values[i],
@@ -1820,6 +1830,7 @@ DEBUG: 1st pass => '00000007' seq:4, type:1 / 000100000101
                         return l == std::get<2>(tmp_tuple);
                       }),
               "Get vs GetFuture");
+#endif
         }
       }
 #endif
