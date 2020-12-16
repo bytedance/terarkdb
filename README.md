@@ -101,7 +101,7 @@ TODO
 
 
 # 3. Real-world Performance Improvement
-TerarkDB has been deployed in lots of applications in Bytedance, in most cases TerarkDB can help to reduce overall latency and improve throughput tremendously.
+TerarkDB has been deployed in lots of applications in Bytedance, in most cases TerarkDB can help to reduce latency spike and improve throughput tremendously.
 
 ### Disk Write
 ![](docs/static/images/performance/disk_write.png)
@@ -116,11 +116,10 @@ TerarkDB has been deployed in lots of applications in Bytedance, in most cases T
 
 
 # 5. License
-- TerarkDB uses the same license policy with original [RocksDB](https://github.com/facebook/rocksdb))
-- Dual License: Apache2.0 and GPLv2
+- Apache2.0
 
 # 6. Users
 
-Please let us know if you are using TerarkDB, thanks!
+Please let us know if you are using TerarkDB, thanks! (guokuankuan@bytedance.com)
 
 - ByteDance (core online services)
