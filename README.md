@@ -19,14 +19,9 @@ drawbacks.
   - `heavy_write` means 90% write operations
   - `heavy_read` means 90% read operations
 
-### Documentation
-
-[TerarkDB all-in-one Docs](https://bytedance.feishu.cn/docs/doccnZmYFqHBm06BbvYgjsHHcKc#)
-
 ![](docs/static/images/performance/compare_rocksdb.png)
 
-<<<<<<< HEAD
-## Full Document
+## Document
 [All-in-one Documentation](https://bytedance.feishu.cn/docs/doccnZmYFqHBm06BbvYgjsHHcKc#)
 
 
@@ -92,8 +87,7 @@ We didn't archieve all static libraries together yet, so you have to pack all li
 
 ```
 -Wl,-Bstatic \
--lterarkdb -lbz2 -ljemalloc -llz4 -lmetrics2 -lsnappy -lz -lterark-zip-r -lzstd \
--lboost_context -lboost_fiber -lboost_filesystem -lboost_system \
+-lterarkdb -lbz2 -ljemalloc -llz4 -lsnappy -lz -lzstd \
 -Wl,-Bdynamic -pthread -lgomp -lrt -ldl -laio
 ```
 
