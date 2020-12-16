@@ -161,5 +161,5 @@ IF(WITH_JEMALLOC)
   endif()
 ENDIF()
 
-# terark-zip
-# add_subdirectory(terark-zip)
+# terark-zip (for TerarkZipTable)
+add_subdirectory(terark-zip)

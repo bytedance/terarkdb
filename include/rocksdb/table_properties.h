@@ -125,7 +125,7 @@ class TablePropertiesCollector {
 // TablePropertiesCollector for each new table
 class TablePropertiesCollectorFactory
     : public std::enable_shared_from_this<TablePropertiesCollectorFactory>,
-      public bytedance_terark::Factoryable<TablePropertiesCollectorFactory*> {
+      public terark::Factoryable<TablePropertiesCollectorFactory*> {
  public:
   struct Context {
     uint32_t column_family_id;

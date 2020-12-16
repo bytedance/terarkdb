@@ -1,7 +1,9 @@
-// created by leipeng 2019-12-13
 #pragma once
-// #ifndef __UTILITIES_UTIL_FACTORY_HPP__
-// #define __UTILITIES_UTIL_FACTORY_HPP__
+
+#ifdef WITH_TERARK_ZIP
+#include "terark/util/factory.hpp"
+#else
+
 #include <rocksdb/slice.h>
 
 #ifdef BOOSTLIB
@@ -22,7 +24,7 @@
 
 #define BYTEDANCE_TERARK_DLL_EXPORT
 
-namespace bytedance_terark {
+namespace terark {
 ///@note on principle, the factory itself is stateless, but its product
 /// can has states, sometimes we need factory of factory, in this case,
 /// just let the factory being factoryable:
@@ -71,18 +73,18 @@ class Factoryable {
 #define TERARK_FACTORY_REGISTER(Class, Creator) \
   TERARK_FACTORY_REGISTER_EX(Class, TERARK_PP_STR(Class), Creator)
 
-}  // namespace bytedance_terark
-namespace bytedance_terark {
+}  // namespace terark
+namespace terark {
 BYTEDANCE_TERARK_DLL_EXPORT bool getEnvBool(const char* envName,
                                             bool Default = false);
 BYTEDANCE_TERARK_DLL_EXPORT long getEnvLong(const char* envName,
                                             long Default = false);
 BYTEDANCE_TERARK_DLL_EXPORT double getEnvDouble(const char* envName,
                                                 double Default);
-}  // namespace bytedance_terark
+}  // namespace terark
 // #endif  // __UTILITIES_UTIL_FACTORY_HPP__
 
-namespace bytedance_terark {
+namespace terark {
 
 template <class ProductPtr, class... CreatorArgs>
 struct Factoryable<ProductPtr, CreatorArgs...>::AutoReg::Impl {
@@ -188,7 +190,7 @@ rocksdb::Slice Factoryable<ProductPtr, CreatorArgs...>::reg_name() const {
 template <class ProductPtr, class... CreatorArgs>
 Factoryable<ProductPtr, CreatorArgs...>::~Factoryable() {}
 
-}  // namespace bytedance_terark
+}  // namespace terark
 
 /// ---- user land ----
 
@@ -200,6 +202,8 @@ Factoryable<ProductPtr, CreatorArgs...>::~Factoryable() {}
 
 ///@note this macro must be called in global namespace
 #define BYTEDANCE_TERARK_FACTORY_INSTANTIATE_GNS(ProductPtr, ...)  \
-  namespace bytedance_terark {                                     \
+  namespace terark {                                     \
   BYTEDANCE_TERARK_FACTORY_INSTANTIATE(ProductPtr, ##__VA_ARGS__); \
   }
+
+#endif

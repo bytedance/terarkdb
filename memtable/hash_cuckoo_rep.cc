@@ -549,7 +549,7 @@ HashCuckooRep::Iterator::Iterator(
 
 void HashCuckooRep::Iterator::DoSort() const {
   if (!sorted_) {
-    bytedance_terark::sort_a(*bucket_, "" < compare_);
+    terark::sort_a(*bucket_, "" < compare_);
     cit_ = bucket_->begin();
     sorted_ = true;
   }

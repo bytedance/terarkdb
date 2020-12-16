@@ -2,7 +2,7 @@
 //#include <terark/hash_strmap.hpp>
 // #include <terark/gold_hash_map.hpp>
 
-namespace bytedance_terark {
+namespace terark {
 ///@note on principle, the factory itself is stateless, but its product
 /// can has states, sometimes we need factory of factory, in this case,
 /// just let the factory being factoryable:
@@ -43,4 +43,4 @@ double getEnvDouble(const char* envName, double Default) {
   return Default;
 }
 
-}  // namespace bytedance_terark
+}  // namespace terark

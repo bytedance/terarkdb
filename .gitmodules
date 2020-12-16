@@ -1,6 +1,6 @@
 [submodule "third-party/terark-zip"]
 	path = third-party/terark-zip
-	url = git@code.byted.org:storage/terark-zip.git
+	url = https://github.com/bytedance/terark-zip.git
 [submodule "third-party/zstd"]
 	path = third-party/zstd
 	url = https://github.com/facebook/zstd.git

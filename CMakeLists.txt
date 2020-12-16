@@ -34,6 +34,7 @@ option(WITH_ASAN "build with ASAN" ON)
 option(WITH_GFLAGS "build with GFlags" ON)
 option(WITH_TESTS "build with tests" OFF)
 option(WITH_TOOLS "build with tools" OFF)
+option(WITH_TERARK_ZIP "build with TerarkZipTable support" OFF)
 option(WITH_BOOSTLIB "build with boost" OFF)
 
 option(BUILD_SUFFIX "library sufix" "d")
@@ -45,6 +46,12 @@ Find_Package(Threads REQUIRED)
 #----------------------- Global Options
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin" OR CMAKE_BUILD_TYPE STREQUAL "Release" OR WITH_JEMALLOC)
   set(WITH_ASAN OFF)
+endif()
+
+# terark-zip embedded boost, will remove the boost library in the future
+if(WITH_TERARK_ZIP)
+  add_definitions(-DWITH_TERARK_ZIP=1)
+  SET(WITH_BOOSTLIB ON)
 endif()
 
 # RocksDB's UT has to be run under Debug or RelWithDebInfo mode
@@ -82,8 +89,8 @@ MESSAGE("[terarkdb] CMAKE_THREAD_LIBS_INIT=${CMAKE_THREAD_LIBS_INIT}")
 #-------------------------- Third-party Libraries
 SET(USE_RTTI ON) # terark-zip use RTTI, to be refined
 ADD_SUBDIRECTORY(third-party)
-#GET_TARGET_PROPERTY(terark_zip_include_dir terark-zip-${BUILD_SUFFIX} INCLUDE_DIRECTORIES)
-#INCLUDE_DIRECTORIES(${terark_zip_include_dir})
+GET_TARGET_PROPERTY(terark_zip_include_dir terark-zip-${BUILD_SUFFIX} INCLUDE_DIRECTORIES)
+INCLUDE_DIRECTORIES(${terark_zip_include_dir})
 
 
 #-------------------------- Third-party Library Flags for RocksDB

@@ -25,7 +25,7 @@ class ValueExtractor {
 };
 
 class ValueExtractorFactory
-    : public bytedance_terark::Factoryable<ValueExtractorFactory*, Slice> {
+    : public terark::Factoryable<ValueExtractorFactory*, Slice> {
  public:
   virtual ~ValueExtractorFactory() {}
 

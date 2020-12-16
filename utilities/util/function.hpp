@@ -1,11 +1,14 @@
-﻿/* vim: set tabstop=4 : */
-#pragma once
+﻿#pragma once
+#ifdef WITH_TERARK_ZIP
+#include "terark/util/function.hpp"
+#include "terark/valvec.hpp"
+#else
 
 #include <functional>
 #include "utilities/util/config.hpp"
 #include "utilities/util/preproc.hpp"
 #include "utilities/util/terark_boost.hpp"
-namespace bytedance_terark {
+namespace terark {
 
 using std::bind;
 using std::cref;
@@ -297,7 +300,7 @@ CombinableExtractorT<Extractor1> CombinableExtractor(Extractor1&& ex1) {
 ///@note '.' or '->' before field is required
 ///@note TERARK_GET() is identity operator
 #define TERARK_GET(...)                  \
-  bytedance_terark::CombinableExtractor( \
+  terark::CombinableExtractor( \
       [](const auto& x) -> decltype(auto) { return (x __VA_ARGS__); })
 
 #define TERARK_FIELD_O_0() x
@@ -436,6 +439,7 @@ CombinableExtractorT<Extractor1> CombinableExtractor(Extractor1&& ex1) {
 #define TERARK_EQUAL_P(...) \
   TERARK_EQUAL_IMP(TERARK_PP_MAP(TERARK_PP_PREPEND, ->, __VA_ARGS__))
 
-}  // namespace bytedance_terark
+}  // namespace terark
 
-// using bytedance_terark::cmp;
+// using terark::cmp;
+#endif

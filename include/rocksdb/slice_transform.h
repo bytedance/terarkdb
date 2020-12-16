@@ -29,7 +29,7 @@ class Slice;
  * ColumnFamilyOptions.
  */
 class SliceTransform
-    : public bytedance_terark::Factoryable<SliceTransform*,
+    : public terark::Factoryable<SliceTransform*,
                                            const std::string&> {
  public:
   virtual ~SliceTransform(){};

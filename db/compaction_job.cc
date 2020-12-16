@@ -87,6 +87,7 @@
 #include "util/stop_watch.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
+
 #include "utilities/util/function.hpp"
 #include "utilities/util/valvec.hpp"
 
@@ -599,12 +600,12 @@ void CompactionJob::GenSubcompactionBoundaries(int max_usable_threads) {
       }
     }
   }
-  bytedance_terark::sort_a(bounds, &ExtractUserKey < *cfd_comparator);
+  terark::sort_a(bounds, &ExtractUserKey < *cfd_comparator);
 
   // Remove duplicated entries from bounds
   // bounds.resize(terark::unique_a(bounds, &ExtractUserKey ==
   // *cfd_comparator));
-  bounds.resize(bytedance_terark::unique_a(bounds, &ExtractUserKey == *cfd_comparator));
+  bounds.resize(terark::unique_a(bounds, &ExtractUserKey == *cfd_comparator));
 
   // Combine consecutive pairs of boundaries into ranges with an approximate
   // size of data covered by keys in that range

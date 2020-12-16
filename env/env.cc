@@ -422,7 +422,7 @@ EnvOptions::EnvOptions() {
 }
 
 #define FROM_ENV_bool(field)                                                \
-  (field = bytedance_terark::getEnvBool("EnvOptions_" TERARK_PP_STR(field), \
+  (field = terark::getEnvBool("EnvOptions_" TERARK_PP_STR(field), \
                                         field))
 
 void EnvOptions::InitFromEnvVar() {
