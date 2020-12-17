@@ -1,5 +1,6 @@
-#ifndef __bytedance_penglei_valvec_hpp__
-#define __bytedance_penglei_valvec_hpp__
+#ifdef WITH_TERARK_ZIP
+#include <terark/valvec.hpp>
+#else
 
 #include <stdlib.h>
 

@@ -19,6 +19,13 @@
 
 #include <chrono>
 
+#ifdef WITH_TERARK_ZIP
+#include <terark/num_to_str.hpp>
+#include <terark/util/autoclose.hpp>
+#include <terark/util/linebuf.hpp>
+#include <terark/util/process.hpp>
+#endif
+
 #include "db/compaction_iterator.h"
 #include "db/map_builder.h"
 #include "db/merge_helper.h"
@@ -38,7 +45,9 @@
 #include "util/c_style_callback.h"
 #include "util/filename.h"
 
+#ifndef WITH_TERARK_ZIP
 #define USE_AJSON 1
+#endif
 
 #ifdef USE_AJSON
 #include "util/ajson_msd.hpp"
@@ -1078,34 +1087,36 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
 }
 
 void RemoteCompactionDispatcher::Worker::DebugSerializeCheckResult(Slice data) {
-  // using namespace terark;
-  // LittleEndianDataInput<MemIO> dio;
-  // dio.set((void*)(data.data_), data.size());
-  // CompactionWorkerResult res;
-  // dio >> res;
-  // string_appender<> str;
-  // str << "CompactionWorkerResult: time_us = " << res.time_us << " ("
-  //     << (res.time_us * 1e-6) << " sec), ";
-  // str << "  status = " << res.status.ToString() << "\n";
-  // str << "  actual_start = " << res.actual_start.DebugString(true) << "\n";
-  // str << "  actual_end   = " << res.actual_end.DebugString(true) << "\n";
-  // str << "  files[size=" << res.files.size() << "]\n";
-  // for (size_t i = 0; i < res.files.size(); ++i) {
-  //   const auto& f = res.files[i];
-  //   str << "    " << i << " = " << f.file_name
-  //       << " : marked_for_compaction = " << f.marked_for_compaction
-  //       << "  filesize = " << f.file_size << "\n";
-  //   str << "    seq_smallest = " << f.smallest_seqno
-  //       << "  key_smallest = " << f.smallest.DebugString(true) << "\n";
-  //   str << "    seq__largest = " << f.largest_seqno
-  //       << "  key__largest = " << f.largest.DebugString(true) << "\n";
-  // }
-  // str << "  stat_all[size=" << res.stat_all.size() << "] = " << res.stat_all
-  //     << "\n";
-  // intptr_t wlen = ::write(2, str.data(), str.size());
-  // if (size_t(wlen) != str.size()) {
-  //   abort();
-  // }
+#ifdef WITH_TERARK_ZIP
+  using namespace terark;
+  LittleEndianDataInput<MemIO> dio;
+  dio.set((void*)(data.data_), data.size());
+  CompactionWorkerResult res;
+  dio >> res;
+  string_appender<> str;
+  str << "CompactionWorkerResult: time_us = " << res.time_us << " ("
+      << (res.time_us * 1e-6) << " sec), ";
+  str << "  status = " << res.status.ToString() << "\n";
+  str << "  actual_start = " << res.actual_start.DebugString(true) << "\n";
+  str << "  actual_end   = " << res.actual_end.DebugString(true) << "\n";
+  str << "  files[size=" << res.files.size() << "]\n";
+  for (size_t i = 0; i < res.files.size(); ++i) {
+    const auto& f = res.files[i];
+    str << "    " << i << " = " << f.file_name
+        << " : marked_for_compaction = " << f.marked_for_compaction
+        << "  filesize = " << f.file_size << "\n";
+    str << "    seq_smallest = " << f.smallest_seqno
+        << "  key_smallest = " << f.smallest.DebugString(true) << "\n";
+    str << "    seq__largest = " << f.largest_seqno
+        << "  key__largest = " << f.largest.DebugString(true) << "\n";
+  }
+  str << "  stat_all[size=" << res.stat_all.size() << "] = " << res.stat_all
+      << "\n";
+  intptr_t wlen = ::write(2, str.data(), str.size());
+  if (size_t(wlen) != str.size()) {
+    abort();
+  }
+#endif
 }
 
 const char* RemoteCompactionDispatcher::Name() const {

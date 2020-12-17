@@ -1,3 +1,5 @@
+// Copyright (c) 2020-present, Bytedance Inc.  All rights reserved.
+// This source code is licensed under Apache 2.0 License.
 //
 // This bench tool is used for batch writing bench.
 //
@@ -38,8 +40,8 @@ void init_db_options(rocksdb::DBOptions& db_options_,  // NOLINT
   db_options_.create_if_missing = true;
   db_options_.create_missing_column_families = true;
 
-  // db_options_.bytes_per_sync = 32768;
-  // db_options_.wal_bytes_per_sync = 32768;
+  db_options_.bytes_per_sync = 32768;
+  db_options_.wal_bytes_per_sync = 32768;
   db_options_.max_background_flushes = 8;
   db_options_.base_background_compactions = 4;
   db_options_.max_background_compactions = 10;
@@ -60,7 +62,7 @@ void init_db_options(rocksdb::DBOptions& db_options_,  // NOLINT
 
   // db_options_.max_wal_size = 512ULL << 20;
   // db_options_.max_total_wal_size = 1024ULL << 20;
-#ifdef BYTEDANCE_TERARK_ZIP
+#ifdef WITH_TERARK_ZIP
   rocksdb::TerarkZipDeleteTempFiles(work_dir_);  // call once
 #endif
   assert(db_options_.env == rocksdb::Env::Default());
@@ -94,7 +96,7 @@ void init_cf_options(
   table_options.block_size = 8ULL << 10;
   table_options.cache_index_and_filter_blocks = true;
   table_factory.reset(NewBlockBasedTableFactory(table_options));
-#ifdef BYTEDANCE_TERARK_ZIP
+#ifdef WITH_TERARK_ZIP
   rocksdb::TerarkZipTableOptions tzto{};
   tzto.localTempDir = work_dir_;
   tzto.indexNestLevel = 3;

@@ -175,7 +175,7 @@ class ChaosTest {
     options.create_missing_column_families = true;
     options.use_aio_reads = (flags_ & TestAsync) ? true : false;
     options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(bbto));
-#ifdef BYTEDANCE_TERARK_ZIP
+#ifdef WITH_TERARK_ZIP
     if (flags_ & TestTerark) {
       tzto.localTempDir = dbname_;
       tzto.indexNestLevel = 3;
@@ -320,7 +320,7 @@ class ChaosTest {
 
   void WriteFunc(int seed) {
     if (flags_ & ReadOnly) return;
-#ifdef BYTEDANCE_TERARK_ZIP
+#ifdef WITH_TERARK_ZIP
     auto index_factory =
         (flags_ & TestTerark) ? patricia_WriteBatchEntryIndexFactory() :
 #else

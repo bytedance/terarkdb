@@ -43,7 +43,6 @@
 #include <vector>
 
 #include "db/builder.h"
-// #include "db/compaction_dispatcher.cc"
 #include "db/db_impl.h"
 #include "db/db_iter.h"
 #include "db/dbformat.h"
@@ -678,7 +677,7 @@ void CompactionJob::GenSubcompactionBoundaries(int max_usable_threads) {
 static std::shared_ptr<CompactionDispatcher> GetCmdLineDispatcher() {
   const char* cmdline = getenv("TerarkDB_compactionWorkerCommandLine");
   if (cmdline) {
-#ifdef BYTEDANCE_TERARK_ZIP
+#ifdef WITH_TERARK_ZIP
     return NewCommandLineCompactionDispatcher(cmdline);
 #endif
   }
@@ -687,7 +686,7 @@ static std::shared_ptr<CompactionDispatcher> GetCmdLineDispatcher() {
 
 Status CompactionJob::Run() {
   TEST_SYNC_POINT("CompactionJob::Run():OuterStart");
-#ifdef BYTEDANCE_TERARK_ZIP
+#ifdef WITH_TERARK_ZIP
   assert(!IsCompactionWorkerNode());
 #endif
   ColumnFamilyData* cfd = compact_->compaction->column_family_data();

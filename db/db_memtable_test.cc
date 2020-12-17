@@ -11,10 +11,11 @@
 #include "db/range_del_aggregator.h"
 #include "port/stack_trace.h"
 #include "rocksdb/memtablerep.h"
-#ifdef BYTEDANCE_TERARK_ZIP
+#include "rocksdb/slice_transform.h"
+
+#ifdef WITH_TERARK_ZIP
 #include "memtable/terark_zip_memtable.h"
 #endif
-#include "rocksdb/slice_transform.h"
 
 namespace rocksdb {
 
@@ -273,7 +274,7 @@ TEST_F(DBMemTableTest, ColumnFamilyId) {
   }
 }
 
-#ifdef BYTEDANCE_TERARK_ZIP
+#ifdef WITH_TERARK_ZIP
 TEST(PatriciaMemTableTest, Normal) {
   SequenceNumber seq = 123;
   std::string value;

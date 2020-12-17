@@ -543,6 +543,6 @@ int Compaction::GetInputBaseLevel() const {
 }  // namespace rocksdb
 
 using namespace rocksdb;
-BYTEDANCE_TERARK_FACTORY_INSTANTIATE_GNS(CompactionFilter*, Slice,
-                                         CompactionFilterContext);
-BYTEDANCE_TERARK_FACTORY_INSTANTIATE_GNS(CompactionFilterFactory*, Slice);
+TERARK_FACTORY_INSTANTIATE_GNS(CompactionFilter*, Slice,
+                               CompactionFilterContext);
+TERARK_FACTORY_INSTANTIATE_GNS(CompactionFilterFactory*, Slice);

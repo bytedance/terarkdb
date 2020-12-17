@@ -106,5 +106,4 @@ bool AssociativeMergeOperator::PartialMerge(const Slice& key,
 
 }  // namespace rocksdb
 
-BYTEDANCE_TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::MergeOperator*,
-                                         const std::string&);
+TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::MergeOperator*, const std::string&);

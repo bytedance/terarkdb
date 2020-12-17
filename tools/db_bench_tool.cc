@@ -61,6 +61,7 @@
 #include "rocksdb/utilities/transaction.h"
 #include "rocksdb/utilities/transaction_db.h"
 #include "rocksdb/write_batch.h"
+#include "table/terark_zip_table.h"
 #include "util/cast_util.h"
 #include "util/compression.h"
 #include "util/crc32c.h"
@@ -75,8 +76,6 @@
 #include "utilities/merge_operators.h"
 #include "utilities/merge_operators/bytesxor.h"
 #include "utilities/persistent_cache/block_cache_tier.h"
-
-// #include "table/terark_zip_table.h"
 
 #ifdef OS_WIN
 #include <io.h>  // open/close
@@ -3421,17 +3420,20 @@ class Benchmark {
 #endif
       }
     }
-    // Terark_table unsupport
-    // if (FLAGS_use_terark_table) {
-    //   rocksdb::TerarkZipTableOptions tzto{};
-    //   tzto.localTempDir = FLAGS_db;
-    //   tzto.cbtHashBits = FLAGS_cbt_hash_bit;
-    //   tzto.cbtEntryPerTrie = FLAGS_cbt_entry_per_trie;
-    //   rocksdb::TerarkZipDeleteTempFiles(tzto.localTempDir);
-    //   FLAGS_env->CreateDir(FLAGS_db);
-    //   options.table_factory.reset(
-    //       rocksdb::NewTerarkZipTableFactory(tzto, options.table_factory));
-    // }
+
+#ifdef WITH_TERARK_ZIP
+    if (FLAGS_use_terark_table) {
+      rocksdb::TerarkZipTableOptions tzto{};
+      tzto.localTempDir = FLAGS_db;
+      tzto.cbtHashBits = FLAGS_cbt_hash_bit;
+      tzto.cbtEntryPerTrie = FLAGS_cbt_entry_per_trie;
+      rocksdb::TerarkZipDeleteTempFiles(tzto.localTempDir);
+      FLAGS_env->CreateDir(FLAGS_db);
+      options.table_factory.reset(
+          rocksdb::NewTerarkZipTableFactory(tzto, options.table_factory));
+    }
+#endif
+
     if (FLAGS_max_bytes_for_level_multiplier_additional_v.size() > 0) {
       if (FLAGS_max_bytes_for_level_multiplier_additional_v.size() !=
           (unsigned int)FLAGS_num_levels) {

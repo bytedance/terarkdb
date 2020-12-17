@@ -9,8 +9,10 @@
 
 #ifdef ROCKSDB_LIB_IO_POSIX
 #include "env/io_posix.h"
+
 #include <errno.h>
 #include <fcntl.h>
+
 #include <algorithm>
 #if defined(OS_LINUX)
 #include <linux/fs.h>
@@ -35,11 +37,14 @@
 #include "util/coding.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
-// #include <terark/thread/fiber_aio.hpp>
+
+#ifdef WITH_TERARK_ZIP
+#include <terark/thread/fiber_aio.hpp>
+#endif
 
 #if defined(OS_LINUX) && !defined(F_SET_RW_HINT)
 #define F_LINUX_SPECIFIC_BASE 1024
-#define F_SET_RW_HINT         (F_LINUX_SPECIFIC_BASE + 12)
+#define F_SET_RW_HINT (F_LINUX_SPECIFIC_BASE + 12)
 #endif
 
 namespace rocksdb {
@@ -120,7 +125,7 @@ size_t GetLogicalBufferSize(int __attribute__((__unused__)) fd) {
 #endif
   return kDefaultPageSize;
 }
-} //  namespace
+}  //  namespace
 
 /*
  * DirectIOHelper
@@ -136,7 +141,7 @@ bool IsSectorAligned(const void* ptr, size_t sector_size) {
   return uintptr_t(ptr) % sector_size == 0;
 }
 
-}
+}  // namespace
 #endif
 
 /*
@@ -320,23 +325,26 @@ PosixRandomAccessFile::PosixRandomAccessFile(const std::string& fname, int fd,
 
 PosixRandomAccessFile::~PosixRandomAccessFile() { close(fd_); }
 
-bool PosixRandomAccessFile::use_aio_reads() const {
-    return use_aio_reads_;
-}
+bool PosixRandomAccessFile::use_aio_reads() const { return use_aio_reads_; }
 
 static Status PosixFsRead(uint64_t offset, size_t n, Slice* result,
-                          char* scratch,
-                          int fd_, const std::string& filename_,
-                          bool use_aio_reads_, bool use_direct_io_, size_t filealign) {
+                          char* scratch, int fd_, const std::string& filename_,
+                          bool use_aio_reads_, bool use_direct_io_,
+                          size_t filealign) {
   Status s;
   ssize_t r = -1;
   size_t left = n;
   char* ptr = scratch;
   while (left > 0) {
-    if (false && use_aio_reads_) {
-      // r = terark::fiber_aio_read(fd_, ptr, left, static_cast<off_t>(offset));
-    }
-    else {
+    // Disable AIO read if terark-zip is NOT used.
+#ifndef WITH_TERARK_ZIP
+    use_aio_reads_ = false;
+#endif
+    if (use_aio_reads_) {
+#ifdef WITH_TERARK_ZIP
+      r = terark::fiber_aio_read(fd_, ptr, left, static_cast<off_t>(offset));
+#endif
+    } else {
       r = pread(fd_, ptr, left, static_cast<off_t>(offset));
     }
     if (r <= 0) {
@@ -348,8 +356,7 @@ static Status PosixFsRead(uint64_t offset, size_t n, Slice* result,
     ptr += r;
     offset += r;
     left -= r;
-    if (use_direct_io_ &&
-        r % static_cast<ssize_t>(filealign) != 0) {
+    if (use_direct_io_ && r % static_cast<ssize_t>(filealign) != 0) {
       // Bytes reads don't fill sectors. Should only happen at the end
       // of the file.
       break;
@@ -363,7 +370,7 @@ static Status PosixFsRead(uint64_t offset, size_t n, Slice* result,
   }
   *result = Slice(scratch, (r < 0) ? 0 : n - left);
   return s;
-}
+}  // namespace rocksdb
 
 Status PosixRandomAccessFile::Read(uint64_t offset, size_t n, Slice* result,
                                    char* scratch) const {
@@ -374,8 +381,8 @@ Status PosixRandomAccessFile::Read(uint64_t offset, size_t n, Slice* result,
     assert(IsSectorAligned(scratch, GetRequiredBufferAlignment()));
   }
 #endif
-  return PosixFsRead(offset, n, result, scratch, fd_, filename_,
-      use_aio_reads_, use_direct_io_, GetRequiredBufferAlignment());
+  return PosixFsRead(offset, n, result, scratch, fd_, filename_, use_aio_reads_,
+                     use_direct_io_, GetRequiredBufferAlignment());
 }
 
 Status PosixRandomAccessFile::Prefetch(uint64_t offset, size_t n) {
@@ -452,9 +459,7 @@ Status PosixRandomAccessFile::InvalidateCache(size_t offset, size_t length) {
 #endif
 }
 
-intptr_t PosixRandomAccessFile::FileDescriptor() const {
-  return this->fd_;
-}
+intptr_t PosixRandomAccessFile::FileDescriptor() const { return this->fd_; }
 
 /*
  * PosixMmapReadableFile
@@ -482,9 +487,7 @@ PosixMmapReadableFile::~PosixMmapReadableFile() {
   close(fd_);
 }
 
-bool PosixMmapReadableFile::use_aio_reads() const {
-    return use_aio_reads_;
-}
+bool PosixMmapReadableFile::use_aio_reads() const { return use_aio_reads_; }
 
 Status PosixMmapReadableFile::Read(uint64_t offset, size_t n, Slice* result,
                                    char* /*scratch*/) const {
@@ -506,11 +509,11 @@ Status PosixMmapReadableFile::Read(uint64_t offset, size_t n, Slice* result,
 // There are 2 purpose of FsRead:
 // 1. Preventing link page cache to process's address space
 // 2. Implement network fs by client lib(faster than fuse...)
-Status PosixMmapReadableFile::FsRead(uint64_t offset, size_t len, Slice* result, void* buf)
-const {
+Status PosixMmapReadableFile::FsRead(uint64_t offset, size_t len, Slice* result,
+                                     void* buf) const {
   bool use_direct_io = false;
   return PosixFsRead(offset, len, result, (char*)buf, fd_, filename_,
-      use_aio_reads_, use_direct_io, 0);
+                     use_aio_reads_, use_direct_io, 0);
 }
 
 Status PosixMmapReadableFile::InvalidateCache(size_t offset, size_t length) {
@@ -527,9 +530,7 @@ Status PosixMmapReadableFile::InvalidateCache(size_t offset, size_t length) {
   return Status::OK();
 }
 
-intptr_t PosixMmapReadableFile::FileDescriptor() const {
-  return this->fd_;
-}
+intptr_t PosixMmapReadableFile::FileDescriptor() const { return this->fd_; }
 
 /*
  * PosixMmapFile
@@ -748,9 +749,9 @@ Status PosixMmapFile::Allocate(uint64_t offset, uint64_t len) {
   TEST_KILL_RANDOM("PosixMmapFile::Allocate:0", rocksdb_kill_odds);
   int alloc_status = 0;
   if (allow_fallocate_) {
-    alloc_status = fallocate(
-        fd_, fallocate_with_keep_size_ ? FALLOC_FL_KEEP_SIZE : 0,
-          static_cast<off_t>(offset), static_cast<off_t>(len));
+    alloc_status =
+        fallocate(fd_, fallocate_with_keep_size_ ? FALLOC_FL_KEEP_SIZE : 0,
+                  static_cast<off_t>(offset), static_cast<off_t>(len));
   }
   if (alloc_status == 0) {
     return Status::OK();
@@ -884,8 +885,8 @@ Status PosixWritableFile::Close() {
     // If not, we should hack it with FALLOC_FL_PUNCH_HOLE
     if (result == 0 &&
         (file_stats.st_size + file_stats.st_blksize - 1) /
-            file_stats.st_blksize !=
-        file_stats.st_blocks / (file_stats.st_blksize / 512)) {
+                file_stats.st_blksize !=
+            file_stats.st_blocks / (file_stats.st_blksize / 512)) {
       IOSTATS_TIMER_GUARD(allocate_nanos);
       if (allow_fallocate_) {
         fallocate(fd_, FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE, filesize_,
@@ -935,10 +936,10 @@ void PosixWritableFile::SetWriteLifeTimeHint(Env::WriteLifeTimeHint hint) {
   }
 #else
   (void)hint;
-#endif // ROCKSDB_VALGRIND_RUN
+#endif  // ROCKSDB_VALGRIND_RUN
 #else
   (void)hint;
-#endif // OS_LINUX
+#endif  // OS_LINUX
 }
 
 Status PosixWritableFile::InvalidateCache(size_t offset, size_t length) {
@@ -967,9 +968,9 @@ Status PosixWritableFile::Allocate(uint64_t offset, uint64_t len) {
   IOSTATS_TIMER_GUARD(allocate_nanos);
   int alloc_status = 0;
   if (allow_fallocate_) {
-    alloc_status = fallocate(
-        fd_, fallocate_with_keep_size_ ? FALLOC_FL_KEEP_SIZE : 0,
-        static_cast<off_t>(offset), static_cast<off_t>(len));
+    alloc_status =
+        fallocate(fd_, fallocate_with_keep_size_ ? FALLOC_FL_KEEP_SIZE : 0,
+                  static_cast<off_t>(offset), static_cast<off_t>(len));
   }
   if (alloc_status == 0) {
     return Status::OK();
@@ -986,7 +987,7 @@ Status PosixWritableFile::RangeSync(uint64_t offset, uint64_t nbytes) {
   assert(offset <= std::numeric_limits<off_t>::max());
   assert(nbytes <= std::numeric_limits<off_t>::max());
   if (sync_file_range(fd_, static_cast<off_t>(offset),
-      static_cast<off_t>(nbytes), SYNC_FILE_RANGE_WRITE) == 0) {
+                      static_cast<off_t>(nbytes), SYNC_FILE_RANGE_WRITE) == 0) {
     return Status::OK();
   } else {
     return IOError("While sync_file_range offset " + ToString(offset) +

@@ -6,9 +6,12 @@
 #include "db/memtable.h"
 #include "memtable/inlineskiplist.h"
 #include "rocksdb/memtablerep.h"
-// #include "table/terark_zip_internal.h"
 #include "util/arena.h"
 #include "util/string_util.h"
+
+#ifdef WITH_TERARK_ZIP
+#include "table/terark_zip_internal.h"
+#endif
 
 namespace rocksdb {
 namespace {
@@ -364,6 +367,10 @@ struct ReverseBytewiseKeyComparator {
   const InternalKeyComparator* icomparator() const { return &comparator; }
 };
 }  // namespace
+
+#ifndef WITH_TERARK_ZIP
+// These functions are defined inside terarkzip, we should remove them in the
+// future.
 bool IsForwardBytewiseComparator(const Slice name) {
   if (name.ToString().find("RocksDB_SE_") == 0) {
     return true;
@@ -382,6 +389,7 @@ bool IsBackwardBytewiseComparator(const Slice name) {
 inline bool IsBackwardBytewiseComparator(const Comparator* cmp) {
   return IsBackwardBytewiseComparator(cmp->Name());
 }
+#endif
 
 MemTableRep* SkipListFactory::CreateMemTableRep(
     const MemTableRep::KeyComparator& compare, bool /*needs_dup_key_check*/,

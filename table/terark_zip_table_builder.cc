@@ -4,6 +4,7 @@
 #include "terark_zip_common.h"
 // std headers
 #include <cfloat>
+#include <exception>
 #include <future>
 // boost headers
 #include <boost/range/algorithm.hpp>
@@ -792,6 +793,10 @@ Status TerarkZipTableBuilder::Finish(
   }
   return s;
 } catch (const std::exception& ex) {
+  fprintf(stderr, "TerarkZipTableBuilder::Finish():this=%12p:ex.what()=%s",
+          this, ex.what());
+  WARN(ioptions_.info_log, "TerarkZipTableBuilder::Finish():this=%12p:ex.what()=%s",
+      this, ex.what());
   return AbortFinish(ex);
 }
 

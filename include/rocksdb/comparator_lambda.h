@@ -1,3 +1,5 @@
+// Copyright (c) 2020-present, Bytedance Inc.  All rights reserved.
+// This source code is licensed under Apache 2.0 License.
 #pragma once
 #include "utilities/util/function.hpp"
 namespace rocksdb {

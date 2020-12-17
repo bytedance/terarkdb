@@ -1,7 +1,7 @@
 #pragma once
 
 #ifdef WITH_TERARK_ZIP
-#include "terark/util/factory.hpp"
+#include "terark/util/factory.ipp"
 #else
 
 #include <rocksdb/slice.h>
@@ -42,7 +42,7 @@ class Factoryable {
 #ifdef BOOSTLIB
   struct AutoReg : boost::noncopyable {
 #else
-  struct AutoReg : terark_boost::noncopyable {
+  struct AutoReg : boost::noncopyable {
 #endif
     typedef function<ProductPtr(CreatorArgs...)> CreatorFunc;
     AutoReg(rocksdb::Slice name, CreatorFunc creator, const std::type_info&);
@@ -197,13 +197,13 @@ Factoryable<ProductPtr, CreatorArgs...>::~Factoryable() {}
 ///@param ProductPtr allowing template product, such as
 /// TERARK_FACTORY_INSTANTIATE(SomeProduct<T1, T2, T3>, CreatorArg1...)
 ///@note this macro must be called in namespace terark
-#define BYTEDANCE_TERARK_FACTORY_INSTANTIATE(ProductPtr, ...) \
+#define TERARK_FACTORY_INSTANTIATE(ProductPtr, ...) \
   template class Factoryable<ProductPtr, ##__VA_ARGS__>
 
 ///@note this macro must be called in global namespace
-#define BYTEDANCE_TERARK_FACTORY_INSTANTIATE_GNS(ProductPtr, ...)  \
+#define TERARK_FACTORY_INSTANTIATE_GNS(ProductPtr, ...)  \
   namespace terark {                                     \
-  BYTEDANCE_TERARK_FACTORY_INSTANTIATE(ProductPtr, ##__VA_ARGS__); \
+  TERARK_FACTORY_INSTANTIATE(ProductPtr, ##__VA_ARGS__); \
   }
 
 #endif

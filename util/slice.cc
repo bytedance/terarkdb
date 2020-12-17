@@ -244,7 +244,7 @@ TERARK_FACTORY_REGISTER_EX(NoopTransform, "rocksdb.Noop", &S_NewNoopTransform);
 
 }  // namespace rocksdb
 
-BYTEDANCE_TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::SliceTransform*,
+TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::SliceTransform*,
                                          const std::string&);
-BYTEDANCE_TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::ValueExtractorFactory*,
+TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::ValueExtractorFactory*,
                                          rocksdb::Slice);

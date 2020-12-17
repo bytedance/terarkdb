@@ -1,5 +1,8 @@
 #pragma once
-namespace terark_boost {
+#ifdef BOOSTLIB
+#include <boost/noncopyable.hpp>
+#else
+namespace boost {
 
 struct base_token {};
 class noncopyable : base_token {
@@ -12,4 +15,5 @@ class noncopyable : base_token {
   const noncopyable& operator=(const noncopyable&);
 };
 
-}  // namespace terark_boost
+}  // namespace boost
+#endif

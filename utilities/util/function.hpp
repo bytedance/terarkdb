@@ -88,7 +88,7 @@ struct mf_callback_t {
 
 //--------------------------------------------------------------------
 // User/Application defined MemPool
-class TERARK_DLL_EXPORT UserMemPool : terark_boost::noncopyable {
+class TERARK_DLL_EXPORT UserMemPool : boost::noncopyable {
   UserMemPool();
 
  public:
