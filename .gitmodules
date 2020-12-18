@@ -13,9 +13,6 @@
 [submodule "third-party/lz4"]
 	path = third-party/lz4
 	url = https://github.com/lz4/lz4.git
-[submodule "third-party/gflags"]
-	path = third-party/gflags
-	url = git@code.byted.org:storage/gflags.git
 [submodule "third-party/jemalloc"]
 	path = third-party/jemalloc
 	url = https://github.com/jemalloc/jemalloc.git
