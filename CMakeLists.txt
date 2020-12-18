@@ -46,6 +46,7 @@ option(WITH_ZENFS "build with experimental zenfs" OFF)
 option(WITH_DIAGNOSE_CACHE "build with diagnosable cache support" OFF)
 option(WITH_BOOSTLIB "build with boost, if WITH_TERARK_ZIP is ON, this will also set to ON" OFF)
 option(WITH_TERARKDB_NAMESPACE "namespace" "terarkdb")
+option(FORCE_TERARKDB_RELEASE_BUILD "ignore outside cmake_build_type" OFF)
 
 # Plugins
 SET(BYTEDANCE_METRICS_PATH "" CACHE STRING "root directory of the metrics library source code")
@@ -541,8 +542,9 @@ include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/include)
 find_package(Threads REQUIRED)
 
-
-
+if(WITH_TERARK_ZIP)
+  SET(TERARK_ZIP_LIB terark-zip-${BUILD_SUFFIX})
+endif()
 if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   LIST(APPEND TERARK_SHARED_DEPENDS pthread gomp aio rt dl)
   if ((${CMAKE_BUILD_TYPE} STREQUAL "Debug") AND (${WITH_ASAN}))
@@ -1212,7 +1214,7 @@ if(WITH_TOOLS)
       $<TARGET_OBJECTS:testharness>)
   target_link_libraries(db_bench${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
 
-                      
+
   if(WITH_ZENFS)
     include_directories(third-party/zenfs)
     add_executable(zenfs${ARTIFACT_SUFFIX} third-party/zenfs/util/zenfs.cc
