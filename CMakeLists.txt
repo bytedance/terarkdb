@@ -30,11 +30,13 @@ option(WITH_ZLIB "build with zlib" ON)
 option(WITH_ZSTD "build with zstd" ON)
 option(WITH_BZ2 "build with bzip2" ON)
 option(WITH_WINDOWS_UTF8_FILENAMES "use UTF8 as characterset for opening files, regardles of the system code page" OFF)
+option(WITH_BYTEDANCE_METRICS "build with bytedance internal metrics" OFF)
 option(WITH_ASAN "build with ASAN" ON)
 option(WITH_GFLAGS "build with GFlags" ON)
 option(WITH_TESTS "build with tests" OFF)
 option(WITH_TOOLS "build with tools" OFF)
-option(WITH_BOOSTLIB "build with boost" OFF)
+option(WITH_TERARK_ZIP "build with TerarkZipTable support" OFF)
+option(WITH_BOOSTLIB "build with boost, if WITH_TERARK_ZIP is ON, this will also set to ON" OFF)
 
 option(BUILD_SUFFIX "library sufix" "d")
 option(FORCE_TERARKDB_RELEASE_BUILD "ignore outside cmake_build_type" OFF)
@@ -46,6 +48,7 @@ Find_Package(Threads REQUIRED)
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin" OR CMAKE_BUILD_TYPE STREQUAL "Release" OR WITH_JEMALLOC)
   set(WITH_ASAN OFF)
 endif()
+
 
 # RocksDB's UT has to be run under Debug or RelWithDebInfo mode
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -66,12 +69,19 @@ ELSE()
   SET(BUILD_SUFFIX "d")
 ENDIF()
 
+# terark-zip embedded boost, will remove the boost library in the future
+if(WITH_TERARK_ZIP)
+  add_definitions(-DWITH_TERARK_ZIP=1)
+  SET(WITH_BOOSTLIB ON)
+  SET(TERARK_ZIP_LIB terark-zip-${BUILD_SUFFIX})
+endif()
+
 IF(WITH_COVERAGE)
   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
 ENDIF()
 
 #-------------------------- Print Global Options
-message("[terarkdb] force_release_build = ${FORCE_TERARKDB_RELEASE_BUILD}, cmake_build_type = ${CMAKE_BUILD_TYPE}")
+message("[terarkdb] FORCE_RELEASE_BUILD = ${FORCE_TERARKDB_RELEASE_BUILD}, cmake_build_type = ${CMAKE_BUILD_TYPE}")
 message("[terarkdb] WITH_TOOLS = ${WITH_TOOLS}, WITH_ASAN = ${WITH_ASAN}, WITH_TESTS = ${WITH_TESTS}")
 message("[terarkdb] WITH_JEMALLOC = ${WITH_JEMALLOC}, WITH_COVERAGE=${WITH_COVERAGE}")
 MESSAGE("[terarkdb] CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}, BUILD_SUFFIX=${BUILD_SUFFIX}")
@@ -80,10 +90,11 @@ MESSAGE("[terarkdb] CMAKE_THREAD_LIBS_INIT=${CMAKE_THREAD_LIBS_INIT}")
 
 
 #-------------------------- Third-party Libraries
-SET(USE_RTTI ON) # terark-zip use RTTI, to be refined
 ADD_SUBDIRECTORY(third-party)
-#GET_TARGET_PROPERTY(terark_zip_include_dir terark-zip-${BUILD_SUFFIX} INCLUDE_DIRECTORIES)
-#INCLUDE_DIRECTORIES(${terark_zip_include_dir})
+if(WITH_TERARK_ZIP)
+  GET_TARGET_PROPERTY(terark_zip_include_dir terark-zip-${BUILD_SUFFIX} INCLUDE_DIRECTORIES)
+  INCLUDE_DIRECTORIES(${terark_zip_include_dir})
+ENDIF()
 
 
 #-------------------------- Third-party Library Flags for RocksDB
@@ -138,6 +149,14 @@ if(WITH_BZ2)
   include_directories(${bzip2_INCLUDE_DIR})
   list(APPEND THIRDPARTY_LIBS bzip2)
   message("[terarkdb] bzip2 include dir : ${bzip2_INCLUDE_DIR}")
+endif()
+
+if(WITH_BYTEDANCE_METRICS)	
+  add_definitions(-DTERARKDB_ENABLE_METRICS)	
+  get_target_property(metrics2_INCLUDE_DIR metrics2 INCLUDE_DIRECTORIES)	
+  include_directories(${metrics2_INCLUDE_DIR})	
+  list(APPEND THIRDPARTY_LIBS metrics2)	
+  message("[terarkdb] bytedance_metrics2 include dir : ${metrics2_INCLUDE_DIR}")	
 endif()
 
 if(WITH_LZ4)
@@ -496,7 +515,6 @@ find_package(Threads REQUIRED)
 
 
 
-SET(TERARK_ZIP_LIB terark-zip-${BUILD_SUFFIX})
 if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   LIST(APPEND TERARK_SHARED_DEPENDS pthread gomp aio rt dl)
   if ((${CMAKE_BUILD_TYPE} STREQUAL "Debug") AND (${WITH_ASAN}))
@@ -735,6 +753,18 @@ set(SOURCES
         utilities/util/factory.cc
         $<TARGET_OBJECTS:rocksdb_build_version>)
 
+IF(WITH_TERARK_ZIP)
+  LIST(APPEND SOURCES db/compaction_dispatcher.cc
+                      memtable/terark_zip_entry_index.cc	
+                      memtable/terark_zip_memtable.cc
+                      table/terark_zip_common.cc	
+                      table/terark_zip_config.cc	
+                      table/terark_zip_table_builder.cc	
+                      table/terark_zip_table_reader.cc	
+                      table/terark_zip_table.cc
+                      tools/remote_compaction_worker_101.cc)
+ENDIF()
+
 IF(WITH_TESTS OR WITH_TOOLS)
   LIST(APPEND SOURCES utilities/cassandra/cassandra_compaction_filter.cc
                       utilities/cassandra/format.cc
@@ -804,7 +834,7 @@ endif()
 
 # Static terarkdb lib
 add_library(${ROCKSDB_STATIC_LIB} STATIC ${SOURCES})
-target_link_libraries(${ROCKSDB_STATIC_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_SHARED_DEPENDS})
+target_link_libraries(${ROCKSDB_STATIC_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_ZIP_LIB} ${TERARK_SHARED_DEPENDS})
 target_include_directories(${ROCKSDB_STATIC_LIB} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                                                         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
                                                         $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>)
@@ -812,7 +842,7 @@ target_include_directories(${ROCKSDB_STATIC_LIB} PUBLIC $<BUILD_INTERFACE:${CMAK
 if(WIN32)
   # imported terarkdb lib
   add_library(${ROCKSDB_IMPORT_LIB} SHARED ${SOURCES})
-  target_link_libraries(${ROCKSDB_IMPORT_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS})
+  target_link_libraries(${ROCKSDB_IMPORT_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_ZIP_LIB})
   target_include_directories(${ROCKSDB_IMPORT_LIB} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
   set_target_properties(${ROCKSDB_IMPORT_LIB} PROPERTIES
     COMPILE_DEFINITIONS "ROCKSDB_DLL;ROCKSDB_LIBRARY_EXPORTS")

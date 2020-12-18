@@ -46,7 +46,7 @@ class Logger;
 // Refer to rocksdb-merge wiki for more details and example implementations.
 //
 class MergeOperator
-    : public bytedance_terark::Factoryable<MergeOperator*, const std::string&> {
+    : public terark::Factoryable<MergeOperator*, const std::string&> {
  protected:
   static bool Fetch(const LazyBuffer& buffer, LazyBuffer* new_value) {
     auto s = buffer.fetch();

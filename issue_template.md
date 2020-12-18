@@ -1,7 +1,14 @@
-> Note: Please use Issues only for bug reports. For questions, discussions, feature requests, etc. post to git hub issuses.
+> Note: Please label your issues type before submit, e.g. [Enhancement], [docs], [bug] etc.
 
+[BUG]:
 ### Expected behavior
 
 ### Actual behavior
 
 ### Steps to reproduce the behavior
+
+[Enhancement]:
+### Problem
+
+### Solution
+If you don't have any solution, leave this section empty

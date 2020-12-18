@@ -1050,7 +1050,7 @@ Status ParseColumnFamilyOption(const std::string& name,
       if (!s.ok()) {
         return s;
       }
-#ifdef BYTEDANCE_TERARK_ZIP
+#ifdef WITH_TERARK_ZIP
     } else if (name == "terark_zip_table_factory") {
       TerarkZipTableOptions tzto, tzto_base;
       Status table_opt_s =
@@ -1383,7 +1383,7 @@ Status GetTableFactoryFromMap(
     }
     table_factory->reset(new PlainTableFactory(pt_opt));
     return Status::OK();
-#ifdef BYTEDANCE_TERARK_ZIP
+#ifdef WITH_TERARK_ZIP
   } else if (factory_name == "TerarkZipTable") {
     TerarkZipTableOptions tzt_opt;
     s = GetTerarkZipTableOptionsFromMap(TerarkZipTableOptions(), opt_map,

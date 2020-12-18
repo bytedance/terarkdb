@@ -228,4 +228,4 @@ TERARK_FACTORY_REGISTER_EX(ReverseBytewiseComparatorImpl,
 
 }  // namespace rocksdb
 
-BYTEDANCE_TERARK_FACTORY_INSTANTIATE_GNS(const rocksdb::Comparator*);
+TERARK_FACTORY_INSTANTIATE_GNS(const rocksdb::Comparator*);

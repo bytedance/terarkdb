@@ -131,7 +131,7 @@ extern TableFactory* NewAdaptiveTableFactory(
 
 }  // namespace rocksdb
 
-BYTEDANCE_TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::TableFactory*,
-                                         const std::string&, rocksdb::Status*);
+TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::TableFactory*, const std::string&,
+                               rocksdb::Status*);
 
 #endif  // ROCKSDB_LITE

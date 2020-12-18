@@ -1,10 +1,5 @@
-/*
- * terark_zip_table.h
- *
- *  Created on: 2016-08-09
- *      Author: leipeng
- */
-
+// Copyright (c) 2020-present, Bytedance Inc.  All rights reserved.
+// This source code is licensed under Apache 2.0 License.
 #pragma once
 
 #ifndef TERARK_ZIP_TABLE_H_

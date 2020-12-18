@@ -99,7 +99,9 @@
 #include "utilities/trace/bytedance_metrics_reporter.h"
 #if !defined(_MSC_VER) && !defined(__APPLE__)
 #include <sys/unistd.h>
-// #include <table/terark_zip_table.h>
+
+
+
 #endif
 #include "utilities/util/valvec.hpp"
 
@@ -108,12 +110,17 @@
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #endif
 
-//#include <terark/util/fiber_pool.hpp>
+#ifdef WITH_TERARK_ZIP
+#include <table/terark_zip_table.h>
+#include <terark/util/fiber_pool.hpp>
+#include <terark/thread/fiber_yield.hpp>
+#endif
+
 #ifdef BOOSTLIB
 #include <boost/fiber/all.hpp>
 #endif
 //#include <boost/context/pooled_fixedsize_stack.hpp>
-// #include <terark/thread/fiber_yield.hpp>
+
 
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
@@ -1878,7 +1885,7 @@ Status DBImpl::CreateColumnFamilyImpl(const ColumnFamilyOptions& cf_options,
           "env TerarkZipTable_localTempDir",
           terarkdb_localTempDir);
     }
-#ifdef BYTEDANCE_TERARK_ZIP
+#ifdef WITH_TERARK_ZIP
     if (!TerarkZipIsBlackListCF(column_family_name)) {
       TerarkZipCFOptionsFromEnv(const_cast<ColumnFamilyOptions&>(cf_options),
                                 dbname_);
@@ -2949,7 +2956,7 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
         deleted_range.push_back(deleted);
       }
       // sort & merge ranges
-      bytedance_terark::sort_a(deleted_range, TERARK_FIELD(start) < *uc);
+      terark::sort_a(deleted_range, TERARK_FIELD(start) < *uc);
       size_t c = 0;
       n = deleted_range.size();
       for (size_t i = 1; i < n; ++i) {

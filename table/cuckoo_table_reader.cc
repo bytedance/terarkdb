@@ -312,7 +312,7 @@ void CuckooTableIterator::InitIfNeeded() {
   }
   assert(sorted_bucket_ids_.size() ==
          reader_->GetTableProperties()->num_entries);
-  bytedance_terark::sort_a(sorted_bucket_ids_, bucket_comparator_);
+  terark::sort_a(sorted_bucket_ids_, bucket_comparator_);
   curr_key_idx_ = kInvalidIndex;
   initialized_ = true;
 }
@@ -334,7 +334,7 @@ void CuckooTableIterator::Seek(const Slice& target) {
   const BucketComparator seek_comparator(
       reader_->file_data_, reader_->ucomp_, reader_->bucket_length_,
       reader_->user_key_length_, ExtractUserKey(target));
-  curr_key_idx_ = static_cast<uint32_t>(bytedance_terark::lower_bound_a(
+  curr_key_idx_ = static_cast<uint32_t>(terark::lower_bound_a(
       sorted_bucket_ids_, kInvalidIndex, seek_comparator));
   PrepareKVAtCurrIdx();
 }

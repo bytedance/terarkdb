@@ -117,7 +117,7 @@ void FragmentedRangeTombstoneList::FragmentTombstones(
       for (auto flush_it = it; flush_it != cur_end_keys.end(); ++flush_it) {
         seqnums_to_flush.push_back(flush_it->sequence);
       }
-      bytedance_terark::sort_a(seqnums_to_flush,
+      terark::sort_a(seqnums_to_flush,
                                std::greater<SequenceNumber>());
 
       size_t start_idx = tombstone_seqs_.size();

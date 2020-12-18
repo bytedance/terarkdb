@@ -96,7 +96,7 @@ RandomAccessFileReader::RandomAccessFileReader(
 #else  // !ROCKSDB_LITE
   (void)listeners;
 #endif
-  use_fsread_ = bytedance_terark::getEnvBool("TerarkDB_FileReaderUseFsRead");
+  use_fsread_ = terark::getEnvBool("TerarkDB_FileReaderUseFsRead");
 }
 
 Status RandomAccessFileReader::Read(uint64_t offset, size_t n, Slice* result,

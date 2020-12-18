@@ -11,7 +11,12 @@
 #include "table/get_context.h"
 #if !defined(_MSC_VER) && !defined(__APPLE__)
 #include <sys/unistd.h>
-// #include <table/terark_zip_table.h>
+
+#ifdef WITH_TERARK_ZIP
+#include <table/terark_zip_table.h>
+#include <terark/valvec.hpp>
+#endif
+
 #endif
 
 namespace rocksdb {
@@ -176,16 +181,20 @@ Status CompactedDBImpl::Open(const Options& options, const std::string& dbname,
           "env TerarkZipTable_localTempDir",
           terarkdb_localTempDir);
     }
-    // if (!TerarkZipIsBlackListCF(kDefaultColumnFamilyName)) {
-    //   const ColumnFamilyOptions& cf_options = options;
-    //   const DBOptions& db_options = options;
-    //   TerarkZipDBOptionsFromEnv(const_cast<DBOptions&>(db_options));
-    //   TerarkZipCFOptionsFromEnv(const_cast<ColumnFamilyOptions&>(cf_options),
-    //                             dbname);
-    //   auto& factory = cf_options.table_factory;
-    //   Status s = factory->SanitizeOptions(db_options, cf_options);
-    //   if (!s.ok()) return s;
-    // }
+    
+    #ifdef WITH_TERARK_ZIP
+    if (!TerarkZipIsBlackListCF(kDefaultColumnFamilyName)) {
+      const ColumnFamilyOptions& cf_options = options;
+      const DBOptions& db_options = options;
+      TerarkZipDBOptionsFromEnv(const_cast<DBOptions&>(db_options));
+      TerarkZipCFOptionsFromEnv(const_cast<ColumnFamilyOptions&>(cf_options),
+                                dbname);
+      auto& factory = cf_options.table_factory;
+      Status s = factory->SanitizeOptions(db_options, cf_options);
+      if (!s.ok()) return s;
+    }
+    #endif
+
   }
 #endif
   if (options.max_open_files != -1) {

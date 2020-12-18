@@ -1,11 +1,12 @@
-#ifndef __bytedance_penglei_valvec_hpp__
-#define __bytedance_penglei_valvec_hpp__
+#ifdef WITH_TERARK_ZIP
+#include <terark/valvec.hpp>
+#else
 
 #include <stdlib.h>
 
 #include "utilities/util/function.hpp"
 
-namespace bytedance_terark {
+namespace terark {
 
 /// STL like algorithm with array/RanIt and size_t param
 
@@ -311,5 +312,5 @@ void sort_ex_a(Container& a, KeyExtractor keyEx, Comp cmp) {
   std::sort(std::begin(a), std::end(a), ExtractorComparator(keyEx, cmp));
 }
 
-}  // namespace bytedance_terark
+}  // namespace terark
 #endif

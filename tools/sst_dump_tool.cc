@@ -301,7 +301,7 @@ Status SstFileDumper::SetTableOptionsByMagicNumber(
           "env TerarkZipTable_localTempDir",
           terarkdb_localTempDir);
     }
-#ifdef BYTEDANCE_TERARK_ZIP
+#ifdef WITH_TERARK_ZIP
     TerarkZipConfigFromEnv(options_, options_);
 #endif
 #endif

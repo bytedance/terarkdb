@@ -43,7 +43,7 @@ class CompactionFilter
     : public
       /// CompactionFilter can also be created by new factory mechanism.
       /// CompactionFilterFactory the old factory mechanism are also kept.
-      bytedance_terark::Factoryable<CompactionFilter*, Slice,
+      terark::Factoryable<CompactionFilter*, Slice,
                                     CompactionFilterContext> {
  public:
   enum ValueType {
@@ -214,7 +214,7 @@ class CompactionFilter
 // Each compaction will create a new CompactionFilter allowing the
 // application to know about different compactions
 class CompactionFilterFactory
-    : public bytedance_terark::Factoryable<CompactionFilterFactory*, Slice> {
+    : public terark::Factoryable<CompactionFilterFactory*, Slice> {
  public:
   virtual ~CompactionFilterFactory() {}
 
