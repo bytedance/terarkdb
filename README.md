@@ -47,10 +47,15 @@ target_link_libraries({YOUR_TARGET} terarkdb)
 
 3) Important Default Options
 
-- CMAKE_BUILD_TYPE: Debug
+- CMAKE_BUILD_TYPE: RelWithDebInfo
 - WITH_JEMALLOC: ON
+  - Use Jemalloc or Not (If you are using a different malloc library, change to OFF)
 - WITH_TESTS: OFF
+  - Build test cases
 - WITH_TOOLS: OFF
+  - Build with TerarkDB tools (e.g. db_bench, ldb etc)
+- WITH_TERARK_ZIP: OFF
+  - Build with TerarkZipTable
 
 
 ### Notes
