@@ -1,6 +1,10 @@
 ## CHANGELOG
 
 ### 2020-12-11
+- v1.3.2
+- Release Note
+  - Release TerarkDB as a public project
+  - Code refine & docs improvement etc.
 
 ### 2020-09-18
 - v1.2.12
