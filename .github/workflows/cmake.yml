@@ -21,7 +21,7 @@ jobs:
     - uses: actions/checkout@v2
     - name: Create Build Environment
       run: |
-        apt-get install -y libaio-dev
+        sudo apt-get install -y libaio-dev
         cmake -E make_directory ${{runner.workspace}}/build
 
     - name: Configure CMake
