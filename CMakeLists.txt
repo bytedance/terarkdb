@@ -102,7 +102,7 @@ if(WITH_JEMALLOC)
   add_definitions(-DROCKSDB_JEMALLOC -DJEMALLOC_NO_DEMANGLE)
   get_target_property(jemalloc_INCLUDE_DIR jemalloc INCLUDE_DIRECTORIES)
   include_directories(${jemalloc_INCLUDE_DIR})
-  list(APPEND THIRDPARTY_LIBS jemalloc pthread)
+  list(APPEND THIRDPARTY_LIBS jemalloc pthread dl)
   message("[terarkdb] jemalloc include dir: ${jemalloc_INCLUDE_DIR}")
 endif()
 
