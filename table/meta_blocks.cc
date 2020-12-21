@@ -157,6 +157,10 @@ void PropertyBlockBuilder::AddTableProperty(const TableProperties& props) {
   if (!props.compression_name.empty()) {
     Add(TablePropertiesNames::kCompression, props.compression_name);
   }
+  if (true) {
+    Add(TablePropertiesNames::kRatioExpireTime, props.ratio_expire_time);
+    Add(TablePropertiesNames::kScanGapExpireTime, props.scan_gap_expire_time);
+  }
 }
 
 Slice PropertyBlockBuilder::Finish() {
@@ -288,6 +292,10 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
        &new_table_properties->creation_time},
       {TablePropertiesNames::kOldestKeyTime,
        &new_table_properties->oldest_key_time},
+      {TablePropertiesNames::kRatioExpireTime,
+       &new_table_properties->ratio_expire_time},
+      {TablePropertiesNames::kScanGapExpireTime,
+       &new_table_properties->scan_gap_expire_time},
   };
 
   auto GetUint64Vector = [&](const std::string& key, Slice* raw_val,
