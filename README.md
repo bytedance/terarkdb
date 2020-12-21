@@ -19,7 +19,7 @@ drawbacks.
   - `heavy_write` means 90% write operations
   - `heavy_read` means 90% read operations
 
-![](docs/static/images/performance/compare_rocksdb.png)
+![](docs/images/compare_rocksdb.png)
 
 ## Document
 [All-in-one Documentation](https://bytedance.feishu.cn/docs/doccnZmYFqHBm06BbvYgjsHHcKc#)
@@ -109,10 +109,10 @@ TODO
 TerarkDB has been deployed in lots of applications in Bytedance, in most cases TerarkDB can help to reduce latency spike and improve throughput tremendously.
 
 ### Disk Write
-![](docs/static/images/performance/disk_write.png)
+![](docs/images/disk_write.png)
 
 ### Get Latency
-![](docs/static/images/performance/get_latency.png)
+![](docs/images/get_latency.png)
 
 
 # 4. Contributing
