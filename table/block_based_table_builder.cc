@@ -78,9 +78,11 @@ FilterBlockBuilder* CreateFilterBlockBuilder(
       // until index builder actully cuts the partition, we take the lower bound
       // as partition size.
       assert(table_opt.block_size_deviation <= 100);
-      auto partition_size = static_cast<uint32_t>(
-          ((table_opt.metadata_block_size *
-          (100 - table_opt.block_size_deviation)) + 99) / 100);
+      auto partition_size =
+          static_cast<uint32_t>(((table_opt.metadata_block_size *
+                                  (100 - table_opt.block_size_deviation)) +
+                                 99) /
+                                100);
       partition_size = std::max(partition_size, static_cast<uint32_t>(1));
       return new PartitionedFilterBlockBuilder(
           mopt.prefix_extractor.get(), table_opt.whole_key_filtering,
@@ -155,10 +157,9 @@ Slice CompressBlock(const Slice& raw, const CompressionContext& compression_ctx,
           GoodCompressionRatio(compressed_output->size(), raw.size())) {
         return *compressed_output;
       }
-      break;     // fall back to no compression.
+      break;  // fall back to no compression.
     case kXpressCompression:
-      if (XPRESS_Compress(raw.data(), raw.size(),
-          compressed_output) &&
+      if (XPRESS_Compress(raw.data(), raw.size(), compressed_output) &&
           GoodCompressionRatio(compressed_output->size(), raw.size())) {
         return *compressed_output;
       }
@@ -170,8 +171,9 @@ Slice CompressBlock(const Slice& raw, const CompressionContext& compression_ctx,
           GoodCompressionRatio(compressed_output->size(), raw.size())) {
         return *compressed_output;
       }
-      break;     // fall back to no compression.
-    default: {}  // Do not recognize this compression type
+      break;  // fall back to no compression.
+    default: {
+    }  // Do not recognize this compression type
   }
 
   // Compression method is not supported, or not good compression ratio, so just
@@ -382,6 +384,17 @@ BlockBasedTableBuilder::BlockBasedTableBuilder(
         &rep_->compressed_cache_key_prefix[0],
         &rep_->compressed_cache_key_prefix_size);
   }
+  if (true) {
+    TtlExtractorContext ttl_extractor_context;
+    ttl_extractor_context.column_family_id = column_family_id;
+    ttl_histogram_ = std::make_unique<HistogramImpl>();
+    ttl_extractor_ =
+        builder_options.ioptions.ttl_extractor_factory->CreateTtlExtractor(
+            ttl_extractor_context);
+    ttl_seconds_slice_window_.clear();
+    slice_index_ = 0;
+    min_ttl_seconds_ = std::numeric_limits<uint64_t>::max();
+  }
 }
 
 BlockBasedTableBuilder::~BlockBasedTableBuilder() {
@@ -438,6 +451,39 @@ Status BlockBasedTableBuilder::Add(const Slice& key,
     r->props.num_deletions++;
   } else if (value_type == kTypeMerge) {
     r->props.num_merge_operands++;
+  }
+
+  if (true) {
+    EntryType entry_type = GetEntryType(value_type);
+    if (entry_type == kEntryMerge || entry_type == kEntryPut) {
+      bool has_ttl = false;
+      std::chrono::seconds ttl(0);
+      assert(ttl_extractor_ != nullptr);
+      Status s = ttl_extractor_->Extract(entry_type, ExtractUserKey(key), value,
+                                         &has_ttl, &ttl);
+      if (!s.ok()) {
+        return s;
+      }
+      if (has_ttl) {
+        assert(ttl_histogram_ != nullptr);
+        uint64_t key_ttl = static_cast<uint64_t>(ttl.count());
+        ttl_histogram_->Add(key_ttl);
+        // left for scan
+        int slice_length = 10;
+        if (ttl_seconds_slice_window_.size() < slice_length) {
+          ttl_seconds_slice_window_.emplace_back(key_ttl);
+          min_ttl_seconds_ = std::min(min_ttl_seconds_, key_ttl);
+        } else {
+          assert(slice_length == ttl_seconds_slice_window_.size());
+          ttl_seconds_slice_window_[slice_index_] = key_ttl;
+          min_ttl_seconds_ =
+              std::min(min_ttl_seconds_,
+                       *std::max_element(ttl_seconds_slice_window_.begin(),
+                                         ttl_seconds_slice_window_.end()));
+          slice_index_ = (slice_index_ + 1) % slice_length;
+        }
+      }
+    }
   }
 
   r->index_builder->OnKeyAdded(key);
@@ -502,8 +548,9 @@ void BlockBasedTableBuilder::WriteBlock(const Slice& raw_block_contents,
   Slice block_contents;
   bool abort_compression = false;
 
-  StopWatchNano timer(r->ioptions.env,
-    ShouldReportDetailedTime(r->ioptions.env, r->ioptions.statistics));
+  StopWatchNano timer(
+      r->ioptions.env,
+      ShouldReportDetailedTime(r->ioptions.env, r->ioptions.statistics));
 
   if (raw_block_contents.size() < kCompressionSizeLimit) {
     Slice compression_dict;
@@ -613,11 +660,12 @@ void BlockBasedTableBuilder::WriteRawBlock(const Slice& block_contents,
         XXH64_state_t* const state = XXH64_createState();
         XXH64_reset(state, 0);
         XXH64_update(state, block_contents.data(),
-                static_cast<uint32_t>(block_contents.size()));
+                     static_cast<uint32_t>(block_contents.size()));
         XXH64_update(state, trailer, 1);  // Extend  to cover block type
-        EncodeFixed32(trailer_without_type,
-          static_cast<uint32_t>(XXH64_digest(state) & // lower 32 bits
-                                   uint64_t{0xffffffff}));
+        EncodeFixed32(
+            trailer_without_type,
+            static_cast<uint32_t>(XXH64_digest(state) &  // lower 32 bits
+                                  uint64_t{0xffffffff}));
         XXH64_freeState(state);
         break;
       }
@@ -644,9 +692,7 @@ void BlockBasedTableBuilder::WriteRawBlock(const Slice& block_contents,
   }
 }
 
-Status BlockBasedTableBuilder::status() const {
-  return rep_->status;
-}
+Status BlockBasedTableBuilder::status() const { return rep_->status; }
 
 static void DeleteCachedBlockContents(const Slice& /*key*/, void* value) {
   BlockContents* bc = reinterpret_cast<BlockContents*>(value);
@@ -678,11 +724,10 @@ Status BlockBasedTableBuilder::InsertBlockInCache(const Slice& block_contents,
 
     // make cache key by appending the file offset to the cache prefix id
     char* end = EncodeVarint64(
-                  r->compressed_cache_key_prefix +
-                  r->compressed_cache_key_prefix_size,
-                  handle->offset());
-    Slice key(r->compressed_cache_key_prefix, static_cast<size_t>
-              (end - r->compressed_cache_key_prefix));
+        r->compressed_cache_key_prefix + r->compressed_cache_key_prefix_size,
+        handle->offset());
+    Slice key(r->compressed_cache_key_prefix,
+              static_cast<size_t>(end - r->compressed_cache_key_prefix));
 
     // Insert into compressed block cache.
     block_cache_compressed->Insert(
@@ -831,6 +876,24 @@ void BlockBasedTableBuilder::WritePropertiesBlock(
     rep_->props.creation_time = rep_->creation_time;
     rep_->props.oldest_key_time = rep_->oldest_key_time;
 
+    if (true) {
+      assert(ttl_histogram_ != nullptr);
+      uint64_t percentile_ratio_ttl =
+          static_cast<uint64_t>(ttl_histogram_->Percentile(10.0));
+      uint64_t now_seconds = rep_->ioptions.env->NowMicros() / 1000000ul;
+      rep_->props.ratio_expire_time = now_seconds + percentile_ratio_ttl;
+      rep_->props.scan_gap_expire_time = now_seconds + min_ttl_seconds_;
+      ROCKS_LOG_INFO(rep_->ioptions.info_log,
+                     "[%s] ratio_expire_time:%" PRIu64
+                     ", scan_gap_expire_time:%" PRIu64 ".",
+                     rep_->column_family_name.c_str(),
+                     rep_->props.ratio_expire_time,
+                     rep_->props.scan_gap_expire_time);
+      min_ttl_seconds_ = std::numeric_limits<uint64_t>::max();
+      ttl_histogram_.reset();
+      ttl_extractor_.reset();
+    }
+
     // Add basic properties
     property_block_builder.AddTableProperty(rep_->props);
 
@@ -961,9 +1024,7 @@ uint64_t BlockBasedTableBuilder::NumEntries() const {
   return rep_->props.num_entries;
 }
 
-uint64_t BlockBasedTableBuilder::FileSize() const {
-  return rep_->offset;
-}
+uint64_t BlockBasedTableBuilder::FileSize() const { return rep_->offset; }
 
 bool BlockBasedTableBuilder::NeedCompact() const {
   for (const auto& collector : rep_->table_properties_collectors) {

@@ -68,6 +68,8 @@ struct TablePropertiesNames {
   static const std::string kDependence;
   static const std::string kDependenceEntryCount;
   static const std::string kInheritanceChain;
+  static const std::string kRatioExpireTime;
+  static const std::string kScanGapExpireTime;
 };
 
 extern const std::string kPropertiesBlock;
@@ -248,6 +250,12 @@ struct TablePropertiesBase {
 
   // Inheritance chain
   std::vector<uint64_t> inheritance_chain;
+
+  // Expire time of fixed ratio
+  uint64_t ratio_expire_time = std::numeric_limits<uint64_t>::max();
+
+  // Expire time of fixed scan gap
+  uint64_t scan_gap_expire_time = std::numeric_limits<uint64_t>::max();
 
   // convert this object to a human readable form
   //   @prop_delim: delimiter for each property.

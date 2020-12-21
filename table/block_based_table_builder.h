@@ -9,11 +9,13 @@
 
 #pragma once
 #include <stdint.h>
+
 #include <limits>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "monitoring/histogram.h"
 #include "rocksdb/flush_block_policy.h"
 #include "rocksdb/listener.h"
 #include "rocksdb/options.h"
@@ -124,6 +126,13 @@ class BlockBasedTableBuilder : public TableBuilder {
   // Some compression libraries fail when the raw size is bigger than int. If
   // uncompressed size is bigger than kCompressionSizeLimit, don't compress it
   const uint64_t kCompressionSizeLimit = std::numeric_limits<int>::max();
+
+  std::unique_ptr<HistogramImpl> ttl_histogram_ = nullptr;
+  std::unique_ptr<TtlExtractor> ttl_extractor_ = nullptr;
+
+  std::vector<uint64_t> ttl_seconds_slice_window_;
+  uint64_t min_ttl_seconds_;
+  int slice_index_;
 };
 
 Slice CompressBlock(const Slice& raw, const CompressionContext& compression_ctx,
