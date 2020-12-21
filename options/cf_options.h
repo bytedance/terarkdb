@@ -37,6 +37,8 @@ struct ImmutableCFOptions {
 
   const ValueExtractorFactory* value_meta_extractor_factory;
 
+  const TtlExtractorFactory* ttl_extractor_factory;
+
   const CompactionFilter* compaction_filter;
 
   CompactionFilterFactory* compaction_filter_factory;
@@ -212,7 +214,7 @@ struct MutableCFOptions {
   explicit MutableCFOptions(const Options& options);
 
   BlobConfig get_blob_config() const {
-    return BlobConfig{ blob_size, blob_large_key_ratio };
+    return BlobConfig{blob_size, blob_large_key_ratio};
   }
 
   // Must be called after any change to MutableCFOptions
@@ -278,7 +280,8 @@ struct MutableCFOptions {
 uint64_t MultiplyCheckOverflow(uint64_t op1, double op2);
 
 // Get the max file size in a given level.
-uint64_t MaxFileSizeForLevel(const MutableCFOptions& cf_options,
-    int level, CompactionStyle compaction_style, int base_level = 1,
-    bool level_compaction_dynamic_level_bytes = false);
+uint64_t MaxFileSizeForLevel(const MutableCFOptions& cf_options, int level,
+                             CompactionStyle compaction_style,
+                             int base_level = 1,
+                             bool level_compaction_dynamic_level_bytes = false);
 }  // namespace rocksdb

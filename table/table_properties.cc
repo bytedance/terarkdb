@@ -4,6 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include "rocksdb/table_properties.h"
+
 #include "port/port.h"
 #include "rocksdb/env.h"
 #include "rocksdb/iterator.h"
@@ -18,59 +19,50 @@ const uint32_t TablePropertiesCollectorFactory::Context::kUnknownColumnFamily =
     port::kMaxInt32;
 
 namespace {
-  void AppendProperty(
-      std::string& props,
-      const std::string& key,
-      const std::string& value,
-      const std::string& prop_delim,
-      const std::string& kv_delim) {
-    props.append(key);
-    props.append(kv_delim);
-    props.append(value);
-    props.append(prop_delim);
-  }
-
-  template <class TValue>
-  void AppendProperty(
-      std::string& props,
-      const std::string& key,
-      const TValue& value,
-      const std::string& prop_delim,
-      const std::string& kv_delim) {
-    AppendProperty(
-        props, key, ToString(value), prop_delim, kv_delim
-    );
-  }
-
-  // Seek to the specified meta block.
-  // Return true if it successfully seeks to that block.
-  Status SeekToMetaBlock(InternalIteratorBase<Slice>* meta_iter,
-                         const std::string& block_name, bool* is_found,
-                         BlockHandle* block_handle = nullptr) {
-    if (block_handle != nullptr) {
-      *block_handle = BlockHandle::NullBlockHandle();
-    }
-    *is_found = true;
-    meta_iter->Seek(block_name);
-    if (meta_iter->status().ok()) {
-      if (meta_iter->Valid() && meta_iter->key() == block_name) {
-        *is_found = true;
-        if (block_handle) {
-          Slice v = meta_iter->value();
-          return block_handle->DecodeFrom(&v);
-        }
-      } else {
-        *is_found = false;
-        return Status::OK();
-      }
-    }
-    return meta_iter->status();
-  }
+void AppendProperty(std::string& props, const std::string& key,
+                    const std::string& value, const std::string& prop_delim,
+                    const std::string& kv_delim) {
+  props.append(key);
+  props.append(kv_delim);
+  props.append(value);
+  props.append(prop_delim);
 }
 
-std::string TablePropertiesBase::ToString(
-    const std::string& prop_delim,
-    const std::string& kv_delim) const {
+template <class TValue>
+void AppendProperty(std::string& props, const std::string& key,
+                    const TValue& value, const std::string& prop_delim,
+                    const std::string& kv_delim) {
+  AppendProperty(props, key, ToString(value), prop_delim, kv_delim);
+}
+
+// Seek to the specified meta block.
+// Return true if it successfully seeks to that block.
+Status SeekToMetaBlock(InternalIteratorBase<Slice>* meta_iter,
+                       const std::string& block_name, bool* is_found,
+                       BlockHandle* block_handle = nullptr) {
+  if (block_handle != nullptr) {
+    *block_handle = BlockHandle::NullBlockHandle();
+  }
+  *is_found = true;
+  meta_iter->Seek(block_name);
+  if (meta_iter->status().ok()) {
+    if (meta_iter->Valid() && meta_iter->key() == block_name) {
+      *is_found = true;
+      if (block_handle) {
+        Slice v = meta_iter->value();
+        return block_handle->DecodeFrom(&v);
+      }
+    } else {
+      *is_found = false;
+      return Status::OK();
+    }
+  }
+  return meta_iter->status();
+}
+}  // namespace
+
+std::string TablePropertiesBase::ToString(const std::string& prop_delim,
+                                          const std::string& kv_delim) const {
   std::string result;
   result.reserve(1024);
 
@@ -105,8 +97,8 @@ std::string TablePropertiesBase::ToString(
   if (index_partitions != 0) {
     AppendProperty(result, "# index partitions", index_partitions, prop_delim,
                    kv_delim);
-    AppendProperty(result, "top-level index size", top_level_index_size, prop_delim,
-                   kv_delim);
+    AppendProperty(result, "top-level index size", top_level_index_size,
+                   prop_delim, kv_delim);
   }
   AppendProperty(result, "filter block size", filter_size, prop_delim,
                  kv_delim);
@@ -163,6 +155,13 @@ std::string TablePropertiesBase::ToString(
   AppendProperty(result, "time stamp of earliest key", oldest_key_time,
                  prop_delim, kv_delim);
 
+  // Add for ttl feature property
+  AppendProperty(result, "expire time of fixed ratio", ratio_expire_time,
+                 prop_delim, kv_delim);
+
+  AppendProperty(result, "expire time of fixed scan gap", scan_gap_expire_time,
+                 prop_delim, kv_delim);
+
   return result;
 }
 
@@ -183,10 +182,8 @@ void TableProperties::Add(const TableProperties& tp) {
   num_range_deletions += tp.num_range_deletions;
 }
 
-const std::string TablePropertiesNames::kDataSize  =
-    "rocksdb.data.size";
-const std::string TablePropertiesNames::kIndexSize =
-    "rocksdb.index.size";
+const std::string TablePropertiesNames::kDataSize = "rocksdb.data.size";
+const std::string TablePropertiesNames::kIndexSize = "rocksdb.index.size";
 const std::string TablePropertiesNames::kIndexPartitions =
     "rocksdb.index.partitions";
 const std::string TablePropertiesNames::kTopLevelIndexSize =
@@ -195,23 +192,19 @@ const std::string TablePropertiesNames::kIndexKeyIsUserKey =
     "rocksdb.index.key.is.user.key";
 const std::string TablePropertiesNames::kIndexValueIsDeltaEncoded =
     "rocksdb.index.value.is.delta.encoded";
-const std::string TablePropertiesNames::kFilterSize =
-    "rocksdb.filter.size";
-const std::string TablePropertiesNames::kRawKeySize =
-    "rocksdb.raw.key.size";
+const std::string TablePropertiesNames::kFilterSize = "rocksdb.filter.size";
+const std::string TablePropertiesNames::kRawKeySize = "rocksdb.raw.key.size";
 const std::string TablePropertiesNames::kRawValueSize =
     "rocksdb.raw.value.size";
 const std::string TablePropertiesNames::kNumDataBlocks =
     "rocksdb.num.data.blocks";
-const std::string TablePropertiesNames::kNumEntries =
-    "rocksdb.num.entries";
+const std::string TablePropertiesNames::kNumEntries = "rocksdb.num.entries";
 const std::string TablePropertiesNames::kDeletedKeys = "rocksdb.deleted.keys";
 const std::string TablePropertiesNames::kMergeOperands =
     "rocksdb.merge.operands";
 const std::string TablePropertiesNames::kNumRangeDeletions =
     "rocksdb.num.range-deletions";
-const std::string TablePropertiesNames::kFilterPolicy =
-    "rocksdb.filter.policy";
+const std::string TablePropertiesNames::kFilterPolicy = "rocksdb.filter.policy";
 const std::string TablePropertiesNames::kFormatVersion =
     "rocksdb.format.version";
 const std::string TablePropertiesNames::kFixedKeyLen =
@@ -242,6 +235,10 @@ const std::string TablePropertiesNames::kDependenceEntryCount =
     "rocksdb.sst.dependence.entry-count";
 const std::string TablePropertiesNames::kInheritanceChain =
     "rocksdb.sst.inheritance-chain";
+const std::string TablePropertiesNames::kRatioExpireTime =
+    "rocksdb.ratio_expire_time";
+const std::string TablePropertiesNames::kScanGapExpireTime =
+    "rocksdb.scan_gap_expire_time";
 
 extern const std::string kPropertiesBlock = "rocksdb.properties";
 // Old property block name for backward compatibility

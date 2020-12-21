@@ -10,9 +10,11 @@
 #endif
 
 #include <inttypes.h>
+
 #include <cassert>
 #include <limits>
 #include <string>
+
 #include "options/db_options.h"
 #include "port/port.h"
 #include "rocksdb/env.h"
@@ -30,7 +32,9 @@ ImmutableCFOptions::ImmutableCFOptions(const ImmutableDBOptions& db_options,
       user_comparator(cf_options.comparator),
       internal_comparator(InternalKeyComparator(cf_options.comparator)),
       merge_operator(cf_options.merge_operator.get()),
-      value_meta_extractor_factory(cf_options.value_meta_extractor_factory.get()),
+      value_meta_extractor_factory(
+          cf_options.value_meta_extractor_factory.get()),
+      ttl_extractor_factory(cf_options.ttl_extractor_factory.get()),
       compaction_filter(cf_options.compaction_filter),
       compaction_filter_factory(cf_options.compaction_filter_factory.get()),
       compaction_dispatcher(cf_options.compaction_dispatcher.get()),
