@@ -23,6 +23,7 @@
 #include "rocksdb/env.h"
 #include "rocksdb/listener.h"
 #include "rocksdb/metrics_reporter.h"
+#include "rocksdb/ttl_extractor.h"
 #include "rocksdb/universal_compaction.h"
 #include "rocksdb/value_extractor.h"
 #include "rocksdb/version.h"
@@ -156,6 +157,9 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // Default: nullptr
   std::shared_ptr<const ValueExtractorFactory> value_meta_extractor_factory =
       nullptr;
+
+  // Default: nullptr
+  std::shared_ptr<const TtlExtractorFactory> ttl_extractor_factory = nullptr;
 
   // A single CompactionFilter instance to call into during compaction.
   // Allows an application to modify/delete a key-value during background
