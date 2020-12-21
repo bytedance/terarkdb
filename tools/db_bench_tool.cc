@@ -3268,7 +3268,12 @@ class Benchmark {
             options.write_buffer_size, FLAGS_key_size + FLAGS_value_size));
         break;
       case kPatriciaTrie:
+#ifdef WITH_TERARK_ZIP
         options.memtable_factory.reset(NewPatriciaTrieRepFactory());
+#else
+        printf("TerarkZipTable was not enabled!");
+        exit(1);
+#endif
         break;
 #else
       default:
