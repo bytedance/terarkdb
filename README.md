@@ -110,7 +110,7 @@ We didn't archieve all static libraries together yet, so you have to pack all li
 
 # 2. Usage
 ## 2.1. BlockBasedTable
-```
+```c++
 #include <cassert>
 #include "rocksdb/db.h"
 
@@ -129,7 +129,7 @@ auto status = rocksdb::DB::Open(options, "/tmp/testdb", &db);
 std::string value;
 auto s = db->Put(rocksdb::WriteOptions(), "key1", "value1");
 s = db->Get(rocksdb::ReadOptions(), "key1", &value);
-      assert(s.ok());
+assert(s.ok());
 assert("value1" == value);
 
 s = db->Delete(rocksdb::WriteOptions(), "key1");
@@ -138,7 +138,7 @@ assert(s.ok());
 
 Or manually set table format and table options:
 
-```
+```c++
 #include <cassert>
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
@@ -166,7 +166,7 @@ auto status = rocksdb::DB::Open(options, "/tmp/testdb2", &db);
 std::string value;
 auto s = db->Put(rocksdb::WriteOptions(), "key1", "value1");
 s = db->Get(rocksdb::ReadOptions(), "key1", &value);
-    assert(s.ok());
+assert(s.ok());
 assert("value1" == value);
 
 s = db->Delete(rocksdb::WriteOptions(), "key1");
@@ -174,7 +174,7 @@ assert(s.ok());
 ```
 
 ## 2.2. TerarkZipTable
-```
+```c++
 #include <cassert>
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
@@ -214,7 +214,7 @@ auto status = rocksdb::DB::Open(options, "/tmp/testdb2", &db);
 std::string value;
 auto s = db->Put(rocksdb::WriteOptions(), "key1", "value1");
 s = db->Get(rocksdb::ReadOptions(), "key1", &value);
-      assert(s.ok());
+assert(s.ok());
 assert("value1" == value);
 
 s = db->Delete(rocksdb::WriteOptions(), "key1");
