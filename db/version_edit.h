@@ -102,6 +102,8 @@ struct TablePropertyCache {
   float read_amp = 1;                       // expt read amp from sst
   std::vector<Dependence> dependence;       // make these sst hidden
   std::vector<uint64_t> inheritance_chain;  // inheritance chain
+  uint64_t ratio_expire_time = std::numeric_limits<uint64_t>::max();
+  uint64_t scan_gap_expire_time = std::numeric_limits<uint64_t>::max();
 
   bool is_map_sst() const { return purpose == kMapSst; }
   bool has_range_deletions() const { return (flags & kNoRangeDeletions) == 0; }
