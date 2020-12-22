@@ -927,6 +927,7 @@ ENDIF()
 if(WITH_TESTS)
   set(TESTS
         table/block_based_table_builder_test.cc
+          db/db_impl_gc_ttl_test.cc
   )
 
   if(WITH_LIBRADOS)
