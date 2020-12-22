@@ -17,6 +17,7 @@
 #pragma once
 
 #include <string>
+
 #include "rocksdb/slice.h"
 
 namespace rocksdb {
@@ -74,6 +75,7 @@ class Status {
     kMemoryLimit = 7,
     kSpaceLimit = 8,
     kBadAlloc = 9,
+    kRequireMmap = 10,
     kMaxSubCode
   };
 
@@ -299,11 +301,12 @@ class Status {
   static const char* CopyState(const char* s);
 };
 
-inline Status::Status(const Status& s) : code_(s.code_), subcode_(s.subcode_), sev_(s.sev_) {
+inline Status::Status(const Status& s)
+    : code_(s.code_), subcode_(s.subcode_), sev_(s.sev_) {
   state_ = (s.state_ == nullptr) ? nullptr : CopyState(s.state_);
 }
 inline Status::Status(const Status& s, Severity sev)
-  : code_(s.code_), subcode_(s.subcode_), sev_(sev) {
+    : code_(s.code_), subcode_(s.subcode_), sev_(sev) {
   state_ = (s.state_ == nullptr) ? nullptr : CopyState(s.state_);
 }
 inline Status& Status::operator=(const Status& s) {
@@ -329,8 +332,10 @@ inline Status::Status(Status&& s)
 
 inline Status::Status(unsigned char code, unsigned char subcode,
                       unsigned char sev, const char* state)
-  : code_((Code)code), subcode_((SubCode)subcode), sev_((Severity)sev),
-    state_(state == nullptr ? nullptr : CopyState(state)) {}
+    : code_((Code)code),
+      subcode_((SubCode)subcode),
+      sev_((Severity)sev),
+      state_(state == nullptr ? nullptr : CopyState(state)) {}
 
 inline Status& Status::operator=(Status&& s)
 #if !(defined _MSC_VER) || ((defined _MSC_VER) && (_MSC_VER >= 1900))
@@ -338,7 +343,7 @@ inline Status& Status::operator=(Status&& s)
 #endif
 {
   this->swap(s);
-  //Status().swap(s); // s is being dead, don't care it's content
+  // Status().swap(s); // s is being dead, don't care it's content
   return *this;
 }
 
@@ -351,10 +356,10 @@ inline bool Status::operator!=(const Status& rhs) const {
 }
 
 inline void Status::swap(Status& y) noexcept {
-    std::swap(code_,    y.code_);
-    std::swap(subcode_, y.subcode_);
-    std::swap(sev_,     y.sev_);
-    std::swap(state_,   y.state_);
+  std::swap(code_, y.code_);
+  std::swap(subcode_, y.subcode_);
+  std::swap(sev_, y.sev_);
+  std::swap(state_, y.state_);
 }
 
 }  // namespace rocksdb
