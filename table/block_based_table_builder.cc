@@ -479,13 +479,15 @@ Status BlockBasedTableBuilder::Add(const Slice& key,
       if (!s.ok()) {
         return s;
       }
+      uint64_t key_ttl = std::numeric_limits<uint64_t>::max();
       if (has_ttl) {
-        uint64_t key_ttl = static_cast<uint64_t>(ttl.count());
-        if (r->moptions.ttl_garbage_collection_percentage < 100.0) {
-          assert(ttl_histogram_ != nullptr);
-          ttl_histogram_->Add(key_ttl);
-        }
-        // left for scan
+        key_ttl = static_cast<uint64_t>(ttl.count());
+      }
+      if (r->moptions.ttl_garbage_collection_percentage < 100.0) {
+        assert(ttl_histogram_ != nullptr);
+        ttl_histogram_->Add(key_ttl);
+      }
+      if (has_ttl) {
         int slice_length = r->moptions.ttl_scan_gap;
         if (slice_length < std::numeric_limits<int>::max()) {
           if (ttl_seconds_slice_window_.size() < slice_length) {
@@ -501,6 +503,9 @@ Status BlockBasedTableBuilder::Add(const Slice& key,
             slice_index_ = (slice_index_ + 1) % slice_length;
           }
         }
+      } else {
+        ttl_seconds_slice_window_.clear();
+        slice_index_ = 0;
       }
     }
   }
@@ -510,7 +515,7 @@ Status BlockBasedTableBuilder::Add(const Slice& key,
                                     r->table_properties_collectors,
                                     r->ioptions.info_log);
   return r->status;
-}
+}  // namespace rocksdb
 
 Status BlockBasedTableBuilder::AddTombstone(const Slice& key,
                                             const LazyBuffer& lazy_value) {

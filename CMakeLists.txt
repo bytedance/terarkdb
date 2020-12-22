@@ -1005,8 +1005,8 @@ if(WITH_TESTS)
         options/options_settable_test.cc
         options/options_test.cc
         table/block_based_filter_block_test.cc
-        table/block_based_table_builder_test.cc
-          db/db_impl_gc_ttl_test.cc
+        table/block_based_table_builder_ttl_test.cc
+        db/db_impl_gc_ttl_test.cc
   )
 
   if(WITH_LIBRADOS)
