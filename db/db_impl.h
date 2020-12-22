@@ -1151,6 +1151,9 @@ class DBImpl : public DB {
   // dump rocksdb.stats to LOG
   void DumpStats();
 
+  //
+  void ScheduleGCTTL();
+
   // Return the minimum empty level that could hold the total data in the
   // input level. Return the input level, if such level could not be found.
   int FindMinimumEmptyLevelFitting(ColumnFamilyData* cfd,
