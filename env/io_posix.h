@@ -9,8 +9,10 @@
 #pragma once
 #include <errno.h>
 #include <unistd.h>
+
 #include <atomic>
 #include <string>
+
 #include "rocksdb/env.h"
 
 // For non linux platform, the following macros are used only as place
@@ -36,14 +38,14 @@ static std::string IOErrorMsg(const std::string& context,
 static Status IOError(const std::string& context, const std::string& file_name,
                       int err_number) {
   switch (err_number) {
-  case ENOSPC:
-    return Status::NoSpace(IOErrorMsg(context, file_name),
-                           strerror(err_number));
-  case ESTALE:
-    return Status::IOError(Status::kStaleFile);
-  default:
-    return Status::IOError(IOErrorMsg(context, file_name),
-                           strerror(err_number));
+    case ENOSPC:
+      return Status::NoSpace(IOErrorMsg(context, file_name),
+                             strerror(err_number));
+    case ESTALE:
+      return Status::IOError(Status::kStaleFile);
+    default:
+      return Status::IOError(IOErrorMsg(context, file_name),
+                             strerror(err_number));
   }
 }
 
@@ -163,13 +165,15 @@ class PosixMmapReadableFile : public RandomAccessFile {
  public:
   PosixMmapReadableFile(const int fd, const std::string& fname, void* base,
                         size_t length, const EnvOptions& options);
-  virtual ~PosixMmapReadableFile();
-  virtual bool use_aio_reads() const final;
-  virtual Status Read(uint64_t offset, size_t n, Slice* result,
-                      char* scratch) const final;
-  virtual Status FsRead(uint64_t offset, size_t len, Slice* result, void* buf) const final;
-  virtual Status InvalidateCache(size_t offset, size_t length) final;
-  virtual intptr_t FileDescriptor() const final;
+  ~PosixMmapReadableFile();
+  bool use_aio_reads() const final { return use_aio_reads_; }
+  bool is_mmap_open() const final { return true; }
+  Status Read(uint64_t offset, size_t n, Slice* result,
+              char* scratch) const final;
+  Status FsRead(uint64_t offset, size_t len, Slice* result,
+                void* buf) const final;
+  Status InvalidateCache(size_t offset, size_t length) final;
+  intptr_t FileDescriptor() const final;
 };
 
 class PosixMmapFile : public WritableFile {

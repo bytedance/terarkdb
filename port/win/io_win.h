@@ -9,15 +9,14 @@
 #pragma once
 
 #include <stdint.h>
+#include <windows.h>
+
 #include <mutex>
 #include <string>
 
-#include "rocksdb/status.h"
 #include "rocksdb/env.h"
+#include "rocksdb/status.h"
 #include "util/aligned_buffer.h"
-
-#include <windows.h>
-
 
 namespace rocksdb {
 namespace port {
@@ -42,11 +41,11 @@ inline Status IOError(const std::string& context, int err_number) {
 
 class WinFileData;
 
-Status pwrite(const WinFileData* file_data, const Slice& data,
-  uint64_t offset, size_t& bytes_written);
+Status pwrite(const WinFileData* file_data, const Slice& data, uint64_t offset,
+              size_t& bytes_written);
 
 Status pread(const WinFileData* file_data, char* src, size_t num_bytes,
-  uint64_t offset, size_t& bytes_read);
+             uint64_t offset, size_t& bytes_read);
 
 Status fallocate(const std::string& filename, HANDLE hFile, uint64_t to_size);
 
@@ -93,29 +92,29 @@ class WinFileData {
 };
 
 class WinSequentialFile : protected WinFileData, public SequentialFile {
-
   // Override for behavior change when creating a custom env
   virtual Status PositionedReadInternal(char* src, size_t numBytes,
-    uint64_t offset, size_t& bytes_read) const;
+                                        uint64_t offset,
+                                        size_t& bytes_read) const;
 
-public:
+ public:
   WinSequentialFile(const std::string& fname, HANDLE f,
-    const EnvOptions& options);
+                    const EnvOptions& options);
 
   ~WinSequentialFile();
 
   WinSequentialFile(const WinSequentialFile&) = delete;
   WinSequentialFile& operator=(const WinSequentialFile&) = delete;
 
-  virtual Status Read(size_t n, Slice* result, char* scratch) override;
-  virtual Status PositionedRead(uint64_t offset, size_t n, Slice* result,
-    char* scratch) override;
+  Status Read(size_t n, Slice* result, char* scratch) override;
+  Status PositionedRead(uint64_t offset, size_t n, Slice* result,
+                        char* scratch) override;
 
-  virtual Status Skip(uint64_t n) override;
+  Status Skip(uint64_t n) override;
 
-  virtual Status InvalidateCache(size_t offset, size_t length) override;
+  Status InvalidateCache(size_t offset, size_t length) override;
 
-  virtual bool use_direct_io() const override { return WinFileData::use_direct_io(); }
+  bool use_direct_io() const override { return WinFileData::use_direct_io(); }
 };
 
 // mmap() based random-access
@@ -135,15 +134,17 @@ class WinMmapReadableFile : private WinFileData, public RandomAccessFile {
   WinMmapReadableFile(const WinMmapReadableFile&) = delete;
   WinMmapReadableFile& operator=(const WinMmapReadableFile&) = delete;
 
-  virtual Status Read(uint64_t offset, size_t n, Slice* result,
-                      char* scratch) const override;
-  virtual Status FsRead(uint64_t offset, size_t len, Slice*, void* buf) const override;
+  bool is_mmap_open() const override { return true; }
 
-  virtual Status InvalidateCache(size_t offset, size_t length) override;
+  Status Read(uint64_t offset, size_t n, Slice* result,
+              char* scratch) const override;
+  Status FsRead(uint64_t offset, size_t len, Slice*, void* buf) const override;
 
-  virtual size_t GetUniqueId(char* id, size_t max_size) const override;
+  Status InvalidateCache(size_t offset, size_t length) override;
 
-  virtual intptr_t FileDescriptor() const override;
+  size_t GetUniqueId(char* id, size_t max_size) const override;
+
+  intptr_t FileDescriptor() const override;
 };
 
 // We preallocate and use memcpy to append new
@@ -210,15 +211,15 @@ class WinMmapFile : private WinFileData, public WritableFile {
   virtual Status Sync() override;
 
   /**
-  * Flush data as well as metadata to stable storage.
-  */
+   * Flush data as well as metadata to stable storage.
+   */
   virtual Status Fsync() override;
 
   /**
-  * Get the size of valid data in the file. This will not match the
-  * size that is returned from the filesystem because we use mmap
-  * to extend file by map_size every time.
-  */
+   * Get the size of valid data in the file. This will not match the
+   * size that is returned from the filesystem because we use mmap
+   * to extend file by map_size every time.
+   */
   virtual uint64_t GetFileSize() override;
 
   virtual Status InvalidateCache(size_t offset, size_t length) override;
@@ -231,11 +232,12 @@ class WinMmapFile : private WinFileData, public WritableFile {
 class WinRandomAccessImpl {
  protected:
   WinFileData* file_base_;
-  size_t       alignment_;
+  size_t alignment_;
 
   // Override for behavior change when creating a custom env
   virtual Status PositionedReadInternal(char* src, size_t numBytes,
-                                        uint64_t offset, size_t& bytes_read) const;
+                                        uint64_t offset,
+                                        size_t& bytes_read) const;
 
   WinRandomAccessImpl(WinFileData* file_base, size_t alignment,
                       const EnvOptions& options);
@@ -248,7 +250,6 @@ class WinRandomAccessImpl {
   size_t GetAlignment() const { return alignment_; }
 
  public:
-
   WinRandomAccessImpl(const WinRandomAccessImpl&) = delete;
   WinRandomAccessImpl& operator=(const WinRandomAccessImpl&) = delete;
 };
@@ -270,7 +271,9 @@ class WinRandomAccessFile
 
   virtual size_t GetUniqueId(char* id, size_t max_size) const override;
 
-  virtual bool use_direct_io() const override { return WinFileData::use_direct_io(); }
+  virtual bool use_direct_io() const override {
+    return WinFileData::use_direct_io();
+  }
 
   virtual Status InvalidateCache(size_t offset, size_t length) override;
 
@@ -293,7 +296,8 @@ class WinWritableImpl {
  protected:
   WinFileData* file_data_;
   const uint64_t alignment_;
-  uint64_t next_write_offset_; // Needed because Windows does not support O_APPEND
+  uint64_t
+      next_write_offset_;  // Needed because Windows does not support O_APPEND
   uint64_t reservedsize_;  // how far we have reserved space
 
   virtual Status PreallocateInternal(uint64_t spaceToReserve);
@@ -415,28 +419,27 @@ class WinRandomRWFile : private WinFileData,
 };
 
 class WinMemoryMappedBuffer : public MemoryMappedFileBuffer {
-private:
-  HANDLE  file_handle_;
-  HANDLE  map_handle_;
-public:
-  WinMemoryMappedBuffer(HANDLE file_handle, HANDLE map_handle, void* base, size_t size) :
-    MemoryMappedFileBuffer(base, size),
-    file_handle_(file_handle),
-    map_handle_(map_handle) {}
+ private:
+  HANDLE file_handle_;
+  HANDLE map_handle_;
+
+ public:
+  WinMemoryMappedBuffer(HANDLE file_handle, HANDLE map_handle, void* base,
+                        size_t size)
+      : MemoryMappedFileBuffer(base, size),
+        file_handle_(file_handle),
+        map_handle_(map_handle) {}
   ~WinMemoryMappedBuffer() override;
 };
 
 class WinDirectory : public Directory {
   HANDLE handle_;
+
  public:
-  explicit
-  WinDirectory(HANDLE h) noexcept : 
-    handle_(h) {
+  explicit WinDirectory(HANDLE h) noexcept : handle_(h) {
     assert(handle_ != INVALID_HANDLE_VALUE);
   }
-  ~WinDirectory() {
-    ::CloseHandle(handle_);
-  }
+  ~WinDirectory() { ::CloseHandle(handle_); }
   virtual Status Fsync() override;
 
   size_t GetUniqueId(char* id, size_t max_size) const override;
@@ -454,5 +457,5 @@ class WinFileLock : public FileLock {
  private:
   HANDLE hFile_;
 };
-}
-}
+}  // namespace port
+}  // namespace rocksdb

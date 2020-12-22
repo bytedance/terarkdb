@@ -798,8 +798,8 @@ Status TerarkZipTableReaderBase::LoadTombstone(RandomAccessFileReader* file,
                                                uint64_t file_size) {
   BlockContents tombstoneBlock;
   Status s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber,
-                                 table_reader_options_.ioptions,
-                                 kRangeDelBlock, &tombstoneBlock);
+                                 table_reader_options_.ioptions, kRangeDelBlock,
+                                 &tombstoneBlock);
   if (s.ok()) {
     auto block = DetachBlockContents(tombstoneBlock, GetSequenceNumber());
     auto icomp = &table_reader_options_.internal_comparator;
@@ -1044,10 +1044,18 @@ Status TerarkEmptyTableReader::Open(RandomAccessFileReader* file,
                                     uint64_t file_size) {
   file->set_use_fsread(false);
   file_.reset(file);  // take ownership
+  Status s;
+  Slice file_data;
+  if (file->file()->is_mmap_open()) {
+    s = file->file()->Read(0, file_size, &file_data, nullptr);
+    if (!s.ok()) return s;
+  } else {
+    return Status::InvalidArgument(Status::kRequireMmap);
+  }
   const auto& ioptions = table_reader_options_.ioptions;
   TableProperties* props = nullptr;
-  Status s = ReadTableProperties(file, file_size, kTerarkZipTableMagicNumber,
-                                 ioptions, &props);
+  s = ReadTableProperties(file, file_size, kTerarkZipTableMagicNumber, ioptions,
+                          &props);
   if (!s.ok()) {
     return s;
   }
@@ -1055,14 +1063,6 @@ Status TerarkEmptyTableReader::Open(RandomAccessFileReader* file,
   props->compression_name = "TERARK";
   if (ioptions.pin_table_properties_in_reader) {
     table_properties_.reset(props);
-  }
-  Slice file_data;
-  if (table_reader_options_.env_options.use_mmap_reads) {
-    s = file->file()->Read(0, file_size, &file_data, nullptr);
-    if (!s.ok()) return s;
-  } else {
-    return Status::InvalidArgument("TerarkZipTableReader::Open()",
-                                   "EnvOptions::use_mmap_reads must be true");
   }
   if (props->comparator_name != fstring(ioptions.user_comparator->Name()) &&
       0) {
@@ -1097,10 +1097,18 @@ Status TerarkZipTableReader::Open(RandomAccessFileReader* file,
                                   uint64_t file_size) {
   file->set_use_fsread(false);
   file_.reset(file);  // take ownership
+  Status s;
+  Slice file_data;
+  if (file->file()->is_mmap_open()) {
+    s = file->file()->Read(0, file_size, &file_data, nullptr);
+    if (!s.ok()) return s;
+  } else {
+    return Status::InvalidArgument(Status::kRequireMmap);
+  }
   const auto& ioptions = table_reader_options_.ioptions;
   TableProperties* props = nullptr;
-  Status s = ReadTableProperties(file, file_size, kTerarkZipTableMagicNumber,
-                                 ioptions, &props);
+  s = ReadTableProperties(file, file_size, kTerarkZipTableMagicNumber, ioptions,
+                          &props);
   if (!s.ok()) {
     return s;
   }
@@ -1108,14 +1116,6 @@ Status TerarkZipTableReader::Open(RandomAccessFileReader* file,
   props->compression_name = "TERARK";
   if (ioptions.pin_table_properties_in_reader) {
     table_properties_.reset(props);
-  }
-  Slice file_data;
-  if (table_reader_options_.env_options.use_mmap_reads) {
-    s = file->file()->Read(0, file_size, &file_data, nullptr);
-    if (!s.ok()) return s;
-  } else {
-    return Status::InvalidArgument("TerarkZipTableReader::Open()",
-                                   "EnvOptions::use_mmap_reads must be true");
   }
   if (props->comparator_name != fstring(ioptions.user_comparator->Name()) &&
       0) {
@@ -1672,10 +1672,18 @@ Status TerarkZipTableMultiReader::Open(RandomAccessFileReader* file,
                                        uint64_t file_size) {
   file->set_use_fsread(false);
   file_.reset(file);  // take ownership
+  Status s;
+  Slice file_data;
+  if (file->file()->is_mmap_open()) {
+    s = file->file()->Read(0, file_size, &file_data, nullptr);
+    if (!s.ok()) return s;
+  } else {
+    return Status::InvalidArgument(Status::kRequireMmap);
+  }
   const auto& ioptions = table_reader_options_.ioptions;
   TableProperties* props = nullptr;
-  Status s = ReadTableProperties(file, file_size, kTerarkZipTableMagicNumber,
-                                 ioptions, &props);
+  s = ReadTableProperties(file, file_size, kTerarkZipTableMagicNumber, ioptions,
+                          &props);
   if (!s.ok()) {
     return s;
   }
@@ -1683,14 +1691,6 @@ Status TerarkZipTableMultiReader::Open(RandomAccessFileReader* file,
   props->compression_name = "TERARK";
   if (ioptions.pin_table_properties_in_reader) {
     table_properties_.reset(props);
-  }
-  Slice file_data;
-  if (table_reader_options_.env_options.use_mmap_reads) {
-    s = file->file()->Read(0, file_size, &file_data, nullptr);
-    if (!s.ok()) return s;
-  } else {
-    return Status::InvalidArgument("TerarkZipTableReader::Open()",
-                                   "EnvOptions::use_mmap_reads must be true");
   }
   if (props->comparator_name != fstring(ioptions.user_comparator->Name()) &&
       0) {
