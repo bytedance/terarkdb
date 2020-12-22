@@ -27,6 +27,13 @@ drawbacks.
 
 # 1. Use TerarkDB
 
+## Prerequisite
+If you enabled TerarkZipTable support (`-DWITH_TERARK_ZIP=ON`), you should install `libaio` before compile TerarkDB:
+
+`sudo apt-get install libaio-dev`
+
+If this is your first time using TerarkDB, we recommend you to use without TerarkZipTable by changing `-DWITH_TERARK_ZIP` to `OFF` in `build.sh`.
+
 ## Method 1: Use CMake subdirectory (Recommend)
 
 1) Clone
