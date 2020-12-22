@@ -85,6 +85,7 @@ class Status {
     kStaleFile = 6,
     kMemoryLimit = 7,
     kSpaceLimit = 8,
+<<<<<<< HEAD
     kPathNotFound = 9,
     KMergeOperandsInsufficientCapacity = 10,
     kManualCompactionPaused = 11,
@@ -94,6 +95,10 @@ class Status {
     kBadAlloc = 15,
     kRequireMmap = 16,
     kInstallTimeout = 17,
+=======
+    kBadAlloc = 9,
+    kRequireMmap = 10,
+>>>>>>> cba411c28 ([refactor] Auto fallback mmap reads)
     kMaxSubCode
   };
 
