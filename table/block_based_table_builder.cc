@@ -374,6 +374,14 @@ BlockBasedTableBuilder::BlockBasedTableBuilder(
   rep_ =
       new Rep(builder_options, sanitized_table_options, column_family_id, file);
 
+  if (builder_options.moptions.ttl_garbage_collection_percentage >= 100.0 &&
+      builder_options.moptions.ttl_scan_gap ==
+          std::numeric_limits<int>::max()) {
+    enable_row_ttl_ = false;
+  } else {
+    enable_row_ttl_ = true;
+  }
+
   if (rep_->filter_builder != nullptr) {
     rep_->filter_builder->StartBlock(0);
   }
@@ -383,16 +391,23 @@ BlockBasedTableBuilder::BlockBasedTableBuilder(
         &rep_->compressed_cache_key_prefix[0],
         &rep_->compressed_cache_key_prefix_size);
   }
-  if (true) {
+  if (is_row_ttl_enable()) {
+    if (builder_options.moptions.ttl_garbage_collection_percentage < 100.0) {
+      ttl_histogram_ = std::make_unique<HistogramImpl>();
+    } else {
+      ttl_histogram_.reset();
+    }
     TtlExtractorContext ttl_extractor_context;
     ttl_extractor_context.column_family_id = column_family_id;
-    ttl_histogram_ = std::make_unique<HistogramImpl>();
     ttl_extractor_ =
         builder_options.ioptions.ttl_extractor_factory->CreateTtlExtractor(
             ttl_extractor_context);
     ttl_seconds_slice_window_.clear();
     slice_index_ = 0;
     min_ttl_seconds_ = std::numeric_limits<uint64_t>::max();
+  } else {
+    ttl_histogram_.reset();
+    ttl_extractor_.reset();
   }
 }
 
@@ -452,7 +467,7 @@ Status BlockBasedTableBuilder::Add(const Slice& key,
     r->props.num_merge_operands++;
   }
 
-  if (true) {
+  if (is_row_ttl_enable()) {
     EntryType entry_type = GetEntryType(value_type);
     if (entry_type == kEntryMerge || entry_type == kEntryPut) {
       bool has_ttl = false;
@@ -464,22 +479,26 @@ Status BlockBasedTableBuilder::Add(const Slice& key,
         return s;
       }
       if (has_ttl) {
-        assert(ttl_histogram_ != nullptr);
         uint64_t key_ttl = static_cast<uint64_t>(ttl.count());
-        ttl_histogram_->Add(key_ttl);
+        if (r->moptions.ttl_garbage_collection_percentage < 100.0) {
+          assert(ttl_histogram_ != nullptr);
+          ttl_histogram_->Add(key_ttl);
+        }
         // left for scan
-        int slice_length = 10;
-        if (ttl_seconds_slice_window_.size() < slice_length) {
-          ttl_seconds_slice_window_.emplace_back(key_ttl);
-          min_ttl_seconds_ = std::min(min_ttl_seconds_, key_ttl);
-        } else {
-          assert(slice_length == ttl_seconds_slice_window_.size());
-          ttl_seconds_slice_window_[slice_index_] = key_ttl;
-          min_ttl_seconds_ =
-              std::min(min_ttl_seconds_,
-                       *std::max_element(ttl_seconds_slice_window_.begin(),
-                                         ttl_seconds_slice_window_.end()));
-          slice_index_ = (slice_index_ + 1) % slice_length;
+        int slice_length = r->moptions.ttl_scan_gap;
+        if (slice_length < std::numeric_limits<int>::max()) {
+          if (ttl_seconds_slice_window_.size() < slice_length) {
+            ttl_seconds_slice_window_.emplace_back(key_ttl);
+            min_ttl_seconds_ = std::min(min_ttl_seconds_, key_ttl);
+          } else {
+            assert(slice_length == ttl_seconds_slice_window_.size());
+            ttl_seconds_slice_window_[slice_index_] = key_ttl;
+            min_ttl_seconds_ =
+                std::min(min_ttl_seconds_,
+                         *std::max_element(ttl_seconds_slice_window_.begin(),
+                                           ttl_seconds_slice_window_.end()));
+            slice_index_ = (slice_index_ + 1) % slice_length;
+          }
         }
       }
     }
@@ -843,6 +862,10 @@ void BlockBasedTableBuilder::WritePropertiesBlock(
         rep_->ioptions.value_meta_extractor_factory != nullptr
             ? rep_->ioptions.value_meta_extractor_factory->Name()
             : "nullptr";
+    rep_->props.ttl_extractor_name =
+        rep_->ioptions.ttl_extractor_factory != nullptr
+            ? rep_->ioptions.ttl_extractor_factory->Name()
+            : "nullptr";
     rep_->props.compression_name =
         CompressionTypeToString(rep_->compression_ctx.type());
     rep_->props.prefix_extractor_name =
@@ -875,13 +898,18 @@ void BlockBasedTableBuilder::WritePropertiesBlock(
     rep_->props.creation_time = rep_->creation_time;
     rep_->props.oldest_key_time = rep_->oldest_key_time;
 
-    if (true) {
-      assert(ttl_histogram_ != nullptr);
-      uint64_t percentile_ratio_ttl =
-          static_cast<uint64_t>(ttl_histogram_->Percentile(10.0));
+    if (is_row_ttl_enable()) {
       uint64_t now_seconds = rep_->ioptions.env->NowMicros() / 1000000ul;
-      rep_->props.ratio_expire_time = now_seconds + percentile_ratio_ttl;
-      rep_->props.scan_gap_expire_time = now_seconds + min_ttl_seconds_;
+      if (rep_->moptions.ttl_garbage_collection_percentage < 100.0) {
+        assert(ttl_histogram_ != nullptr);
+        uint64_t percentile_ratio_ttl =
+            static_cast<uint64_t>(ttl_histogram_->Percentile(
+                rep_->moptions.ttl_garbage_collection_percentage));
+        rep_->props.ratio_expire_time = now_seconds + percentile_ratio_ttl;
+      }
+      if (rep_->moptions.ttl_scan_gap < std::numeric_limits<int>::max()) {
+        rep_->props.scan_gap_expire_time = now_seconds + min_ttl_seconds_;
+      }
       ROCKS_LOG_INFO(rep_->ioptions.info_log,
                      "[%s] ratio_expire_time:%" PRIu64
                      ", scan_gap_expire_time:%" PRIu64 ".",

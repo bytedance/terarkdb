@@ -199,7 +199,8 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
       {offsetof(struct DBOptions, listeners),
        sizeof(std::vector<std::shared_ptr<EventListener>>)},
       {offsetof(struct DBOptions, row_cache), sizeof(std::shared_ptr<Cache>)},
-      {offsetof(struct DBOptions, metrics_reporter_factory), sizeof(std::shared_ptr<MetricsReporterFactory>)},
+      {offsetof(struct DBOptions, metrics_reporter_factory),
+       sizeof(std::shared_ptr<MetricsReporterFactory>)},
       {offsetof(struct DBOptions, wal_filter), sizeof(const WalFilter*)},
   };
 
@@ -352,6 +353,8 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
        sizeof(std::shared_ptr<MergeOperator>)},
       {offset_of(&ColumnFamilyOptions::value_meta_extractor_factory),
        sizeof(const std::shared_ptr<ValueExtractorFactory>)},
+      {offset_of(&ColumnFamilyOptions::ttl_extractor_factory),
+       sizeof(const std::shared_ptr<TtlExtractorFactory>)},
       {offset_of(&ColumnFamilyOptions::compaction_filter),
        sizeof(const CompactionFilter*)},
       {offset_of(&ColumnFamilyOptions::compaction_filter_factory),
@@ -464,6 +467,8 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
       "blob_gc_ratio=0.05;"
       "report_bg_io_stats=true;"
       "ttl=60;"
+      "ttl_garbage_collection_percentage=100.0;"
+      "ttl_scan_gap=2147483647;"
       "compaction_options_fifo={max_table_files_size=3;ttl=100;allow_"
       "compaction=false;};",
       new_options));
