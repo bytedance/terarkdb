@@ -100,8 +100,6 @@
 #if !defined(_MSC_VER) && !defined(__APPLE__)
 #include <sys/unistd.h>
 
-
-
 #endif
 #include "utilities/util/valvec.hpp"
 
@@ -112,15 +110,15 @@
 
 #ifdef WITH_TERARK_ZIP
 #include <table/terark_zip_table.h>
-#include <terark/util/fiber_pool.hpp>
+
 #include <terark/thread/fiber_yield.hpp>
+#include <terark/util/fiber_pool.hpp>
 #endif
 
 #ifdef BOOSTLIB
 #include <boost/fiber/all.hpp>
 #endif
 //#include <boost/context/pooled_fixedsize_stack.hpp>
-
 
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
@@ -772,8 +770,41 @@ void DBImpl::StartTimedTasks() {
     }
   }
 }
-
+void DBImpl::ScheduleGCTTL() {
+  uint64_t mark_count = 0;
+  uint64_t marked_count = 0;
+  uint64_t nowSeconds = env_->NowMicros() / 1000000;
+  auto should_marked_for_compacted = [](uint64_t ratio_expire_time,
+                                        uint64_t scan_gap_expire_time,
+                                        uint64_t now) {
+    return (std::min(ratio_expire_time, scan_gap_expire_time) < now);
+  };
+  ROCKS_LOG_INFO(immutable_db_options_.info_log, "Start ScheduleGCTTL");
+  for (auto cfd : *versions_->GetColumnFamilySet()) {
+    if (cfd->initialized()) {
+      VersionStorageInfo* vsi = cfd->current()->storage_info();
+      for (int l = 0; l < vsi->num_levels(); l++) {
+        for (auto sst : vsi->LevelFiles(l)) {
+          if (sst->marked_for_compaction) marked_count++;
+          if (!sst->marked_for_compaction)
+            sst->marked_for_compaction = should_marked_for_compacted(
+                sst->prop.ratio_expire_time, sst->prop.scan_gap_expire_time,
+                nowSeconds);
+          if (sst->marked_for_compaction) {
+            mark_count++;
+          }
+        }
+      }
+    }
+  }
+  ROCKS_LOG_INFO(immutable_db_options_.info_log, "marked for compact SST: %d,%d",
+                 marked_count,mark_count);
+  if (mark_count > 0) {
+    MaybeScheduleFlushOrCompaction();
+  }
+}
 void DBImpl::DumpStats() {
+  ScheduleGCTTL();
   TEST_SYNC_POINT("DBImpl::DumpStats:1");
 #ifndef ROCKSDB_LITE
   const DBPropertyInfo* cf_property_info =
@@ -1258,9 +1289,9 @@ void DBImpl::SchedulePurge() {
 void DBImpl::BackgroundCallPurge() {
   mutex_.Lock();
 
-  // We use one single loop to clear both queues so that after existing the loop
-  // both queues are empty. This is stricter than what is needed, but can make
-  // it easier for us to reason the correctness.
+  // We use one single loop to clear both queues so that after existing the
+  // loop both queues are empty. This is stricter than what is needed, but can
+  // make it easier for us to reason the correctness.
   while (!purge_queue_.empty() | !superversion_to_free_queue_.empty() |
          !logs_to_free_queue_.empty()) {
     if (!superversion_to_free_queue_.empty()) {
@@ -2248,8 +2279,8 @@ Status DBImpl::NewIterators(
 #endif
   } else {
     // Note: no need to consider the special case of
-    // last_seq_same_as_publish_seq_==false since NewIterators is overridden in
-    // WritePreparedTxnDB
+    // last_seq_same_as_publish_seq_==false since NewIterators is overridden
+    // in WritePreparedTxnDB
     auto snapshot = read_options.snapshot != nullptr
                         ? read_options.snapshot->GetSequenceNumber()
                         : versions_->LastSequence();
