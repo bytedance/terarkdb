@@ -1,33 +1,12 @@
 // Copyright (c) 2020-present, Bytedance Inc.  All rights reserved.
 // This source code is licensed under Apache 2.0 License.
 
+// #include "include/rocksdb/ttl_extractor.h"
 #include "table/block_based_table_builder.h"
-
-#include "include/rocksdb/ttl_extractor.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
 namespace rocksdb {
-
-int kTtlLength = sizeof(uint64_t);
-
-class TestTtlExtractor : public TtlExtractor {
-  //
-  Status Extract(EntryType entry_type, const Slice& user_key,
-                 const Slice& value_or_meta, bool* has_ttl,
-                 std::chrono::seconds* ttl) const {
-    if (entry_type == EntryType::kEntryPut ||
-        entry_type == EntryType::kEntryMerge) {
-      *has_ttl = true;
-      assert(value_or_meta.size() > kTtlLength);
-      *ttl = static_cast<std::chrono::seconds>(DecodeFixed64(
-          value_or_meta.data() + value_or_meta.size() - kTtlLength));
-    }
-    *has_ttl = false;
-    return Status::OK();
-  }
-};
-
 class TestEnv : public EnvWrapper {
  public:
   explicit TestEnv() : EnvWrapper(Env::Default()), close_count(0) {}
@@ -67,21 +46,6 @@ class TestEnv : public EnvWrapper {
 
  private:
   int close_count;
-};
-
-class TestTtlExtractorFactory : public TtlExtractorFactory {
-  using TtlContext = TtlExtractorContext;
-
-  virtual std::unique_ptr<TtlExtractor> CreateTtlExtractor(
-      const TtlContext& context) const {
-    return std::make_unique<TestTtlExtractor>();
-  }
-
-  virtual const char* Name() const { return "TestTtlExtractorFactor"; }
-
-  virtual Status Serialize(std::string* /*bytes*/) const {
-    return Status::NotSupported();
-  }
 };
 
 class BlockBasedTableBuilderTest : public testing::Test {
@@ -192,9 +156,9 @@ TEST_F(BlockBasedTableBuilderTest, SimpleTest2) {
   options.info_log.reset(new TestEnv::TestLogger(env));
   options.create_if_missing = true;
   options.env = env;
-  options.ttl_garbage_collection_percentage = 100.0;
+  options.ttl_garbage_collection_percentage = 50.0;
   options.ttl_scan_gap = 10;
-  options.ttl_extractor_factory.reset(new TestTtlExtractorFactory());
+  options.ttl_extractor_factory.reset(new test::TestTtlExtractorFactory());
   Status s = DB::Open(options, dbname, &db);
   ASSERT_OK(s);
   ASSERT_TRUE(db != nullptr);
@@ -259,8 +223,10 @@ TEST_F(BlockBasedTableBuilderTest, SimpleTest2) {
   ASSERT_EQ(28ul * 26, props->raw_value_size);
   ASSERT_EQ(26ul, props->num_entries);
   ASSERT_EQ(1ul, props->num_data_blocks);
-  ASSERT_EQ(std::numeric_limits<uint64_t>::max(), props->ratio_expire_time);
-  ASSERT_NE(std::numeric_limits<uint64_t>::max(), props->scan_gap_expire_time);
+  env->SleepForMicroseconds(2000000);
+  std::cout << props->ratio_expire_time << std::endl;
+  std::cout << props->scan_gap_expire_time << std::endl;
+  std::cout << env->NowMicros() / 1000000ul << std::endl;
   // delete env;
   // env = nullptr;
   delete options.env;

@@ -3,8 +3,11 @@
 
 #pragma once
 
+#include <memory>
 #include <string>
 
+#include "rocksdb/status.h"
+#include "rocksdb/types.h"
 #include "utilities/util/factory.h"
 
 namespace rocksdb {
