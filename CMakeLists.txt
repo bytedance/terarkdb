@@ -1008,6 +1008,7 @@ if(WITH_TESTS)
         options/options_settable_test.cc
         options/options_test.cc
         table/block_based_filter_block_test.cc
+        table/block_based_table_builder_test.cc
         table/block_test.cc
         table/cleanable_test.cc
         table/cuckoo_table_builder_test.cc

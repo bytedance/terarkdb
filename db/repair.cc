@@ -672,6 +672,8 @@ class Repairer {
       t->meta.prop.read_amp = props->read_amp;
       t->meta.prop.dependence = props->dependence;
       t->meta.prop.inheritance_chain = props->inheritance_chain;
+      t->meta.prop.ratio_expire_time = props->ratio_expire_time;
+      t->meta.prop.scan_gap_expire_time = props->scan_gap_expire_time;
     }
     return status;
   }

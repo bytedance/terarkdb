@@ -8,23 +8,23 @@
 
 #include <assert.h>
 
-#include <string>
 #include <limits>
 #include <map>
+#include <string>
 
+#include "db/dbformat.h"
+#include "db/version_edit.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/env.h"
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
-#include "table/plain_table_factory.h"
-#include "db/dbformat.h"
-#include "db/version_edit.h"
 #include "table/block_builder.h"
 #include "table/bloom_block.h"
-#include "table/plain_table_index.h"
 #include "table/format.h"
 #include "table/meta_blocks.h"
+#include "table/plain_table_factory.h"
+#include "table/plain_table_index.h"
 #include "util/coding.h"
 #include "util/crc32c.h"
 #include "util/file_reader_writer.h"
@@ -104,15 +104,14 @@ PlainTableBuilder::PlainTableBuilder(
 
   std::string val;
   PutFixed32(&val, static_cast<uint32_t>(encoder_.GetEncodingType()));
-  properties_.user_collected_properties
-      [PlainTablePropertyNames::kEncodingType] = val;
+  properties_
+      .user_collected_properties[PlainTablePropertyNames::kEncodingType] = val;
 
   builder_options.PushIntTblPropCollectors(&table_properties_collectors_,
                                            column_family_id);
 }
 
-PlainTableBuilder::~PlainTableBuilder() {
-}
+PlainTableBuilder::~PlainTableBuilder() {}
 
 Status PlainTableBuilder::Add(const Slice& key, const LazyBuffer& lazy_value) {
   auto s = lazy_value.fetch();
@@ -193,6 +192,8 @@ Status PlainTableBuilder::Finish(const TablePropertyCache* prop,
     properties_.read_amp = prop->read_amp;
     properties_.dependence = prop->dependence;
     properties_.inheritance_chain = prop->inheritance_chain;
+    properties_.ratio_expire_time = prop->ratio_expire_time;
+    properties_.scan_gap_expire_time = prop->scan_gap_expire_time;
   }
   if (snapshots != nullptr) {
     properties_.snapshots = *snapshots;
@@ -263,12 +264,8 @@ Status PlainTableBuilder::Finish(const TablePropertyCache* prop,
 
   // -- Write property block
   BlockHandle property_block_handle;
-  auto s = WriteBlock(
-      property_block_builder.Finish(),
-      file_,
-      &offset_,
-      &property_block_handle
-  );
+  auto s = WriteBlock(property_block_builder.Finish(), file_, &offset_,
+                      &property_block_handle);
   if (!s.ok()) {
     return s;
   }
@@ -276,12 +273,8 @@ Status PlainTableBuilder::Finish(const TablePropertyCache* prop,
 
   // -- write metaindex block
   BlockHandle metaindex_block_handle;
-  s = WriteBlock(
-      meta_index_builer.Finish(),
-      file_,
-      &offset_,
-      &metaindex_block_handle
-  );
+  s = WriteBlock(meta_index_builer.Finish(), file_, &offset_,
+                 &metaindex_block_handle);
   if (!s.ok()) {
     return s;
   }
@@ -301,17 +294,13 @@ Status PlainTableBuilder::Finish(const TablePropertyCache* prop,
   return s;
 }
 
-void PlainTableBuilder::Abandon() {
-  closed_ = true;
-}
+void PlainTableBuilder::Abandon() { closed_ = true; }
 
 uint64_t PlainTableBuilder::NumEntries() const {
   return properties_.num_entries;
 }
 
-uint64_t PlainTableBuilder::FileSize() const {
-  return offset_;
-}
+uint64_t PlainTableBuilder::FileSize() const { return offset_; }
 
 }  // namespace rocksdb
 #endif  // ROCKSDB_LITE

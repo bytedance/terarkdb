@@ -950,6 +950,8 @@ Status BlockBasedTableBuilder::Finish(
     r->props.read_amp = prop->read_amp;
     r->props.dependence = prop->dependence;
     r->props.inheritance_chain = prop->inheritance_chain;
+    r->props.ratio_expire_time = prop->ratio_expire_time;
+    r->props.scan_gap_expire_time = prop->scan_gap_expire_time;
   }
   if (snapshots != nullptr) {
     r->props.snapshots = *snapshots;
