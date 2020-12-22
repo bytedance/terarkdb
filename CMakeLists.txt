@@ -35,7 +35,7 @@ option(WITH_ASAN "build with ASAN" ON)
 option(WITH_GFLAGS "build with GFlags" ON)
 option(WITH_TESTS "build with tests" OFF)
 option(WITH_TOOLS "build with tools" OFF)
-option(WITH_TERARK_ZIP "build with TerarkZipTable support" OFF)
+option(WITH_TERARK_ZIP "build with TerarkZipTable support" ON)
 option(WITH_BOOSTLIB "build with boost, if WITH_TERARK_ZIP is ON, this will also set to ON" OFF)
 
 option(BUILD_SUFFIX "library sufix" "d")
