@@ -632,6 +632,8 @@ class RandomAccessFile {
 
   virtual bool use_aio_reads() const { return false; }
 
+  virtual bool is_mmap_open() const { return false; }
+
   // Use the returned alignment value to allocate
   // aligned buffer for Direct I/O
   virtual size_t GetRequiredBufferAlignment() const { return kDefaultPageSize; }

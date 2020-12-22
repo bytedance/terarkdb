@@ -8,11 +8,13 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "rocksdb/status.h"
+
 #include <stdio.h>
 #ifdef OS_WIN
 #include <string.h>
 #endif
 #include <cstring>
+
 #include "port/port.h"
 
 namespace rocksdb {
@@ -22,7 +24,7 @@ const char* Status::CopyState(const char* state) {
   // should use strdup?
   //   does delete[]state is equivalent to free(state) on all platforms?
   const size_t cch = std::strlen(state) + 1;  // +1 for the null terminator
-  char* const  pch = new char[cch];
+  char* const pch = new char[cch];
   memcpy(pch, state, cch);
   return pch;
 }
@@ -36,8 +38,9 @@ static const char* msgs[static_cast<int>(Status::kMaxSubCode)] = {
     "Deadlock",                                           // kDeadlock
     "Stale file handle",                                  // kStaleFile
     "Memory limit reached",                               // kMemoryLimit
-    "Space limit reached"                                 // kSpaceLimit
-    "Bad allocation"                                      // kBadAlloc
+    "Space limit reached",                                // kSpaceLimit
+    "Bad allocation",                                     // kBadAlloc
+    "Require mmap open file",                             // kRequireMmap
 };
 
 Status::Status(Code _code, SubCode _subcode, const Slice& msg,
@@ -105,8 +108,8 @@ std::string Status::ToString() const {
       type = "Operation failed. Try again.: ";
       break;
     default:
-      snprintf(tmp, sizeof(tmp), "Unknown code(%d): ",
-               static_cast<int>(code()));
+      snprintf(tmp, sizeof(tmp),
+               "Unknown code(%d): ", static_cast<int>(code()));
       type = tmp;
       break;
   }
