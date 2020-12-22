@@ -1006,69 +1006,6 @@ if(WITH_TESTS)
         options/options_test.cc
         table/block_based_filter_block_test.cc
         table/block_based_table_builder_test.cc
-        table/block_test.cc
-        table/cleanable_test.cc
-        table/cuckoo_table_builder_test.cc
-        table/cuckoo_table_reader_test.cc
-        table/data_block_hash_index_test.cc
-        table/full_filter_block_test.cc
-        table/merger_test.cc
-        table/sst_file_reader_test.cc
-        table/table_test.cc
-        tools/ldb_cmd_test.cc
-        tools/reduce_levels_test.cc
-        tools/sst_dump_test.cc
-        tools/trace_analyzer_test.cc
-        util/arena_test.cc
-        util/auto_roll_logger_test.cc
-        util/autovector_test.cc
-        util/bloom_test.cc
-        util/coding_test.cc
-        util/crc32c_test.cc
-        util/delete_scheduler_test.cc
-        util/dynamic_bloom_test.cc
-        util/event_logger_test.cc
-        util/file_reader_writer_test.cc
-        util/filelock_test.cc
-        util/hash_test.cc
-        util/heap_test.cc
-        util/lazy_buffer_test.cc
-        util/rate_limiter_test.cc
-        util/repeatable_thread_test.cc
-        util/slice_transform_test.cc
-        util/timer_queue_test.cc
-        util/thread_list_test.cc
-        util/thread_local_test.cc
-        utilities/backupable/backupable_db_test.cc
-        utilities/cassandra/cassandra_functional_test.cc
-        utilities/cassandra/cassandra_format_test.cc
-        utilities/cassandra/cassandra_row_merge_test.cc
-        utilities/cassandra/cassandra_serialize_test.cc
-        utilities/flink/flink_compaction_filter_test.cc
-        utilities/checkpoint/checkpoint_test.cc
-        utilities/column_aware_encoding_test.cc
-        utilities/date_tiered/date_tiered_test.cc
-        utilities/document/document_db_test.cc
-        utilities/document/json_document_test.cc
-        utilities/geodb/geodb_test.cc
-        utilities/lua/rocks_lua_test.cc
-        utilities/memory/memory_test.cc
-        utilities/merge_operators/string_append/stringappend_test.cc
-        utilities/object_registry_test.cc
-        utilities/option_change_migration/option_change_migration_test.cc
-        utilities/options/options_util_test.cc
-        utilities/persistent_cache/hash_table_test.cc
-        utilities/persistent_cache/persistent_cache_test.cc
-        utilities/redis/redis_lists_test.cc
-        utilities/spatialdb/spatial_db_test.cc
-        utilities/simulator_cache/sim_cache_test.cc
-        utilities/table_properties_collectors/compact_on_deletion_collector_test.cc
-        utilities/transactions/optimistic_transaction_test.cc
-        utilities/transactions/transaction_test.cc
-        utilities/transactions/write_prepared_transaction_test.cc
-        utilities/transactions/write_unprepared_transaction_test.cc
-        utilities/ttl/ttl_test.cc
-        utilities/write_batch_with_index/write_batch_with_index_test.cc
   )
 
   if(WITH_LIBRADOS)

@@ -336,6 +336,15 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // Default: empty
   std::vector<DbPath> cf_paths;
 
+  // The ratio percentage of ttl to mark a SST to be compacted.
+  // Default: 100.0
+  double ttl_garbage_collection_percentage = 100.0;
+
+  // The scan gap of ttl to mark a SST to be compacted.
+  // If the value not set, we do not enable
+  // Default: INT_MAX
+  int ttl_scan_gap = std::numeric_limits<int>::max();
+
   // Create ColumnFamilyOptions with default values for all fields
   ColumnFamilyOptions();
   // Create ColumnFamilyOptions from Options

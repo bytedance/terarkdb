@@ -186,6 +186,10 @@ void MutableCFOptions::Dump(Logger* log) const {
                  max_bytes_for_level_multiplier);
   ROCKS_LOG_INFO(log, "                                      ttl: %" PRIu64,
                  ttl);
+  ROCKS_LOG_INFO(log, "        ttl_garbage_collection_percentage: %f",
+                 ttl_garbage_collection_percentage);
+  ROCKS_LOG_INFO(log, "                             ttl_scan_gap: %f",
+                 ttl_scan_gap);
   std::string result;
   char buf[10];
   for (const auto m : max_bytes_for_level_multiplier_additional) {

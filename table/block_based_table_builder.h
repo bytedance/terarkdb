@@ -82,6 +82,8 @@ class BlockBasedTableBuilder : public TableBuilder {
 
   bool NeedCompact() const override;
 
+  bool is_row_ttl_enable() const { return enable_row_ttl_; }
+
   // Get table properties
   TableProperties GetTableProperties() const override;
 
@@ -133,6 +135,7 @@ class BlockBasedTableBuilder : public TableBuilder {
   std::vector<uint64_t> ttl_seconds_slice_window_;
   uint64_t min_ttl_seconds_;
   int slice_index_;
+  bool enable_row_ttl_;
 };
 
 Slice CompressBlock(const Slice& raw, const CompressionContext& compression_ctx,

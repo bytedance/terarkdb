@@ -124,6 +124,9 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
                    value_meta_extractor_factory
                        ? value_meta_extractor_factory->Name()
                        : "None");
+  ROCKS_LOG_HEADER(
+      log, "    Options.ttl_extractor_factory: %s",
+      ttl_extractor_factory ? ttl_extractor_factory->Name() : "None");
   ROCKS_LOG_HEADER(log, "       Options.compaction_filter: %s",
                    compaction_filter ? compaction_filter->Name() : "None");
   ROCKS_LOG_HEADER(
