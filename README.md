@@ -2,6 +2,8 @@
 TerarkDB is a RocksDB replacement with optimized tail latency, throughput and compression etc. In most cases you can migirate your existing RocksDB instance to TerarkDB without any
 drawbacks.
 
+[All-in-one Documentation](https://bytedance.feishu.cn/docs/doccnZmYFqHBm06BbvYgjsHHcKc#)
+
 
 **NOTES**
 - TerarkDB was only tested and production ready under Linux platform
@@ -25,9 +27,6 @@ drawbacks.
 
 
 ![](docs/images/compare_rocksdb.png)
-
-## Document
-[All-in-one Documentation](https://bytedance.feishu.cn/docs/doccnZmYFqHBm06BbvYgjsHHcKc#)
 
 
 # 1. Use TerarkDB
@@ -112,6 +111,9 @@ We didn't archieve all static libraries together yet, so you have to pack all li
 # 2. Usage
 ## 2.1. BlockBasedTable
 ```
+#include <cassert>
+#include "rocksdb/db.h"
+
 rocksdb::DB* db;
 rocksdb::Options options;
 
@@ -137,6 +139,11 @@ assert(s.ok());
 Or manually set table format and table options:
 
 ```
+#include <cassert>
+#include "rocksdb/db.h"
+#include "rocksdb/options.h"
+#include "rocksdb/table.h"
+
 rocksdb::DB* db;
 rocksdb::Options options;
 
@@ -168,6 +175,12 @@ assert(s.ok());
 
 ## 2.2. TerarkZipTable
 ```
+#include <cassert>
+#include "rocksdb/db.h"
+#include "rocksdb/options.h"
+#include "rocksdb/table.h"
+#include "table/terark_zip_table.h"
+
 rocksdb::DB* db;
 rocksdb::Options options;
 
@@ -225,7 +238,7 @@ TerarkDB has been deployed in lots of applications in Bytedance, in most cases T
 
 
 # 5. License
-- Apache2.0
+- Apache 2.0
 
 # 6. Users
 
