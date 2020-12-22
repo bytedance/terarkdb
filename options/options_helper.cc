@@ -184,6 +184,9 @@ ColumnFamilyOptions BuildColumnFamilyOptions(
   cf_opts.max_bytes_for_level_multiplier =
       mutable_cf_options.max_bytes_for_level_multiplier;
   cf_opts.ttl = mutable_cf_options.ttl;
+  cf_opts.ttl_garbage_collection_percentage =
+      mutable_cf_options.ttl_garbage_collection_percentage;
+  cf_opts.ttl_scan_gap = mutable_cf_options.ttl_scan_gap;
 
   cf_opts.max_bytes_for_level_multiplier_additional.clear();
   for (auto value :
@@ -472,6 +475,19 @@ bool ParseValueExtractorFactory(
   return true;
 }
 
+bool ParseTtlExtractorFactory(
+    const std::string& ttl_extractor_factory_name,
+    std::shared_ptr<const TtlExtractorFactory>* ttl_extractor_factory) {
+  if (ttl_extractor_factory_name == kNullptrString) {
+    ttl_extractor_factory->reset();
+    return true;
+  }
+  ttl_extractor_factory->reset(TtlExtractorFactory::create(
+      ttl_extractor_factory_name, Slice() /* ttl_extractor_factory_option */));
+  // ttl extractor can be null, so always return true
+  return true;
+}
+
 bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
                        const std::string& value) {
   switch (opt_type) {
@@ -586,6 +602,10 @@ bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
           value,
           reinterpret_cast<std::shared_ptr<const ValueExtractorFactory>*>(
               opt_address));
+    case OptionType::kTtlExtractorFactory:
+      return ParseTtlExtractorFactory(
+          value, reinterpret_cast<std::shared_ptr<const TtlExtractorFactory>*>(
+                     opt_address));
     default:
       return false;
   }
@@ -2032,7 +2052,16 @@ std::unordered_map<std::string, OptionTypeInfo>
         {"ttl",
          {offset_of(&ColumnFamilyOptions::ttl), OptionType::kUInt64T,
           OptionVerificationType::kNormal, true,
-          offsetof(struct MutableCFOptions, ttl)}}};
+          offsetof(struct MutableCFOptions, ttl)}},
+        {"ttl_garbage_collection_percentage",
+         {offset_of(&ColumnFamilyOptions::ttl_garbage_collection_percentage),
+          OptionType::kDouble, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions,
+                   ttl_garbage_collection_percentage)}},
+        {"ttl_scan_gap",
+         {offset_of(&ColumnFamilyOptions::ttl_scan_gap), OptionType::kInt,
+          OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, ttl_scan_gap)}}};
 
 std::unordered_map<std::string, OptionTypeInfo>
     OptionsHelper::fifo_compaction_options_type_info = {

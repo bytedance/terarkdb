@@ -83,6 +83,7 @@ enum class OptionType {
   kEntropyAlgo,
   kWriteBufferFlushPri,
   kValueExtractorFactory,
+  kTtlExtractorFactory,
   kUnknown
 };
 

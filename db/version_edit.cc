@@ -384,12 +384,12 @@ const char* VersionEdit::DecodeNewFile4From(Slice* input) {
                 f.prop.raw_value_size > 0) {
               f.need_upgrade = false;
             }
-            if (f.prop.num_entries > 0) {
+            if (!field.empty()) {
               if (!GetVarint64(&field, &f.prop.ratio_expire_time)) {
                 return error_msg;
               }
             }
-            if (f.prop.num_entries > 0) {
+            if (!field.empty()) {
               if (!GetVarint64(&field, &f.prop.scan_gap_expire_time)) {
                 return error_msg;
               }

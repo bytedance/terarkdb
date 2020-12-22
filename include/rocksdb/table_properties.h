@@ -221,6 +221,11 @@ struct TablePropertiesBase {
   // "nullptr".
   std::string value_meta_extractor_name;
 
+  // The name of the ttl extractor used in this table.
+  // If no ttl extractor is used, `ttl_extractor_name` will be
+  // "nullptr".
+  std::string ttl_extractor_name;
+
   // The name of the prefix extractor used in this table
   // If no prefix extractor is used, `prefix_extractor_name` will be "nullptr".
   std::string prefix_extractor_name;
