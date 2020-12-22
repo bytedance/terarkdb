@@ -207,6 +207,8 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
       encode_property_cache.push_back(char(f.prop.flags));
       PutVarint64Varint64(&encode_property_cache, f.prop.raw_key_size,
                           f.prop.raw_value_size);
+      PutVarint64(&encode_property_cache, f.prop.ratio_expire_time);
+      PutVarint64(&encode_property_cache, f.prop.scan_gap_expire_time);
       PutLengthPrefixedSlice(dst, encode_property_cache);
     }
     TEST_SYNC_POINT_CALLBACK("VersionEdit::EncodeTo:NewFile4:CustomizeFields",
@@ -381,6 +383,16 @@ const char* VersionEdit::DecodeNewFile4From(Slice* input) {
             if (f.prop.num_entries > 0 || f.prop.raw_key_size > 0 ||
                 f.prop.raw_value_size > 0) {
               f.need_upgrade = false;
+            }
+            if (f.prop.num_entries > 0) {
+              if (!GetVarint64(&field, &f.prop.ratio_expire_time)) {
+                return error_msg;
+              }
+            }
+            if (f.prop.num_entries > 0) {
+              if (!GetVarint64(&field, &f.prop.scan_gap_expire_time)) {
+                return error_msg;
+              }
             }
           }
           break;
