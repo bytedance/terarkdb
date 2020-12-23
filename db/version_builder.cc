@@ -776,6 +776,9 @@ class VersionBuilder::Rep {
           file_meta->prop.num_deletions = properties->num_deletions;
           file_meta->prop.raw_key_size = properties->raw_key_size;
           file_meta->prop.raw_value_size = properties->raw_value_size;
+          file_meta->prop.ratio_expire_time = properties->ratio_expire_time;
+          file_meta->prop.scan_gap_expire_time =
+              properties->scan_gap_expire_time;
         }
       }
     });
