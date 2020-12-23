@@ -398,8 +398,10 @@ BlockBasedTableBuilder::BlockBasedTableBuilder(
     } else {
       ttl_histogram_.reset();
     }
+    num_has_row_ttl_ = 0;
     TtlExtractorContext ttl_extractor_context;
     ttl_extractor_context.column_family_id = column_family_id;
+    assert(builder_options.ioptions.ttl_extractor_factory != nullptr);
     ttl_extractor_ =
         builder_options.ioptions.ttl_extractor_factory->CreateTtlExtractor(
             ttl_extractor_context);
@@ -479,28 +481,29 @@ Status BlockBasedTableBuilder::Add(const Slice& key,
       if (!s.ok()) {
         return s;
       }
-      uint64_t key_ttl = std::numeric_limits<uint64_t>::max();
+
       if (has_ttl) {
+        num_has_row_ttl_++;
+        uint64_t key_ttl = std::numeric_limits<uint64_t>::max();
         key_ttl = static_cast<uint64_t>(ttl.count());
-      }
-      if (r->moptions.ttl_garbage_collection_percentage < 100.0) {
-        assert(ttl_histogram_ != nullptr);
-        ttl_histogram_->Add(key_ttl);
-      }
-      if (has_ttl) {
+        if (r->moptions.ttl_garbage_collection_percentage < 100.0) {
+          assert(ttl_histogram_ != nullptr);
+          ttl_histogram_->Add(key_ttl);
+        }
         int slice_length = r->moptions.ttl_scan_gap;
         if (slice_length < std::numeric_limits<int>::max()) {
           if (ttl_seconds_slice_window_.size() < slice_length) {
             ttl_seconds_slice_window_.emplace_back(key_ttl);
-            min_ttl_seconds_ = std::min(min_ttl_seconds_, key_ttl);
           } else {
             assert(slice_length == ttl_seconds_slice_window_.size());
             ttl_seconds_slice_window_[slice_index_] = key_ttl;
+            slice_index_ = (slice_index_ + 1) % slice_length;
+          }
+          if (ttl_seconds_slice_window_.size() == slice_length) {
             min_ttl_seconds_ =
                 std::min(min_ttl_seconds_,
                          *std::max_element(ttl_seconds_slice_window_.begin(),
                                            ttl_seconds_slice_window_.end()));
-            slice_index_ = (slice_index_ + 1) % slice_length;
           }
         }
       } else {
@@ -906,15 +909,28 @@ void BlockBasedTableBuilder::WritePropertiesBlock(
 
     if (is_row_ttl_enable()) {
       uint64_t now_seconds = rep_->ioptions.env->NowMicros() / 1000000ul;
+      uint64_t max_uint64_t = std::numeric_limits<uint64_t>::max();
       if (rep_->moptions.ttl_garbage_collection_percentage < 100.0) {
         assert(ttl_histogram_ != nullptr);
-        uint64_t percentile_ratio_ttl =
-            static_cast<uint64_t>(ttl_histogram_->Percentile(
-                rep_->moptions.ttl_garbage_collection_percentage));
-        rep_->props.ratio_expire_time = now_seconds + percentile_ratio_ttl;
+        uint64_t percentile_ratio_ttl = max_uint64_t;
+        if (!ttl_histogram_->Empty()) {
+          percentile_ratio_ttl =
+              static_cast<uint64_t>(ttl_histogram_->Percentile(
+                  rep_->moptions.ttl_garbage_collection_percentage *
+                  num_has_row_ttl_ / rep_->props.num_entries));
+        }
+        if (max_uint64_t - percentile_ratio_ttl > now_seconds) {
+          rep_->props.ratio_expire_time = now_seconds + percentile_ratio_ttl;
+        } else {
+          rep_->props.ratio_expire_time = max_uint64_t;
+        }
       }
       if (rep_->moptions.ttl_scan_gap < std::numeric_limits<int>::max()) {
-        rep_->props.scan_gap_expire_time = now_seconds + min_ttl_seconds_;
+        if (max_uint64_t - min_ttl_seconds_ > now_seconds) {
+          rep_->props.scan_gap_expire_time = now_seconds + min_ttl_seconds_;
+        } else {
+          rep_->props.scan_gap_expire_time = max_uint64_t;
+        }
       }
       ROCKS_LOG_INFO(rep_->ioptions.info_log,
                      "[%s] ratio_expire_time:%" PRIu64

@@ -3,6 +3,7 @@
 
 // #include "include/rocksdb/ttl_extractor.h"
 #include "table/block_based_table_builder.h"
+#include "util/string_util.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
@@ -150,19 +151,17 @@ TEST_F(BlockBasedTableBuilderTest, SimpleTest2) {
 
   std::string dbname = test::PerThreadDBPath("block_based_table_builder_test");
   ASSERT_OK(DestroyDB(dbname, options));
-
   DB* db = nullptr;
   TestEnv* env = new TestEnv();
   options.info_log.reset(new TestEnv::TestLogger(env));
   options.create_if_missing = true;
   options.env = env;
-  options.ttl_garbage_collection_percentage = 50.0;
-  options.ttl_scan_gap = 10;
+  options.ttl_garbage_collection_percentage = 99.9999;
+  options.ttl_scan_gap = 1;
   options.ttl_extractor_factory.reset(new test::TestTtlExtractorFactory());
   Status s = DB::Open(options, dbname, &db);
   ASSERT_OK(s);
   ASSERT_TRUE(db != nullptr);
-
   s = db->Close();
   delete db;
 
@@ -179,13 +178,9 @@ TEST_F(BlockBasedTableBuilderTest, SimpleTest2) {
   // }
   const ImmutableCFOptions ioptions(options);
   const MutableCFOptions moptions(options);
-
   InternalKeyComparator ikc(options.comparator);
   std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
       int_tbl_prop_collector_factories;
-  //   int_tbl_prop_collector_factories.emplace_back(
-  //       make_unique<BlockBasedTableBuilder::BlockBasedTablePropertiesCollector>(
-  //           BlockBasedTableOptions::IndexType::kBinarySearch, false, false));
   std::string column_family_name;
   int unknown_level = -1;
   std::unique_ptr<TableBuilder> builder(factory.NewTableBuilder(
@@ -200,6 +195,11 @@ TEST_F(BlockBasedTableBuilderTest, SimpleTest2) {
     std::string key(8, c);
     key.append("\1       ");  // PlainTable expects internal key structure
     std::string value(28, c + 42);
+    char ts_string[sizeof(uint64_t)];
+    uint64_t ttl = 100;
+    EncodeFixed64(ts_string, (uint64_t)ttl);
+    // AppendNumberTo(&value, ttl);
+    value.append(ts_string, sizeof(uint64_t));
     ASSERT_OK(builder->Add(key, LazyBuffer(value)));
   }
   ASSERT_OK(builder->Finish(nullptr, nullptr));
@@ -220,15 +220,15 @@ TEST_F(BlockBasedTableBuilderTest, SimpleTest2) {
 
   ASSERT_EQ(0ul, props->filter_size);
   ASSERT_EQ(16ul * 26, props->raw_key_size);
-  ASSERT_EQ(28ul * 26, props->raw_value_size);
+  // ASSERT_EQ(28ul * 26, props->raw_value_size);
   ASSERT_EQ(26ul, props->num_entries);
   ASSERT_EQ(1ul, props->num_data_blocks);
   env->SleepForMicroseconds(2000000);
   std::cout << props->ratio_expire_time << std::endl;
   std::cout << props->scan_gap_expire_time << std::endl;
   std::cout << env->NowMicros() / 1000000ul << std::endl;
-  // delete env;
-  // env = nullptr;
+  std::cout << std::numeric_limits<uint64_t>::max() << std::endl;
+
   delete options.env;
 }
 
