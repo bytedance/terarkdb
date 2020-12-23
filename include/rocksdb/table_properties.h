@@ -186,6 +186,8 @@ struct TablePropertiesBase {
   uint64_t num_merge_operands = 0;
   // the number of range deletions in this table
   uint64_t num_range_deletions = 0;
+  // the number of k-v pairs has raw ttl in this table
+  // uint64_t num_has_raw_ttl = 0;
   // format version, reserved for backward compatibility
   uint64_t format_version = 0;
   // If 0, key is variable length. Otherwise number of bytes for each key.
