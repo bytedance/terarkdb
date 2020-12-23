@@ -807,7 +807,8 @@ void DBImpl::ScheduleGCTTL() {
   ROCKS_LOG_INFO(immutable_db_options_.info_log, "marked for compact SST: %d,%d",
                  marked_count,mark_count);
   if (mark_count > 0) {
-//    MaybeScheduleFlushOrCompaction();
+    InstrumentedMutexLock l(&mutex_);
+    MaybeScheduleFlushOrCompaction();
   }
 }
 void DBImpl::DumpStats() {
