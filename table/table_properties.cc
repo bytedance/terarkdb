@@ -180,6 +180,17 @@ void TableProperties::Add(const TableProperties& tp) {
   num_deletions += tp.num_deletions;
   num_merge_operands += tp.num_merge_operands;
   num_range_deletions += tp.num_range_deletions;
+  uint64_t max_uint64_t = std::numeric_limits<uint64_t>::max();
+  if (max_uint64_t - ratio_expire_time > tp.ratio_expire_time) {
+    ratio_expire_time += tp.ratio_expire_time;
+  } else {
+    ratio_expire_time = max_uint64_t;
+  }
+  if (max_uint64_t - scan_gap_expire_time > tp.scan_gap_expire_time) {
+    scan_gap_expire_time += tp.scan_gap_expire_time;
+  } else {
+    scan_gap_expire_time = max_uint64_t;
+  }
 }
 
 const std::string TablePropertiesNames::kDataSize = "rocksdb.data.size";
