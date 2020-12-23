@@ -2,6 +2,7 @@
 // This source code is licensed under Apache 2.0 License.
 
 // #include "include/rocksdb/ttl_extractor.h"
+// #include "gtest/gtest.h"
 #include "table/block_based_table_builder.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
@@ -62,7 +63,8 @@ TEST_F(BlockBasedTableBuilderTest, SimpleTest1) {
       test::GetWritableFileWriter(new test::StringSink(), "" /* don't care */));
   Options options;
 
-  std::string dbname = test::PerThreadDBPath("block_based_table_builder_test");
+  std::string dbname =
+      test::PerThreadDBPath("block_based_table_builder_ttl_test_1");
   ASSERT_OK(DestroyDB(dbname, options));
 
   DB* db = nullptr;
@@ -77,17 +79,6 @@ TEST_F(BlockBasedTableBuilderTest, SimpleTest1) {
   s = db->Close();
   delete db;
 
-  // Env* env = Env::Default();
-  // options.db_log_dir = std::string("log");
-  // options.info_log = nullptr;
-  // env->CreateDirIfMissing(options.db_log_dir);
-  // if (options.info_log == nullptr) {
-  //   Status s = CreateLoggerFromOptions(".", options, &options.info_log);
-  //   if (!s.ok()) {
-  //     // No place suitable for logging
-  //     options.info_log = nullptr;
-  //   }
-  // }
   const ImmutableCFOptions ioptions(options);
   const MutableCFOptions moptions(options);
   InternalKeyComparator ikc(options.comparator);
@@ -149,7 +140,8 @@ TEST_F(BlockBasedTableBuilderTest, SimpleTest2) {
       test::GetWritableFileWriter(new test::StringSink(), "" /* don't care */));
   Options options;
 
-  std::string dbname = test::PerThreadDBPath("block_based_table_builder_test");
+  std::string dbname =
+      test::PerThreadDBPath("block_based_table_builder_ttl_test_2");
   ASSERT_OK(DestroyDB(dbname, options));
   DB* db = nullptr;
   TestEnv* env = new TestEnv();
@@ -165,17 +157,6 @@ TEST_F(BlockBasedTableBuilderTest, SimpleTest2) {
   s = db->Close();
   delete db;
 
-  // Env* env = Env::Default();
-  // options.db_log_dir = std::string("log");
-  // options.info_log = nullptr;
-  // env->CreateDirIfMissing(options.db_log_dir);
-  // if (options.info_log == nullptr) {
-  //   Status s = CreateLoggerFromOptions(".", options, &options.info_log);
-  //   if (!s.ok()) {
-  //     // No place suitable for logging
-  //     options.info_log = nullptr;
-  //   }
-  // }
   const ImmutableCFOptions ioptions(options);
   const MutableCFOptions moptions(options);
   InternalKeyComparator ikc(options.comparator);
@@ -223,11 +204,14 @@ TEST_F(BlockBasedTableBuilderTest, SimpleTest2) {
   // ASSERT_EQ(28ul * 26, props->raw_value_size);
   ASSERT_EQ(26ul, props->num_entries);
   ASSERT_EQ(1ul, props->num_data_blocks);
-  env->SleepForMicroseconds(2000000);
-  std::cout << props->ratio_expire_time << std::endl;
-  std::cout << props->scan_gap_expire_time << std::endl;
-  std::cout << env->NowMicros() / 1000000ul << std::endl;
-  std::cout << std::numeric_limits<uint64_t>::max() << std::endl;
+  // env->SleepForMicroseconds(2000000);
+  std::cout << "[===========]   ratio_expire_time:";
+  std::cout << props->ratio_expire_time << "s" << std::endl;
+  std::cout << "[========]   scan_gap_expire_time:";
+  std::cout << props->scan_gap_expire_time << "s" << std::endl;
+  std::cout << "[====================]   now_time:";
+  std::cout << env->NowMicros() / 1000000ul << "s" << std::endl;
+  // std::cout << std::numeric_limits<uint64_t>::max() << std::endl;
 
   delete options.env;
 }
