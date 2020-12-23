@@ -4,8 +4,10 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include "db/write_thread.h"
+
 #include <chrono>
 #include <thread>
+
 #include "db/column_family.h"
 #include "monitoring/perf_context_imp.h"
 #include "port/port.h"
@@ -218,6 +220,8 @@ void WriteThread::SetState(Writer* w, uint8_t new_state) {
   }
 }
 
+void WriteThread::SetStateCompleted(Writer* w) { SetState(w, STATE_COMPLETED); }
+
 bool WriteThread::LinkOne(Writer* w, std::atomic<Writer*>* newest_writer) {
   assert(newest_writer != nullptr);
   assert(w->state == STATE_INIT);
@@ -388,8 +392,9 @@ void WriteThread::JoinBatchGroup(Writer* w) {
      *      writes in parallel.
      */
     TEST_SYNC_POINT_CALLBACK("WriteThread::JoinBatchGroup:BeganWaiting", w);
-    AwaitState(w, STATE_GROUP_LEADER | STATE_MEMTABLE_WRITER_LEADER |
-                      STATE_PARALLEL_MEMTABLE_WRITER | STATE_COMPLETED,
+    AwaitState(w,
+               STATE_GROUP_LEADER | STATE_MEMTABLE_WRITER_LEADER |
+                   STATE_PARALLEL_MEMTABLE_WRITER | STATE_COMPLETED,
                &jbg_ctx);
     TEST_SYNC_POINT_CALLBACK("WriteThread::JoinBatchGroup:DoneWaiting", w);
   }
@@ -571,10 +576,10 @@ void WriteThread::LaunchParallelMemTableWriters(WriteGroup* write_group) {
   }
 }
 
-static WriteThread::AdaptationContext cpmtw_ctx("CompleteParallelMemTableWriter");
+static WriteThread::AdaptationContext cpmtw_ctx(
+    "CompleteParallelMemTableWriter");
 // This method is called by both the leader and parallel followers
 bool WriteThread::CompleteParallelMemTableWriter(Writer* w) {
-
   auto* write_group = w->write_group;
   if (!w->status.ok()) {
     std::lock_guard<std::mutex> guard(write_group->leader->StateMutex());
@@ -591,20 +596,25 @@ bool WriteThread::CompleteParallelMemTableWriter(Writer* w) {
   return true;
 }
 
-void WriteThread::ExitAsBatchGroupFollower(Writer* w) {
+void WriteThread::ExitAsBatchGroupFollower(
+    Writer* w, std::vector<Writer*>* manual_wake_followers) {
   auto* write_group = w->write_group;
 
   assert(w->state == STATE_PARALLEL_MEMTABLE_WRITER);
   assert(write_group->status.ok());
-  ExitAsBatchGroupLeader(*write_group, write_group->status);
+  ExitAsBatchGroupLeader(*write_group, write_group->status,
+                         manual_wake_followers);
   assert(w->status.ok());
-  assert(w->state == STATE_COMPLETED);
+  if (manual_wake_followers == nullptr) {
+    assert(w->state == STATE_COMPLETED);
+  }
   SetState(write_group->leader, STATE_COMPLETED);
 }
 
 static WriteThread::AdaptationContext eabgl_ctx("ExitAsBatchGroupLeader");
-void WriteThread::ExitAsBatchGroupLeader(WriteGroup& write_group,
-                                         Status status) {
+void WriteThread::ExitAsBatchGroupLeader(
+    WriteGroup& write_group, Status status,
+    std::vector<Writer*>* manual_wake_followers) {
   Writer* leader = write_group.leader;
   Writer* last_writer = write_group.last_writer;
   assert(leader->link_older == nullptr);
@@ -673,8 +683,9 @@ void WriteThread::ExitAsBatchGroupLeader(WriteGroup& write_group,
       next_leader->link_older = nullptr;
       SetState(next_leader, STATE_GROUP_LEADER);
     }
-    AwaitState(leader, STATE_MEMTABLE_WRITER_LEADER |
-                           STATE_PARALLEL_MEMTABLE_WRITER | STATE_COMPLETED,
+    AwaitState(leader,
+               STATE_MEMTABLE_WRITER_LEADER | STATE_PARALLEL_MEMTABLE_WRITER |
+                   STATE_COMPLETED,
                &eabgl_ctx);
   } else {
     Writer* head = newest_writer_.load(std::memory_order_acquire);
@@ -708,6 +719,16 @@ void WriteThread::ExitAsBatchGroupLeader(WriteGroup& write_group,
     }
     // else nobody else was waiting, although there might already be a new
     // leader now
+
+    if (manual_wake_followers != nullptr) {
+      manual_wake_followers->clear();
+      while (last_writer != leader) {
+        auto next = last_writer->link_older;
+        manual_wake_followers->emplace_back(last_writer);
+        last_writer = next;
+      }
+      return;
+    }
 
     while (last_writer != leader) {
       last_writer->status = status;

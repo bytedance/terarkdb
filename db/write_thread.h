@@ -7,9 +7,11 @@
 
 #include <assert.h>
 #include <stdint.h>
+
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <functional>
 #include <mutex>
 #include <type_traits>
 #include <vector>
@@ -82,6 +84,7 @@ class WriteThread {
     Status status;
     std::atomic<size_t> running;
     size_t size = 0;
+    std::function<Status()> exit_callback;
 
     struct Iterator {
       Writer* writer;
@@ -241,7 +244,7 @@ class WriteThread {
     std::condition_variable& StateCV() {
       assert(made_waitable);
       return *static_cast<std::condition_variable*>(
-                 static_cast<void*>(&state_cv_bytes));
+          static_cast<void*>(&state_cv_bytes));
     }
   };
 
@@ -289,10 +292,13 @@ class WriteThread {
   //
   // WriteGroup* write_group: the write group
   // Status status:           Status of write operation
-  void ExitAsBatchGroupLeader(WriteGroup& write_group, Status status);
+  void ExitAsBatchGroupLeader(
+      WriteGroup& write_group, Status status,
+      std::vector<Writer*>* manual_wake_followers = nullptr);
 
   // Exit batch group on behalf of batch group leader.
-  void ExitAsBatchGroupFollower(Writer* w);
+  void ExitAsBatchGroupFollower(
+      Writer* w, std::vector<Writer*>* manual_wake_followers = nullptr);
 
   // Constructs a write batch group led by leader from newest_memtable_writers_
   // list. The leader should either write memtable for the whole group and
@@ -349,6 +355,8 @@ class WriteThread {
   // Remove the dummy writer and wake up waiting writers
   void EndWriteStall();
 
+  static void SetStateCompleted(Writer* w);
+
  private:
   // See AwaitState.
   const uint64_t max_yield_usec_;
@@ -394,7 +402,7 @@ class WriteThread {
   uint8_t AwaitState(Writer* w, uint8_t goal_mask, AdaptationContext* ctx);
 
   // Set writer state and wake the writer up if it is waiting.
-  void SetState(Writer* w, uint8_t new_state);
+  static void SetState(Writer* w, uint8_t new_state);
 
   // Links w into the newest_writer list. Return true if w was linked directly
   // into the leader position.  Safe to call from multiple threads without

@@ -10,6 +10,7 @@
 #include <atomic>
 #include <sstream>
 #include <string>
+
 #include "port/port.h"
 #include "rocksdb/env.h"
 #include "rocksdb/listener.h"
@@ -85,13 +86,13 @@ class RandomAccessFileReader {
   bool ShouldNotifyListeners() const { return !listeners_.empty(); }
 
   std::unique_ptr<RandomAccessFile> file_;
-  std::string     file_name_;
-  Env*            env_;
-  Statistics*     stats_;
-  uint32_t        hist_type_;
-  bool            for_compaction_;
-  bool            use_fsread_;
-  HistogramImpl*  file_read_hist_;
+  std::string file_name_;
+  Env* env_;
+  Statistics* stats_;
+  uint32_t hist_type_;
+  bool for_compaction_;
+  bool use_fsread_;
+  HistogramImpl* file_read_hist_;
   RateLimiter* rate_limiter_;
   std::vector<std::shared_ptr<EventListener>> listeners_;
 
@@ -147,21 +148,21 @@ class WritableFileWriter {
 
   std::unique_ptr<WritableFile> writable_file_;
   std::string file_name_;
-  AlignedBuffer           buf_;
-  size_t                  max_buffer_size_;
+  AlignedBuffer buf_;
+  size_t max_buffer_size_;
   // Actually written data size can be used for truncate
   // not counting padding data
-  uint64_t                filesize_;
+  uint64_t filesize_;
 #ifndef ROCKSDB_LITE
   // This is necessary when we use unbuffered access
   // and writes must happen on aligned offsets
   // so we need to go back and write that page again
-  uint64_t                next_write_offset_;
+  uint64_t next_write_offset_;
 #endif  // ROCKSDB_LITE
-  bool                    pending_sync_;
-  uint64_t                last_sync_size_;
-  uint64_t                bytes_per_sync_;
-  RateLimiter*            rate_limiter_;
+  bool pending_sync_;
+  uint64_t last_sync_size_;
+  uint64_t bytes_per_sync_;
+  RateLimiter* rate_limiter_;
   Statistics* stats_;
   std::vector<std::shared_ptr<EventListener>> listeners_;
 
