@@ -819,8 +819,9 @@ class TestTtlExtractor : public TtlExtractor {
       assert(value_or_meta.size() > kTtlLength);
       *ttl = static_cast<std::chrono::seconds>(DecodeFixed64(
           value_or_meta.data() + value_or_meta.size() - kTtlLength));
+    } else {
+      *has_ttl = false;
     }
-    *has_ttl = false;
     return Status::OK();
   }
 
