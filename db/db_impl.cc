@@ -123,6 +123,7 @@
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif
+#include <iostream>
 
 #include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
@@ -772,26 +773,31 @@ void DBImpl::StartTimedTasks() {
   }
 }
 void DBImpl::ScheduleGCTTL() {
+  TEST_SYNC_POINT("DBImpl:ScheduleGCTTL");
   uint64_t mark_count = 0;
   uint64_t marked_count = 0;
   uint64_t nowSeconds = env_->NowMicros() / 1000000;
   auto should_marked_for_compacted = [](uint64_t ratio_expire_time,
                                         uint64_t scan_gap_expire_time,
                                         uint64_t now) {
-    return (std::min(ratio_expire_time, scan_gap_expire_time) < now);
+    return (std::min(ratio_expire_time, scan_gap_expire_time) <= now);
   };
   ROCKS_LOG_INFO(immutable_db_options_.info_log, "Start ScheduleGCTTL");
   for (auto cfd : *versions_->GetColumnFamilySet()) {
+//    if(cfd->GetLatestCFOptions().ttl_extractor_factory == nullptr) continue;
     if (cfd->initialized()) {
       VersionStorageInfo* vsi = cfd->current()->storage_info();
       for (int l = 0; l < vsi->num_levels(); l++) {
         for (auto sst : vsi->LevelFiles(l)) {
+
           if (sst->marked_for_compaction) marked_count++;
           if (!sst->marked_for_compaction)
             sst->marked_for_compaction = should_marked_for_compacted(
                 sst->prop.ratio_expire_time, sst->prop.scan_gap_expire_time,
                 nowSeconds);
           if (sst->marked_for_compaction) {
+            std::cout << sst->marked_for_compaction << std::endl ;
+            TEST_SYNC_POINT("DBImpl:ScheduleGCTTL-mark");
             mark_count++;
           }
         }
@@ -801,7 +807,7 @@ void DBImpl::ScheduleGCTTL() {
   ROCKS_LOG_INFO(immutable_db_options_.info_log, "marked for compact SST: %d,%d",
                  marked_count,mark_count);
   if (mark_count > 0) {
-    MaybeScheduleFlushOrCompaction();
+//    MaybeScheduleFlushOrCompaction();
   }
 }
 void DBImpl::DumpStats() {
