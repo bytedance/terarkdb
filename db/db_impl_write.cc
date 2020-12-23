@@ -123,10 +123,10 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
   }
 
   if (write_options.sync && !write_options.disableWAL && !two_write_queues_ &&
-      write_options.write_wal_while_sync) {
-    return WriteWhileLogWriteImpl(write_options, my_batch, callback, log_used,
-                                  log_ref, disable_memtable, seq_used,
-                                  batch_cnt, pre_release_callback);
+      write_wal_while_sync_) {
+    return WriteWhileSyncWriteImpl(write_options, my_batch, callback, log_used,
+                                   log_ref, disable_memtable, seq_used,
+                                   batch_cnt, pre_release_callback);
   }
 
   PERF_TIMER_GUARD(write_pre_and_post_process_time);
@@ -689,7 +689,7 @@ Status DBImpl::WriteImplWALOnly(const WriteOptions& write_options,
   return status;
 }
 
-Status DBImpl::WriteWhileLogWriteImpl(
+Status DBImpl::WriteWhileSyncWriteImpl(
     const WriteOptions& write_options, WriteBatch* my_batch,
     WriteCallback* callback, uint64_t* log_used, uint64_t log_ref,
     bool disable_memtable, uint64_t* seq_used, size_t batch_cnt,
@@ -700,9 +700,7 @@ Status DBImpl::WriteWhileLogWriteImpl(
   WriteThread::Writer w(write_options, my_batch, callback, log_ref,
                         disable_memtable, batch_cnt, pre_release_callback);
 
-  // if (!write_options.disableWAL) {
   RecordTick(stats_, WRITE_WITH_WAL);
-  // }
 
   StopWatch write_sw(env_, immutable_db_options_.statistics.get(), DB_WRITE);
 
@@ -744,13 +742,11 @@ Status DBImpl::WriteWhileLogWriteImpl(
       // TODO(myabandeh): propagate status to write_group
       auto last_sequence = w.write_group->last_sequence;
       MemTableInsertStatusCheck(w.status);
-      // versions_->SetLastSequenceConcurrently(last_sequence);
+      // TODO(linyuanjin): may violate consistency
       versions_->SetLastSequence(last_sequence);
       write_thread_.ExitAsBatchGroupFollower(&w, &manual_wake_followers);
       status = w.write_group->exit_callback();
-      // if (status.ok()) {
-      //   versions_->SetLastSequenceConcurrently(last_sequence);
-      // }
+
       for (auto* follower : manual_wake_followers) {
         follower->status = status;
         WriteThread::SetStateCompleted(follower);
@@ -879,13 +875,8 @@ Status DBImpl::WriteWhileLogWriteImpl(
     }
     MeasureTime(stats_, BYTES_PER_WRITE, total_byte_size);
 
-    // if (write_options.disableWAL) {
-    //   has_unpersisted_data_.store(true, std::memory_order_relaxed);
-    // }
-
     PERF_TIMER_STOP(write_pre_and_post_process_time);
 
-    // if (!two_write_queues_) {
     if (status.ok() /* && !write_options.disableWAL */) {
       PERF_TIMER_GUARD(write_wal_time);
       status = WriteToWAL(write_group, log_writer, log_used, need_log_sync,
@@ -903,18 +894,6 @@ Status DBImpl::WriteWhileLogWriteImpl(
         return Status::OK();
       };
     }
-    // } else {
-    //   if (status.ok() /* && !write_options.disableWAL */) {
-    //     PERF_TIMER_GUARD(write_wal_time);
-    //     // LastAllocatedSequence is increased inside WriteToWAL under
-    //     // wal_write_mutex_ to ensure ordered events in WAL
-    //     status = ConcurrentWriteToWAL(write_group, log_used, &last_sequence,
-    //                                   seq_inc);
-    //   } else {
-    //     // Otherwise we inc seq number for memtable writes
-    //     last_sequence = versions_->FetchAddLastAllocatedSequence(seq_inc);
-    //   }
-    // }
     assert(last_sequence != kMaxSequenceNumber);
     const SequenceNumber current_sequence = last_sequence + 1;
     last_sequence += seq_inc;
@@ -975,21 +954,6 @@ Status DBImpl::WriteWhileLogWriteImpl(
     WriteStatusCheck(status);
   }
 
-  // if (need_log_sync) {
-  //   mutex_.Lock();
-  //   MarkLogsSynced(logfile_number_, need_log_dir_sync, status);
-  //   mutex_.Unlock();
-  // Requesting sync with two_write_queues_ is expected to be very rare. We
-  // hence provide a simple implementation that is not necessarily efficient.
-  // if (two_write_queues_) {
-  //   if (manual_wal_flush_) {
-  //     status = FlushWAL(true);
-  //   } else {
-  //     status = SyncWAL();
-  //   }
-  // }
-  // }
-
   bool should_exit_batch_group = true;
   if (in_parallel_group) {
     // CompleteParallelWorker returns true if this thread should
@@ -1011,14 +975,12 @@ Status DBImpl::WriteWhileLogWriteImpl(
       }
     }
     MemTableInsertStatusCheck(w.status);
-    // versions_->SetLastSequenceConcurrently(last_sequence);
+    // TODO(linyuanjin): may violate consistency
     versions_->SetLastSequence(last_sequence);
     write_thread_.ExitAsBatchGroupLeader(write_group, status,
                                          &manual_wake_followers);
     status = write_group.exit_callback();
-    // if (status.ok()) {
-    //   versions_->SetLastSequenceConcurrently(last_sequence);
-    // }
+
     for (auto* follower : manual_wake_followers) {
       follower->status = status;
       WriteThread::SetStateCompleted(follower);

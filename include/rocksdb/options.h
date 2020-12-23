@@ -689,6 +689,11 @@ struct DBOptions {
   // Not supported in ROCKSDB_LITE mode!
   bool use_direct_reads = false;
 
+  // Write Wal while WriteOptions.sync = true
+  //
+  // Dedefault: false
+  bool write_wal_while_sync = false;
+
   // Use O_DIRECT for writes in background flush and compactions.
   // Default: false
   // Not supported in ROCKSDB_LITE mode!
@@ -1238,8 +1243,6 @@ struct WriteOptions {
   // Default: false
   bool sync;
 
-  bool write_wal_while_sync;
-
   // If true, writes will not first go to the write ahead log,
   // and the write may got lost after a crash.
   // Default: false
@@ -1267,7 +1270,6 @@ struct WriteOptions {
 
   WriteOptions()
       : sync(false),
-        write_wal_while_sync(false),
         disableWAL(false),
         ignore_missing_column_families(false),
         no_slowdown(false),

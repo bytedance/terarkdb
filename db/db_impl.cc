@@ -100,8 +100,6 @@
 #if !defined(_MSC_VER) && !defined(__APPLE__)
 #include <sys/unistd.h>
 
-
-
 #endif
 #include "utilities/util/valvec.hpp"
 
@@ -112,15 +110,15 @@
 
 #ifdef WITH_TERARK_ZIP
 #include <table/terark_zip_table.h>
-#include <terark/util/fiber_pool.hpp>
+
 #include <terark/thread/fiber_yield.hpp>
+#include <terark/util/fiber_pool.hpp>
 #endif
 
 #ifdef BOOSTLIB
 #include <boost/fiber/all.hpp>
 #endif
 //#include <boost/context/pooled_fixedsize_stack.hpp>
-
 
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
@@ -275,6 +273,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       use_custom_gc_(seq_per_batch),
       shutdown_initiated_(false),
       own_sfm_(options.sst_file_manager == nullptr),
+      write_wal_while_sync_(options.write_wal_while_sync),
       preserve_deletes_(options.preserve_deletes),
       closed_(false),
       error_handler_(this, immutable_db_options_, &mutex_),
