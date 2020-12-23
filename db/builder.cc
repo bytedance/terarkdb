@@ -413,6 +413,8 @@ Status BuildTable(
                                     : TablePropertyCache::kNoRangeDeletions;
       sst_meta()->prop.flags |=
           tp.snapshots.empty() ? 0 : TablePropertyCache::kHasSnapshots;
+      sst_meta()->prop.ratio_expire_time = tp.ratio_expire_time;
+      sst_meta()->prop.scan_gap_expire_time = tp.scan_gap_expire_time;
     }
 
     if (s.ok() && !empty) {
