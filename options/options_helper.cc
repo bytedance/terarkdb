@@ -130,6 +130,7 @@ DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
       immutable_db_options.avoid_flush_during_recovery;
   options.avoid_flush_during_shutdown =
       mutable_db_options.avoid_flush_during_shutdown;
+  options.write_wal_while_sync = mutable_db_options.write_wal_while_sync;
   options.allow_ingest_behind = immutable_db_options.allow_ingest_behind;
   options.preserve_deletes = immutable_db_options.preserve_deletes;
   options.two_write_queues = immutable_db_options.two_write_queues;
@@ -1635,6 +1636,10 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offsetof(struct DBOptions, avoid_flush_during_shutdown),
           OptionType::kBoolean, OptionVerificationType::kNormal, true,
           offsetof(struct MutableDBOptions, avoid_flush_during_shutdown)}},
+        {"write_wal_while_sync",
+         {offsetof(struct DBOptions, write_wal_while_sync),
+          OptionType::kBoolean, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableDBOptions, write_wal_while_sync)}},
         {"writable_file_max_buffer_size",
          {offsetof(struct DBOptions, writable_file_max_buffer_size),
           OptionType::kSizeT, OptionVerificationType::kNormal, true,

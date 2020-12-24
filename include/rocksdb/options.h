@@ -692,6 +692,8 @@ struct DBOptions {
   // Write Wal while WriteOptions.sync = true
   //
   // Dedefault: false
+  //
+  // Dynamically changeable through SetDBOptions() API.
   bool write_wal_while_sync = false;
 
   // Use O_DIRECT for writes in background flush and compactions.

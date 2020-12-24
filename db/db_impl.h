@@ -1674,7 +1674,7 @@ class DBImpl : public DB {
   // DB::Open() or passed to us
   bool own_sfm_;
 
-  const bool write_wal_while_sync_;
+  bool write_wal_while_sync_;
 
   // Clients must periodically call SetPreserveDeletesSequenceNumber()
   // to advance this seqnum. Default value is 0 which means ALL deletes are
