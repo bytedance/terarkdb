@@ -214,7 +214,7 @@ struct MutableCFOptions {
         paranoid_file_checks(false),
         report_bg_io_stats(false),
         compression(Snappy_Supported() ? kSnappyCompression : kNoCompression),
-        ttl_garbage_collection_percentage(100.0),
+        ttl_garbage_collection_percentage(128.0),
         ttl_scan_gap(std::numeric_limits<int>::max()) {}
 
   explicit MutableCFOptions(const Options& options);
