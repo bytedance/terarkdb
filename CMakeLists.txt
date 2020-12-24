@@ -940,6 +940,7 @@ if(WITH_TESTS)
         db/db_compaction_test.cc
         db/db_dynamic_level_test.cc
         db/db_flush_test.cc
+        db/db_impl_gc_ttl_test.cc
         db/db_inplace_update_test.cc
         db/db_io_failure_test.cc
         db/db_iter_test.cc
@@ -1006,7 +1007,6 @@ if(WITH_TESTS)
         options/options_test.cc
         table/block_based_filter_block_test.cc
         table/block_based_table_builder_ttl_test.cc
-        db/db_impl_gc_ttl_test.cc
   )
 
   if(WITH_LIBRADOS)

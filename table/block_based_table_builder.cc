@@ -375,12 +375,15 @@ BlockBasedTableBuilder::BlockBasedTableBuilder(
   rep_ =
       new Rep(builder_options, sanitized_table_options, column_family_id, file);
 
-  if (builder_options.moptions.ttl_garbage_collection_percentage >= 100.0 &&
-      builder_options.moptions.ttl_scan_gap ==
-          std::numeric_limits<int>::max()) {
+  if (builder_options.ioptions.ttl_extractor_factory == nullptr ||
+      (builder_options.moptions.ttl_garbage_collection_percentage > 100.0 &&
+       builder_options.moptions.ttl_scan_gap ==
+           std::numeric_limits<int>::max())) {
     enable_row_ttl_ = false;
+    ROCKS_LOG_INFO(rep_->ioptions.info_log, "Disable row ttl.");
   } else {
     enable_row_ttl_ = true;
+    ROCKS_LOG_INFO(rep_->ioptions.info_log, "Enable row ttl.");
   }
 
   if (rep_->filter_builder != nullptr) {
@@ -393,7 +396,7 @@ BlockBasedTableBuilder::BlockBasedTableBuilder(
         &rep_->compressed_cache_key_prefix_size);
   }
   if (is_row_ttl_enable()) {
-    if (builder_options.moptions.ttl_garbage_collection_percentage < 100.0) {
+    if (builder_options.moptions.ttl_garbage_collection_percentage <= 100.0) {
       ttl_histogram_ = std::make_unique<HistogramImpl>();
     } else {
       ttl_histogram_.reset();
@@ -407,6 +410,10 @@ BlockBasedTableBuilder::BlockBasedTableBuilder(
             ttl_extractor_context);
     ttl_seconds_slice_window_.clear();
     slice_index_ = 0;
+    slice_length_ = builder_options.moptions.ttl_scan_gap;
+    if (slice_length_ < std::numeric_limits<int>::max()) {
+      slice_length_ = std::max(std::min(slice_length_, 1000), 1);
+    }
     min_ttl_seconds_ = std::numeric_limits<uint64_t>::max();
   } else {
     ttl_histogram_.reset();
@@ -445,8 +452,8 @@ Status BlockBasedTableBuilder::Add(const Slice& key,
     // key for the next data block.  This allows us to use shorter keys in the
     // index block.  For example, consider a block boundary between the keys
     // "the quick brown fox" and "the who".  We can use "the r" as the key for
-    // the index block entry since it is >= all entries in the first block and <
-    // all entries in subsequent blocks.
+    // the index block entry since it is >= all entries in the first block and
+    // < all entries in subsequent blocks.
     if (ok()) {
       r->index_builder->AddIndexEntry(&r->last_key, &key, r->pending_handle);
     }
@@ -486,20 +493,19 @@ Status BlockBasedTableBuilder::Add(const Slice& key,
         num_has_row_ttl_++;
         uint64_t key_ttl = std::numeric_limits<uint64_t>::max();
         key_ttl = static_cast<uint64_t>(ttl.count());
-        if (r->moptions.ttl_garbage_collection_percentage < 100.0) {
+        if (r->moptions.ttl_garbage_collection_percentage <= 100.0) {
           assert(ttl_histogram_ != nullptr);
           ttl_histogram_->Add(key_ttl);
         }
-        int slice_length = r->moptions.ttl_scan_gap;
-        if (slice_length < std::numeric_limits<int>::max()) {
-          if (ttl_seconds_slice_window_.size() < slice_length) {
+        if (slice_length_ < std::numeric_limits<int>::max()) {
+          if (ttl_seconds_slice_window_.size() < slice_length_) {
             ttl_seconds_slice_window_.emplace_back(key_ttl);
           } else {
-            assert(slice_length == ttl_seconds_slice_window_.size());
+            assert(slice_length_ == ttl_seconds_slice_window_.size());
             ttl_seconds_slice_window_[slice_index_] = key_ttl;
-            slice_index_ = (slice_index_ + 1) % slice_length;
+            slice_index_ = (slice_index_ + 1) % slice_length_;
           }
-          if (ttl_seconds_slice_window_.size() == slice_length) {
+          if (ttl_seconds_slice_window_.size() == slice_length_) {
             min_ttl_seconds_ =
                 std::min(min_ttl_seconds_,
                          *std::max_element(ttl_seconds_slice_window_.begin(),
@@ -910,7 +916,7 @@ void BlockBasedTableBuilder::WritePropertiesBlock(
     if (is_row_ttl_enable()) {
       uint64_t now_seconds = rep_->ioptions.env->NowMicros() / 1000000ul;
       uint64_t max_uint64_t = std::numeric_limits<uint64_t>::max();
-      if (rep_->moptions.ttl_garbage_collection_percentage < 100.0) {
+      if (rep_->moptions.ttl_garbage_collection_percentage <= 100.0) {
         assert(ttl_histogram_ != nullptr);
         uint64_t percentile_ratio_ttl = max_uint64_t;
         if (!ttl_histogram_->Empty()) {
@@ -925,7 +931,7 @@ void BlockBasedTableBuilder::WritePropertiesBlock(
           rep_->props.ratio_expire_time = max_uint64_t;
         }
       }
-      if (rep_->moptions.ttl_scan_gap < std::numeric_limits<int>::max()) {
+      if (slice_length_ < std::numeric_limits<int>::max()) {
         if (max_uint64_t - min_ttl_seconds_ > now_seconds) {
           rep_->props.scan_gap_expire_time = now_seconds + min_ttl_seconds_;
         } else {
@@ -1037,9 +1043,9 @@ Status BlockBasedTableBuilder::Finish(
   // Write footer
   if (ok()) {
     // No need to write out new footer if we're using default checksum.
-    // We're writing legacy magic number because we want old versions of RocksDB
-    // be able to read files generated with new release (just in case if
-    // somebody wants to roll back after an upgrade)
+    // We're writing legacy magic number because we want old versions of
+    // RocksDB be able to read files generated with new release (just in case
+    // if somebody wants to roll back after an upgrade)
     // TODO(icanadi) at some point in the future, when we're absolutely sure
     // nobody will roll back to RocksDB 2.x versions, retire the legacy magic
     // number and always write new table files with new magic number
