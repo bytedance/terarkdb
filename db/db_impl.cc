@@ -961,6 +961,7 @@ Status DBImpl::SetDBOptions(
     s = GetMutableDBOptionsFromStrings(mutable_db_options_, options_map,
                                        &new_options);
     if (s.ok()) {
+      write_wal_while_sync_ = new_options.write_wal_while_sync;
       auto bg_job_limits = DBImpl::GetBGJobLimits(
           immutable_db_options_.max_background_flushes,
           new_options.max_background_compactions,

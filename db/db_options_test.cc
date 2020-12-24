@@ -492,6 +492,7 @@ TEST_F(DBOptionsTest, WriteWalWhileSync) {
 
   DestroyAndReopen(options);
   ASSERT_OK(Put("foo", "v2", wopt));
+  ASSERT_EQ("v2", Get("foo"));
   ASSERT_OK(dbfull()->SetDBOptions({{"write_wal_while_sync", "true"}}));
   Reopen(options);
 
