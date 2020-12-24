@@ -783,7 +783,7 @@ void DBImpl::ScheduleGCTTL() {
   };
   ROCKS_LOG_INFO(immutable_db_options_.info_log, "Start ScheduleGCTTL");
   for (auto cfd : *versions_->GetColumnFamilySet()) {
-//    if(cfd->GetLatestCFOptions().ttl_extractor_factory == nullptr) continue;
+    if(cfd->GetLatestCFOptions().ttl_extractor_factory == nullptr) continue;
     if (cfd->initialized()) {
       VersionStorageInfo* vsi = cfd->current()->storage_info();
       for (int l = 0; l < vsi->num_levels(); l++) {

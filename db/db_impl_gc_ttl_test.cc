@@ -73,6 +73,7 @@ TEST_F(DBImplGCTTL_Test, L0FileExpiredTest) {
   ASSERT_TRUE(flag);
   ASSERT_EQ(L0FilesNums,mark);
   dbfull()->TEST_WaitForCompact();
+  dbfull()->Close();
 
 
 }
