@@ -136,6 +136,7 @@ class BlockBasedTableBuilder : public TableBuilder {
   int slice_index_;
   bool enable_row_ttl_;
   uint64_t num_has_row_ttl_;
+  int slice_length_;
 };
 
 Slice CompressBlock(const Slice& raw, const CompressionContext& compression_ctx,

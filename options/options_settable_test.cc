@@ -467,7 +467,7 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
       "blob_gc_ratio=0.05;"
       "report_bg_io_stats=true;"
       "ttl=60;"
-      "ttl_garbage_collection_percentage=100.0;"
+      "ttl_garbage_collection_percentage=128.0;"
       "ttl_scan_gap=2147483647;"
       "compaction_options_fifo={max_table_files_size=3;ttl=100;allow_"
       "compaction=false;};",
@@ -476,7 +476,8 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
   ASSERT_EQ(unset_bytes_base,
             NumUnsetBytes(new_options_ptr, sizeof(ColumnFamilyOptions),
                           kColumnFamilyOptionsBlacklist));
-
+  EXPECT_EQ(new_options->ttl_garbage_collection_percentage, 128.0);
+  EXPECT_EQ(new_options->ttl_scan_gap, 2147483647);
   options->~ColumnFamilyOptions();
   new_options->~ColumnFamilyOptions();
 

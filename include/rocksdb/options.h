@@ -336,11 +336,16 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   std::vector<DbPath> cf_paths;
 
   // The ratio percentage of ttl to mark a SST to be compacted.
-  // Default: 100.0
-  double ttl_garbage_collection_percentage = 100.0;
+  // The value should be set no greater than 100.
+  // If value less than 0.0, it acts the same as 0.0.
+  // If the value not set or greater than 100, we do not enable.
+  // Default: 128.0
+  double ttl_garbage_collection_percentage = 128.0;
 
   // The scan gap of ttl to mark a SST to be compacted.
-  // If the value not set, we do not enable
+  // If the value less than 1, it acts the same as 1.
+  // If the value greater than 1000, it acts the same as 1000.
+  // If the value not set, we do not enable.
   // Default: INT_MAX
   int ttl_scan_gap = std::numeric_limits<int>::max();
 
