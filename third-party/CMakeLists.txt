@@ -184,6 +184,5 @@ ENDIF()
 
 # terark-zip (for TerarkZipTable)
 IF(WITH_TERARK_ZIP)
-  SET(USE_RTTI ON) # terark-zip use RTTI, to be refined
   add_subdirectory(terark-zip)
 ENDIF()
