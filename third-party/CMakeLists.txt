@@ -29,7 +29,7 @@ IF(WITH_SNAPPY)
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/snappy
         CONFIGURE_COMMAND rm -rf build && mkdir -p build
         BUILD_IN_SOURCE 1
-        BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} -DCMAKE_BUILD_TYPE=Release -DSNAPPY_BUILD_TESTS=OFF -DHAVE_LIBLZO2=OFF && make -j 10
+        BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} -DCMAKE_INSTALL_LIBDIR=${CMAKE_BINARY_DIR}/lib -DCMAKE_BUILD_TYPE=Release -DSNAPPY_BUILD_TESTS=OFF -DHAVE_LIBLZO2=OFF && make -j $(nproc)
         INSTALL_COMMAND cd build && ls -l && make install && cd ../ && rm -rf build)
     ADD_LIBRARY(snappy STATIC IMPORTED GLOBAL)
     ADD_DEPENDENCIES(snappy snappy-project)
@@ -49,7 +49,7 @@ IF(WITH_BYTEDANCE_METRICS)
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/metrics2-cmake	
         CONFIGURE_COMMAND rm -rf cmake-build && mkdir -p cmake-build && mkdir -p ${CMAKE_BINARY_DIR}/lib	
         BUILD_IN_SOURCE 1	
-        BUILD_COMMAND cd cmake-build && cmake ../ -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} && make -j $(nproc)	
+        BUILD_COMMAND cd cmake-build && cmake ../ -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} && make -j $(nproc)
         # metrics2 doesn't have a install instruction, so we have to manully install it	
         INSTALL_COMMAND cp cmake-build/libmetrics2.a ${CMAKE_BINARY_DIR}/lib/)	
     ADD_LIBRARY(metrics2 STATIC IMPORTED GLOBAL)	
@@ -91,7 +91,7 @@ IF(WITH_GFLAGS)
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/gflags
         CONFIGURE_COMMAND rm -rf build-cmake && mkdir -p build-cmake
         BUILD_IN_SOURCE 1
-        BUILD_COMMAND cd build-cmake && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} -DCMAKE_BUILD_TYPE=Release && make -j 10
+        BUILD_COMMAND cd build-cmake && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} -DCMAKE_BUILD_TYPE=Release && make -j $(nproc)
         INSTALL_COMMAND cd build-cmake && make install)
     ADD_LIBRARY(gflags STATIC IMPORTED GLOBAL)
     ADD_DEPENDENCIES(gflags gflags-project)
@@ -111,7 +111,7 @@ IF(WITH_ZSTD)
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/zstd
         CONFIGURE_COMMAND ""
         BUILD_IN_SOURCE 1
-        BUILD_COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/zstd && make "CXXFLAGS=-fPIC -O2" "CFLAGS=-fPIC -O2" -j 10
+        BUILD_COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/zstd && make "CXXFLAGS=-fPIC -O2" "CFLAGS=-fPIC -O2" -j $(nproc)
         INSTALL_COMMAND PREFIX=${CMAKE_BINARY_DIR} make install)
     ADD_LIBRARY(zstd STATIC IMPORTED GLOBAL)
     ADD_DEPENDENCIES(zstd zstd-project)
@@ -132,7 +132,7 @@ IF(WITH_LZ4)
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lz4
         CONFIGURE_COMMAND ""
         BUILD_IN_SOURCE 1
-        BUILD_COMMAND make "CXXFLAGS=-fPIC -O2" "CFLAGS=-fPIC -O2" -j 10
+        BUILD_COMMAND make "CXXFLAGS=-fPIC -O2" "CFLAGS=-fPIC -O2" -j $(nproc)
         INSTALL_COMMAND prefix=${CMAKE_BINARY_DIR} make install)
     ADD_LIBRARY(lz4 STATIC IMPORTED GLOBAL)
     ADD_DEPENDENCIES(lz4 lz4-project)
@@ -152,7 +152,7 @@ IF(WITH_BZ2)
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/bzip2
         CONFIGURE_COMMAND ""
         BUILD_IN_SOURCE 1
-        BUILD_COMMAND make "CXXFLAGS=-fPIC -O2" "CFLAGS=-fPIC -O2" -j 4
+        BUILD_COMMAND make "CXXFLAGS=-fPIC -O2" "CFLAGS=-fPIC -O2" -j $(nproc)
         INSTALL_COMMAND make install PREFIX=${CMAKE_BINARY_DIR} && make clean)
     ADD_LIBRARY(bzip2 STATIC IMPORTED GLOBAL)
     ADD_DEPENDENCIES(bzip2 bzip2-project)
@@ -172,7 +172,7 @@ IF(WITH_JEMALLOC)
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/jemalloc
         CONFIGURE_COMMAND ""
         BUILD_IN_SOURCE 1
-        BUILD_COMMAND bash autogen.sh && "CFLAGS=-fPIC" "CXXFLAGS=-fPIC" "LDFLAGS=-fPIC" ./configure --prefix=${CMAKE_BINARY_DIR} --enable-prof && make -j 20
+        BUILD_COMMAND bash autogen.sh && "CFLAGS=-fPIC" "CXXFLAGS=-fPIC" "LDFLAGS=-fPIC" ./configure --prefix=${CMAKE_BINARY_DIR} --enable-prof && make -j $(nproc)
         INSTALL_COMMAND make install PREFIX=${CMAKE_BINARY_DIR} && make clean)
     ADD_LIBRARY(jemalloc STATIC IMPORTED GLOBAL)
     ADD_DEPENDENCIES(jemalloc jemalloc-project)
