@@ -609,6 +609,7 @@ set(SOURCES
         monitoring/perf_context.cc
         monitoring/perf_level.cc
         monitoring/statistics.cc
+        monitoring/stats_dump_scheduler.cc
         monitoring/thread_status_impl.cc
         monitoring/thread_status_updater.cc
         monitoring/thread_status_util.cc
@@ -933,7 +934,6 @@ if(WITH_TESTS)
           options/options_settable_test.cc
           util/timer_test.cc
   )
-
   if(WITH_LIBRADOS)
     list(APPEND TESTS utilities/env_librados_test.cc)
   endif()

@@ -1,5 +1,4 @@
 # Rocksdb Change Log
-
 ## 6.0.0 (2/19/2019)
 ### New Features
 * Enabled checkpoint on readonly db (DBImplReadOnly).

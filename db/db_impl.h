@@ -67,6 +67,12 @@ class Arena;
 class ArenaWrappedDBIter;
 class InMemoryStatsHistoryIterator;
 class MemTable;
+
+class PersistentStatsHistoryIterator;
+class StatsDumpScheduler;
+#ifndef NDEBUG
+class StatsDumpTestScheduler;
+#endif  // !NDEBUG
 class TableCache;
 class Version;
 class VersionEdit;
@@ -751,6 +757,35 @@ class DBImpl : public DB {
                        uint64_t* new_time,
                        std::map<std::string, uint64_t>* stats_map);
 
+  // Print information of all tombstones of all iterators to the std::string
+  // This is only used by ldb. The output might be capped. Tombstones
+  // printed out are not guaranteed to be in any order.
+  Status TablesRangeTombstoneSummary(ColumnFamilyHandle* column_family,
+                                     int max_entries_to_print,
+                                     std::string* out_str);
+
+#ifndef NDEBUG
+
+  Status TEST_FlushMemTable(ColumnFamilyData* cfd,
+                            const FlushOptions& flush_opts);
+
+  // Flush (multiple) ColumnFamilyData without using ColumnFamilyHandle. This
+  // is because in certain cases, we can flush column families, wait for the
+  // flush to complete, but delete the column family handle before the wait
+  // finishes. For example in CompactRange.
+  Status TEST_AtomicFlushMemTables(const autovector<ColumnFamilyData*>& cfds,
+                                   const FlushOptions& flush_opts);
+  void TEST_WaitForStatsDumpRun(std::function<void()> callback) const;
+  size_t TEST_EstimateInMemoryStatsHistorySize() const;
+
+  VersionSet* TEST_GetVersionSet() const { return versions_.get(); }
+
+
+#ifndef ROCKSDB_LITE
+  StatsDumpTestScheduler* TEST_GetStatsDumpScheduler() const;
+#endif  // !ROCKSDB_LITE
+
+#endif  // NDEBUG
  protected:
   Env* const env_;
   const std::string dbname_;
@@ -1158,7 +1193,7 @@ class DBImpl : public DB {
                                bool* sfm_bookkeeping, LogBuffer* log_buffer);
 
   // Schedule background tasks
-  void StartTimedTasks();
+  void StartStatsDumpScheduler();
 
   void PrintStatistics();
 
@@ -1615,14 +1650,6 @@ class DBImpl : public DB {
   // Only to be set during initialization
   std::unique_ptr<PreReleaseCallback> recoverable_state_pre_release_callback_;
 
-  // handle for scheduling stats dumping at fixed intervals
-  // REQUIRES: mutex locked
-  std::unique_ptr<rocksdb::RepeatableThread> thread_dump_stats_;
-
-  // handle for scheduling stats snapshoting at fixed intervals
-  // REQUIRES: mutex locked
-  std::unique_ptr<rocksdb::RepeatableThread> thread_persist_stats_;
-
   // No copying allowed
   DBImpl(const DBImpl&);
   void operator=(const DBImpl&);
@@ -1665,6 +1692,12 @@ class DBImpl : public DB {
 
   size_t GetWalPreallocateBlockSize(uint64_t write_buffer_size) const;
   Env::WriteLifeTimeHint CalculateWALWriteHint() { return Env::WLTH_SHORT; }
+#ifndef ROCKSDB_LITE
+  // Scheduler to run DumpStats() and PersistStats(). Currently, it always use
+  // a global instance from StatsDumpScheduler::Default(). Only in unittest, it
+  // can be overrided by StatsDumpTestSchduler.
+  StatsDumpScheduler* stats_dump_scheduler_;
+#endif
 
   // When set, we use a separate queue for writes that dont write to memtable.
   // In 2PC these are the writes at Prepare phase.

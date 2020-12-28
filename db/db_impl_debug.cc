@@ -11,6 +11,7 @@
 
 #include "db/db_impl.h"
 #include "db/error_handler.h"
+#include "monitoring/stats_dump_scheduler.h"
 #include "monitoring/thread_status_updater.h"
 
 namespace rocksdb {
@@ -250,21 +251,18 @@ size_t DBImpl::TEST_GetWalPreallocateBlockSize(
   return GetWalPreallocateBlockSize(write_buffer_size);
 }
 
-void DBImpl::TEST_WaitForDumpStatsRun(std::function<void()> callback) const {
-  if (thread_dump_stats_ != nullptr) {
-    thread_dump_stats_->TEST_WaitForRun(callback);
+#ifndef ROCKSDB_LITE
+void DBImpl::TEST_WaitForStatsDumpRun(std::function<void()> callback) const {
+  if (stats_dump_scheduler_ != nullptr) {
+    static_cast<StatsDumpTestScheduler*>(stats_dump_scheduler_)
+        ->TEST_WaitForRun(callback);
   }
 }
 
-void DBImpl::TEST_WaitForPersistStatsRun(std::function<void()> callback) const {
-  if (thread_persist_stats_ != nullptr) {
-    thread_persist_stats_->TEST_WaitForRun(callback);
-  }
+StatsDumpTestScheduler* DBImpl::TEST_GetStatsDumpScheduler() const {
+  return static_cast<StatsDumpTestScheduler*>(stats_dump_scheduler_);
 }
-
-bool DBImpl::TEST_IsPersistentStatsEnabled() const {
-  return thread_persist_stats_ && thread_persist_stats_->IsRunning();
-}
+#endif  // !ROCKSDB_LITE
 
 size_t DBImpl::TEST_EstiamteStatsHistorySize() const {
   return EstiamteStatsHistorySize();
