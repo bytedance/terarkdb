@@ -136,7 +136,7 @@ class BlockBasedTableBuilder : public TableBuilder {
   uint64_t min_ttl_seconds_;
   int slice_index_;
   bool enable_row_ttl_;
-  uint64_t num_has_row_ttl_;
+  uint64_t kv_size_has_row_ttl_;
   int slice_length_;
 };
 
