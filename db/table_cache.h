@@ -150,6 +150,16 @@ class TableCache {
                         bool skip_filters = false, int level = -1,
                         bool prefetch_index_and_filter_in_cache = true,
                         bool for_compaction = false, bool force_memory = false);
+  Status GetTableReaderImpl(const EnvOptions& env_options,
+                            const InternalKeyComparator& internal_comparator,
+                            const FileDescriptor& fd, bool sequential_mode,
+                            size_t readahead, bool record_read_stats,
+                            HistogramImpl* file_read_hist,
+                            std::unique_ptr<TableReader>* table_reader,
+                            const SliceTransform* prefix_extractor,
+                            bool skip_filters, int level,
+                            bool prefetch_index_and_filter_in_cache,
+                            bool for_compaction, bool force_memory);
 
   const ImmutableCFOptions& ioptions_;
   const EnvOptions& env_options_;

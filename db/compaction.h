@@ -58,11 +58,10 @@ struct SelectedRange : public RangeStorage {
 
   SelectedRange(const Slice& _start, const Slice& _limit,
                 bool _include_start = true, bool _include_limit = true)
-      : RangeStorage(std::move(_start), std::move(_limit), _include_start,
-                     _include_limit),
+      : RangeStorage(_start, _limit, _include_start, _include_limit),
         weight(0) {}
 
-  SelectedRange() : weight(0) {} 
+  SelectedRange() : weight(0) {}
 };
 
 class ColumnFamilyData;

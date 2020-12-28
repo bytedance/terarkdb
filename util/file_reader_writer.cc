@@ -796,6 +796,7 @@ class MemoryRandomAccessFile : public RandomAccessFile {
 
   bool use_direct_io() const override { return false; }
   bool use_aio_reads() const override { return false; }
+  bool is_mmap_open() const override { return true; }
 
   size_t GetRequiredBufferAlignment() const override {
     return file_->GetRequiredBufferAlignment();
