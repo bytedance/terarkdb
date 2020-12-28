@@ -55,14 +55,13 @@ enum class InsertResult { Success, Duplicated, Fail };
 #pragma pack(push)
 #pragma pack(4)
 struct tag_vector_t {
-  std::atomic<uint32_t> size;
-  std::atomic<uint32_t> loc;
+  std::atomic<uint64_t> size_loc;
   struct data_t {
     uint64_t tag;
     uint32_t loc;
     operator uint64_t() const { return tag; }
   };
-  static bool full(uint32_t size) { return ((size - 1) & size) == 0; }
+  static bool full(uint32_t size) { return !((size - 1) & size); }
 };
 #pragma pack(pop)
 
