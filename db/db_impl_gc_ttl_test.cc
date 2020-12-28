@@ -69,7 +69,7 @@ TEST_F(DBImplGCTTL_Test, L0FileExpiredTest) {
   }
 
   ASSERT_EQ(10, dbfull()->GetDBOptions().stats_dump_period_sec);
-  dbfull()->TEST_WaitForTimedTaskRun([&] { mock_env->set_current_time(ttl); });
+  dbfull()->TEST_WaitForDumpStatsRun([&] { mock_env->set_current_time(ttl); });
   ASSERT_TRUE(flag);
   ASSERT_EQ(L0FilesNums,mark);
   dbfull()->TEST_WaitForCompact();
