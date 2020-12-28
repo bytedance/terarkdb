@@ -991,6 +991,7 @@ if(WITH_TESTS)
         env/mock_env_test.cc
         memtable/inlineskiplist_test.cc
         memtable/skiplist_test.cc
+        memtable/terark_zip_memtable_test.cc
         memtable/write_buffer_manager_test.cc
         monitoring/histogram_test.cc
         monitoring/iostats_context_test.cc
