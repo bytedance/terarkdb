@@ -65,7 +65,8 @@ DEFINE_string(memtablerep, "skiplist",
               "\tvector              -- backed by an std::vector\n"
               "\thashskiplist        -- backed by a hash skip list\n"
               "\thashlinklist        -- backed by a hash linked list\n"
-              "\tcuckoo              -- backed by a cuckoo hash table");
+              "\tcuckoo              -- backed by a cuckoo hash table\n"
+              "\tpatricia_trie       -- backed by a patricia trie\n");
 
 DEFINE_int64(bucket_count, 1000000,
              "bucket_count parameter to pass into NewHashSkiplistRepFactory or "
@@ -247,24 +248,13 @@ class FillBenchmarkThread : public BenchmarkThread {
                         num_ops, read_hits) {}
 
   void FillOne() {
-    char* buf = nullptr;
-    auto internal_key_size = 16;
-    auto encoded_len =
-        FLAGS_item_size + VarintLength(internal_key_size) + internal_key_size;
-    KeyHandle handle = table_->Allocate(encoded_len, &buf);
-    assert(buf != nullptr);
-    char* p = EncodeVarint32(buf, internal_key_size);
+    std::string user_key;
     auto key = key_gen_->Next();
-    EncodeFixed64(p, key);
-    p += 8;
-    EncodeFixed64(p, ++(*sequence_));
-    p += 8;
+    PutFixed64(&user_key, key);
+    InternalKey internal_key(user_key, ++(*sequence_), kTypeValue);
     Slice bytes = generator_.Generate(FLAGS_item_size);
-    memcpy(p, bytes.data(), FLAGS_item_size);
-    p += FLAGS_item_size;
-    assert(p == buf + encoded_len);
-    table_->Insert(handle);
-    *bytes_written_ += encoded_len;
+    table_->InsertKeyValue(internal_key.Encode(), bytes);
+    *bytes_written_ += MemTableRep::EncodeKeyValueSize(internal_key.Encode(), bytes);
   }
 
   void operator()() override {
@@ -287,9 +277,7 @@ class ConcurrentFillBenchmarkThread : public FillBenchmarkThread {
   }
 
   void operator()() override {
-    // # of read threads will be total threads - write threads (always 1). Loop
-    // while all reads complete.
-    while ((*threads_done_).load() < (FLAGS_num_threads - 1)) {
+    for (unsigned int i = 0; i < num_ops_; ++i) {
       FillOne();
     }
   }
@@ -591,6 +579,8 @@ int main(int argc, char** argv) {
   if (FLAGS_memtablerep == "skiplist") {
     factory.reset(new rocksdb::SkipListFactory);
 #ifndef ROCKSDB_LITE
+  } else if (FLAGS_memtablerep == "patricia_trie") {
+    factory.reset(rocksdb::NewPatriciaTrieRepFactory());
   } else if (FLAGS_memtablerep == "vector") {
     factory.reset(new rocksdb::VectorRepFactory);
   } else if (FLAGS_memtablerep == "hashskiplist") {
