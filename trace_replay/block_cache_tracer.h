@@ -12,7 +12,7 @@
 #include "rocksdb/options.h"
 #include "rocksdb/trace_reader_writer.h"
 #include "table/table_reader_caller.h"
-#include "trace_replay/trace_replay.h"
+#include "util/trace_replay.h"
 
 namespace rocksdb {
 
