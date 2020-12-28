@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "db/db_impl/db_impl.h"
+#include "db/db_impl.h"
 #include "rocksdb/stats_history.h"
 
 namespace rocksdb {
