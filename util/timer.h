@@ -16,6 +16,7 @@
 #include "monitoring/instrumented_mutex.h"
 #include "rocksdb/env.h"
 #include "util/mutexlock.h"
+#include "util/sync_point_impl.h"
 
 namespace rocksdb {
 

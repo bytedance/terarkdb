@@ -1500,6 +1500,7 @@ class ReporterAgent {
       }
       auto total_ops_done_snapshot = total_ops_done_.load();
       // round the seconds elapsed
+      uint64_t kMicrosInSecond = 1000 * 1000;
       auto secs_elapsed =
           (env_->NowMicros() - time_started + kMicrosInSecond / 2) /
           kMicrosInSecond;

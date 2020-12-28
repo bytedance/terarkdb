@@ -82,6 +82,8 @@ struct JobContext;
 struct ExternalSstFileInfo;
 struct MemTableInfo;
 
+const uint64_t kMicrosInSecond = 1000 * 1000;
+
 class DBImpl : public DB {
  public:
   DBImpl(const DBOptions& options, const std::string& dbname,
@@ -256,8 +258,6 @@ class DBImpl : public DB {
 
   virtual Status GetDbIdentity(std::string& identity) const override;
 
-  virtual Status GetDbIdentityFromIdentityFile(std::string* identity) const;
-
   virtual Status GetDbSessionId(std::string& session_id) const override;
   ColumnFamilyHandle* DefaultColumnFamily() const override;
 
@@ -380,8 +380,6 @@ class DBImpl : public DB {
   // match to our in-memory records
   virtual Status CheckConsistency(bool read_only);
 
-  virtual Status GetDbIdentity(std::string& identity) const override;
-
   Status RunManualCompaction(
       ColumnFamilyData* cfd, int input_level, int output_level,
       uint32_t output_path_id, uint32_t max_subcompactions, const Slice* begin,
@@ -399,6 +397,14 @@ class DBImpl : public DB {
   LogsWithPrepTracker* logs_with_prep_tracker() {
     return &logs_with_prep_tracker_;
   }
+  // persist stats to column family "_persistent_stats"
+  void PersistStats();
+
+  // dump rocksdb.stats to LOG
+  void DumpStats();
+
+  //
+  void ScheduleGCTTL();
 
 #ifndef NDEBUG
   // Extra methods (for testing) that are not in the public DB interface
@@ -490,8 +496,7 @@ class DBImpl : public DB {
   int TEST_BGGarbageCollectionAllowed() const;
   int TEST_BGFlushesAllowed() const;
   size_t TEST_GetWalPreallocateBlockSize(uint64_t write_buffer_size) const;
-  void TEST_WaitForDumpStatsRun(std::function<void()> callback) const;
-  void TEST_WaitForPersistStatsRun(std::function<void()> callback) const;
+  void TEST_WaitForStatsDumpRun(std::function<void()> callback) const;
   bool TEST_IsPersistentStatsEnabled() const;
   size_t TEST_EstiamteStatsHistorySize() const;
 
@@ -779,7 +784,6 @@ class DBImpl : public DB {
   // finishes. For example in CompactRange.
   Status TEST_AtomicFlushMemTables(const autovector<ColumnFamilyData*>& cfds,
                                    const FlushOptions& flush_opts);
-  void TEST_WaitForStatsDumpRun(std::function<void()> callback) const;
   size_t TEST_EstimateInMemoryStatsHistorySize() const;
 
   VersionSet* TEST_GetVersionSet() const { return versions_.get(); }
@@ -903,8 +907,7 @@ class DBImpl : public DB {
   virtual Status Recover(
       const std::vector<ColumnFamilyDescriptor>& column_families,
       bool read_only = false, bool error_if_log_file_exist = false,
-      bool error_if_data_exists_in_logs = false,
-      uint64_t* recovered_seq = nullptr);
+      bool error_if_data_exists_in_logs = false);
 
   virtual bool OwnTablesAndLogs() const { return true; }
 
@@ -1240,15 +1243,6 @@ class DBImpl : public DB {
   void PrintStatistics();
 
   size_t EstimateInMemoryStatsHistorySize() const;
-
-  // persist stats to column family "_persistent_stats"
-  void PersistStats();
-
-  // dump rocksdb.stats to LOG
-  void DumpStats();
-
-  //
-  void ScheduleGCTTL();
 
   // Return the minimum empty level that could hold the total data in the
   // input level. Return the input level, if such level could not be found.
