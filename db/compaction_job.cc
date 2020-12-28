@@ -481,7 +481,7 @@ int CompactionJob::Prepare(int sub_compaction_slots) {
                   uint32_t(input_range.size()), c->max_subcompactions()});
     boundaries_.resize(n * 2);
     auto uc = c->column_family_data()->user_comparator();
-    if (n > input_range.size()) {
+    if (n < input_range.size()) {
       std::nth_element(input_range.begin(), input_range.begin() + n,
                        input_range.end(), TERARK_CMP(weight, >));
       input_range.resize(n);

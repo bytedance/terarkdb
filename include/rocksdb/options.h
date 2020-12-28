@@ -344,7 +344,7 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
 
   // The scan gap of ttl to mark a SST to be compacted.
   // If the value less than 1, it acts the same as 1.
-  // If the value greater than 1000, it acts the same as 1000.
+  // If the value greater than 1000 but not INT_MAX, it acts the same as 1000.
   // If the value not set, we do not enable.
   // Default: INT_MAX
   int ttl_scan_gap = std::numeric_limits<int>::max();
