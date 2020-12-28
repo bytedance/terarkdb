@@ -1381,6 +1381,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
     sfm->ReserveDiskBuffer(max_write_buffer_size,
                            impl->immutable_db_options_.db_paths[0].path);
   }
+
 #endif  // !ROCKSDB_LITE
 
   if (s.ok()) {
@@ -1396,9 +1397,8 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
     }
   }
   if (s.ok()) {
-    impl->StartTimedTasks();
-  }
-  if (!s.ok()) {
+    impl->StartStatsDumpScheduler();
+  } else {
     for (auto* h : *handles) {
       delete h;
     }

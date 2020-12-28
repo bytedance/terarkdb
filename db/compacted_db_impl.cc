@@ -208,7 +208,7 @@ Status CompactedDBImpl::Open(const Options& options, const std::string& dbname,
   std::unique_ptr<CompactedDBImpl> db(new CompactedDBImpl(db_options, dbname));
   Status s = db->Init(options);
   if (s.ok()) {
-    db->StartTimedTasks();
+    db->StartStatsDumpScheduler();
     ROCKS_LOG_INFO(db->immutable_db_options_.info_log,
                    "Opened the db as fully compacted mode");
     LogFlush(db->immutable_db_options_.info_log);

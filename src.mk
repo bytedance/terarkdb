@@ -87,6 +87,7 @@ LIB_SOURCES =                                                   \
   monitoring/perf_context.cc                                    \
   monitoring/perf_level.cc                                      \
   monitoring/statistics.cc                                      \
+  monitoring/stats_dump_scheduler.cc                            \
   monitoring/thread_status_impl.cc                              \
   monitoring/thread_status_updater.cc                           \
   monitoring/thread_status_updater_debug.cc                     \
@@ -369,6 +370,9 @@ MAIN_SOURCES =                                                          \
   monitoring/histogram_test.cc                                          \
   monitoring/iostats_context_test.cc                                    \
   monitoring/statistics_test.cc                                         \
+  monitoring/stats_dump_scheduler_test.cc                               \
+  monitoring/stats_history_test.cc                                      \
+  options/options_settable_test.cc
   options/options_test.cc                                               \
   table/block_based_filter_block_test.cc                                \
   table/block_test.cc                                                   \
