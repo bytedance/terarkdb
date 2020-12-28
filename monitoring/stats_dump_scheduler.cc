@@ -5,11 +5,11 @@
 
 #include "monitoring/stats_dump_scheduler.h"
 
-#include "db/db_impl/db_impl.h"
+#include "db/db_impl.h"
 #include "util/cast_util.h"
 
 #ifndef ROCKSDB_LITE
-namespace ROCKSDB_NAMESPACE {
+namespace rocksdb {
 
 StatsDumpScheduler::StatsDumpScheduler(Env* env) {
   timer = std::unique_ptr<Timer>(new Timer(env));

@@ -354,8 +354,6 @@ TEST_F(TimerTest, ShutdownRunningTask) {
   control_thr.join();
   delete value;
 }
-<<<<<<< Updated upstream
-=======
 
 TEST_F(TimerTest, AddSameFuncNameTest) {
   mock_env_->set_current_time(0);

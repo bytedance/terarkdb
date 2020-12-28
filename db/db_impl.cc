@@ -58,7 +58,6 @@
 #include "monitoring/in_memory_stats_history.h"
 #include "monitoring/iostats_context_imp.h"
 #include "monitoring/perf_context_imp.h"
-#include "trace_replay/block_cache_tracer.h"
 #include "monitoring/stats_dump_scheduler.h"
 #include "monitoring/persistent_stats_history.h"
 #include "monitoring/thread_status_updater.h"
@@ -813,7 +812,7 @@ void DBImpl::PersistStats() {
     return;
   }
   TEST_SYNC_POINT("DBImpl::PersistStats:StartRunning");
-  uint64_t now_seconds = env_->NowMicros() / kMicrosInSecond;
+  uint64_t now_seconds = env_->NowMicros() / 1000 * 1000;
   Statistics* statistics = immutable_db_options_.statistics.get();
   if (!statistics) {
     return;
