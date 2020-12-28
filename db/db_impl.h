@@ -255,8 +255,6 @@ class DBImpl : public DB {
 
   virtual bool SetPreserveDeletesSequenceNumber(SequenceNumber seqnum) override;
 
-  virtual Status GetDbIdentity(std::string& identity) const override;
-
   ColumnFamilyHandle* DefaultColumnFamily() const override;
 
   ColumnFamilyHandle* PersistentStatsColumnFamily() const;
@@ -544,8 +542,6 @@ class DBImpl : public DB {
 
   void SchedulePurge();
 
-  ColumnFamilyHandle* DefaultColumnFamily() const override;
-
   const SnapshotList& snapshots() const { return snapshots_; }
 
   const ImmutableDBOptions& immutable_db_options() const {
@@ -753,16 +749,8 @@ class DBImpl : public DB {
                      std::vector<ColumnFamilyHandle*>* handles, DB** dbptr,
                      const bool seq_per_batch, const bool batch_per_txn);
 
-  virtual Status Close() override;
-
   static Status CreateAndNewDirectory(Env* env, const std::string& dirname,
                                       std::unique_ptr<Directory>* directory);
-
-  // Given a time window, return an iterator for accessing stats history
-  Status GetStatsHistory(
-      uint64_t start_time, uint64_t end_time,
-      std::unique_ptr<StatsHistoryIterator>* stats_iterator) override;
-
   // find stats map from stats_history_ with smallest timestamp in
   // the range of [start_time, end_time)
   bool FindStatsByTime(uint64_t start_time, uint64_t end_time,
@@ -773,7 +761,7 @@ class DBImpl : public DB {
   // This is only used by ldb. The output might be capped. Tombstones
   // printed out are not guaranteed to be in any order.
   Status TablesRangeTombstoneSummary(ColumnFamilyHandle* column_family,
-                                     int max_entries_to_print,
+                                     int  ,
                                      std::string* out_str);
 
 #ifndef NDEBUG
@@ -792,20 +780,9 @@ class DBImpl : public DB {
 
   VersionSet* TEST_GetVersionSet() const { return versions_.get(); }
 
-
-<<<<<<< HEAD:db/db_impl.h
 #ifndef ROCKSDB_LITE
   StatsDumpTestScheduler* TEST_GetStatsDumpScheduler() const;
 #endif  // !ROCKSDB_LITE
-=======
-  int TEST_BGCompactionsAllowed() const;
-  int TEST_BGFlushesAllowed() const;
-  size_t TEST_GetWalPreallocateBlockSize(uint64_t write_buffer_size) const;
-  void TEST_WaitForDumpStatsRun(std::function<void()> callback) const;
-  void TEST_WaitForPersistStatsRun(std::function<void()> callback) const;
-  bool TEST_IsPersistentStatsEnabled() const;
-  size_t TEST_EstimateInMemoryStatsHistorySize() const;
->>>>>>> 671d15cbd... Persistent Stats: persist stats history to disk (#5046):db/db_impl/db_impl.h
 
 #endif  // NDEBUG
  protected:
