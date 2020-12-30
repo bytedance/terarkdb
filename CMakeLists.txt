@@ -930,7 +930,7 @@ ENDIF()
 
 if(WITH_TESTS)
   set(TESTS
-          table/block_based_table_builder_ttl_test.cc
+          table/block_based_table_row_ttl_test.cc
           db/db_impl_gc_ttl_test.cc
           db/periodic_work_scheduler_test.cc
           options/options_settable_test.cc
