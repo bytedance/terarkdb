@@ -11,6 +11,7 @@
 
 #include "db/db_impl.h"
 #include "db/error_handler.h"
+#include "db/periodic_work_scheduler.h"
 #include "monitoring/thread_status_updater.h"
 
 namespace rocksdb {
@@ -250,10 +251,21 @@ size_t DBImpl::TEST_GetWalPreallocateBlockSize(
   return GetWalPreallocateBlockSize(write_buffer_size);
 }
 
-void DBImpl::TEST_WaitForTimedTaskRun(std::function<void()> callback) const {
-  if (thread_dump_stats_ != nullptr) {
-    thread_dump_stats_->TEST_WaitForRun(callback);
+#ifndef ROCKSDB_LITE
+void DBImpl::TEST_WaitForStatsDumpRun(std::function<void()> callback) const {
+  if (periodic_work_scheduler_ != nullptr) {
+    static_cast<PeriodicWorkTestScheduler*>(periodic_work_scheduler_)
+        ->TEST_WaitForRun(callback);
   }
+}
+
+PeriodicWorkTestScheduler* DBImpl::TEST_GetPeriodicWorkScheduler() const {
+  return static_cast<PeriodicWorkTestScheduler*>(periodic_work_scheduler_);
+}
+#endif  // !ROCKSDB_LITE
+
+size_t DBImpl::TEST_EstimateInMemoryStatsHistorySize() const {
+  return EstimateInMemoryStatsHistorySize();
 }
 }  // namespace rocksdb
 #endif  // NDEBUG

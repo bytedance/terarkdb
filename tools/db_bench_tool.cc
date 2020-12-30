@@ -1061,6 +1061,14 @@ DEFINE_bool(identity_as_first_hash, false,
 DEFINE_bool(dump_malloc_stats, true, "Dump malloc stats in LOG ");
 DEFINE_uint64(stats_dump_period_sec, rocksdb::Options().stats_dump_period_sec,
               "Gap between printing stats to log in seconds");
+DEFINE_uint64(stats_persist_period_sec,
+              rocksdb::Options().stats_persist_period_sec,
+              "Gap between persisting stats in seconds");
+DEFINE_bool(persist_stats_to_disk, rocksdb::Options().persist_stats_to_disk,
+            "whether to persist stats to disk");
+DEFINE_uint64(stats_history_buffer_size,
+              rocksdb::Options().stats_history_buffer_size,
+              "Max number of stats snapshots to keep in memory");
 
 enum RepFactory {
   kSkipList,
@@ -1084,7 +1092,7 @@ static enum RepFactory StringToRepFactory(const char* ctype) {
     return kHashLinkedList;
   else if (!strcasecmp(ctype, "cuckoo"))
     return kCuckoo;
-  else if (!strcasecmp(ctype, "patricil_trie"))
+  else if (!strcasecmp(ctype, "patricia_trie"))
     return kPatriciaTrie;
 
   fprintf(stdout, "Cannot parse memreptable %s\n", ctype);
@@ -1478,7 +1486,6 @@ class ReporterAgent {
  private:
   std::string Header() const { return "secs_elapsed,interval_qps"; }
   void SleepAndReport() {
-    uint64_t kMicrosInSecond = 1000 * 1000;
     auto time_started = env_->NowMicros();
     while (true) {
       {
@@ -1493,6 +1500,7 @@ class ReporterAgent {
       }
       auto total_ops_done_snapshot = total_ops_done_.load();
       // round the seconds elapsed
+      uint64_t kMicrosInSecond = 1000 * 1000;
       auto secs_elapsed =
           (env_->NowMicros() - time_started + kMicrosInSecond / 2) /
           kMicrosInSecond;
@@ -2163,7 +2171,7 @@ class Benchmark {
         fprintf(stdout, "Memtablerep: cuckoo\n");
         break;
       case kPatriciaTrie:
-        fprintf(stdout, "Memtablerep: patricil_trie\n");
+        fprintf(stdout, "Memtablerep: patricia_trie\n");
         break;
     }
     fprintf(stdout, "Perf Level: %d\n", FLAGS_perf_level);
@@ -3269,9 +3277,13 @@ class Benchmark {
             options.write_buffer_size, FLAGS_key_size + FLAGS_value_size));
         break;
       case kPatriciaTrie:
-        fprintf(stderr, "PatriciaTrie is unsupported now\n");
-        // options.memtable_factory.reset(NewPatriciaTrieRepFactory());
-        // break;
+#ifdef WITH_TERARK_ZIP
+        options.memtable_factory.reset(NewPatriciaTrieRepFactory());
+#else
+        printf("TerarkZipTable was not enabled!");
+        exit(1);
+#endif
+        break;
 #else
       default:
         fprintf(stderr, "Only skip list is supported in lite mode\n");
@@ -3557,6 +3569,11 @@ class Benchmark {
     options.dump_malloc_stats = FLAGS_dump_malloc_stats;
     options.stats_dump_period_sec =
         static_cast<unsigned int>(FLAGS_stats_dump_period_sec);
+    options.stats_persist_period_sec =
+        static_cast<unsigned int>(FLAGS_stats_persist_period_sec);
+    options.persist_stats_to_disk = FLAGS_persist_stats_to_disk;
+    options.stats_history_buffer_size =
+        static_cast<size_t>(FLAGS_stats_history_buffer_size);
 
     options.compression_opts.level = FLAGS_compression_level;
     options.compression_opts.max_dict_bytes = FLAGS_compression_max_dict_bytes;

@@ -30,6 +30,10 @@
 #include <sys/syscall.h>
 #include <sys/sysmacros.h>
 #endif
+#ifdef WITH_TERARK_ZIP
+#include <terark/thread/fiber_aio.hpp>
+#endif
+
 #include "env/posix_logger.h"
 #include "monitoring/iostats_context_imp.h"
 #include "port/port.h"
@@ -37,10 +41,6 @@
 #include "util/coding.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
-
-#ifdef WITH_TERARK_ZIP
-#include <terark/thread/fiber_aio.hpp>
-#endif
 
 #if defined(OS_LINUX) && !defined(F_SET_RW_HINT)
 #define F_LINUX_SPECIFIC_BASE 1024
@@ -486,8 +486,6 @@ PosixMmapReadableFile::~PosixMmapReadableFile() {
   }
   close(fd_);
 }
-
-bool PosixMmapReadableFile::use_aio_reads() const { return use_aio_reads_; }
 
 Status PosixMmapReadableFile::Read(uint64_t offset, size_t n, Slice* result,
                                    char* /*scratch*/) const {

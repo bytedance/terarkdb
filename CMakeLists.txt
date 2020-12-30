@@ -35,7 +35,7 @@ option(WITH_ASAN "build with ASAN" ON)
 option(WITH_GFLAGS "build with GFlags" ON)
 option(WITH_TESTS "build with tests" OFF)
 option(WITH_TOOLS "build with tools" OFF)
-option(WITH_TERARK_ZIP "build with TerarkZipTable support" OFF)
+option(WITH_TERARK_ZIP "build with TerarkZipTable support" ON)
 option(WITH_BOOSTLIB "build with boost, if WITH_TERARK_ZIP is ON, this will also set to ON" OFF)
 
 option(BUILD_SUFFIX "library sufix" "d")
@@ -371,6 +371,7 @@ if(DISABLE_STALL_NOTIF)
   add_definitions(-DROCKSDB_DISABLE_STALL_NOTIFICATION)
 endif()
 
+SET(USE RTTI ON)
 if(DEFINED USE_RTTI)
   if(USE_RTTI)
     message(STATUS "Enabling RTTI")
@@ -572,6 +573,7 @@ set(SOURCES
         db/memtable_list.cc
         db/merge_helper.cc
         db/merge_operator.cc
+        db/periodic_work_scheduler.cc
         db/range_del_aggregator.cc
         db/range_tombstone_fragmenter.cc
         db/repair.cc
@@ -602,10 +604,12 @@ set(SOURCES
         memtable/write_buffer_manager.cc
         monitoring/histogram.cc
         monitoring/histogram_windowing.cc
+        monitoring/in_memory_stats_history.cc
         monitoring/instrumented_mutex.cc
         monitoring/iostats_context.cc
         monitoring/perf_context.cc
         monitoring/perf_level.cc
+        monitoring/persistent_stats_history.cc
         monitoring/statistics.cc
         monitoring/thread_status_impl.cc
         monitoring/thread_status_updater.cc
@@ -923,14 +927,17 @@ IF(WITH_TESTS OR WITH_TOOLS)
   add_library(testharness OBJECT util/testharness.cc)
 ENDIF()
 
-
+#          db/periodic_work_scheduler_test.cc
 if(WITH_TESTS)
   set(TESTS
           table/block_based_table_row_ttl_test.cc
           db/db_impl_gc_ttl_test.cc
           options/options_settable_test.cc
+          util/timer_test.cc
+          monitoring/histogram_test.cc
+          monitoring/iostats_context_test.cc
+          monitoring/statistics_test.cc
   )
-
   if(WITH_LIBRADOS)
     list(APPEND TESTS utilities/env_librados_test.cc)
   endif()

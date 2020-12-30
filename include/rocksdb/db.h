@@ -65,11 +65,13 @@ struct ExternalSstFileInfo;
 class WriteBatch;
 class Env;
 class EventListener;
+class StatsHistoryIterator;
 class TraceWriter;
 
 using std::unique_ptr;
 
 extern const std::string kDefaultColumnFamilyName;
+extern const std::string kPersistentStatsColumnFamilyName;
 struct ColumnFamilyDescriptor {
   std::string name;
   ColumnFamilyOptions options;
@@ -1234,6 +1236,13 @@ class DB {
   // be set properly
   virtual Status GetDbIdentity(std::string& identity) const = 0;
 
+  // Return a unique identifier for each DB object that is opened
+  // This DB session ID should be unique among all open DB instances on all
+  // hosts, and should be unique among re-openings of the same or other DBs.
+  // (Two open DBs have the same identity from other function GetDbIdentity when
+  // one is physically copied from the other.)
+  virtual Status GetDbSessionId(std::string& session_id) const = 0;
+
   // Returns default column family handle
   virtual ColumnFamilyHandle* DefaultColumnFamily() const = 0;
 
@@ -1272,6 +1281,15 @@ class DB {
 
   // Needed for StackableDB
   virtual DB* GetRootDB() { return this; }
+
+  // Given a window [start_time, end_time), setup a StatsHistoryIterator
+  // to access stats history. Note the start_time and end_time are epoch
+  // time measured in seconds, and end_time is an exclusive bound.
+  virtual Status GetStatsHistory(
+      uint64_t /*start_time*/, uint64_t /*end_time*/,
+      std::unique_ptr<StatsHistoryIterator>* /*stats_iterator*/) {
+    return Status::NotSupported("GetStatsHistory() is not implemented.");
+  }
 
  private:
   // No copying allowed

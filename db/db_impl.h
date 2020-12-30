@@ -65,7 +65,14 @@ namespace rocksdb {
 
 class Arena;
 class ArenaWrappedDBIter;
+class InMemoryStatsHistoryIterator;
 class MemTable;
+class PersistentStatsHistoryIterator;
+class PeriodicWorkScheduler;
+#ifndef NDEBUG
+class PeriodicWorkTestScheduler;
+#endif  // !NDEBUG
+
 class TableCache;
 class Version;
 class VersionEdit;
@@ -74,6 +81,8 @@ class WriteCallback;
 struct JobContext;
 struct ExternalSstFileInfo;
 struct MemTableInfo;
+
+const uint64_t kMicrosInSecond = 1000 * 1000;
 
 class DBImpl : public DB {
  public:
@@ -247,6 +256,18 @@ class DBImpl : public DB {
 
   virtual bool SetPreserveDeletesSequenceNumber(SequenceNumber seqnum) override;
 
+  virtual Status GetDbIdentity(std::string& identity) const override;
+
+  virtual Status GetDbSessionId(std::string& session_id) const override;
+  ColumnFamilyHandle* DefaultColumnFamily() const override;
+
+  ColumnFamilyHandle* PersistentStatsColumnFamily() const;
+
+  virtual Status Close() override;
+
+  Status GetStatsHistory(
+      uint64_t start_time, uint64_t end_time,
+      std::unique_ptr<StatsHistoryIterator>* stats_iterator) override;
 #ifndef ROCKSDB_LITE
   using DB::ResetStats;
   virtual Status ResetStats() override;
@@ -359,8 +380,6 @@ class DBImpl : public DB {
   // match to our in-memory records
   virtual Status CheckConsistency(bool read_only);
 
-  virtual Status GetDbIdentity(std::string& identity) const override;
-
   Status RunManualCompaction(
       ColumnFamilyData* cfd, int input_level, int output_level,
       uint32_t output_path_id, uint32_t max_subcompactions, const Slice* begin,
@@ -469,7 +488,9 @@ class DBImpl : public DB {
   int TEST_BGGarbageCollectionAllowed() const;
   int TEST_BGFlushesAllowed() const;
   size_t TEST_GetWalPreallocateBlockSize(uint64_t write_buffer_size) const;
-  void TEST_WaitForTimedTaskRun(std::function<void()> callback) const;
+  void TEST_WaitForStatsDumpRun(std::function<void()> callback) const;
+  bool TEST_IsPersistentStatsEnabled() const;
+  size_t TEST_EstiamteStatsHistorySize() const;
 
 #endif  // NDEBUG
 
@@ -521,8 +542,6 @@ class DBImpl : public DB {
                           bool schedule_only = false);
 
   void SchedulePurge();
-
-  ColumnFamilyHandle* DefaultColumnFamily() const override;
 
   const SnapshotList& snapshots() const { return snapshots_; }
 
@@ -731,14 +750,59 @@ class DBImpl : public DB {
                      std::vector<ColumnFamilyHandle*>* handles, DB** dbptr,
                      const bool seq_per_batch, const bool batch_per_txn);
 
-  virtual Status Close() override;
-
   static Status CreateAndNewDirectory(Env* env, const std::string& dirname,
                                       std::unique_ptr<Directory>* directory);
+  // find stats map from stats_history_ with smallest timestamp in
+  // the range of [start_time, end_time)
+  bool FindStatsByTime(uint64_t start_time, uint64_t end_time,
+                       uint64_t* new_time,
+                       std::map<std::string, uint64_t>* stats_map);
 
+  // Print information of all tombstones of all iterators to the std::string
+  // This is only used by ldb. The output might be capped. Tombstones
+  // printed out are not guaranteed to be in any order.
+  Status TablesRangeTombstoneSummary(ColumnFamilyHandle* column_family,
+                                     int  ,
+                                     std::string* out_str);
+
+#ifndef NDEBUG
+
+  Status TEST_FlushMemTable(ColumnFamilyData* cfd,
+                            const FlushOptions& flush_opts);
+
+  // Flush (multiple) ColumnFamilyData without using ColumnFamilyHandle. This
+  // is because in certain cases, we can flush column families, wait for the
+  // flush to complete, but delete the column family handle before the wait
+  // finishes. For example in CompactRange.
+  Status TEST_AtomicFlushMemTables(const autovector<ColumnFamilyData*>& cfds,
+                                   const FlushOptions& flush_opts);
+  size_t TEST_EstimateInMemoryStatsHistorySize() const;
+
+  VersionSet* TEST_GetVersionSet() const { return versions_.get(); }
+
+#ifndef ROCKSDB_LITE
+  PeriodicWorkTestScheduler* TEST_GetPeriodicWorkScheduler() const;
+#endif  // !ROCKSDB_LITE
+
+#endif  // NDEBUG
+
+  // persist stats to column family "_persistent_stats"
+  void PersistStats();
+
+  // dump rocksdb.stats to LOG
+  void DumpStats();
+
+  // flush LOG out of application buffer
+  void FlushInfoLog();
+
+  void ScheduleGCTTL();
  protected:
   Env* const env_;
   const std::string dbname_;
+  std::string db_id_;
+  // db_session_id_ is an identifier that gets reset
+  // every time the DB is opened
+  std::string db_session_id_;
   std::unique_ptr<VersionSet> versions_;
   // Flag to check whether we allocated and own the info log file
   bool own_info_log_;
@@ -838,7 +902,30 @@ class DBImpl : public DB {
 
   // Actual implementation of Close()
   Status CloseImpl();
+  // Recover the descriptor from persistent storage.  May do a significant
+  // amount of work to recover recently logged updates.  Any changes to
+  // be made to the descriptor are added to *edit.
+  // recovered_seq is set to less than kMaxSequenceNumber if the log's tail is
+  // skipped.
+  virtual Status Recover(
+      const std::vector<ColumnFamilyDescriptor>& column_families,
+      bool read_only = false, bool error_if_log_file_exist = false,
+      bool error_if_data_exists_in_logs = false);
 
+  virtual bool OwnTablesAndLogs() const { return true; }
+
+  // REQUIRES: db mutex held when calling this function, but the db mutex can
+  // be released and re-acquired. Db mutex will be held when the function
+  // returns.
+  // After best-efforts recovery, there may be SST files in db/cf paths that are
+  // not referenced in the MANIFEST. We delete these SST files. In the
+  // meantime, we find out the largest file number present in the paths, and
+  // bump up the version set's next_file_number_ to be 1 + largest_file_number.
+  Status FinishBestEffortsRecovery();
+
+  // SetDbSessionId() should be called in the constuctor DBImpl()
+  // to ensure that db_session_id_ gets updated every time the DB is opened
+  void SetDbSessionId();
  private:
   friend class DB;
   friend class ErrorHandler;
@@ -859,6 +946,9 @@ class DBImpl : public DB {
   friend class CompactedDBImpl;
   friend class DBTest_ConcurrentFlushWAL_Test;
   friend class DBTest_MixedSlowdownOptionsStop_Test;
+  friend class DBCompactionTest_CompactBottomLevelFilesWithDeletions_Test;
+  friend class DBCompactionTest_CompactionDuringShutdown_Test;
+  friend class StatsHistoryTest_PersistentStatsCreateColumnFamilies_Test;
 #ifndef NDEBUG
   friend class DBTest2_ReadCallbackTest_Test;
   friend class WriteCallbackTest_WriteWithCallbackTest_Test;
@@ -885,12 +975,20 @@ class DBImpl : public DB {
   struct PrepickedCompaction;
   struct PurgeFileInfo;
 
-  // Recover the descriptor from persistent storage.  May do a significant
-  // amount of work to recover recently logged updates.  Any changes to
-  // be made to the descriptor are added to *edit.
-  Status Recover(const std::vector<ColumnFamilyDescriptor>& column_families,
-                 bool read_only = false, bool error_if_log_file_exist = false,
-                 bool error_if_data_exists_in_logs = false);
+  // Initialize the built-in column family for persistent stats. Depending on
+  // whether on-disk persistent stats have been enabled before, it may either
+  // create a new column family and column family handle or just a column family
+  // handle.
+  // Required: DB mutex held
+  Status InitPersistStatsColumnFamily();
+
+  // Persistent Stats column family has two format version key which are used
+  // for compatibility check. Write format version if it's created for the
+  // first time, read format version and check compatibility if recovering
+  // from disk. This function requires DB mutex held at entrance but may
+  // release and re-acquire DB mutex in the process.
+  // Required: DB mutex held
+  Status PersistentStatsProcessFormatVersion();
 
   Status ResumeImpl();
 
@@ -1143,15 +1241,11 @@ class DBImpl : public DB {
                                bool* sfm_bookkeeping, LogBuffer* log_buffer);
 
   // Schedule background tasks
-  void StartTimedTasks();
+  void StartPeriodicWorkScheduler();
 
   void PrintStatistics();
 
-  // dump rocksdb.stats to LOG
-  void DumpStats();
-
-  //
-  void ScheduleGCTTL();
+  size_t EstimateInMemoryStatsHistorySize() const;
 
   // Return the minimum empty level that could hold the total data in the
   // input level. Return the input level, if such level could not be found.
@@ -1193,6 +1287,8 @@ class DBImpl : public DB {
   // Lock over the persistent DB state.  Non-nullptr iff successfully acquired.
   FileLock* db_lock_;
 
+  // In addition to mutex_, log_write_mutex_ protected writes to stats_history_
+  InstrumentedMutex stats_history_mutex_;
   // In addition to mutex_, log_write_mutex_ protected writes to logs_ and
   // logfile_number_. With two_write_queues it also protects alive_log_files_,
   // and log_empty_. Refer to the definition of each variable below for more
@@ -1279,6 +1375,9 @@ class DBImpl : public DB {
     // true for some prefix of logs_
     bool getting_synced = false;
   };
+
+  ColumnFamilyHandleImpl* persist_stats_cf_handle_;
+  bool persistent_stats_cfd_exists_ = true;
   // Without two_write_queues, read and writes to alive_log_files_ are
   // protected by mutex_. However since back() is never popped, and push_back()
   // is done only from write_thread_, the same thread can access the item
@@ -1323,6 +1422,12 @@ class DBImpl : public DB {
   autovector<log::Writer*> logs_to_free_;
 
   bool is_snapshot_supported_;
+
+  std::map<uint64_t, std::map<std::string, uint64_t>> stats_history_;
+
+  std::map<std::string, uint64_t> stats_slice_;
+
+  bool stats_slice_initialized_ = false;
 
   // Class to maintain directories for all database paths other than main one.
   class Directories {
@@ -1587,10 +1692,6 @@ class DBImpl : public DB {
   // Only to be set during initialization
   std::unique_ptr<PreReleaseCallback> recoverable_state_pre_release_callback_;
 
-  // handle for scheduling jobs at fixed intervals
-  // REQUIRES: mutex locked
-  std::unique_ptr<rocksdb::RepeatableThread> thread_dump_stats_;
-
   // No copying allowed
   DBImpl(const DBImpl&);
   void operator=(const DBImpl&);
@@ -1633,6 +1734,13 @@ class DBImpl : public DB {
 
   size_t GetWalPreallocateBlockSize(uint64_t write_buffer_size) const;
   Env::WriteLifeTimeHint CalculateWALWriteHint() { return Env::WLTH_SHORT; }
+#ifndef ROCKSDB_LITE
+  // Scheduler to run DumpStats(), PersistStats(), and FlushInfoLog().
+  // Currently, it always use a global instance from
+  // PeriodicWorkScheduler::Default(). Only in unittest, it can be overrided by
+  // PeriodicWorkTestScheduler.
+  PeriodicWorkScheduler* periodic_work_scheduler_;
+#endif
 
   // When set, we use a separate queue for writes that dont write to memtable.
   // In 2PC these are the writes at Prepare phase.

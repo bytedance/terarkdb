@@ -47,6 +47,11 @@ LIB_SOURCES =                                                   \
   db/memtable_list.cc                                           \
   db/merge_helper.cc                                            \
   db/merge_operator.cc                                          \
+<<<<<<< HEAD
+=======
+  db/output_validator.cc                                        \
+  db/periodic_work_scheduler.cc                                 \
+>>>>>>> 1e0090973... Periodically flush info log out of application buffer (#7488)
   db/range_del_aggregator.cc                                    \
   db/range_tombstone_fragmenter.cc                              \
   db/repair.cc                                                  \
@@ -81,10 +86,12 @@ LIB_SOURCES =                                                   \
   memtable/write_buffer_manager.cc                              \
   monitoring/histogram.cc                                       \
   monitoring/histogram_windowing.cc                             \
+  monitoring/in_memory_stats_history.cc                         \
   monitoring/instrumented_mutex.cc                              \
   monitoring/iostats_context.cc                                 \
   monitoring/perf_context.cc                                    \
   monitoring/perf_level.cc                                      \
+  monitoring/persistent_stats_history.cc                        \
   monitoring/statistics.cc                                      \
   monitoring/thread_status_impl.cc                              \
   monitoring/thread_status_updater.cc                           \
@@ -99,6 +106,7 @@ LIB_SOURCES =                                                   \
   options/options_sanity_check.cc                               \
   port/port_posix.cc                                            \
   port/stack_trace.cc                                           \
+<<<<<<< HEAD
   table/adaptive_table_factory.cc                               \
   table/block.cc                                                \
   table/block_based_filter_block.cc                             \
@@ -115,6 +123,27 @@ LIB_SOURCES =                                                   \
   table/data_block_hash_index.cc                                \
   table/data_block_footer.cc                                    \
   table/flush_block_policy.cc                                   \
+=======
+  table/adaptive/adaptive_table_factory.cc                      \
+  table/block_based/block.cc                                    \
+  table/block_based/block_based_filter_block.cc                 \
+  table/block_based/block_based_table_builder.cc                \
+  table/block_based/block_based_table_factory.cc                \
+  table/block_based/block_based_table_reader.cc                 \
+  table/block_based/block_builder.cc                            \
+  table/block_based/block_prefix_index.cc                       \
+  table/block_based/data_block_hash_index.cc                    \
+  table/block_based/data_block_footer.cc                        \
+  table/block_based/flush_block_policy.cc                       \
+  table/block_based/full_filter_block.cc                        \
+  table/block_based/index_builder.cc                            \
+  table/block_based/partitioned_filter_block.cc                 \
+  table/block_fetcher.cc                             		\
+  table/bloom_block.cc                               		\
+  table/cuckoo/cuckoo_table_builder.cc                          \
+  table/cuckoo/cuckoo_table_factory.cc                          \
+  table/cuckoo/cuckoo_table_reader.cc                           \
+>>>>>>> 671d15cbd... Persistent Stats: persist stats history to disk (#5046)
   table/format.cc                                               \
   table/full_filter_block.cc                                    \
   table/get_context.cc                                          \
@@ -247,21 +276,32 @@ LIB_SOURCES_ASM =
 LIB_SOURCES_C =
 endif
 
-TOOL_LIB_SOURCES = \
+TOOL_LIB_SOURCES =                                              \
   tools/ldb_cmd.cc                                              \
   tools/ldb_tool.cc                                             \
   tools/sst_dump_tool.cc                                        \
 
+<<<<<<< HEAD
 ANALYZER_LIB_SOURCES = \
   tools/trace_analyzer_tool.cc                                  \
 
 MOCK_LIB_SOURCES = \
   table/mock_table.cc \
   util/fault_injection_test_env.cc
+=======
+ANALYZER_LIB_SOURCES =                                          \
+  tools/block_cache_trace_analyzer.cc                           \
+  tools/trace_analyzer_tool.cc                                  \
 
-BENCH_LIB_SOURCES = \
+MOCK_LIB_SOURCES =                                              \
+  table/mock_table.cc                                           \
+  test_util/fault_injection_test_env.cc
+>>>>>>> 671d15cbd... Persistent Stats: persist stats history to disk (#5046)
+
+BENCH_LIB_SOURCES =                                             \
   tools/db_bench_tool.cc                                        \
 
+<<<<<<< HEAD
 EXP_LIB_SOURCES = \
   utilities/col_buf_decoder.cc                                  \
   utilities/col_buf_encoder.cc                                  \
@@ -271,6 +311,12 @@ TEST_LIB_SOURCES = \
   db/db_test_util.cc                                            \
   util/testharness.cc                                           \
   util/testutil.cc                                              \
+=======
+TEST_LIB_SOURCES =                                              \
+  db/db_test_util.cc                                            \
+  test_util/testharness.cc                                      \
+  test_util/testutil.cc                                         \
+>>>>>>> 671d15cbd... Persistent Stats: persist stats history to disk (#5046)
   utilities/cassandra/test_utils.cc                             \
 
 MAIN_SOURCES =                                                          \
@@ -339,7 +385,11 @@ MAIN_SOURCES =                                                          \
   db/options_file_test.cc                                               \
   db/partitioned_filter_block_test.cc                                   \
   db/perf_context_test.cc                                               \
+<<<<<<< HEAD
   db/persistent_cache_test.cc                                           \
+=======
+  db/periodic_work_scheduler_test.cc                                    \
+>>>>>>> 1e0090973... Periodically flush info log out of application buffer (#7488)
   db/plain_table_db_test.cc                                             \
   db/prefix_test.cc                                                     \
   db/redis_test.cc                                                      \
@@ -368,9 +418,25 @@ MAIN_SOURCES =                                                          \
   monitoring/histogram_test.cc                                          \
   monitoring/iostats_context_test.cc                                    \
   monitoring/statistics_test.cc                                         \
+<<<<<<< HEAD
+<<<<<<< HEAD
+  monitoring/stats_dump_scheduler_test.cc                               \
+=======
+>>>>>>> 1e0090973... Periodically flush info log out of application buffer (#7488)
+  monitoring/stats_history_test.cc                                      \
+  options/options_settable_test.cc
   options/options_test.cc                                               \
   table/block_based_filter_block_test.cc                                \
   table/block_test.cc                                                   \
+=======
+  monitoring/stats_history_test.cc                                      \
+  options/options_test.cc                                               \
+  table/block_based/block_based_filter_block_test.cc                    \
+  table/block_based/block_test.cc                                       \
+  table/block_based/data_block_hash_index_test.cc                       \
+  table/block_based/full_filter_block_test.cc                           \
+  table/block_based/partitioned_filter_block_test.cc                    \
+>>>>>>> 671d15cbd... Persistent Stats: persist stats history to disk (#5046)
   table/cleanable_test.cc                                               \
   table/cuckoo_table_builder_test.cc                                    \
   table/cuckoo_table_reader_test.cc                                     \
@@ -391,9 +457,14 @@ MAIN_SOURCES =                                                          \
   tools/ldb_cmd_test.cc                                                 \
   tools/reduce_levels_test.cc                                           \
   tools/sst_dump_test.cc                                                \
+<<<<<<< HEAD
   tools/trace_analyzer_test.cc                                          \
   util/arena_test.cc                                                    \
   util/auto_roll_logger_test.cc                                         \
+=======
+  tools/trace_analyzer_test.cc				             	\
+  trace_replay/block_cache_tracer_test.cc                               \
+>>>>>>> 671d15cbd... Persistent Stats: persist stats history to disk (#5046)
   util/autovector_test.cc                                               \
   util/bloom_test.cc                                                    \
   util/coding_test.cc                                                   \
@@ -406,6 +477,7 @@ MAIN_SOURCES =                                                          \
   util/repeatable_thread_test.cc                                        \
   util/slice_transform_test.cc                                          \
   util/timer_queue_test.cc                                              \
+  util/timer_test.cc                                                    \
   util/thread_list_test.cc                                              \
   util/thread_local_test.cc                                             \
   utilities/backupable/backupable_db_test.cc                            \
