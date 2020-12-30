@@ -1011,7 +1011,7 @@ if(WITH_TESTS)
         options/options_settable_test.cc
         options/options_test.cc
         table/block_based_filter_block_test.cc
-        table/block_based_table_builder_ttl_test.cc
+        table/block_based_table_row_ttl_test.cc
         util/timer_test.cc
   )
   if(WITH_LIBRADOS)
