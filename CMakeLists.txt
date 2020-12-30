@@ -933,6 +933,7 @@ if(WITH_TESTS)
           table/block_based_table_row_ttl_test.cc
           db/db_impl_gc_ttl_test.cc
           db/periodic_work_scheduler_test.cc
+          db/db_options_test.cc
           options/options_settable_test.cc
           util/timer_test.cc
           monitoring/histogram_test.cc
