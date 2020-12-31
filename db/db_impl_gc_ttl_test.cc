@@ -52,7 +52,6 @@ class DBImplGCTTL_Test : public DBTestBase {
                                                    });
     rocksdb::SyncPoint::GetInstance()->SetCallBack(
         "DBImpl:ScheduleGCTTL-mark", [&](void* /*arg*/) {
-          std::cout << mark << std::endl;
           mark++;
         });
   }

@@ -945,7 +945,6 @@ void DBImpl::ScheduleGCTTL() {
                 sst->prop.ratio_expire_time, sst->prop.scan_gap_expire_time,
                 nowSeconds);
           if (sst->marked_for_compaction) {
-            std::cout << sst->marked_for_compaction << std::endl;
             TEST_SYNC_POINT("DBImpl:ScheduleGCTTL-mark");
             mark_count++;
           }
