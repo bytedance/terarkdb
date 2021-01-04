@@ -11,9 +11,9 @@
 #include "port/port.h"
 #include "port/stack_trace.h"
 #include "rocksdb/sst_file_manager.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/sst_file_manager_impl.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBSSTTest : public DBTestBase {
@@ -182,7 +182,7 @@ TEST_F(DBSSTTest, DeleteObsoleteFilesPendingOutputs) {
   options.max_background_compactions = 2;
   options.enable_lazy_compaction = false;
   options.blob_size = -1;
-  
+
   OnFileDeletionListener* listener = new OnFileDeletionListener();
   options.listeners.emplace_back(listener);
 
@@ -268,7 +268,8 @@ TEST_F(DBSSTTest, DBWithSstFileManager) {
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "SstFileManagerImpl::OnAddFile", [&](void* /*arg*/) { files_added++; });
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
-      "SstFileManagerImpl::OnDeleteFile", [&](void* /*arg*/) { files_deleted++; });
+      "SstFileManagerImpl::OnDeleteFile",
+      [&](void* /*arg*/) { files_deleted++; });
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "SstFileManagerImpl::OnMoveFile", [&](void* /*arg*/) { files_moved++; });
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
@@ -370,7 +371,7 @@ TEST_F(DBSSTTest, RateLimitedDelete) {
   options.stats_persist_period_sec = 0;
   options.env = env_;
 
-  int64_t rate_bytes_per_sec = 1024 * 10;  // 10 Kbs / Sec
+  int64_t rate_bytes_per_sec = 1024 * 100;  // 10 Kbs / Sec
   Status s;
   options.sst_file_manager.reset(
       NewSstFileManager(env_, nullptr, "", 0, false, &s, 0));
@@ -454,8 +455,7 @@ TEST_F(DBSSTTest, DeleteSchedulerMultipleDBPaths) {
   // The deletion scheduler sometimes skips marking file as trash according to
   // a heuristic. In that case the deletion will go through the below SyncPoint.
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
-      "DeleteScheduler::DeleteFile",
-      [&](void* /*arg*/) { bg_delete_file++; });
+      "DeleteScheduler::DeleteFile", [&](void* /*arg*/) { bg_delete_file++; });
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
 
   Options options = CurrentOptions();
@@ -632,7 +632,9 @@ TEST_F(DBSSTTest, CancellingCompactionsWorks) {
   ASSERT_GT(completed_compactions, 0);
   ASSERT_EQ(sfm->GetCompactionsReservedSize(), 0);
   // Make sure the stat is bumped
-  ASSERT_GT(dbfull()->immutable_db_options().statistics.get()->getTickerCount(COMPACTION_CANCELLED), 0);
+  ASSERT_GT(dbfull()->immutable_db_options().statistics.get()->getTickerCount(
+                COMPACTION_CANCELLED),
+            0);
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
 }
 
