@@ -178,7 +178,7 @@ TEST_F(DBSSTTest, DeleteObsoleteFilesPendingOutputs) {
   options.level0_file_num_compaction_trigger =
       2;  // trigger compaction when we have 2 files
   options.max_background_flushes = 2;
-  options.max_background_compactions = 2;RateLimitedDelete
+  options.max_background_compactions = 2;
   options.enable_lazy_compaction = false;
   options.blob_size = -1;
   
