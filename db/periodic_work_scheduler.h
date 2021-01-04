@@ -39,6 +39,7 @@ class PeriodicWorkScheduler {
   // log messages leading up to the hang will eventually become visible in the
   // log.
   static const uint64_t kDefaultFlushInfoLogPeriodSec = 10;
+  static const uint64_t kDefaultScheduleGCTTLPeriodSec = 10;
 
  protected:
   std::unique_ptr<Timer> timer;

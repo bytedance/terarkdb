@@ -24,7 +24,6 @@ class DBImplGCTTL_Test : public DBTestBase {
     options.ttl_scan_gap = 10;
     options.ttl_extractor_factory.reset(new test::TestTtlExtractorFactory());
     options.level0_file_num_compaction_trigger = 8;
-    options.stats_dump_period_sec = 10;
     options.table_factory.reset(
         new BlockBasedTableFactory(BlockBasedTableOptions()));
   }
@@ -79,7 +78,6 @@ TEST_F(DBImplGCTTL_Test, L0FileExpiredTest) {
     dbfull()->Flush(FlushOptions());
   }
   //  dbfull()->StartPeriodicWorkScheduler();
-  ASSERT_EQ(10, dbfull()->GetDBOptions().stats_dump_period_sec);
   dbfull()->TEST_WaitForStatsDumpRun([&] { mock_env_->set_current_time(ttl); });
   ASSERT_TRUE(flag);
   ASSERT_EQ(L0FilesNums, mark);

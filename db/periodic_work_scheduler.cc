@@ -39,12 +39,18 @@ void PeriodicWorkScheduler::Register(DBImpl* dbi,
              initial_delay.fetch_add(1) % kDefaultFlushInfoLogPeriodSec *
                  kMicrosInSecond,
              kDefaultFlushInfoLogPeriodSec * kMicrosInSecond);
+  timer->Add([dbi]() { dbi->ScheduleGCTTL(); },
+             GetTaskName(dbi, "schedule_gc_ttl"),
+             initial_delay.fetch_add(1) % kDefaultScheduleGCTTLPeriodSec *
+             kMicrosInSecond,
+             kDefaultScheduleGCTTLPeriodSec * kMicrosInSecond);
 }
 
 void PeriodicWorkScheduler::Unregister(DBImpl* dbi) {
   timer->Cancel(GetTaskName(dbi, "dump_st"));
   timer->Cancel(GetTaskName(dbi, "pst_st"));
   timer->Cancel(GetTaskName(dbi, "flush_info_log"));
+  timer->Cancel(GetTaskName(dbi, "schedule_gc_ttl"));
   if (!timer->HasPendingTask()) {
     timer->Shutdown();
   }
