@@ -164,8 +164,10 @@ bool PatriciaTrieRep::Contains(const Slice& internal_key) const {
       auto vector =
           (details::tag_vector_t*)trie->mem_get(*(uint32_t*)token->value());
       uint64_t size_loc = vector->size_loc.load(std::memory_order_relaxed);
-      auto data = (details::tag_vector_t::data_t*)trie->mem_get((uint32_t)size_loc);
-      bool ret = terark::binary_search_0(data, (size_loc >> 32) & SIZE_MASK, tag);
+      auto data =
+          (details::tag_vector_t::data_t*)trie->mem_get((uint32_t)size_loc);
+      bool ret =
+          terark::binary_search_0(data, (size_loc >> 32) & SIZE_MASK, tag);
       token->idle();
       return ret;
     }
@@ -205,7 +207,7 @@ void PatriciaTrieRep::Get(const LookupKey& k, void* callback_args,
     auto trie = heap->trie();
     auto vector = (details::tag_vector_t*)trie->mem_get(heap->loc);
     auto data = (details::tag_vector_t::data_t*)trie->mem_get(
-      (uint32_t)vector->size_loc.load(std::memory_order_relaxed));
+        (uint32_t)vector->size_loc.load(std::memory_order_relaxed));
     auto value = (const char*)trie->mem_get(data[heap->idx].loc);
     return callback_func(callback_args, Slice(buffer->data(), buffer->size()),
                          value);
@@ -224,8 +226,10 @@ void PatriciaTrieRep::Get(const LookupKey& k, void* callback_args,
       uint32_t loc = token->value_of<uint32_t>();
       auto vector = (details::tag_vector_t*)trie->mem_get(loc);
       uint64_t size_loc = vector->size_loc.load(std::memory_order_relaxed);
-      auto data = (details::tag_vector_t::data_t*)trie->mem_get((uint32_t)size_loc);
-      size_t idx = terark::upper_bound_0(data, (size_loc >> 32) & SIZE_MASK, tag) - 1;
+      auto data =
+          (details::tag_vector_t::data_t*)trie->mem_get((uint32_t)size_loc);
+      size_t idx =
+          terark::upper_bound_0(data, (size_loc >> 32) & SIZE_MASK, tag) - 1;
       if (idx != size_t(-1)) {
         heap.emplace_back(HeapItem{(uint32_t)idx, loc, data[idx].tag, token});
         continue;
@@ -318,9 +322,11 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice& internal_key,
         do {
           size_loc = vector->size_loc.load(std::memory_order_relaxed);
         } while (size_loc & LOCK_FLAG);
-        size_loc = vector->size_loc.fetch_or(LOCK_FLAG, std::memory_order_acq_rel);
+        size_loc =
+            vector->size_loc.fetch_or(LOCK_FLAG, std::memory_order_acq_rel);
       } while (size_loc & LOCK_FLAG);
-      auto* data = (details::tag_vector_t::data_t*)trie->mem_get((uint32_t)size_loc);
+      auto* data =
+          (details::tag_vector_t::data_t*)trie->mem_get((uint32_t)size_loc);
       uint32_t size = (size_loc >> 32);
       assert(size > 0);
       size_t insert_pos = terark::lower_bound_ex_n(
@@ -336,11 +342,13 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice& internal_key,
         data[size].tag = tag;
 
         // update 'size' and unlock
-        vector->size_loc.store(size_loc + (1ULL << 32), std::memory_order_release);
+        vector->size_loc.store(size_loc + (1ULL << 32),
+                               std::memory_order_release);
         return details::InsertResult::Success;
       }
-      size_t old_data_cap = sizeof(details::tag_vector_t::data_t) *
-        (1u << (32 - details::tag_vector_t::full(size) - fast_clz32(size)));
+      size_t old_data_cap =
+          sizeof(details::tag_vector_t::data_t) *
+          (1u << (32 - details::tag_vector_t::full(size) - fast_clz32(size)));
       size_t cow_data_loc = trie->mem_alloc(
           old_data_cap * (1 + details::tag_vector_t::full(size)));
       if (cow_data_loc == MainPatricia::mem_alloc_fail) {
@@ -356,7 +364,8 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice& internal_key,
       cow_data[insert_pos].tag = tag;
       memcpy(cow_data + insert_pos + 1, data + insert_pos,
              sizeof(details::tag_vector_t::data_t) * (size - insert_pos));
-      vector->size_loc.store((uint64_t(size + 1) << 32) + cow_data_loc, std::memory_order_release);
+      vector->size_loc.store((uint64_t(size + 1) << 32) + cow_data_loc,
+                             std::memory_order_release);
       trie->mem_lazy_free((uint32_t)size_loc, old_data_cap);
       return details::InsertResult::Success;
     } else if (token->value() != nullptr) {
@@ -391,7 +400,8 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice& internal_key,
         auto vector =
             (details::tag_vector_t*)trie->mem_get(token->value_of<uint32_t>());
         uint64_t size_loc = vector->size_loc.load(std::memory_order_relaxed);
-        auto data = (details::tag_vector_t::data_t*)trie->mem_get((uint32_t)size_loc);
+        auto data =
+            (details::tag_vector_t::data_t*)trie->mem_get((uint32_t)size_loc);
         if (terark::binary_search_0(data, (size_loc >> 32) & SIZE_MASK, tag)) {
           return false;
         }

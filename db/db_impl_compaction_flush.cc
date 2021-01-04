@@ -2659,7 +2659,8 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
 
   if (!c) {
     // Nothing to do
-    ROCKS_LOG_BUFFER(log_buffer, "Compaction nothing to do");
+    ROCKS_LOG_BUFFER(log_buffer, "[%s] Compaction nothing to do",
+                     c->column_family_data()->GetName().c_str());
   } else if (c->deletion_compaction()) {
     // TODO(icanadi) Do we want to honor snapshots here? i.e. not delete old
     // file if there is alive snapshot pointing to it
@@ -3001,7 +3002,8 @@ Status DBImpl::BackgroundGarbageCollection(bool* made_progress,
 
   if (!c) {
     // Nothing to do
-    ROCKS_LOG_BUFFER(log_buffer, "GarbageCollection nothing to do");
+    ROCKS_LOG_BUFFER(log_buffer, "[%s] GarbageCollection nothing to do",
+                     c->column_family_data()->GetName().c_str());
   } else {
     int output_level __attribute__((__unused__));
     output_level = c->output_level();
