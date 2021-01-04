@@ -13,10 +13,6 @@ IF(CMAKE_BUILD_TYPE STREQUAL "" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebug")
   SET(CMAKE_BUILD_TYPE "RelWithDebInfo")
 ENDIF()
 
-# Change `RelWithDebInfo` g2 -O2 -DDEBUG`
-string(REGEX REPLACE "-DNDEBUG " "" CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -DDEBUG" )
-string(REGEX REPLACE "-DNDEBUG " "" CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO} -DDEBUG" )
-
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/modules/")
 SET(CMAKE_INSTALL_LIBDIR ${CMAKE_BINARY_DIR}/lib)
 SET(CMAKE_INSTALL_BINDIR ${CMAKE_BINARY_DIR}/bin)
@@ -31,9 +27,11 @@ option(WITH_ZSTD "build with zstd" ON)
 option(WITH_BZ2 "build with bzip2" ON)
 option(WITH_WINDOWS_UTF8_FILENAMES "use UTF8 as characterset for opening files, regardles of the system code page" OFF)
 option(WITH_BYTEDANCE_METRICS "build with bytedance internal metrics" OFF)
-option(WITH_ASAN "build with ASAN" ON)
+option(WITH_ASAN "build with ASAN" OFF)
 option(WITH_GFLAGS "build with GFlags" ON)
-option(WITH_TESTS "build with tests" OFF)
+include(CMakeDependentOption)
+# Tests are excluded from Release builds
+CMAKE_DEPENDENT_OPTION(WITH_TESTS "build with tests" ON "CMAKE_BUILD_TYPE STREQUAL Debug" OFF)
 option(WITH_TOOLS "build with tools" OFF)
 option(WITH_TERARK_ZIP "build with TerarkZipTable support" ON)
 option(WITH_BOOSTLIB "build with boost, if WITH_TERARK_ZIP is ON, this will also set to ON" OFF)
@@ -45,16 +43,6 @@ SET(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 Find_Package(Threads REQUIRED)
 
 #----------------------- Global Options
-if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin" OR CMAKE_BUILD_TYPE STREQUAL "Release" OR WITH_JEMALLOC)
-  set(WITH_ASAN OFF)
-endif()
-
-
-# RocksDB's UT has to be run under Debug or RelWithDebInfo mode
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-  SET(WITH_TESTS OFF CACHE BOOL OFF)
-endif()
-
 if (WITH_WINDOWS_UTF8_FILENAMES)
   add_definitions(-DROCKSDB_WINDOWS_UTF8_FILENAMES)
 endif()
@@ -254,6 +242,7 @@ endif(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
 option(PORTABLE "build a portable binary" OFF)
 option(FORCE_SSE42 "force building with SSE4.2, even when PORTABLE=ON" OFF)
 if(PORTABLE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=haswell")
   # MSVC does not need a separate compiler flag to enable SSE4.2; if nmmintrin.h
   # is available, it is available by default.
   if(FORCE_SSE42 AND NOT MSVC)
@@ -264,7 +253,7 @@ else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /arch:AVX2")
   else()
     if(NOT HAVE_POWER8)
-      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=haswell")
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
     endif()
   endif()
 endif()
@@ -371,6 +360,7 @@ if(DISABLE_STALL_NOTIF)
   add_definitions(-DROCKSDB_DISABLE_STALL_NOTIFICATION)
 endif()
 
+SET(USE_RTTI ON)
 if(DEFINED USE_RTTI)
   if(USE_RTTI)
     message(STATUS "Enabling RTTI")
