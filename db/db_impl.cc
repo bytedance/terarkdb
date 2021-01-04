@@ -960,7 +960,6 @@ void DBImpl::ScheduleGCTTL() {
   }
 }
 void DBImpl::DumpStats() {
-  ScheduleGCTTL();
   TEST_SYNC_POINT("DBImpl::DumpStats:1");
 #ifndef ROCKSDB_LITE
   const DBPropertyInfo* cf_property_info =
