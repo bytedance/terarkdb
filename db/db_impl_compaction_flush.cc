@@ -2532,10 +2532,12 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
   // InternalKey* manual_end = &manual_end_storage;
   bool sfm_reserved_compact_space = false;
   bool enable_lazy_compaction = false;
+  std::string cf_name = "(null)";
   if (is_manual) {
     ManualCompactionState* m = manual_compaction;
     assert(m->in_progress);
     enable_lazy_compaction = m->cfd->ioptions()->enable_lazy_compaction;
+    cf_name = m->cfd->GetName();
     if (!c) {
       m->done = true;
       m->manual_end = nullptr;
@@ -2583,6 +2585,7 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
 
     // cfd is referenced here
     auto cfd = PopFirstFromCompactionQueue();
+    cf_name = cfd->GetName();
     // We unreference here because the following code will take a Ref() on
     // this cfd if it is going to use it (Compaction class holds a
     // reference).
@@ -2659,7 +2662,8 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
 
   if (!c) {
     // Nothing to do
-    ROCKS_LOG_BUFFER(log_buffer, "Compaction nothing to do");
+    ROCKS_LOG_BUFFER(log_buffer, "[%s] Compaction nothing to do",
+                     cf_name.c_str());
   } else if (c->deletion_compaction()) {
     // TODO(icanadi) Do we want to honor snapshots here? i.e. not delete old
     // file if there is alive snapshot pointing to it
@@ -2939,9 +2943,11 @@ Status DBImpl::BackgroundGarbageCollection(bool* made_progress,
   }
 
   bool sfm_reserved_compact_space = false;
+  std::string cf_name = "(null)";
   if (!garbage_collection_queue_.empty()) {
     // cfd is referenced here
     auto cfd = PopFirstFromGarbageCollectionQueue();
+    cf_name = cfd->GetName();
     // We unreference here because the following code will take a Ref() on
     // this cfd if it is going to use it (GarbageCollection class holds a
     // reference).
@@ -3001,7 +3007,8 @@ Status DBImpl::BackgroundGarbageCollection(bool* made_progress,
 
   if (!c) {
     // Nothing to do
-    ROCKS_LOG_BUFFER(log_buffer, "GarbageCollection nothing to do");
+    ROCKS_LOG_BUFFER(log_buffer, "[%s] GarbageCollection nothing to do",
+                     cf_name.c_str());
   } else {
     int output_level __attribute__((__unused__));
     output_level = c->output_level();
