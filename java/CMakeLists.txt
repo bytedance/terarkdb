@@ -168,9 +168,7 @@ set(JAVA_CGLIB_JAR ${JAVA_TEST_LIBDIR}/cglib-2.2.2.jar)
 set(JAVA_ASSERTJ_JAR ${JAVA_TEST_LIBDIR}/assertj-core-1.7.1.jar)
 set(JAVA_TESTCLASSPATH ${JAVA_JUNIT_JAR} ${JAVA_HAMCR_JAR} ${JAVA_MOCKITO_JAR} ${JAVA_CGLIB_JAR} ${JAVA_ASSERTJ_JAR})
 
-add_jar(
-  rocksdbjni_classes
-  SOURCES
+set(JAVA_MAIN_AND_TEST_CLASSES
   src/main/java/org/rocksdb/AbstractCompactionFilterFactory.java
   src/main/java/org/rocksdb/AbstractCompactionFilter.java
   src/main/java/org/rocksdb/AbstractComparator.java
@@ -307,8 +305,33 @@ add_jar(
   src/test/java/org/rocksdb/WriteBatchTest.java
   src/test/java/org/rocksdb/util/CapturingWriteBatchHandler.java
   src/test/java/org/rocksdb/util/WriteBatchGetter.java
-  INCLUDE_JARS ${JAVA_TESTCLASSPATH}
 )
+
+if(${Java_VERSION_MAJOR} VERSION_GREATER_EQUAL "10" AND ${CMAKE_VERSION} VERSION_LESS "3.11.4")
+  # Java 10 and newer don't have javah, but the alternative GENERATE_NATIVE_HEADERS requires CMake 3.11.4 or newer
+  message(FATAL_ERROR "Detected Java 10 or newer (${Java_VERSION_STRING}), to build with CMake please upgrade CMake to 3.11.4 or newer")
+
+elseif(${CMAKE_VERSION} VERSION_LESS "3.11.4" OR (${Java_VERSION_MINOR} STREQUAL "7" AND ${Java_VERSION_MAJOR} STREQUAL "1"))
+  # Old CMake or Java 1.7 prepare the JAR...
+  message("Preparing Jar for Java 7")
+  add_jar(
+    rocksdbjni_classes
+    SOURCES
+    ${JAVA_MAIN_AND_TEST_CLASSES}
+    INCLUDE_JARS ${JAVA_TESTCLASSPATH}
+  )
+else ()
+  # Java 1.8 or newer prepare the JAR...
+  message("Preparing Jar for JDK ${Java_VERSION_STRING}")
+  add_jar(
+      rocksdbjni_classes
+      SOURCES
+      ${JAVA_MAIN_AND_TEST_CLASSES}
+      INCLUDE_JARS ${JAVA_TESTCLASSPATH}
+      GENERATE_NATIVE_HEADERS rocksdbjni_headers DESTINATION ${JNI_OUTPUT_DIR}
+  )
+endif()
+
 
 if(NOT EXISTS ${PROJECT_SOURCE_DIR}/java/classes)
   file(MAKE_DIRECTORY ${PROJECT_SOURCE_DIR}/java/classes)
@@ -375,12 +398,17 @@ endif()
 set(JNI_OUTPUT_DIR ${PROJECT_SOURCE_DIR}/java/include)
 
 file(MAKE_DIRECTORY ${JNI_OUTPUT_DIR})
-create_javah(
-  TARGET rocksdbjni_headers
-  CLASSES ${NATIVE_JAVA_CLASSES}
-  CLASSPATH rocksdbjni_classes ${JAVA_TESTCLASSPATH}
-  OUTPUT_DIR ${JNI_OUTPUT_DIR}
-)
+
+if(${CMAKE_VERSION} VERSION_LESS "3.11.4" OR (${Java_VERSION_MINOR} STREQUAL "7" AND ${Java_VERSION_MAJOR} STREQUAL "1"))
+  # Old CMake or Java 1.7 ONLY generate JNI headers, Java 1.8+ JNI is handled in add_jar step above
+  message("Preparing JNI headers for Java 7")
+  create_javah(
+    TARGET rocksdbjni_headers
+    CLASSES ${NATIVE_JAVA_CLASSES}
+    CLASSPATH rocksdbjni_classes ${JAVA_TESTCLASSPATH}
+    OUTPUT_DIR ${JNI_OUTPUT_DIR}
+  )
+endif()
 
 if(NOT MSVC)
   set_property(TARGET ${ROCKSDB_STATIC_LIB} PROPERTY POSITION_INDEPENDENT_CODE ON)

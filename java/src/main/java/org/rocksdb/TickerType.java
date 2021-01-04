@@ -476,15 +476,11 @@ public enum TickerType {
     NUMBER_MULTIGET_KEYS_FOUND((byte) 0x5E),
 
     /**
-     * Number of iterators created.
-     */
-    NO_ITERATOR_CREATED((byte) 0x5F),
-    /**
      * Number of iterators deleted.
      */
-    NO_ITERATOR_DELETED((byte) 0x60),
+    NO_ITERATOR_DELETED((byte) 0x5F),
 
-    TICKER_ENUM_MAX((byte) 0x61);
+    TICKER_ENUM_MAX((byte) 0x60);
 
 
     private final byte value;
