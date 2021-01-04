@@ -139,9 +139,7 @@ TEST_F(DBOptionsTest, SetBytesPerSync) {
   const std::string kValue(kValueSize, 'v');
   ASSERT_EQ(options.bytes_per_sync, dbfull()->GetDBOptions().bytes_per_sync);
   rocksdb::SyncPoint::GetInstance()->SetCallBack(
-      "WritableFileWriter::RangeSync:0", [&](void* /*arg*/) {
-        counter++;
-      });
+      "WritableFileWriter::RangeSync:0", [&](void* /*arg*/) { counter++; });
 
   WriteOptions write_opts;
   // should sync approximately 40MB/1MB ~= 40 times.
@@ -191,9 +189,7 @@ TEST_F(DBOptionsTest, SetWalBytesPerSync) {
   int counter = 0;
   int low_bytes_per_sync = 0;
   rocksdb::SyncPoint::GetInstance()->SetCallBack(
-      "WritableFileWriter::RangeSync:0", [&](void* /*arg*/) {
-        counter++;
-      });
+      "WritableFileWriter::RangeSync:0", [&](void* /*arg*/) { counter++; });
   rocksdb::SyncPoint::GetInstance()->EnableProcessing();
   const std::string kValue(kValueSize, 'v');
   int i = 0;
@@ -203,7 +199,7 @@ TEST_F(DBOptionsTest, SetWalBytesPerSync) {
   // Do not flush. If we flush here, SwitchWAL will reuse old WAL file since its
   // empty and will not get the new wal_bytes_per_sync value.
   low_bytes_per_sync = counter;
-  //5242880 = 1024 * 1024 * 5
+  // 5242880 = 1024 * 1024 * 5
   ASSERT_OK(dbfull()->SetDBOptions({{"wal_bytes_per_sync", "5242880"}}));
   ASSERT_EQ(5242880, dbfull()->GetDBOptions().wal_bytes_per_sync);
   counter = 0;
@@ -411,7 +407,7 @@ TEST_F(DBOptionsTest, SetOptionsMayTriggerCompaction) {
 TEST_F(DBOptionsTest, SetBackgroundCompactionThreads) {
   Options options;
   options.create_if_missing = true;
-  options.max_background_compactions = 1;   // default value
+  options.max_background_compactions = 1;  // default value
   options.env = env_;
   options.enable_lazy_compaction = false;
   options.blob_size = -1;
@@ -486,7 +482,8 @@ TEST_F(DBOptionsTest, SetDelayedWriteRateOption) {
   options.delayed_write_rate = 2 * 1024U * 1024U;
   options.env = env_;
   Reopen(options);
-  ASSERT_EQ(2 * 1024U * 1024U, dbfull()->TEST_write_controler().max_delayed_write_rate());
+  ASSERT_EQ(2 * 1024U * 1024U,
+            dbfull()->TEST_write_controler().max_delayed_write_rate());
 
   ASSERT_OK(dbfull()->SetDBOptions({{"delayed_write_rate", "20000"}}));
   ASSERT_EQ(20000, dbfull()->TEST_write_controler().max_delayed_write_rate());
@@ -539,7 +536,7 @@ TEST_F(DBOptionsTest, SetStatsDumpPeriodSec) {
   Close();
 }
 
-<<<<<<< HEAD
+//<<<<<<< HEAD
 TEST_F(DBOptionsTest, RunStatsDumpPeriodSec) {
   Options options;
   options.create_if_missing = true;
@@ -548,7 +545,7 @@ TEST_F(DBOptionsTest, RunStatsDumpPeriodSec) {
   options.blob_size = -1;
   std::unique_ptr<rocksdb::MockTimeEnv> mock_env;
   mock_env.reset(new rocksdb::MockTimeEnv(env_));
-  mock_env->set_current_time(0); // in seconds
+  mock_env->set_current_time(0);  // in seconds
   options.env = mock_env.get();
   int counter = 0;
   rocksdb::SyncPoint::GetInstance()->DisableProcessing();
@@ -563,9 +560,7 @@ TEST_F(DBOptionsTest, RunStatsDumpPeriodSec) {
       });
 #endif  // OS_MACOSX && !NDEBUG
   rocksdb::SyncPoint::GetInstance()->SetCallBack(
-      "DBImpl::DumpStats:1", [&](void* /*arg*/) {
-        counter++;
-      });
+      "DBImpl::DumpStats:1", [&](void* /*arg*/) { counter++; });
   rocksdb::SyncPoint::GetInstance()->EnableProcessing();
   Reopen(options);
   ASSERT_EQ(5, dbfull()->GetDBOptions().stats_dump_period_sec);

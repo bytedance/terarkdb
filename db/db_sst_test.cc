@@ -181,7 +181,7 @@ TEST_F(DBSSTTest, DeleteObsoleteFilesPendingOutputs) {
   options.max_background_compactions = 2;
   options.enable_lazy_compaction = false;
   options.blob_size = -1;
-  
+
   OnFileDeletionListener* listener = new OnFileDeletionListener();
   options.listeners.emplace_back(listener);
 
@@ -267,7 +267,8 @@ TEST_F(DBSSTTest, DBWithSstFileManager) {
   rocksdb::SyncPoint::GetInstance()->SetCallBack(
       "SstFileManagerImpl::OnAddFile", [&](void* /*arg*/) { files_added++; });
   rocksdb::SyncPoint::GetInstance()->SetCallBack(
-      "SstFileManagerImpl::OnDeleteFile", [&](void* /*arg*/) { files_deleted++; });
+      "SstFileManagerImpl::OnDeleteFile",
+      [&](void* /*arg*/) { files_deleted++; });
   rocksdb::SyncPoint::GetInstance()->SetCallBack(
       "SstFileManagerImpl::OnMoveFile", [&](void* /*arg*/) { files_moved++; });
   rocksdb::SyncPoint::GetInstance()->EnableProcessing();
@@ -369,7 +370,7 @@ TEST_F(DBSSTTest, RateLimitedDelete) {
   options.stats_persist_period_sec = 0;
   options.env = env_;
 
-  int64_t rate_bytes_per_sec = 1024 * 10;  // 10 Kbs / Sec
+  int64_t rate_bytes_per_sec = 1024 * 100;  // 10 Kbs / Sec
   Status s;
   options.sst_file_manager.reset(
       NewSstFileManager(env_, nullptr, "", 0, false, &s, 0));
@@ -453,8 +454,7 @@ TEST_F(DBSSTTest, DeleteSchedulerMultipleDBPaths) {
   // The deletion scheduler sometimes skips marking file as trash according to
   // a heuristic. In that case the deletion will go through the below SyncPoint.
   rocksdb::SyncPoint::GetInstance()->SetCallBack(
-      "DeleteScheduler::DeleteFile",
-      [&](void* /*arg*/) { bg_delete_file++; });
+      "DeleteScheduler::DeleteFile", [&](void* /*arg*/) { bg_delete_file++; });
   rocksdb::SyncPoint::GetInstance()->EnableProcessing();
 
   Options options = CurrentOptions();
@@ -631,7 +631,9 @@ TEST_F(DBSSTTest, CancellingCompactionsWorks) {
   ASSERT_GT(completed_compactions, 0);
   ASSERT_EQ(sfm->GetCompactionsReservedSize(), 0);
   // Make sure the stat is bumped
-  ASSERT_GT(dbfull()->immutable_db_options().statistics.get()->getTickerCount(COMPACTION_CANCELLED), 0);
+  ASSERT_GT(dbfull()->immutable_db_options().statistics.get()->getTickerCount(
+                COMPACTION_CANCELLED),
+            0);
   rocksdb::SyncPoint::GetInstance()->DisableProcessing();
 }
 
