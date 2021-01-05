@@ -6,6 +6,8 @@
 #include "db/table_properties_collector.h"
 
 #include "db/dbformat.h"
+#include "monitoring/histogram.h"
+#include "rocksdb/ttl_extractor.h"
 #include "util/coding.h"
 #include "util/string_util.h"
 #include "utilities/util/factory.h"
@@ -51,6 +53,79 @@ UserCollectedProperties UserKeyTablePropertiesCollector::GetReadableProperties()
     const {
   return collector_->GetReadableProperties();
 }
+
+class TtlIntTblPropCollector : public IntTblPropCollector {
+  TtlExtractor* ttl_extractor_;
+  double ttl_gc_ratio_;
+  size_t ttl_max_scan_cap_;
+  HistogramImpl histogram_;
+  std::string name_;
+
+ public:
+  TtlIntTblPropCollector(TtlExtractor* _ttl_extractor, double _ttl_gc_ratio,
+                         size_t _ttl_max_scan_cap, const std::string& _name)
+      : ttl_extractor_(_ttl_extractor),
+        ttl_gc_ratio_(_ttl_gc_ratio),
+        ttl_max_scan_cap_(_ttl_max_scan_cap),
+        name_(_name) {}
+  ~TtlIntTblPropCollector() { delete ttl_extractor_; }
+  Status Finish(UserCollectedProperties* properties) override {
+    // do nothing
+  }
+
+  const char* Name() const override { return name_.c_str(); }
+
+  // @params key    the user key that is inserted into the table.
+  // @params value  the value that is inserted into the table.
+  Status InternalAdd(const Slice& key, const Slice& value,
+                     uint64_t file_size) override {
+#error TODO
+    return Status::OK();
+  }
+
+  UserCollectedProperties GetReadableProperties() const override {
+    return UserCollectedProperties();
+  }
+};
+
+// Factory for internal table properties collector.
+class TtlIntTblPropCollectorFactory : public IntTblPropCollectorFactory {
+  TtlExtractorFactory* ttl_extractor_factory_;
+  double ttl_gc_ratio_;
+  size_t ttl_max_scan_cap_;
+  std::string name_;
+
+ public:
+  TtlIntTblPropCollectorFactory(TtlExtractorFactory* _ttl_extractor_factory,
+                                double _ttl_gc_ratio, size_t _ttl_max_scan_cap)
+      : ttl_extractor_factory_(_ttl_extractor_factory),
+        ttl_gc_ratio_(_ttl_gc_ratio),
+        ttl_max_scan_cap_(_ttl_max_scan_cap) {
+    name_ =
+        std::string("TtlCollectorFactory.") + ttl_extractor_factory_->Name();
+  }
+  // has to be thread-safe
+  IntTblPropCollector* CreateIntTblPropCollector(
+      const TablePropertiesCollectorFactory::Context& context) override {
+    TtlExtractorContext ttl_context;
+    ttl_context.column_family_id = context.column_family_id;
+    auto ttl_extractor =
+        ttl_extractor_factory_->CreateTtlExtractor(ttl_context);
+    return new TtlIntTblPropCollector(
+        ttl_extractor.release(), ttl_gc_ratio_, ttl_max_scan_cap_,
+        std::string("TtlCollector.") + ttl_extractor_factory_->Name());
+  }
+
+  // The name of the properties collector can be used for debugging purpose.
+  const char* Name() const override { name_.c_str(); }
+
+  bool NeedSerialize() const override { return false; }
+};
+
+IntTblPropCollectorFactory* NewTtlIntTblPropCollectorFactory(
+    TtlExtractorFactory* ttl_extractor_factory,
+    const TtlExtractorContext& context, double ttl_gc_ratio,
+    size_t ttl_max_scan_cap);
 
 uint64_t GetDeletedKeys(const UserCollectedProperties& props) {
   bool property_present_ignored;

@@ -74,7 +74,7 @@ extern std::string TableFileName(const std::vector<DbPath>& db_paths,
                                  uint64_t number, uint32_t path_id);
 
 // Sufficient buffer size for FormatFileNumber.
-const size_t kFormatFileNumberBufSize = 38;
+const size_t kFormatFileNumberBufSize = 128;
 
 extern void FormatFileNumber(uint64_t number, uint32_t path_id, char* out_buf,
                              size_t out_buf_size);
