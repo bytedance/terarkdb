@@ -12,6 +12,7 @@
 #include <assert.h>
 #include <stdio.h>
 
+#include <exception>
 #include <list>
 #include <map>
 #include <memory>
@@ -409,6 +410,9 @@ BlockBasedTableBuilder::BlockBasedTableBuilder(
       ttl_extractor_ =
           builder_options.ioptions.ttl_extractor_factory->CreateTtlExtractor(
               ttl_extractor_context);
+      if (ttl_extractor_ == nullptr) {
+        throw std::runtime_error("Lack of ttl_extractor");
+      }
       ttl_seconds_slice_window_.clear();
       slice_index_ = 0;
       slice_length_ = builder_options.moptions.ttl_scan_gap;
@@ -417,7 +421,7 @@ BlockBasedTableBuilder::BlockBasedTableBuilder(
       }
       min_ttl_seconds_ = std::numeric_limits<uint64_t>::max();
     } else {
-      throw "Lack of ttl_extractor_factory";
+      throw std::runtime_error("Lack of ttl_extractor_factory");
     }
   } else {
     ttl_histogram_.reset();
@@ -540,7 +544,7 @@ Status BlockBasedTableBuilder::Add(const Slice& key,
                                     r->table_properties_collectors,
                                     r->ioptions.info_log);
   return r->status;
-}  // namespace rocksdb
+}
 
 Status BlockBasedTableBuilder::AddTombstone(const Slice& key,
                                             const LazyBuffer& lazy_value) {
