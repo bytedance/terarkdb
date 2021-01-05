@@ -6,6 +6,7 @@
 // This file defines a collection of statistics collectors.
 #pragma once
 
+#include <deque>
 #include <memory>
 #include <string>
 #include <vector>

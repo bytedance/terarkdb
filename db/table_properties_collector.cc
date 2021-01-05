@@ -7,13 +7,15 @@
 
 #include "db/dbformat.h"
 #include "monitoring/histogram.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/ttl_extractor.h"
 #include "util/coding.h"
 #include "util/string_util.h"
 #include "utilities/util/factory.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
+
+const uint64_t kFiftyYearSecondsNumber = 1576800000;
 namespace {
 
 uint64_t GetUint64Property(const UserCollectedProperties& props,
@@ -55,11 +57,48 @@ UserCollectedProperties UserKeyTablePropertiesCollector::GetReadableProperties()
 }
 
 class TtlIntTblPropCollector : public IntTblPropCollector {
+ private:
   TtlExtractor* ttl_extractor_;
   double ttl_gc_ratio_;
   size_t ttl_max_scan_cap_;
   HistogramImpl histogram_;
+  std::vector<uint64_t> ttl_seconds_slice_window_;
+  std::deque<size_t> slice_window_ttl_index_;
+  size_t slice_index_ = 0;
   std::string name_;
+  uint64_t raw_key_value_size_ = 0;
+  uint64_t ttl_key_value_size_ = 0;
+
+  uint64_t min_scan_cap_ttl_seconds_ = std::numeric_limits<uint64_t>::max();
+  uint64_t min_gc_ratio_ttl_seconds_ = std::numeric_limits<uint64_t>::max();
+  void AddTtlToSliceWindow(uint64_t ttl) {
+    if (slice_index_ < ttl_max_scan_cap_) {
+      while (!slice_window_ttl_index_.empty() &&
+             ttl >= ttl_seconds_slice_window_[slice_window_ttl_index_.back()]) {
+        slice_window_ttl_index_.pop_back();
+      }
+      ttl_seconds_slice_window_.emplace_back(ttl);
+    } else {
+      assert(ttl_seconds_slice_window_.size() == ttl_max_scan_cap_);
+      while (!slice_window_ttl_index_.empty() &&
+             slice_window_ttl_index_.front() <=
+                 slice_index_ - ttl_max_scan_cap_) {
+        slice_window_ttl_index_.pop_front();
+      }
+      while (!slice_window_ttl_index_.empty() &&
+             ttl >= ttl_seconds_slice_window_[slice_window_ttl_index_.back()]) {
+        slice_window_ttl_index_.pop_back();
+      }
+      ttl_seconds_slice_window_[slice_index_ % ttl_max_scan_cap_] = ttl;
+    }
+    slice_window_ttl_index_.push_back(slice_index_);
+    slice_index_++;
+    if (slice_index_ >= ttl_max_scan_cap_) {
+      min_scan_cap_ttl_seconds_ =
+          std::min(min_scan_cap_ttl_seconds_,
+                   ttl_seconds_slice_window_[slice_window_ttl_index_.front()]);
+    }
+  }
 
  public:
   TtlIntTblPropCollector(TtlExtractor* _ttl_extractor, double _ttl_gc_ratio,
@@ -70,7 +109,12 @@ class TtlIntTblPropCollector : public IntTblPropCollector {
         name_(_name) {}
   ~TtlIntTblPropCollector() { delete ttl_extractor_; }
   Status Finish(UserCollectedProperties* properties) override {
-    // do nothing
+    uint64_t max_uint64_t = std::numeric_limits<uint64_t>::max();
+    if (!histogram_.Empty() &&
+        ttl_key_value_size_ >= ttl_gc_ratio_ / 100 * raw_key_value_size_) {
+      min_gc_ratio_ttl_seconds_ =
+          static_cast<uint64_t>(histogram_.Percentile(ttl_gc_ratio_));
+    }
   }
 
   const char* Name() const override { return name_.c_str(); }
@@ -79,7 +123,39 @@ class TtlIntTblPropCollector : public IntTblPropCollector {
   // @params value  the value that is inserted into the table.
   Status InternalAdd(const Slice& key, const Slice& value,
                      uint64_t file_size) override {
-#error TODO
+    raw_key_value_size_ += key.size() + value.size();
+    EntryType entry_type = GetEntryType(ExtractValueType(key));
+    if (entry_type == kEntryMerge || entry_type == kEntryPut ||
+        entry_type == kEntryMergeIndex || entry_type == kEntryValueIndex) {
+      bool has_ttl = false;
+      std::chrono::seconds ttl(0);
+      assert(ttl_extractor_ != nullptr);
+      Status s;
+      Slice user_key = ExtractUserKey(key);
+      Slice value_or_meta = value;
+      if (entry_type == kEntryMergeIndex || entry_type == kEntryValueIndex) {
+        value_or_meta = SeparateHelper::DecodeValueMeta(value);
+      }
+      s = ttl_extractor_->Extract(entry_type, user_key, value_or_meta, &has_ttl,
+                                  &ttl);
+      if (!s.ok()) {
+        return s;
+      }
+      if (has_ttl) {
+        ttl_key_value_size_ += key.size() + value.size();
+        uint64_t key_ttl =
+            std::min(static_cast<uint64_t>(ttl.count()),
+                     kFiftyYearSecondsNumber);  // ttl is limited to 50 years.
+        histogram_.Add(key_ttl);
+        AddTtlToSliceWindow(key_ttl);
+      } else {
+        ttl_seconds_slice_window_.clear();
+        slice_window_ttl_index_.clear();
+        slice_index_ = 0;
+      }
+    } else if (entry_type < kEntryOther) {
+      AddTtlToSliceWindow(0);
+    }
     return Status::OK();
   }
 
@@ -141,4 +217,5 @@ uint64_t GetMergeOperands(const UserCollectedProperties& props,
 
 }  // namespace TERARKDB_NAMESPACE
 
-TERARK_FACTORY_INSTANTIATE_GNS(TERARKDB_NAMESPACE::TablePropertiesCollectorFactory*);
+TERARK_FACTORY_INSTANTIATE_GNS(
+    TERARKDB_NAMESPACE::TablePropertiesCollectorFactory*);
