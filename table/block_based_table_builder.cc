@@ -53,7 +53,6 @@ namespace TERARKDB_NAMESPACE {
 
 extern const std::string kHashIndexPrefixesBlock;
 extern const std::string kHashIndexPrefixesMetadataBlock;
-const uint64_t kFiftyYearSecondsNumber = 1576800000;
 
 typedef BlockBasedTableOptions::IndexType IndexType;
 
@@ -377,17 +376,6 @@ BlockBasedTableBuilder::BlockBasedTableBuilder(
   rep_ =
       new Rep(builder_options, sanitized_table_options, column_family_id, file);
 
-  if (builder_options.ioptions.ttl_extractor_factory == nullptr ||
-      (builder_options.moptions.ttl_garbage_collection_percentage > 100.0 &&
-       builder_options.moptions.ttl_scan_gap ==
-           std::numeric_limits<int>::max())) {
-    enable_row_ttl_ = false;
-    ROCKS_LOG_INFO(rep_->ioptions.info_log, "Disable row ttl.");
-  } else {
-    enable_row_ttl_ = true;
-    ROCKS_LOG_INFO(rep_->ioptions.info_log, "Enable row ttl.");
-  }
-
   if (rep_->filter_builder != nullptr) {
     rep_->filter_builder->StartBlock(0);
   }
@@ -396,37 +384,6 @@ BlockBasedTableBuilder::BlockBasedTableBuilder(
         table_options.block_cache_compressed.get(), file->writable_file(),
         &rep_->compressed_cache_key_prefix[0],
         &rep_->compressed_cache_key_prefix_size);
-  }
-  if (is_row_ttl_enable()) {
-    if (builder_options.moptions.ttl_garbage_collection_percentage <= 100.0) {
-      ttl_histogram_ = std::make_unique<HistogramImpl>();
-    } else {
-      ttl_histogram_.reset();
-    }
-    if (builder_options.ioptions.ttl_extractor_factory != nullptr) {
-      kv_size_has_row_ttl_ = 0;
-      TtlExtractorContext ttl_extractor_context;
-      ttl_extractor_context.column_family_id = column_family_id;
-      // assert(builder_options.ioptions.ttl_extractor_factory != nullptr);
-      ttl_extractor_ =
-          builder_options.ioptions.ttl_extractor_factory->CreateTtlExtractor(
-              ttl_extractor_context);
-      if (ttl_extractor_ == nullptr) {
-        throw std::runtime_error("Lack of ttl_extractor");
-      }
-      ttl_seconds_slice_window_.clear();
-      slice_index_ = 0;
-      slice_length_ = builder_options.moptions.ttl_scan_gap;
-      if (slice_length_ < std::numeric_limits<int>::max()) {
-        slice_length_ = std::max(std::min(slice_length_, 1000), 1);
-      }
-      min_ttl_seconds_ = std::numeric_limits<uint64_t>::max();
-    } else {
-      throw std::runtime_error("Lack of ttl_extractor_factory");
-    }
-  } else {
-    ttl_histogram_.reset();
-    ttl_extractor_.reset();
   }
 }
 
@@ -486,66 +443,12 @@ Status BlockBasedTableBuilder::Add(const Slice& key,
     r->props.num_merge_operands++;
   }
 
-  if (is_row_ttl_enable()) {
-    auto add_ttl_to_slice_window = [this](uint64_t ttl) {
-      if (slice_length_ < std::numeric_limits<int>::max()) {
-        if (ttl_seconds_slice_window_.size() < slice_length_) {
-          ttl_seconds_slice_window_.emplace_back(ttl);
-        } else {
-          assert(slice_length_ == ttl_seconds_slice_window_.size());
-          ttl_seconds_slice_window_[slice_index_] = ttl;
-          slice_index_ = (slice_index_ + 1) % slice_length_;
-        }
-        if (ttl_seconds_slice_window_.size() == slice_length_) {
-          min_ttl_seconds_ =
-              std::min(min_ttl_seconds_,
-                       *std::max_element(ttl_seconds_slice_window_.begin(),
-                                         ttl_seconds_slice_window_.end()));
-        }
-      }
-    };
-    EntryType entry_type = GetEntryType(value_type);
-    if (entry_type == kEntryMerge || entry_type == kEntryPut ||
-        entry_type == kEntryMergeIndex || entry_type == kEntryValueIndex) {
-      bool has_ttl = false;
-      std::chrono::seconds ttl(0);
-      assert(ttl_extractor_ != nullptr);
-      Status s;
-      Slice user_key = ExtractUserKey(key);
-      Slice value_or_meta = value;
-      if (entry_type == kEntryMergeIndex || entry_type == kEntryValueIndex) {
-        value_or_meta = SeparateHelper::DecodeValueMeta(value);
-      }
-      s = ttl_extractor_->Extract(entry_type, user_key, value_or_meta, &has_ttl,
-                                  &ttl);
-      if (!s.ok()) {
-        return s;
-      }
-      if (has_ttl) {
-        kv_size_has_row_ttl_ += key.size() + value.size();
-        uint64_t key_ttl =
-            std::min(static_cast<uint64_t>(ttl.count()),
-                     kFiftyYearSecondsNumber);  // ttl is limited to 50 years.
-        if (r->moptions.ttl_garbage_collection_percentage <= 100.0) {
-          assert(ttl_histogram_ != nullptr);
-          ttl_histogram_->Add(key_ttl);
-        }
-        add_ttl_to_slice_window(key_ttl);
-      } else {
-        ttl_seconds_slice_window_.clear();
-        slice_index_ = 0;
-      }
-    } else if (entry_type < kEntryOther) {
-      add_ttl_to_slice_window(0);
-    }
-  }
-
   r->index_builder->OnKeyAdded(key);
   NotifyCollectTableCollectorsOnAdd(key, value, r->offset,
                                     r->table_properties_collectors,
                                     r->ioptions.info_log);
   return r->status;
-}
+}  // namespace rocksdb
 
 Status BlockBasedTableBuilder::AddTombstone(const Slice& key,
                                             const LazyBuffer& lazy_value) {
@@ -933,47 +836,6 @@ void BlockBasedTableBuilder::WritePropertiesBlock(
         rep_->use_delta_encoding_for_index_values;
     rep_->props.creation_time = rep_->creation_time;
     rep_->props.oldest_key_time = rep_->oldest_key_time;
-
-    if (is_row_ttl_enable()) {
-      uint64_t now_seconds = rep_->ioptions.env->NowMicros() / 1000000ul;
-      uint64_t max_uint64_t = std::numeric_limits<uint64_t>::max();
-
-      double ratio = rep_->moptions.ttl_garbage_collection_percentage;
-      if (ratio <= 100.0) {
-        assert(ttl_histogram_ != nullptr);
-        uint64_t percentile_ratio_ttl = max_uint64_t;
-
-        if (!ttl_histogram_->Empty() &&
-            kv_size_has_row_ttl_ >=
-                ratio / 100.0 *
-                    (rep_->props.raw_key_size + rep_->props.raw_value_size)) {
-          percentile_ratio_ttl =
-              static_cast<uint64_t>(ttl_histogram_->Percentile(ratio));
-        }
-
-        if (max_uint64_t - percentile_ratio_ttl > now_seconds) {
-          rep_->props.ratio_expire_time = now_seconds + percentile_ratio_ttl;
-          // } else {
-          //   rep_->props.ratio_expire_time = max_uint64_t;
-        }
-      }
-      if (slice_length_ < std::numeric_limits<int>::max()) {
-        if (max_uint64_t - min_ttl_seconds_ > now_seconds) {
-          rep_->props.scan_gap_expire_time = now_seconds + min_ttl_seconds_;
-          // } else {
-          //   rep_->props.scan_gap_expire_time = max_uint64_t;
-        }
-      }
-      // ROCKS_LOG_INFO(rep_->ioptions.info_log,
-      //                "[%s] ratio_expire_time:%" PRIu64
-      //                ", scan_gap_expire_time:%" PRIu64 ".",
-      //                rep_->column_family_name.c_str(),
-      //                rep_->props.ratio_expire_time,
-      //                rep_->props.scan_gap_expire_time);
-      min_ttl_seconds_ = std::numeric_limits<uint64_t>::max();
-      ttl_histogram_.reset();
-      ttl_extractor_.reset();
-    }
 
     // Add basic properties
     property_block_builder.AddTableProperty(rep_->props);

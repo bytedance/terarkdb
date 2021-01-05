@@ -82,8 +82,6 @@ class BlockBasedTableBuilder : public TableBuilder {
 
   bool NeedCompact() const override;
 
-  bool is_row_ttl_enable() const { return enable_row_ttl_; }
-
   // Get table properties
   TableProperties GetTableProperties() const override;
 
@@ -128,16 +126,6 @@ class BlockBasedTableBuilder : public TableBuilder {
   // Some compression libraries fail when the raw size is bigger than int. If
   // uncompressed size is bigger than kCompressionSizeLimit, don't compress it
   const uint64_t kCompressionSizeLimit = std::numeric_limits<int>::max();
-
-  std::unique_ptr<HistogramImpl> ttl_histogram_ = nullptr;
-  std::unique_ptr<TtlExtractor> ttl_extractor_ = nullptr;
-
-  std::vector<uint64_t> ttl_seconds_slice_window_;
-  uint64_t min_ttl_seconds_;
-  int slice_index_;
-  bool enable_row_ttl_;
-  uint64_t kv_size_has_row_ttl_;
-  int slice_length_;
 };
 
 Slice CompressBlock(const Slice& raw, const CompressionContext& compression_ctx,
