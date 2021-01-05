@@ -11,9 +11,11 @@
 #include <vector>
 
 #include "rocksdb/table_properties.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
+
+class TtlExtractorFactory;
 
 // Base class for internal table properties collector.
 class IntTblPropCollector {
@@ -148,5 +150,9 @@ class UserKeyTablePropertiesCollectorFactory
  private:
   std::shared_ptr<TablePropertiesCollectorFactory> user_collector_factory_;
 };
+
+IntTblPropCollectorFactory* NewTtlIntTblPropCollectorFactory(
+    TtlExtractorFactory* ttl_extractor_factory, double ttl_gc_ratio,
+    size_t ttl_max_scan_cap);
 
 }  // namespace TERARKDB_NAMESPACE
