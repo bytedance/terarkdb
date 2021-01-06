@@ -1147,7 +1147,7 @@ if(WITH_TOOLS)
   endforeach(sourcefile ${BENCHMARKS})
 
   add_subdirectory(tools)
-  #add_subdirectory(terark-tools/terark-test)
+  add_subdirectory(terark-tools/terark-test)
   add_subdirectory(terark-tools/batch-write-bench)
 endif()
 add_definitions(

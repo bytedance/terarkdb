@@ -1915,10 +1915,8 @@ void DBImpl::MaybeScheduleFlushOrCompaction() {
   }
 
   assert(bg_job_limits.max_wal_index_creations == 1);
-  assert(mutable_db_options_.max_task_per_thread == 1);
   while (bg_wal_index_creation_scheduled_ <
-             bg_job_limits.max_wal_index_creations *
-                 mutable_db_options_.max_task_per_thread &&
+             bg_job_limits.max_wal_index_creations &&
          versions_->HasWalWithoutIndex()) {
     CompactionArg* ca = new CompactionArg;
     ca->db = this;

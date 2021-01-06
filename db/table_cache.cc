@@ -143,35 +143,6 @@ Status TableCache::GetTableReader(
     const SliceTransform* prefix_extractor, bool skip_filters, int level,
     bool prefetch_index_and_filter_in_cache, bool for_compaction,
     bool force_memory) {
-  auto s = GetTableReaderImpl(
-      env_options, internal_comparator, fd, sequential_mode, readahead,
-      record_read_stats, file_read_hist, table_reader, prefix_extractor,
-      skip_filters, level, prefetch_index_and_filter_in_cache, for_compaction,
-      force_memory);
-  if (s.IsInvalidArgument() && s.subcode() == Status::kRequireMmap) {
-    // this table requires mmap open, make it happy
-    assert(!env_options.use_mmap_reads);
-    EnvOptions mmap_env_options = env_options;
-    mmap_env_options.use_mmap_reads = true;
-    mmap_env_options.use_direct_reads = false;
-    mmap_env_options.use_aio_reads = false;
-    s = GetTableReaderImpl(
-        mmap_env_options, internal_comparator, fd, sequential_mode, readahead,
-        record_read_stats, file_read_hist, table_reader, prefix_extractor,
-        skip_filters, level, prefetch_index_and_filter_in_cache, for_compaction,
-        force_memory);
-  }
-  return s;
-}
-
-Status TableCache::GetTableReaderImpl(
-    const EnvOptions& env_options,
-    const InternalKeyComparator& internal_comparator, const FileDescriptor& fd,
-    bool sequential_mode, size_t readahead, bool record_read_stats,
-    HistogramImpl* file_read_hist, std::unique_ptr<TableReader>* table_reader,
-    const SliceTransform* prefix_extractor, bool skip_filters, int level,
-    bool prefetch_index_and_filter_in_cache, bool for_compaction,
-    bool force_memory) {
   std::string fname =
       TableFileName(ioptions_.cf_paths, fd.GetNumber(), fd.GetPathId());
   std::unique_ptr<RandomAccessFile> file;
