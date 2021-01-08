@@ -345,38 +345,15 @@ class MapSstElementIterator : public MapSstRangeIterator {
             link.size = meta->fd.GetFileSize();
             range_size += link.size;
           } else {
-            auto iter = iterator_cache_.GetIterator(meta, &reader);
-            if (!iter->status().ok()) {
-              buffer_.clear();
-              status_ = iter->status();
-              return;
-            }
-            do {
-              iter->Seek(start);
-              if (!iter->Valid()) {
-                CheckIter(iter);
-                break;
-              }
-              temp_start_.DecodeFrom(iter->key());
-              iter->SeekForPrev(end);
-              if (!iter->Valid()) {
-                CheckIter(iter);
-                break;
-              }
-              temp_end_.DecodeFrom(iter->key());
-              if (icomp_.Compare(temp_start_, temp_end_) <= 0) {
-                uint64_t start_offset =
-                    reader->ApproximateOffsetOf(temp_start_.Encode());
-                uint64_t end_offset =
-                    reader->ApproximateOffsetOf(temp_end_.Encode());
-                link.size = end_offset - start_offset;
-                range_size += link.size;
-              }
-            } while (false);
+            status_ = iterator_cache_.GetReader(link.file_number, &reader);
             if (!status_.ok()) {
               buffer_.clear();
               return;
             }
+            uint64_t start_offset = reader->ApproximateOffsetOf(start);
+            uint64_t end_offset = reader->ApproximateOffsetOf(end);
+            link.size = end_offset - start_offset;
+            range_size += link.size;
           }
           put_dependence(link.file_number, link.size);
         }
