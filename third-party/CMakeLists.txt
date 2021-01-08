@@ -184,5 +184,6 @@ ENDIF()
 
 # terark-zip (for TerarkZipTable)
 IF(WITH_TERARK_ZIP)
+  SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
   add_subdirectory(terark-zip)
 ENDIF()
