@@ -8,6 +8,7 @@ LIB_SOURCES =                                                   \
   db/c.cc                                                       \
   db/column_family.cc                                           \
   db/compacted_db_impl.cc                                       \
+  db/compaction_dispatcher.cc                                   \
   db/compaction.cc                                              \
   db/compaction_iterator.cc                                     \
   db/compaction_job.cc                                          \
@@ -75,6 +76,8 @@ LIB_SOURCES =                                                   \
   memtable/hash_linklist_rep.cc                                 \
   memtable/hash_skiplist_rep.cc                                 \
   memtable/skiplistrep.cc                                       \
+  memtable/terark_zip_entry_index.cc                            \
+  memtable/terark_zip_memtable.cc                               \
   memtable/vectorrep.cc                                         \
   memtable/write_buffer_manager.cc                              \
   monitoring/histogram.cc                                       \
@@ -105,6 +108,10 @@ LIB_SOURCES =                                                   \
   table/block_based_table_builder.cc                            \
   table/block_based_table_factory.cc                            \
   table/block_based_table_reader.cc                             \
+  table/terark_zip_config.cc                                    \
+  table/terark_zip_table_builder.cc                             \
+  table/terark_zip_table_reader.cc                              \
+  table/terark_zip_table.cc                                     \
   table/block_builder.cc                                        \
   table/block_fetcher.cc                                        \
   table/block_prefix_index.cc                                   \
@@ -133,6 +140,11 @@ LIB_SOURCES =                                                   \
   table/sst_file_writer.cc                                      \
   table/table_properties.cc                                     \
   table/table_reader.cc                                         \
+  table/terark_zip_common.cc                                    \
+  table/terark_zip_config.cc                                    \
+  table/terark_zip_table_builder.cc                             \
+  table/terark_zip_table_reader.cc                              \
+  table/terark_zip_table.cc                                     \
   table/two_level_iterator.cc                                   \
   tools/dump/db_dump_tool.cc                                    \
   util/arena.cc                                                 \
@@ -269,6 +281,7 @@ TEST_LIB_SOURCES = \
   utilities/cassandra/test_utils.cc                             \
 
 MAIN_SOURCES =                                                          \
+  table/table_test.cc                                                   \
   cache/cache_bench.cc                                                  \
   cache/cache_test.cc                                                   \
   db/column_family_test.cc                                              \
@@ -358,6 +371,8 @@ MAIN_SOURCES =                                                          \
   memtable/inlineskiplist_test.cc                                       \
   memtable/memtablerep_bench.cc                                         \
   memtable/skiplist_test.cc                                             \
+  memtable/terark_zip_entry_index.cc                                    \
+  memtable/terark_zip_memtable.cc                                       \
   memtable/write_buffer_manager_test.cc                                 \
   monitoring/histogram_test.cc                                          \
   monitoring/iostats_context_test.cc                                    \
@@ -375,7 +390,6 @@ MAIN_SOURCES =                                                          \
   table/merger_test.cc                                                  \
   table/sst_file_reader_test.cc                                         \
   table/table_reader_bench.cc                                           \
-  table/table_test.cc                                                   \
   third-party/gtest-1.7.0/fused-src/gtest/gtest-all.cc                  \
   tools/db_bench.cc                                                     \
   tools/db_bench_tool_test.cc                                           \
