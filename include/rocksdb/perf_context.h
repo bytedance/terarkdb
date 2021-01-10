@@ -174,6 +174,20 @@ struct PerfContext {
   // total number of SST table bloom misses
   uint64_t bloom_sst_miss_count;
 
+  uint64_t adjust_range_nanos;
+  uint64_t load_range_nanos;
+  uint64_t decompose_range_nanos;
+  uint64_t construct_mapelement_nanos;
+
+  uint64_t map_preparenext_nanos;
+  uint64_t map_additems_nanos;
+  uint64_t map_addprop_nanos;
+  uint64_t map_finish_nanos;
+  uint64_t map_sync_nanos;
+
+  uint64_t map_seeknextkey_nanos;
+  uint64_t map_mergedep_nanos;
+
   // Time spent waiting on key locks in transaction lock manager.
   uint64_t key_lock_wait_time;
   // number of times acquiring a lock was blocked by another transaction.

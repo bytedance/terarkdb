@@ -16,6 +16,7 @@
 #include <inttypes.h>
 
 #include <algorithm>
+#include <iostream>
 #include <list>
 #include <string>
 #include <unordered_map>
@@ -25,6 +26,7 @@
 #include "db/dbformat.h"
 #include "db/event_helpers.h"
 #include "db/range_del_aggregator.h"
+#include "monitoring/perf_context_imp.h"
 #include "monitoring/thread_status_util.h"
 #include "table/merging_iterator.h"
 #include "table/two_level_iterator.h"
@@ -278,6 +280,7 @@ class MapSstElementIterator : public MapSstRangeIterator {
     }
   }
   void PrepareNext() {
+    PERF_TIMER_GUARD(map_preparenext_nanos)
     while (true) {
       if (where_ == ranges_.end()) {
         buffer_.clear();
@@ -372,6 +375,7 @@ class MapSstElementIterator : public MapSstRangeIterator {
       map_elements_.Value(&buffer_);  // Encode value
       break;
     }
+    PERF_TIMER_STOP(map_preparenext_nanos);
   }
 
  private:
@@ -551,12 +555,14 @@ Status LoadRangeWithDepend(std::vector<RangeWithDepend>& ranges, Arena* arena,
 Status AdjustRange(const InternalKeyComparator* ic, InternalIterator* iter,
                    Arena* arena, const InternalKey& largest_key,
                    std::vector<RangeWithDepend>& ranges) {
+  PERF_TIMER_GUARD(adjust_range_nanos);
   if (ranges.empty()) {
     return Status::OK();
   }
   std::vector<RangeWithDepend> new_ranges;
   auto merge_dependence = [](std::vector<MapSstElement::LinkTarget>& e,
                              const std::vector<MapSstElement::LinkTarget>& d) {
+    PERF_TIMER_GUARD(map_mergedep_nanos);
     size_t insert_pos = e.size();
     for (auto rit = d.rbegin(); rit != d.rend(); ++rit) {
       size_t new_pos;
@@ -571,6 +577,7 @@ Status AdjustRange(const InternalKeyComparator* ic, InternalIterator* iter,
         insert_pos = new_pos;
       }
     }
+    PERF_TIMER_STOP(map_mergedep_nanos);
   };
   new_ranges.clear();
   Slice largest = ArenaPinInternalKey(
@@ -607,6 +614,7 @@ Status AdjustRange(const InternalKeyComparator* ic, InternalIterator* iter,
       range->point[1] = largest;
       range->include[1] = true;
     } else if (GetInternalKeySeqno(range->point[1]) != kMaxSequenceNumber) {
+      PERF_TIMER_GUARD(map_seeknextkey_nanos);
       iter->Seek(set_ik(ExtractUserKey(range->point[1]), kSetMax));
       if (iter->Valid() && ic->Compare(iter->key(), ik.Encode()) == 0) {
         iter->Next();
@@ -621,6 +629,7 @@ Status AdjustRange(const InternalKeyComparator* ic, InternalIterator* iter,
         range->point[1] = largest;
       }
       range->include[1] = true;
+      PERF_TIMER_STOP(map_seeknextkey_nanos);
     } else {
       assert(range->include[1]);
     }
@@ -687,6 +696,7 @@ Status AdjustRange(const InternalKeyComparator* ic, InternalIterator* iter,
     }
   }
   new_ranges.swap(ranges);
+  PERF_TIMER_STOP(adjust_range_nanos);
   return Status::OK();
 }
 
@@ -956,6 +966,8 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   Status s;
   size_t input_range_count = 0;
 
+  SetPerfLevel(PerfLevel::kEnableTime);
+  PERF_TIMER_GUARD(load_range_nanos);
   // load input files into level_ranges
   for (auto& level_files : inputs) {
     if (level_files.files.empty()) {
@@ -1000,7 +1012,9 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
       level_ranges.emplace_back(std::move(ranges));
     }
   }
+  PERF_TIMER_STOP(load_range_nanos);
 
+  PERF_TIMER_GUARD(decompose_range_nanos);
   // merge ranges
   // TODO(zouzhizhang): multi way union
   while (level_ranges.size() > 1) {
@@ -1112,7 +1126,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
           new (iterator_cache.GetArena()->AllocateAligned(
               sizeof(MapSstTombstoneIterator)))
               MapSstTombstoneIterator(item, cfd->internal_comparator()));
-    }
+  }
     tombstone_iter.set(builder.Finish());
   }
   if (build_range_deletion_ranges && !tombstones.empty() &&
@@ -1153,6 +1167,8 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     level_ranges.front() = PartitionRangeWithDepend(
         level_ranges.front(), ranges, icomp, PartitionType::kMerge);
   }
+  PERF_TIMER_STOP(decompose_range_nanos);
+
   std::vector<RangeWithDepend> ranges;
   if (!level_ranges.empty()) {
     s = AdjustRange(&icomp, &version_iter, arena, bound_builder.largest,
@@ -1241,6 +1257,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     return s;
   }
 
+  PERF_TIMER_GUARD(construct_mapelement_nanos);
   MapSstElementIterator output_iter(ranges, iterator_cache,
                                     cfd->internal_comparator());
   assert(std::is_sorted(ranges.begin(), ranges.end(),
@@ -1271,6 +1288,14 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   if (prop_ptr != nullptr) {
     prop_ptr->swap(prop);
   }
+  PERF_TIMER_STOP(construct_mapelement_nanos);
+  ROCKS_LOG_INFO(db_options_.info_log,
+                 "[%s] [JOB %d] BuildMapSst for table #%" PRIu64
+                 " PERF_CONTEXT %s",
+                 cfd->GetName().c_str(), job_id_, file_meta_ptr->fd.GetNumber(),
+                 get_perf_context()->ToString().c_str());
+  LogFlush(db_options_.info_log);
+
   return s;
 }  // namespace rocksdb
 
@@ -1291,6 +1316,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
       IteratorCacheContext::CreateVersionIter, &iterator_cache_ctx, nullptr,
       nullptr, arena);
 
+  SetPerfLevel(PerfLevel::kEnableTime);
   std::vector<MapBuilderRangesItem> range_items;
   MapSstElement map_element;
   Status s;
@@ -1524,7 +1550,11 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
                         tombstone_iter.get(), output_path_id, cfd,
                         version->GetMutableCFOptions(), &output_item.file_meta,
                         &output_item.prop);
-
+    ROCKS_LOG_INFO(
+        db_options_.info_log,
+        "[%s] [JOB %d] BuildMapSst for table #%" PRIu64 " PERF_CONTEXT %s",
+        cfd->GetName().c_str(), job_id_, output_item.file_meta.fd.GetNumber(),
+        get_perf_context()->ToString().c_str());
     if (!s.ok()) {
       return s;
     }
@@ -1541,6 +1571,8 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
       output->emplace_back(std::move(output_item));
     }
   }
+
+  LogFlush(db_options_.info_log);
   return s;
 }
 
@@ -1551,7 +1583,7 @@ Status MapBuilder::WriteOutputFile(
     const MutableCFOptions& mutable_cf_options, FileMetaData* file_meta,
     std::unique_ptr<TableProperties>* prop) {
   std::vector<std::unique_ptr<IntTblPropCollectorFactory>> collectors;
-
+  PERF_TIMER_GUARD(map_additems_nanos);
   // no need to lock because VersionSet::next_file_number_ is atomic
   uint64_t file_number = versions_->NewFileNumber();
   std::string fname =
@@ -1637,7 +1669,9 @@ Status MapBuilder::WriteOutputFile(
       s = tombstone_iter->status();
     }
   }
+  PERF_TIMER_STOP(map_additems_nanos);
 
+  PERF_TIMER_GUARD(map_addprop_nanos);
   // Prepare prop
   file_meta->prop.num_entries = builder->NumEntries();
   file_meta->prop.purpose = kMapSst;
@@ -1653,7 +1687,9 @@ Status MapBuilder::WriteOutputFile(
     dependence.emplace_back(Dependence{pair.first, pair.second});
   }
   std::sort(dependence.begin(), dependence.end(), TERARK_CMP(file_number, <));
+  PERF_TIMER_STOP(map_addprop_nanos);
 
+  PERF_TIMER_GUARD(map_finish_nanos);
   // Map sst don't write tombstones
   if (s.ok()) {
     s = builder->Finish(&file_meta->prop, nullptr);
@@ -1666,6 +1702,9 @@ Status MapBuilder::WriteOutputFile(
   if (s.ok()) {
     file_meta->fd.file_size = current_bytes;
   }
+  PERF_TIMER_STOP(map_finish_nanos);
+
+  PERF_TIMER_GUARD(map_sync_nanos);
   // Finish and check for file errors
   if (s.ok()) {
     StopWatch sw(env_, stats_, COMPACTION_OUTFILE_SYNC_MICROS);
@@ -1709,6 +1748,7 @@ Status MapBuilder::WriteOutputFile(
 #endif
 
   builder.reset();
+  PERF_TIMER_STOP(map_sync_nanos);
   return s;
 }
 

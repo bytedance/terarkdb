@@ -1165,6 +1165,13 @@ struct ReportFileOpCounters {
   std::atomic<uint64_t> bytes_written_;
 };
 
+enum WriteMode {
+  RANDOM,
+  SEQUENTIAL,
+  UNIQUE_RANDOM,
+  MULTI_UNIQUE_RANDOM,
+};
+
 // A special Env to records and report file operations in db_bench
 class ReportFileOpEnv : public EnvWrapper {
  public:
@@ -2403,8 +2410,11 @@ class Benchmark {
     }
   }
 
-  Slice AllocateKey(std::unique_ptr<const char[]>* key_guard) {
-    char* data = new char[key_size_];
+  Slice AllocateKey(std::unique_ptr<const char[]>* key_guard,
+                    WriteMode write_mode = RANDOM) {
+    int key_size = key_size_;
+    if (write_mode == MULTI_UNIQUE_RANDOM) key_size += sizeof(int);
+    char* data = new char[key_size];
     const char* const_data = data;
     key_guard->reset(const_data);
     return Slice(key_guard->get(), key_size_);
@@ -2424,7 +2434,9 @@ class Benchmark {
   //   ----------------------------
   void GenerateKeyFromInt(uint64_t v, int64_t num_keys, Slice* key, int tid) {
     char* start = const_cast<char*>(key->data());
-    char* pos = start;
+    memcpy(start, static_cast<void*>(&tid), sizeof(int));
+    char* pos = start + sizeof(int);
+
     if (keys_per_prefix_ > 0) {
       int64_t num_prefix = num_keys / keys_per_prefix_;
       int64_t prefix = v % num_prefix;
@@ -2453,10 +2465,7 @@ class Benchmark {
     }
     pos += bytes_to_fill;
     if (key_size_ > pos - start) {
-      if (tid > 0)
-        memset(pos, tid + '0', key_size_ - (pos - start));
-      else
-        memset(pos, '0', key_size_ - (pos - start));
+      memset(pos, '0', key_size_ - (pos - start));
     }
   }
 
@@ -3742,13 +3751,6 @@ class Benchmark {
     }
   }
 
-  enum WriteMode {
-    RANDOM,
-    SEQUENTIAL,
-    UNIQUE_RANDOM,
-    MULTI_UNIQUE_RANDOM,
-  };
-
   void WriteSeqDeterministic(ThreadState* thread) {
     DoDeterministicCompact(thread, open_options_.compaction_style, SEQUENTIAL);
   }
@@ -3867,11 +3869,11 @@ class Benchmark {
     int64_t bytes = 0;
 
     std::unique_ptr<const char[]> key_guard;
-    Slice key = AllocateKey(&key_guard);
+    Slice key = AllocateKey(&key_guard, write_mode);
     std::unique_ptr<const char[]> begin_key_guard;
-    Slice begin_key = AllocateKey(&begin_key_guard);
+    Slice begin_key = AllocateKey(&begin_key_guard, write_mode);
     std::unique_ptr<const char[]> end_key_guard;
-    Slice end_key = AllocateKey(&end_key_guard);
+    Slice end_key = AllocateKey(&end_key_guard, write_mode);
     std::vector<std::unique_ptr<const char[]>> expanded_key_guards;
     std::vector<Slice> expanded_keys;
     if (FLAGS_expand_range_tombstones) {

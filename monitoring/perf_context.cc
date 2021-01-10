@@ -87,6 +87,17 @@ void PerfContext::Reset() {
   bloom_memtable_miss_count = 0;
   bloom_sst_hit_count = 0;
   bloom_sst_miss_count = 0;
+  adjust_range_nanos = 0;
+  load_range_nanos = 0;
+  decompose_range_nanos = 0;
+  construct_mapelement_nanos = 0;
+  map_preparenext_nanos = 0;
+  map_additems_nanos = 0;
+  map_addprop_nanos = 0;
+  map_finish_nanos = 0;
+  map_seeknextkey_nanos = 0;
+  map_mergedep_nanos = 0;
+  map_sync_nanos = 0;
   key_lock_wait_time = 0;
   key_lock_wait_count = 0;
 
@@ -194,6 +205,17 @@ std::string PerfContext::ToString(bool exclude_zero_counters) const {
   PERF_CONTEXT_OUTPUT(bloom_memtable_miss_count);
   PERF_CONTEXT_OUTPUT(bloom_sst_hit_count);
   PERF_CONTEXT_OUTPUT(bloom_sst_miss_count);
+  PERF_CONTEXT_OUTPUT(adjust_range_nanos);
+  PERF_CONTEXT_OUTPUT(load_range_nanos);
+  PERF_CONTEXT_OUTPUT(decompose_range_nanos);
+  PERF_CONTEXT_OUTPUT(construct_mapelement_nanos);
+  PERF_CONTEXT_OUTPUT(map_preparenext_nanos);
+  PERF_CONTEXT_OUTPUT(map_additems_nanos);
+  PERF_CONTEXT_OUTPUT(map_addprop_nanos);
+  PERF_CONTEXT_OUTPUT(map_finish_nanos);
+  PERF_CONTEXT_OUTPUT(map_seeknextkey_nanos);
+  PERF_CONTEXT_OUTPUT(map_mergedep_nanos);
+  PERF_CONTEXT_OUTPUT(map_sync_nanos);
   PERF_CONTEXT_OUTPUT(key_lock_wait_time);
   PERF_CONTEXT_OUTPUT(key_lock_wait_count);
   PERF_CONTEXT_OUTPUT(env_new_sequential_file_nanos);

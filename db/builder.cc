@@ -56,6 +56,18 @@ TableBuilder* NewTableBuilder(
   assert((column_family_id ==
           TablePropertiesCollectorFactory::Context::kUnknownColumnFamily) ==
          column_family_name.empty());
+  static auto map_table_factory = NewBlockBasedTableFactory();
+  if (sst_purpose == kMapSst) {
+    // FIXME
+    return map_table_factory->NewTableBuilder(
+        TableBuilderOptions(ioptions, moptions, internal_comparator,
+                            int_tbl_prop_collector_factories, compression_type,
+                            compression_opts, compression_dict, skip_filters,
+                            column_family_name, level, compaction_load,
+                            creation_time, oldest_key_time, sst_purpose),
+        column_family_id, file);
+  }
+
   return ioptions.table_factory->NewTableBuilder(
       TableBuilderOptions(ioptions, moptions, internal_comparator,
                           int_tbl_prop_collector_factories, compression_type,
