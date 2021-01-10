@@ -928,9 +928,11 @@ void DBImpl::ScheduleGCTTL() {
   uint64_t mark_count = 0;
   uint64_t marked_count = 0;
   uint64_t nowSeconds = env_->NowMicros() / 1000U / 1000U;
-  auto should_marked_for_compacted = [](uint64_t ratio_expire_time,
+  auto should_marked_for_compacted = [&](uint64_t ratio_expire_time,
                                         uint64_t scan_gap_expire_time,
                                         uint64_t now) {
+    ROCKS_LOG_INFO(immutable_db_options_.info_log, "marked for compact SST: %d,%d,%d",
+                   ratio_expire_time,scan_gap_expire_time,now);
     return (std::min(ratio_expire_time, scan_gap_expire_time) <= now);
   };
   ROCKS_LOG_INFO(immutable_db_options_.info_log, "Start ScheduleGCTTL");
