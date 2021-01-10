@@ -13,7 +13,7 @@ namespace rocksdb {
 class DBImplGCTTL_Test : public DBTestBase {
  public:
   DBImplGCTTL_Test()
-      : DBTestBase("/db_GC_ttl_test"),
+      : DBTestBase("./db_GC_ttl_test"),
         mock_env_(new MockTimeEnv(Env::Default())) {}
 
   void init() {
@@ -81,9 +81,11 @@ TEST_F(DBImplGCTTL_Test, L0FileExpiredTest) {
   dbfull()->TEST_WaitForStatsDumpRun([&] { mock_env_->set_current_time(ttl); });
   ASSERT_TRUE(flag);
   ASSERT_EQ(L0FilesNums, mark);
+  dbfull()->CompactRange(CompactRangeOptions(),nullptr, nullptr);
   dbfull()->TEST_WaitForCompact();
   Close();
 }
+
 }  // namespace rocksdb
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
