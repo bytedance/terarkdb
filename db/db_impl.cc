@@ -76,6 +76,7 @@
 #include "rocksdb/stats_history.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/write_buffer_manager.h"
 #include "table/block.h"
 #include "table/block_based_table_factory.h"
@@ -129,8 +130,8 @@
 #endif
 #include <iostream>
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
+
 const std::string kDefaultColumnFamilyName("default");
 const uint64_t kDumpStatsWaitMicroseconds = 10000;
 const std::string kPersistentStatsColumnFamilyName(
@@ -933,11 +934,11 @@ void DBImpl::ScheduleGCTTL() {
     return (std::min(ratio_expire_time, scan_gap_expire_time) <= now);
   };
   ROCKS_LOG_INFO(immutable_db_options_.info_log, "Start ScheduleGCTTL");
+  int cnt = 0;
   for (auto cfd : *versions_->GetColumnFamilySet()) {
     if (cfd->GetLatestCFOptions().ttl_extractor_factory == nullptr) continue;
     if (cfd->initialized()) {
       VersionStorageInfo* vsi = cfd->current()->storage_info();
-      int cnt = 0;
       for (int l = 0; l < vsi->num_levels(); l++) {
         for (auto sst : vsi->LevelFiles(l)) {
           if (sst->marked_for_compaction) marked_count++;
@@ -955,7 +956,7 @@ void DBImpl::ScheduleGCTTL() {
   }
   ROCKS_LOG_INFO(immutable_db_options_.info_log,
                  "marked for compact SST: %d,%d,%d", marked_count, mark_count,
-                 count);
+                 cnt);
   if (mark_count > 0) {
     InstrumentedMutexLock l(&mutex_);
     MaybeScheduleFlushOrCompaction();
