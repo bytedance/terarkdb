@@ -49,6 +49,7 @@ class future;  // forward declaration
 }  // namespace boost
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 using std::future;

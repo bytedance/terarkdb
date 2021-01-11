@@ -54,6 +54,7 @@
 #include "util/stop_watch.h"
 #include "util/sync_point.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 const char* GetFlushReasonString(FlushReason flush_reason) {

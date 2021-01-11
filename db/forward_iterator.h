@@ -17,6 +17,7 @@
 #include "table/internal_iterator.h"
 #include "util/arena.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBImpl;

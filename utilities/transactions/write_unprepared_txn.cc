@@ -14,6 +14,7 @@
 #define __STDC_FORMAT_MACROS
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 bool WriteUnpreparedTxnReadCallback::IsVisible(SequenceNumber seq) {

@@ -13,6 +13,7 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/utilities/stackable_db.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace spatial {
 

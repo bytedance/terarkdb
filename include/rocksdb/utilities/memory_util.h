@@ -15,6 +15,7 @@
 #include "rocksdb/cache.h"
 #include "rocksdb/db.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Returns the current memory usage of the specified DB instances.

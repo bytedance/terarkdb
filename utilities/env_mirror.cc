@@ -10,6 +10,7 @@
 
 #include "rocksdb/utilities/env_mirror.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // An implementation of Env that mirrors all work over two backend

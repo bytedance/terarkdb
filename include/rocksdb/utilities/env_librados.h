@@ -13,6 +13,7 @@
 
 #include <rados/librados.hpp>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 class LibradosWritableFile;
 

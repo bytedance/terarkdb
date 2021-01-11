@@ -43,6 +43,7 @@ DEFINE_bool(stat, false,
 DEFINE_string(compression_type, "kNoCompression",
               "The compression algorithm used to compress data blocks");
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class ColumnAwareEncodingExp {

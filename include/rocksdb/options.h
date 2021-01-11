@@ -32,6 +32,7 @@
 #undef max
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Cache;

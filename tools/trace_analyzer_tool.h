@@ -18,6 +18,7 @@
 #include "rocksdb/write_batch.h"
 #include "util/trace_replay.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBImpl;

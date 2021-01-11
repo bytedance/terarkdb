@@ -18,6 +18,7 @@
 #include "rocksdb/env.h"
 #include "util/filename.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 void DumpDBFileSummary(const ImmutableDBOptions& options,

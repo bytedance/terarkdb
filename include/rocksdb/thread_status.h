@@ -26,6 +26,7 @@
 #define ROCKSDB_USING_THREAD_STATUS
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // TODO(yhchiang): remove this function once c++14 is available

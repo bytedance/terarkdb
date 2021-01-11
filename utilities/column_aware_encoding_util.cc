@@ -32,6 +32,7 @@
 
 #include "port/port.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 ColumnAwareEncodingReader::ColumnAwareEncodingReader(

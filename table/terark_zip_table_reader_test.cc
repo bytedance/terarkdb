@@ -16,6 +16,7 @@
 #include "rocksdb/perf_context.h"
 #include "table/terark_zip_table.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {

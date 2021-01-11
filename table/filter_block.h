@@ -30,6 +30,7 @@
 #include "util/hash.h"
 #include "format.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 const uint64_t kNotValid = ULLONG_MAX;

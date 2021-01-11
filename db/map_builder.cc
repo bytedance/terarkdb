@@ -33,6 +33,7 @@
 #include "util/sst_file_manager_impl.h"
 #include "version_set.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct FileMetaDataBoundBuilder {

@@ -58,6 +58,7 @@
 
 #include <terark/idx/terark_zip_index.hpp>
 #else
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 struct TerarkZipTableOptions {};
 }  // namespace TERARKDB_NAMESPACE

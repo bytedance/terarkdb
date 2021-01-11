@@ -18,6 +18,7 @@
 #include "rocksdb/filter_policy.h"
 #include "util/coding.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 FullFilterBlockBuilder::FullFilterBlockBuilder(

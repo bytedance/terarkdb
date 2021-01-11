@@ -26,6 +26,7 @@
 #include "util/cast_util.h"
 #include "util/string_util.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,

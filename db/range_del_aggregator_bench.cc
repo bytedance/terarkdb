@@ -88,6 +88,7 @@ auto icmp = TERARKDB_NAMESPACE::InternalKeyComparator(TERARKDB_NAMESPACE::Bytewi
 
 }  // anonymous namespace
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {

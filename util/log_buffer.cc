@@ -8,6 +8,7 @@
 #include "port/sys_time.h"
 #include "port/port.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 LogBuffer::LogBuffer(const InfoLogLevel log_level,

@@ -15,6 +15,7 @@
 #include "options/cf_options.h"
 #include "table/block_based_table_reader.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct ColDeclaration;

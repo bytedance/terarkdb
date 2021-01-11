@@ -12,6 +12,7 @@
 
 #include "rocksdb/table_properties.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Base class for internal table properties collector.

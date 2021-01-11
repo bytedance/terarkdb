@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include "rocksdb/status.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Comparator;

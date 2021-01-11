@@ -14,6 +14,7 @@
 #include "db/range_tombstone_fragmenter.h"
 #include "util/testutil.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class RangeDelAggregatorTest : public testing::Test {};

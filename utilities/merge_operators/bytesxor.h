@@ -14,6 +14,7 @@
 #include "util/coding.h"
 #include "utilities/merge_operators.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // A 'model' merge operator that XORs two (same sized) array of bytes.

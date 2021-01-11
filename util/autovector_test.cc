@@ -17,6 +17,7 @@
 using std::cout;
 using std::endl;
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class AutoVectorTest : public testing::Test {};

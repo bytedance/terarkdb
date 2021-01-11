@@ -9,6 +9,7 @@
 #include "rocksdb/env.h"
 #include "util/mutexlock.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #ifdef ROCKSDB_USING_THREAD_STATUS

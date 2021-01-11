@@ -10,6 +10,7 @@
 #include "rocksdb/db.h"
 #include "rocksdb/types.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Data associated with a particular version of a key. A database may internally

@@ -16,6 +16,7 @@
 #include "port/jemalloc_helper.h"
 
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #ifdef ROCKSDB_JEMALLOC

@@ -23,6 +23,7 @@
 #define POSIX_FADV_DONTNEED 4   /* [MC1] dont need these pages */
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 static std::string IOErrorMsg(const std::string& context,
                               const std::string& file_name) {

@@ -25,6 +25,7 @@
 #include "util/dynamic_bloom.h"
 #include "util/file_reader_writer.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Block;

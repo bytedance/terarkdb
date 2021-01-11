@@ -16,6 +16,7 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 std::map<uint64_t, Slice> slices;

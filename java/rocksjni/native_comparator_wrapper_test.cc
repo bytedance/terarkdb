@@ -11,6 +11,7 @@
 
 #include "include/org_rocksdb_NativeComparatorWrapperTest_NativeStringComparatorWrapper.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class NativeComparatorWrapperTestStringComparator : public Comparator {

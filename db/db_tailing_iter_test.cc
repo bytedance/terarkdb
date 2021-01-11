@@ -16,6 +16,7 @@
 #include "db/forward_iterator.h"
 #include "port/stack_trace.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBTestTailingIterator : public DBTestBase {

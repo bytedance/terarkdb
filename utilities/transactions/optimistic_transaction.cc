@@ -19,6 +19,7 @@
 #include "util/string_util.h"
 #include "utilities/transactions/transaction_util.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct WriteOptions;

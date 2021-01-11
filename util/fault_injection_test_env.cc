@@ -15,6 +15,7 @@
 #include <functional>
 #include <utility>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Assume a filename, and not a directory name like "/foo/bar/"

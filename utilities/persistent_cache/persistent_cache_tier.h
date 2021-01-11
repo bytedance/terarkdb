@@ -52,6 +52,7 @@
 //               |
 //               V
 //              null
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Persistent Cache Config

@@ -17,6 +17,7 @@ extern "C" {
 
 #include "rocksdb/utilities/lua/rocks_lua_custom_library.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace lua {
 class LuaStateWrapper {

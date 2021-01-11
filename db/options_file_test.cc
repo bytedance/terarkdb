@@ -12,6 +12,7 @@
 #include "rocksdb/table.h"
 #include "util/testharness.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 class OptionsFileTest : public testing::Test {
  public:

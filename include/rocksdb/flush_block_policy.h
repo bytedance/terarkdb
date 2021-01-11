@@ -8,6 +8,7 @@
 #include <string>
 #include "rocksdb/table.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Slice;

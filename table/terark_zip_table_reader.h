@@ -29,6 +29,7 @@
 #include <terark/util/throw.hpp>
 #include <terark/zbs/abstract_blob_store.hpp>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 using terark::ContextBuffer;

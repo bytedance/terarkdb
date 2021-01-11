@@ -12,6 +12,7 @@
 
 using namespace TERARKDB_NAMESPACE::cassandra;
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace cassandra {
 

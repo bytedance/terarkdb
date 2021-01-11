@@ -13,6 +13,7 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/slice_transform.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // conversion' conversion from 'type1' to 'type2', possible loss of data

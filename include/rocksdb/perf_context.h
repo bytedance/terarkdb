@@ -11,6 +11,7 @@
 
 #include "rocksdb/perf_level.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // A thread local context for gathering performance counter efficiently

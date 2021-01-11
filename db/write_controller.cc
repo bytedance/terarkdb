@@ -10,6 +10,7 @@
 #include <ratio>
 #include "rocksdb/env.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 std::unique_ptr<WriteControllerToken> WriteController::GetStopToken() {

@@ -11,6 +11,7 @@
 #include <memory>
 #include <vector>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class LogFile;

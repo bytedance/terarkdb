@@ -40,6 +40,7 @@
 #undef DELETE
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Detect if jlong overflows size_t

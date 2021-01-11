@@ -9,6 +9,7 @@
 #include "rocksdb/slice.h"
 #include "util/dynamic_bloom.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 void BloomBlockBuilder::AddKeysHashes(const std::vector<uint32_t>& keys_hashes) {

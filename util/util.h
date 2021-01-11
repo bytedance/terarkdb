@@ -17,6 +17,7 @@
 #endif
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 template <class T>
 void call_destructor(T* ptr) {

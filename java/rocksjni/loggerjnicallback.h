@@ -16,6 +16,7 @@
 #include "port/port.h"
 #include "rocksdb/env.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
   class LoggerJniCallback : public JniCallback, public Logger {

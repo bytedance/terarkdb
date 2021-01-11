@@ -10,6 +10,7 @@
 
 #include "rocksdb/slice.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 // This is an experimental feature aiming to reduce the CPU utilization of
 // point-lookup within a data-block. It is only used in data blocks, and not

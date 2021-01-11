@@ -13,6 +13,7 @@
 #include "rocksjni/loggerjnicallback.h"
 #include "rocksjni/portal.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 LoggerJniCallback::LoggerJniCallback(JNIEnv* env, jobject jlogger)

@@ -20,6 +20,7 @@
 #include "rocksdb/utilities/write_batch_with_index.h"
 #include "util/string_util.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 Status TransactionUtil::CheckKeyForConflicts(

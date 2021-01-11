@@ -27,6 +27,7 @@
 #define TOSTRING(x) STRINGIFY(x)
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 enum TickersInternal : uint32_t {

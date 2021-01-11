@@ -12,6 +12,7 @@
 #include "port/port.h"
 #include "util/random.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #ifdef ROCKSDB_SUPPORT_THREAD_LOCAL

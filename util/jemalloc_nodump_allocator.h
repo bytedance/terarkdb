@@ -21,6 +21,7 @@
 #if (JEMALLOC_VERSION_MAJOR >= 5) && defined(MADV_DONTDUMP)
 #define ROCKSDB_JEMALLOC_NODUMP_ALLOCATOR
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class JemallocNodumpAllocator : public MemoryAllocator {

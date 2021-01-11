@@ -9,6 +9,7 @@
 #include <climits>
 #include <vector>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 //

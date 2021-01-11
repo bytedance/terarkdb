@@ -25,6 +25,7 @@ DEFINE_int64(iters, 100000, "number of pseudo-random operations in each test");
  * std::priority_queue on a pseudo-random sequence of operations.
  */
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 using HeapTestValue = uint64_t;

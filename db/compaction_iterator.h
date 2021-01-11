@@ -18,6 +18,7 @@
 #include "rocksdb/compaction_filter.h"
 #include "table/iterator_wrapper.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class CompactionIterator {

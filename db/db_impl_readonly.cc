@@ -15,6 +15,7 @@
 #include <table/terark_zip_table.h>
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE

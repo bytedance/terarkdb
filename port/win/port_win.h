@@ -74,6 +74,7 @@ typedef SSIZE_T ssize_t;
 #define PLATFORM_IS_LITTLE_ENDIAN (__BYTE_ORDER == __LITTLE_ENDIAN)
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #define PREFETCH(addr, rw, locality)

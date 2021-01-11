@@ -15,6 +15,7 @@
 #include <cstddef>
 #include "rocksdb/write_buffer_manager.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Logger;

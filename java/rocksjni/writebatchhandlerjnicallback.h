@@ -15,6 +15,7 @@
 #include "rocksjni/jnicallback.h"
 #include "rocksdb/write_batch.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 /**
  * This class acts as a bridge between C++

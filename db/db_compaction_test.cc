@@ -16,7 +16,7 @@
 #include "util/sync_point.h"
 #include "utilities/merge_operators/string_append/stringappend2.h"
 
-namespace TERARKDB_NAMESPACE {
+ namespace TERARKDB_NAMESPACE {
 
 // SYNC_POINT is not supported in released Windows mode.
 #if !defined(ROCKSDB_LITE)

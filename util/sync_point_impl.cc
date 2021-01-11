@@ -6,6 +6,7 @@
 #include "util/sync_point_impl.h"
 
 #ifndef NDEBUG
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 void TestKillRandom(std::string kill_point, int odds,

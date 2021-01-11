@@ -26,6 +26,7 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 static std::string RandomString(Random* rnd, int len) {

@@ -7,6 +7,7 @@
 #include <sstream>
 #include "monitoring/perf_context_imp.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #if defined(NPERF_CONTEXT) || !defined(ROCKSDB_SUPPORT_THREAD_LOCAL)

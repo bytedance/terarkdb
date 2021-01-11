@@ -62,6 +62,7 @@
 #include "rocksdb/slice.h"
 #include "util/testharness.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace cassandra {
 

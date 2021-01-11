@@ -16,6 +16,7 @@
 #include "util/mutexlock.h"
 #include "util/sync_point.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE

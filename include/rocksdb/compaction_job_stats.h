@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <string>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 struct CompactionJobStats {
   CompactionJobStats() { Reset(); }

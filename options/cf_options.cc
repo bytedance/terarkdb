@@ -18,6 +18,7 @@
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 ImmutableCFOptions::ImmutableCFOptions(const Options& options)

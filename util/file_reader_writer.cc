@@ -23,6 +23,7 @@
 
 #undef min
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #ifndef NDEBUG

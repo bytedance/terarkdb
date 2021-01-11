@@ -24,6 +24,7 @@
 #include "rocksdb/write_batch.h"
 #include "util/autovector.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class WriteThread {

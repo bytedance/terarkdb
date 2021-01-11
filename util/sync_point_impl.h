@@ -21,6 +21,7 @@
 #pragma once
 
 #ifndef NDEBUG
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 struct SyncPoint::Data {
   Data() : enabled_(false) {}

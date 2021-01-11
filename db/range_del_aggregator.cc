@@ -19,6 +19,7 @@
 #include "util/kv_map.h"
 #include "util/vector_iterator.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 TruncatedRangeDelIterator::TruncatedRangeDelIterator(

@@ -14,6 +14,7 @@
 #include "rocksdb/env.h"
 #include "rocksdb/threadpool.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class ThreadPoolImpl : public ThreadPool {

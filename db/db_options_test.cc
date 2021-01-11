@@ -22,6 +22,7 @@
 #include "util/sync_point.h"
 #include "util/testutil.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBOptionsTest : public DBTestBase {

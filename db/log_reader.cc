@@ -16,6 +16,7 @@
 #include "util/file_reader_writer.h"
 #include "util/util.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace log {
 

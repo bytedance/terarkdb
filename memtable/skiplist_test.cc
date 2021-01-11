@@ -15,6 +15,7 @@
 #include "util/random.h"
 #include "util/testharness.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 typedef uint64_t Key;

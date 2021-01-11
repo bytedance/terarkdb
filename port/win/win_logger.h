@@ -19,6 +19,7 @@
 #include <stdint.h>
 #include <windows.h>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Env;

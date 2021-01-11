@@ -10,6 +10,7 @@
 
 // noop
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace port {
 void InstallStackTraceHandler() {}
@@ -27,6 +28,7 @@ void PrintStack(int /*first_frames_to_skip*/) {}
 #include <unistd.h>
 #include <cxxabi.h>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace port {
 

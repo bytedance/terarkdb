@@ -15,6 +15,7 @@
 #include "util/filename.h"
 #include "util/testutil.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class ExternalSSTFileTest : public DBTestBase,

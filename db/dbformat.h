@@ -26,6 +26,7 @@
 #include "util/coding.h"
 #include "util/logging.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class InternalKey;

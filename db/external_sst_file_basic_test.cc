@@ -11,6 +11,7 @@
 #include "rocksdb/sst_file_writer.h"
 #include "util/testutil.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE

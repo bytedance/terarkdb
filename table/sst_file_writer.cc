@@ -13,6 +13,7 @@
 #include "util/file_reader_writer.h"
 #include "util/sync_point.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 const std::string ExternalSstFilePropertyNames::kVersion =

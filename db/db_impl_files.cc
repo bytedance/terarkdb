@@ -22,6 +22,7 @@
 #include "util/sst_file_manager_impl.h"
 #include "utilities/util/valvec.hpp"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 uint64_t DBImpl::MinLogNumberToKeep() {

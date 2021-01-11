@@ -20,6 +20,7 @@
 //
 // See transaction.h and examples/transaction_example.cc
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class TransactionDBMutexFactory;

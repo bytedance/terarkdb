@@ -2,6 +2,7 @@
 
 #include "rocksdb/utilities/stackable_db.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class JuxtaposeDB : public StackableDB {

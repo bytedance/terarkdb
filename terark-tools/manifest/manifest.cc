@@ -2,6 +2,7 @@
 
 using namespace TERARKDB_NAMESPACE;
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 extern const uint64_t kPlainTableMagicNumber;
 extern const uint64_t kLegacyPlainTableMagicNumber;

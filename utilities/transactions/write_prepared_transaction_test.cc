@@ -42,6 +42,7 @@
 
 using std::string;
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 using CommitEntry = WritePreparedTxnDB::CommitEntry;

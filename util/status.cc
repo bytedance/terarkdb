@@ -15,6 +15,7 @@
 #include <cstring>
 #include "port/port.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 const char* Status::CopyState(const char* state) {

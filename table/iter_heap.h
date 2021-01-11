@@ -9,6 +9,7 @@
 #include "db/dbformat.h"
 #include "table/iterator_wrapper.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // When used with std::priority_queue, this comparison functor puts the

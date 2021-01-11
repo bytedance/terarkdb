@@ -18,6 +18,7 @@
 #include "table/format.h"
 #include "table/internal_iterator.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 MergeHelper::MergeHelper(Env* env, const Comparator* user_comparator,

@@ -24,6 +24,7 @@
 #include "util/logging.h"
 #include "util/sync_point.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // MSVC complains that it is already defined since it is static in the header.

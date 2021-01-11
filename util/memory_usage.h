@@ -7,6 +7,7 @@
 
 #include <unordered_map>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Helper methods to estimate memroy usage by std containers.

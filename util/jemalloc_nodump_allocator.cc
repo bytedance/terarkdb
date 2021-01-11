@@ -12,6 +12,7 @@
 #include "port/port.h"
 #include "util/string_util.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #ifdef ROCKSDB_JEMALLOC_NODUMP_ALLOCATOR

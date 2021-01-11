@@ -15,6 +15,7 @@
 #include "rocksdb/db.h"
 #include "rocksdb/utilities/date_tiered_db.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Implementation of DateTieredDB.

@@ -6,6 +6,7 @@
 #include "port/port.h"
 #include "util/autovector.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct LIRSHandle {

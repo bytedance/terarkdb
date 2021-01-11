@@ -50,6 +50,7 @@
 #include "utilities/ttl/db_ttl_impl.h"
 #include "utilities/util/function.hpp"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 const std::string LDBCommand::ARG_DB = "db";

@@ -34,6 +34,7 @@
 
 #include "port/port.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Return true if the ith bit is set in combination represented by comb

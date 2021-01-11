@@ -44,6 +44,7 @@
 
 void PrintVersion(TERARKDB_NAMESPACE::Logger* info_log);
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 using terark::byte_t;

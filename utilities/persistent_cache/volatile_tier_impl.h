@@ -38,6 +38,7 @@
 // implementation is not concurrent at this point though.
 //
 // The eviction algorithm is LRU
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class VolatileCacheTier : public PersistentCacheTier {

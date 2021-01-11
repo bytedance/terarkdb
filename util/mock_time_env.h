@@ -7,6 +7,7 @@
 
 #include "rocksdb/env.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class MockTimeEnv : public EnvWrapper {

@@ -16,6 +16,7 @@
 #include "redis_list_iterator.h"
 #include "redis_list_exception.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 /// The Redis functionality (see http://redis.io/commands#list)

@@ -14,6 +14,7 @@
 #include "table/table_reader.h"
 #include "util/file_reader_writer.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct SstFileReader::Rep {

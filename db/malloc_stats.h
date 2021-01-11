@@ -13,6 +13,7 @@
 
 #include <string>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 void DumpMallocStats(std::string*);

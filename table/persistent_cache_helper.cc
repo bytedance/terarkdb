@@ -7,6 +7,7 @@
 #include "table/block_based_table_reader.h"
 #include "table/format.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 void PersistentCacheHelper::InsertRawPage(

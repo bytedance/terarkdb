@@ -12,6 +12,7 @@
 #include "table/format.h"
 #include "util/memory_allocator.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 class BlockFetcher {
  public:

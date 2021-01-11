@@ -7,6 +7,7 @@
 
 #include "rocksdb/trace_reader_writer.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class RandomAccessFileReader;

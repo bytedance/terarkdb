@@ -11,6 +11,7 @@
 
 #include <cassert>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Flush block by size

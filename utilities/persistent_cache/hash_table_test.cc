@@ -17,6 +17,7 @@
 
 #ifndef ROCKSDB_LITE
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct HashTableTest : public testing::Test {

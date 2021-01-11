@@ -11,6 +11,7 @@
 #include "rocksdb/utilities/db_ttl.h"
 #include "rocksdb/db.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Please don't use this class. It's deprecated

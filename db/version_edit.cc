@@ -16,6 +16,7 @@
 #include "util/string_util.h"
 #include "util/sync_point.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Tag numbers for serialized VersionEdit.  These numbers are written to

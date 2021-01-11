@@ -45,6 +45,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Arena;

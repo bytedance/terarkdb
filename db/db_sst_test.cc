@@ -13,6 +13,7 @@
 #include "rocksdb/sst_file_manager.h"
 #include "util/sst_file_manager_impl.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBSSTTest : public DBTestBase {

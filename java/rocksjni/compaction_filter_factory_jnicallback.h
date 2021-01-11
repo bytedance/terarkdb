@@ -15,6 +15,7 @@
 #include "rocksdb/compaction_filter.h"
 #include "rocksjni/jnicallback.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class CompactionFilterFactoryJniCallback : public JniCallback, public CompactionFilterFactory {

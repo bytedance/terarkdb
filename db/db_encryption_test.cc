@@ -12,6 +12,7 @@
 #include <iostream>
 #include <string>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBEncryptionTest : public DBTestBase {

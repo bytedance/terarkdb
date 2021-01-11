@@ -11,6 +11,7 @@
 #include "util/logging.h"
 #include "util/testharness.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 static std::string IKey(const std::string& user_key,

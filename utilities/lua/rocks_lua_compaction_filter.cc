@@ -12,6 +12,7 @@ extern "C" {
 
 #include "rocksdb/compaction_filter.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace lua {
 

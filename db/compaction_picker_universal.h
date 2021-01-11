@@ -12,6 +12,7 @@
 
 #include "db/compaction_picker.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 class UniversalCompactionPicker : public CompactionPicker {
  public:

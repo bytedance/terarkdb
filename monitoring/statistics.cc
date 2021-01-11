@@ -17,6 +17,7 @@
 #include "port/likely.h"
 #include "rocksdb/statistics.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // The order of items listed in  Tickers should be the same as

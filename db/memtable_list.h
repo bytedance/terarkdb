@@ -25,6 +25,7 @@
 #include "util/filename.h"
 #include "util/log_buffer.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class ColumnFamilyData;

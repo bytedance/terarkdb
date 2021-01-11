@@ -14,6 +14,7 @@
 #include <boost/stacktrace.hpp>
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace {
 Statistics* stats_for_report(Env* env, Statistics* stats) {

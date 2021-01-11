@@ -20,6 +20,7 @@
 
 using namespace TERARKDB_NAMESPACE;
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Path to the database on file system

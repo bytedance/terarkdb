@@ -9,6 +9,7 @@
 #include "monitoring/statistics.h"
 #include "rocksdb/persistent_cache.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // PersistentCacheOptions

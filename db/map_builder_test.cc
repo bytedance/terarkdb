@@ -22,6 +22,7 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class MapBuilderTest : public testing::Test {

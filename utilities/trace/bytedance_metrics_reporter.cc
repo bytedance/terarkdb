@@ -9,6 +9,7 @@
 
 #include "util/logging.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 #ifdef TERARKDB_ENABLE_METRICS
 static std::mutex metrics_mtx;

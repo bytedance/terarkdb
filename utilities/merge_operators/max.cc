@@ -84,6 +84,7 @@ class MaxOperator : public MergeOperator {
 
 }  // end of anonymous namespace
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 std::shared_ptr<MergeOperator> MergeOperators::CreateMaxOperator() {

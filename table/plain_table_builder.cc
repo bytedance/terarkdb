@@ -30,6 +30,7 @@
 #include "util/file_reader_writer.h"
 #include "util/stop_watch.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {

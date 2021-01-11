@@ -20,6 +20,7 @@
 #define STORAGE_DECL static
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 Random* Random::GetTLSInstance() {

@@ -55,6 +55,7 @@ DEFINE_bool(enable_print, false, "Print options generated to console.");
 // Path to the database on file system
 const std::string kDbName = TERARKDB_NAMESPACE::test::PerThreadDBPath("prefix_test");
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct TestKey {

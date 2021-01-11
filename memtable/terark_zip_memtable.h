@@ -23,6 +23,7 @@
 #include "terark/thread/instance_tls_owner.hpp"
 #include "util/arena.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Write token pairing with MainPatricia

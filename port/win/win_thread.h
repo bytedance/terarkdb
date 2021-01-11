@@ -13,6 +13,7 @@
 #include <functional>
 #include <type_traits>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace port {
 

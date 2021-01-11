@@ -9,6 +9,7 @@
 
 #include "db/db_impl.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 Status GetAllKeyVersions(DB* db, Slice begin_key, Slice end_key,

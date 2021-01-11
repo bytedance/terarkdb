@@ -9,6 +9,7 @@
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // An interface for converting a slice to a readable string

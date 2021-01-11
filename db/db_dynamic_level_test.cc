@@ -16,6 +16,7 @@
 #include "port/port.h"
 #include "port/stack_trace.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 class DBTestDynamicLevel : public DBTestBase {
  public:

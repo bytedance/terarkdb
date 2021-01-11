@@ -38,6 +38,7 @@
 #include "util/mutexlock.h"
 #include "util/util.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 ImmutableMemTableOptions::ImmutableMemTableOptions(

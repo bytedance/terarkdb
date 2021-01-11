@@ -17,6 +17,7 @@
 #include "util/arena.h"
 #include "util/autovector.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Utility for comparing sstable boundary keys. Returns -1 if either a or b is

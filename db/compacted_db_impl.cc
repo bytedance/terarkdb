@@ -19,6 +19,7 @@
 
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 extern void MarkKeyMayExist(void* arg);

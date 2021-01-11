@@ -57,6 +57,7 @@
 #include "util/string_util.h"
 #include "util/util.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // anon namespace for file-local types

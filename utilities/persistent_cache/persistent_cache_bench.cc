@@ -43,6 +43,7 @@ DEFINE_string(cache_type, "block_cache",
 DEFINE_bool(benchmark, false, "Benchmark mode");
 DEFINE_int32(volatile_cache_pct, 10, "Percentage of cache in memory tier.");
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 std::unique_ptr<PersistentCacheTier> NewVolatileCache() {

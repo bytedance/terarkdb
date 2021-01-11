@@ -33,6 +33,7 @@ bool FLAGS_verbose = false;
 // Path to the database on file system
 const std::string kDbName = TERARKDB_NAMESPACE::test::PerThreadDBPath("perf_context_test");
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 std::shared_ptr<DB> OpenDb(bool read_only = false) {

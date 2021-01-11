@@ -32,6 +32,7 @@ int main() {
 #include "util/testutil.h"
 #include "util/trace_replay.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {

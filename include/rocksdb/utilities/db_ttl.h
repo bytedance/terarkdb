@@ -12,6 +12,7 @@
 #include "rocksdb/utilities/stackable_db.h"
 #include "rocksdb/db.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Database with TTL support.

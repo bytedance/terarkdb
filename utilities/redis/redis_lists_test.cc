@@ -26,6 +26,7 @@
 
 using namespace TERARKDB_NAMESPACE;
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class RedisListsTest : public testing::Test {

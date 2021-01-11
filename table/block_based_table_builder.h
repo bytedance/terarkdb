@@ -22,6 +22,7 @@
 #include "table/table_builder.h"
 #include "util/compression.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class BlockBuilder;

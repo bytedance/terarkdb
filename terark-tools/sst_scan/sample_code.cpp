@@ -57,6 +57,7 @@
 # include <table/terark_zip_common.h>
 # include <table/terark_zip_table.h>
 #else
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
   struct TerarkZipTableOptions{};
 }

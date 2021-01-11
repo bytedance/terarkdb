@@ -5,6 +5,7 @@
 #include <terark/io/FileStream.hpp>
 #include <terark/io/StreamBuffer.hpp>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #if (defined(IOS_CROSS_COMPILE) || defined(__DARWIN_C_LEVEL)) && 0

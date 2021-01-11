@@ -46,6 +46,7 @@
 #include "port/port.h"
 #include "rocksdb/env.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace log {

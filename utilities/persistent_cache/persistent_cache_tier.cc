@@ -16,6 +16,7 @@
 #include <string>
 #include <sstream>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 std::string PersistentCacheConfig::ToString() const {

@@ -14,6 +14,7 @@
 #include <thread>
 #include "port/port.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Helper class that locks a mutex on construction and unlocks the mutex when

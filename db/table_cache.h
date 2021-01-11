@@ -26,6 +26,7 @@
 #include "table/table_reader.h"
 #include "util/iterator_cache.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Env;

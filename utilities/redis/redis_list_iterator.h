@@ -46,6 +46,7 @@
 #include "rocksdb/slice.h"
 #include "util/coding.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 /// An abstraction over the "list" concept.

@@ -11,6 +11,7 @@
 #include "rocksdb/env.h"
 #include "rocksdb/slice_transform.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class TableCache;

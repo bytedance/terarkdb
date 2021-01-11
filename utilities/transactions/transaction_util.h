@@ -17,6 +17,7 @@
 #include "rocksdb/status.h"
 #include "rocksdb/types.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct TransactionKeyMapInfo {

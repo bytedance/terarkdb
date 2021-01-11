@@ -141,6 +141,7 @@ FORCE_INLINE void  XXH_free  (void* p)  { free(p); }
 FORCE_INLINE void* XXH_memcpy(void* dest, const void* src, size_t size) { return memcpy(dest,src,size); }
 #include <assert.h> /* assert */
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 //**************************************
 // Basic Types

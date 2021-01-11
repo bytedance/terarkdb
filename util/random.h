@@ -11,6 +11,7 @@
 #include <random>
 #include <stdint.h>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // A very simple random number generator.  Not especially good at

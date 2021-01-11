@@ -1154,6 +1154,7 @@ static const bool FLAGS_table_cache_numshardbits_dummy
     __attribute__((__unused__)) = RegisterFlagValidator(
         &FLAGS_table_cache_numshardbits, &ValidateTableCacheNumshardbits);
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {

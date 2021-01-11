@@ -17,6 +17,7 @@
 #include "table/plain_table_key_coding.h"
 #include "table/table_builder.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class BlockBuilder;

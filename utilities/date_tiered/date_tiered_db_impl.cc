@@ -21,6 +21,7 @@
 #include "util/filename.h"
 #include "util/string_util.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Open the db inside DateTieredDBImpl because options needs pointer to its ttl

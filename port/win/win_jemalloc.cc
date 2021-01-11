@@ -18,6 +18,7 @@
 #if defined(ZSTD) && defined(ZSTD_STATIC_LINKING_ONLY)
 #include <zstd.h>
 #if (ZSTD_VERSION_NUMBER >= 500)
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace port {
 void* JemallocAllocateForZSTD(void* /* opaque */, size_t size) {
@@ -37,6 +38,7 @@ ZSTD_customMem GetJeZstdAllocationOverrides() {
 // Global operators to be replaced by a linker when this file is
 // a part of the build
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace port {
 void* jemalloc_aligned_alloc(size_t size, size_t alignment) ROCKSDB_NOEXCEPT {

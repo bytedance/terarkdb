@@ -39,6 +39,7 @@
 #include "util/compression.h"
 #include "util/sst_file_manager_impl.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 ColumnFamilyHandleImpl::ColumnFamilyHandleImpl(

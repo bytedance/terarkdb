@@ -9,6 +9,7 @@
 #include "rocksjni/comparatorjnicallback.h"
 #include "rocksjni/portal.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 BaseComparatorJniCallback::BaseComparatorJniCallback(
     JNIEnv* env, jobject jComparator,

@@ -17,6 +17,7 @@
 #include "util/sync_point.h"
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBErrorHandlingTest : public DBTestBase {

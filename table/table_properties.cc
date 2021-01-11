@@ -12,6 +12,7 @@
 #include "table/table_properties_internal.h"
 #include "util/string_util.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 const uint32_t TablePropertiesCollectorFactory::Context::kUnknownColumnFamily =

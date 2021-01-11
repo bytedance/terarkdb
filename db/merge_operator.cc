@@ -12,6 +12,7 @@
 #include "rocksdb/status.h"
 #include "utilities/util/factory.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 bool MergeOperator::FullMergeV2(const MergeOperationInput& merge_in,

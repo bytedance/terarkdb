@@ -9,6 +9,7 @@
 #include "rocksjni/compaction_filter_factory_jnicallback.h"
 #include "rocksjni/portal.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 CompactionFilterFactoryJniCallback::CompactionFilterFactoryJniCallback(
     JNIEnv* env, jobject jcompaction_filter_factory)

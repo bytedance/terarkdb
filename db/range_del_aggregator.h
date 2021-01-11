@@ -26,6 +26,7 @@
 #include "util/heap.h"
 #include "util/kv_map.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class TruncatedRangeDelIterator {

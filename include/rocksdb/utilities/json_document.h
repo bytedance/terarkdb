@@ -27,6 +27,7 @@ namespace fbson {
   typedef FbsonWriterT<FbsonOutStream> FbsonWriter;
 }  // namespace fbson
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // NOTE: none of this is thread-safe

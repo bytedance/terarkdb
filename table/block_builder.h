@@ -15,6 +15,7 @@
 #include "rocksdb/table.h"
 #include "table/data_block_hash_index.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class BlockBuilder {

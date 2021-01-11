@@ -12,6 +12,7 @@
 #include "rocksdb/db.h"
 #include "util/filename.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class CheckpointImpl : public Checkpoint {

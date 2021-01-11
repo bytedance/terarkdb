@@ -10,6 +10,7 @@
 #include "rocksdb/write_buffer_manager.h"
 #include "util/testharness.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class WriteBufferManagerTest : public testing::Test {};

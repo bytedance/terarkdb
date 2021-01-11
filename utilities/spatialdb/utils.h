@@ -9,6 +9,7 @@
 
 #include "rocksdb/utilities/spatial_db.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace spatial {
 

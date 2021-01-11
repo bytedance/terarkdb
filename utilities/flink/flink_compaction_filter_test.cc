@@ -7,6 +7,7 @@
 #include <random>
 #include "util/testharness.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace flink {
 

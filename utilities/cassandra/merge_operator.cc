@@ -13,6 +13,7 @@
 #include "utilities/merge_operators.h"
 #include "utilities/cassandra/format.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace cassandra {
 

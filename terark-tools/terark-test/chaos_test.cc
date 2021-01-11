@@ -1,5 +1,6 @@
 #include "chaos_test.hpp"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class ChaosTest {

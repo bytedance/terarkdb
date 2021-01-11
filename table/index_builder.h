@@ -21,6 +21,7 @@
 #include "table/block_builder.h"
 #include "table/format.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 // The interface for building index.
 // Instruction for adding a new concrete IndexBuilder:

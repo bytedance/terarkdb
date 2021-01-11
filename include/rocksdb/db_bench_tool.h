@@ -4,6 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 #pragma once
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 int db_bench_tool(int argc, char** argv);
 }  // namespace TERARKDB_NAMESPACE

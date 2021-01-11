@@ -13,6 +13,7 @@
 #include "rocksdb/utilities/transaction_db.h"
 #include "util/cast_util.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Instead of reconstructing a Transaction object, and calling rollback on it,

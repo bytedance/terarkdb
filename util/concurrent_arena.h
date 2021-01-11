@@ -26,6 +26,7 @@
 #define ROCKSDB_FIELD_UNUSED
 #endif  // __clang__
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Logger;

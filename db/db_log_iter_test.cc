@@ -15,6 +15,7 @@
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBTestXactLogIterator : public DBTestBase {

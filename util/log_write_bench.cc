@@ -29,6 +29,7 @@ DEFINE_int32(record_interval, 10000, "Interval between records (microSec)");
 DEFINE_int32(bytes_per_sync, 0, "bytes_per_sync parameter in EnvOptions");
 DEFINE_bool(enable_sync, false, "sync after each write.");
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 void RunBenchmark() {
   std::string file_name = test::PerThreadDBPath("log_write_benchmark.log");

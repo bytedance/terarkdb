@@ -47,6 +47,7 @@
 #include "util/string_util.h"
 #include "util/sync_point.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 extern const uint64_t kBlockBasedTableMagicNumber;

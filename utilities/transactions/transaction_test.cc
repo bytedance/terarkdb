@@ -37,6 +37,7 @@
 
 using std::string;
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 INSTANTIATE_TEST_CASE_P(

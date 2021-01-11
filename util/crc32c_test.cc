@@ -10,6 +10,7 @@
 #include "util/testharness.h"
 #include "util/coding.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace crc32c {
 

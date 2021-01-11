@@ -8,6 +8,7 @@
 #include <string>
 #include "util/dynamic_bloom.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 class Logger;
 

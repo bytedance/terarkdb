@@ -8,6 +8,7 @@
 #include <string>
 #include "port/port.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 ColBufEncoder::~ColBufEncoder() {}

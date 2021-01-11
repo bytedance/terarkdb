@@ -8,6 +8,7 @@
 #include "util/event_logger.h"
 #include "util/testharness.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class EventLoggerTest : public testing::Test {};

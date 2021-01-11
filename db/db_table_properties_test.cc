@@ -19,6 +19,7 @@
 
 #ifndef ROCKSDB_LITE
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // A helper function that ensures the table properties returned in

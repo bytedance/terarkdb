@@ -23,6 +23,7 @@
 #include "util/testharness.h"
 #include "utilities/merge_operators.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 static uint64_t TestGetTickerCount(const Options& options,

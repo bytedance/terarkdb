@@ -12,6 +12,7 @@
 #include <vector>
 #include "util/coding.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 enum ColCompressionType {

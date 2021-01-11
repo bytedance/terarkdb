@@ -13,6 +13,7 @@ extern "C" {
 #include <lualib.h>
 }
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace lua {
 // A class that used to define custom C Library that is callable

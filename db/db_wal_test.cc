@@ -14,6 +14,7 @@
 #include "util/fault_injection_test_env.h"
 #include "util/sync_point.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 class DBWALTest : public DBTestBase {
  public:

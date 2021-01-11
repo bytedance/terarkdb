@@ -37,12 +37,18 @@ option(WITH_TESTS "build with tests" OFF)
 option(WITH_TOOLS "build with tools" OFF)
 option(WITH_TERARK_ZIP "build with TerarkZipTable support" OFF)
 option(WITH_BOOSTLIB "build with boost, if WITH_TERARK_ZIP is ON, this will also set to ON" OFF)
+option(WITH_TERARKDB_NAMESPACE "namespace" "terark")
 
 option(BUILD_SUFFIX "library sufix" "d")
 option(FORCE_TERARKDB_RELEASE_BUILD "ignore outside cmake_build_type" OFF)
 
 SET(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 Find_Package(Threads REQUIRED)
+
+#----------------------- namespace
+if(WITH_TERARKDB_NAMESPACE)
+  add_definitions(-DTERARKDB_NAMESPACE=WITH_TERARKDB_NAMESPACE)
+endif()
 
 #----------------------- Global Options
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin" OR CMAKE_BUILD_TYPE STREQUAL "Release" OR WITH_JEMALLOC)

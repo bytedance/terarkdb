@@ -29,6 +29,7 @@ bool FLAGS_verbose = false;
 
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBIteratorStressTest : public testing::Test {

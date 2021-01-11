@@ -16,6 +16,7 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class WritableFileWriter;

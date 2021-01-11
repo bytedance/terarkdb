@@ -11,6 +11,7 @@
 #include "utilities/col_buf_decoder.h"
 #include "utilities/col_buf_encoder.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class ColumnAwareEncodingTest : public testing::Test {

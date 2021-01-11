@@ -11,6 +11,7 @@
 
 #include "rocksdb/table.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 const int kDataBlockIndexTypeBitShift = 31;

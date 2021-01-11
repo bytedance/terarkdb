@@ -9,6 +9,7 @@
 #include "monitoring/thread_status_util.h"
 #include "rocksdb/env.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #ifndef NDEBUG

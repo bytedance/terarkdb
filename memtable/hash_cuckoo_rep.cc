@@ -24,6 +24,7 @@
 #include "util/string_util.h"
 #include "utilities/util/valvec.hpp"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace {
 

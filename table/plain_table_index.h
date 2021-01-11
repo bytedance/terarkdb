@@ -18,6 +18,7 @@
 #include "util/hash.h"
 #include "util/murmurhash.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // PlainTableIndex contains buckets size of index_size_, each is a

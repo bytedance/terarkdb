@@ -14,6 +14,7 @@
 
 #include <algorithm>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {

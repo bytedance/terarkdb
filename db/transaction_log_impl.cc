@@ -13,6 +13,7 @@
 #include "db/write_batch_internal.h"
 #include "util/file_reader_writer.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 TransactionLogIteratorImpl::TransactionLogIteratorImpl(

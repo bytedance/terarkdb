@@ -44,6 +44,7 @@ private:
   high_resolution_clock::time_point _start;
 };
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class EnvLibradosTest : public testing::Test {

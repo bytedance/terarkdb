@@ -8,6 +8,7 @@
 
 #include <functional>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 bool BlockCacheTierMetadata::Insert(BlockCacheFile* file) {

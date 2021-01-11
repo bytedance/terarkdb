@@ -7,6 +7,7 @@
 #include "rocksdb/env.h"
 #include "stats.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 class ByteDanceHistReporterHandle : public HistReporterHandle {
  public:

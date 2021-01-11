@@ -56,6 +56,7 @@
 #include "util/sync_point.h"
 #include "utilities/util/valvec.hpp"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {

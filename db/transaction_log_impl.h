@@ -18,6 +18,7 @@
 #include "rocksdb/types.h"
 #include "util/filename.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class LogFileImpl : public LogFile {

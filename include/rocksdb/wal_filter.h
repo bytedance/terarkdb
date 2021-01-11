@@ -8,6 +8,7 @@
 #include <string>
 #include <map>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class WriteBatch;

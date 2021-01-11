@@ -17,6 +17,7 @@
 #include "memtable/terark_zip_memtable.h"
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBMemTableTest : public DBTestBase {

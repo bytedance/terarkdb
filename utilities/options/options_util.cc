@@ -11,6 +11,7 @@
 #include "rocksdb/options.h"
 #include "util/filename.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 Status LoadOptionsFromFile(const std::string& file_name, Env* env,
                            DBOptions* db_options,

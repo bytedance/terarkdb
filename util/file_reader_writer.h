@@ -17,6 +17,7 @@
 #include "util/aligned_buffer.h"
 #include "util/sync_point.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Statistics;

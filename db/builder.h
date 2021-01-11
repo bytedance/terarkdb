@@ -24,6 +24,7 @@
 #include "table/scoped_arena_iterator.h"
 #include "util/event_logger.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct Options;

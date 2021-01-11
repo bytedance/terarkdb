@@ -33,6 +33,7 @@
 //   key  : 'k' + : + $id
 //   value:  $quadkey
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 const double GeoDBImpl::PI = 3.141592653589793;

@@ -11,6 +11,7 @@
 #include "port/sys_time.h"
 #include <ctime>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Logger;

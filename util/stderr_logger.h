@@ -10,6 +10,7 @@
 
 #include "rocksdb/env.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Prints logs to stderr for faster debugging

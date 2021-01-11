@@ -41,6 +41,7 @@
 #include "util/stop_watch.h"
 #include "util/thread_local.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBImpl;

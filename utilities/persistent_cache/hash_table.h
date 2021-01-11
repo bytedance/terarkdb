@@ -18,6 +18,7 @@
 #include "include/rocksdb/env.h"
 #include "util/mutexlock.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // HashTable<T, Hash, Equal>

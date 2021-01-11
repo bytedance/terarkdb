@@ -210,6 +210,7 @@ static bool Overlap(const fstring& a, const fstring& b) {
 
 }  // namespace
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 Status ReadMetaBlockAdapte(RandomAccessFileReader* file, uint64_t file_size,

@@ -81,6 +81,7 @@
 #define fdatasync fsync
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace port {
 

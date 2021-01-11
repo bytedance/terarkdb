@@ -21,6 +21,7 @@
 
 using std::string;
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class OptimisticTransactionTest : public testing::Test {

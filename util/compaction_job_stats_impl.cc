@@ -5,6 +5,7 @@
 
 #include "rocksdb/compaction_job_stats.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE

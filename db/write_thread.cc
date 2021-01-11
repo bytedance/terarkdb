@@ -12,6 +12,7 @@
 #include "util/random.h"
 #include "util/sync_point.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 WriteThread::WriteThread(const ImmutableDBOptions& db_options)

@@ -9,6 +9,7 @@
 
 #include <memory>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // MemoryAllocator is an interface that a client can implement to supply custom

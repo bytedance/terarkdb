@@ -36,6 +36,7 @@
 
 #ifndef ROCKSDB_LITE
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class EventListenerTest : public DBTestBase {

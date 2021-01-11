@@ -31,6 +31,7 @@
 // third party
 #include <zstd/zstd.h>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 using namespace terark;

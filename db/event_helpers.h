@@ -14,6 +14,7 @@
 #include "rocksdb/table_properties.h"
 #include "util/event_logger.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class EventHelpers {

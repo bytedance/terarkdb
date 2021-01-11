@@ -18,6 +18,7 @@
 #include "util/mutexlock.h"
 #include "util/string_util.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace {
 

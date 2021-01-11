@@ -44,6 +44,7 @@ void DictZipBlobStore_setZipThreads(int zipThreads);
   MyGetUInt(obj.compaction_options_universal, name, \
             obj.compaction_options_universal.name)
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 void TerarkZipDeleteTempFiles(const std::string& tmpPath) {

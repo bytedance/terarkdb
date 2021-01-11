@@ -10,6 +10,7 @@
 #include "rocksjni/jnicallback.h"
 #include "rocksjni/portal.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 JniCallback::JniCallback(JNIEnv* env, jobject jcallback_obj) {
   // Note: jcallback_obj may be accessed by multiple threads,

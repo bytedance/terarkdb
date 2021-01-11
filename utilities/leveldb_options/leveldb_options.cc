@@ -15,6 +15,7 @@
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 LevelDBOptions::LevelDBOptions()

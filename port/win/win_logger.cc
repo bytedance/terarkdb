@@ -24,6 +24,7 @@
 #include "monitoring/iostats_context_imp.h"
 #include "port/sys_time.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace port {

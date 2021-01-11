@@ -20,6 +20,7 @@
 #include "util/coding.h"
 #include "util/string_util.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // kValueTypeForSeek defines the ValueType that should be passed when

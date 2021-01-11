@@ -14,6 +14,7 @@
 #include "util/testutil.h"
 #include "util/testharness.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace {
 void AssertField(const JSONDocument& json, const std::string& field) {

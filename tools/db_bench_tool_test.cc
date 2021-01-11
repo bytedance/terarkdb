@@ -17,6 +17,7 @@
 #ifdef GFLAGS
 #include "util/gflags_compat.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace {
 static const int kMaxArgCount = 100;

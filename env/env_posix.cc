@@ -81,6 +81,7 @@
 #define EXT4_SUPER_MAGIC 0xEF53
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {

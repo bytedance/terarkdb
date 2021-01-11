@@ -14,6 +14,7 @@
 #include "rocksdb/utilities/transaction.h"
 #include "rocksjni/jnicallback.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 /**

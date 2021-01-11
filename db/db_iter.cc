@@ -32,6 +32,7 @@
 #include "util/trace_replay.h"
 #include "util/util.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #if 0

@@ -29,6 +29,7 @@
 #include "util/log_buffer.h"
 #include "util/sync_point.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class InternalKeyComparator;

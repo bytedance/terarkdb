@@ -11,6 +11,7 @@
 #include "rocksdb/status.h"
 #include "rocksdb/types.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 // use_fsync maps to options.use_fsync, which determines the way that
 // the file is synced after copying.

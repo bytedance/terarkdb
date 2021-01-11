@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // This class is used to track the log files with outstanding prepare entries.

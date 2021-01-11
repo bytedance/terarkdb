@@ -12,6 +12,7 @@
 #include "util/allocator.h"
 #include "util/arena.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 AllocTracker::AllocTracker(WriteBufferManager* write_buffer_manager)

@@ -20,6 +20,7 @@
 #include "util/string_util.h"
 #include "util/testharness.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Conversions between numeric keys/values and the types expected by Cache.

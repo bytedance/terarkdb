@@ -11,6 +11,7 @@
 
 #include "env.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class EncryptionProvider;

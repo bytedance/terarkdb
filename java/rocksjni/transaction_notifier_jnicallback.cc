@@ -9,6 +9,7 @@
 #include "rocksjni/transaction_notifier_jnicallback.h"
 #include "rocksjni/portal.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 TransactionNotifierJniCallback::TransactionNotifierJniCallback(JNIEnv* env,

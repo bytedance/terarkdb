@@ -7,6 +7,7 @@
 #include <assert.h>
 #include "monitoring/perf_level_imp.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #ifdef ROCKSDB_SUPPORT_THREAD_LOCAL

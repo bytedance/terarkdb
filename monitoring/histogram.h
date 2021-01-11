@@ -16,6 +16,7 @@
 #include <map>
 #include <mutex>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class HistogramBucketMapper {

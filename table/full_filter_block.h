@@ -17,6 +17,7 @@
 #include "util/hash.h"
 #include "table/filter_block.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class FilterPolicy;

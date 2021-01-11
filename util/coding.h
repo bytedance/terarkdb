@@ -26,6 +26,7 @@
   #define PLATFORM_UNALIGNED_ACCESS_NOT_ALLOWED
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // The maximum length of a varint in bytes for 64-bit.

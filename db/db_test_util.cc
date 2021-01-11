@@ -11,6 +11,7 @@
 #include "db/forward_iterator.h"
 #include "rocksdb/env_encryption.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Special Env used to delay background operations

@@ -26,6 +26,7 @@
 #include "util/testharness.h"
 #include "utilities/persistent_cache/volatile_tier_impl.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 //

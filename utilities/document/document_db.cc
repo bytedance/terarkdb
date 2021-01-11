@@ -18,6 +18,7 @@
 #include "util/mutexlock.h"
 #include "port/port.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // IMPORTANT NOTE: Secondary index column families should be very small and

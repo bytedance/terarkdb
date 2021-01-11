@@ -22,6 +22,7 @@
 #include "rocksdb/status.h"
 #include "rocksdb/transaction_log.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Env;

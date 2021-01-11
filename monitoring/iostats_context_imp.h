@@ -8,6 +8,7 @@
 #include "rocksdb/iostats_context.h"
 
 #ifdef ROCKSDB_SUPPORT_THREAD_LOCAL
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 extern __thread IOStatsContext iostats_context;
 }  // namespace TERARKDB_NAMESPACE

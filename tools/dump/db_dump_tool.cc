@@ -17,6 +17,7 @@
 #include "rocksdb/env.h"
 #include "util/coding.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 bool DbDumpTool::Run(const DumpOptions& dump_options,

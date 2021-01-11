@@ -17,6 +17,7 @@
 #include "table/plain_table_reader.h"
 #include "util/string_util.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 Status PlainTableFactory::NewTableReader(

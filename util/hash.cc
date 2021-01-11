@@ -12,6 +12,7 @@
 #include "util/hash.h"
 #include "util/util.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 uint32_t Hash(const char* data, size_t n, uint32_t seed) {

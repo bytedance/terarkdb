@@ -19,6 +19,7 @@
 #include "table/index_builder.h"
 #include "util/autovector.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class PartitionedFilterBlockBuilder : public FullFilterBlockBuilder {

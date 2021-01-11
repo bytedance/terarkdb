@@ -14,6 +14,7 @@
 #endif
 
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // This class contains APIs to stack rocksdb wrappers.Eg. Stack TTL over base d

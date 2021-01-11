@@ -13,6 +13,7 @@
 #include "table/plain_table_factory.h"
 #include "util/file_reader_writer.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 enum PlainTableEntryType : unsigned char {

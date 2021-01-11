@@ -14,6 +14,7 @@
 #include "rocksdb/status.h"
 #include "rocksdb/table_properties.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 typedef std::unordered_map<std::string, std::shared_ptr<const TableProperties>>

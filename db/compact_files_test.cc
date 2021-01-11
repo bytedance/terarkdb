@@ -18,6 +18,7 @@
 #include "util/sync_point.h"
 #include "util/testharness.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class CompactFilesTest : public testing::Test {

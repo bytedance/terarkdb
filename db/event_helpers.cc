@@ -5,6 +5,7 @@
 
 #include "db/event_helpers.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {

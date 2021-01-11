@@ -68,6 +68,7 @@ It depends on successfully passing SMHasher test set.
 #endif
 
 #if defined (__cplusplus)
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 #endif
 

@@ -18,6 +18,7 @@
 #include "rocksdb/sst_file_writer.h"
 #include "util/autovector.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct IngestedFileInfo {

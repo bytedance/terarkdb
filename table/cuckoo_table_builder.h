@@ -17,6 +17,7 @@
 #include "rocksdb/table_properties.h"
 #include "util/autovector.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class CuckooTableBuilder: public TableBuilder {

@@ -13,6 +13,7 @@
 #include "rocksdb/utilities/table_properties_collectors.h"
 #include "util/sync_point.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 static std::string CompressibleString(Random* rnd, int len) {

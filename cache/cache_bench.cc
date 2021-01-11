@@ -48,6 +48,7 @@ DEFINE_int32(erase_percent, 10,
 
 DEFINE_bool(use_clock_cache, false, "");
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class CacheBench;

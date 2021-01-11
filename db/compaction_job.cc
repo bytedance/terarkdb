@@ -90,6 +90,7 @@
 #include "utilities/util/function.hpp"
 #include "utilities/util/valvec.hpp"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 const char* GetCompactionReasonString(CompactionReason compaction_reason) {

@@ -19,6 +19,7 @@
 #include "rocksdb/lazy_buffer.h"
 #include "util/stop_watch.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class CombinedInternalIterator;

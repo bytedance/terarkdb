@@ -12,6 +12,7 @@
 #include "util/coding.h"
 #include "util/murmurhash.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace stl_wrappers {
 

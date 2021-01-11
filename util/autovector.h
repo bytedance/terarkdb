@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <vector>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #ifdef ROCKSDB_LITE

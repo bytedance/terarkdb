@@ -8,6 +8,7 @@
 
 #include "rocksdb/memory_allocator.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct CustomDeleter {

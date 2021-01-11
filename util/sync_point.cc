@@ -10,6 +10,7 @@ int rocksdb_kill_odds = 0;
 std::vector<std::string> rocksdb_kill_prefix_blacklist;
 
 #ifndef NDEBUG
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 SyncPoint* SyncPoint::GetInstance() {

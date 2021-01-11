@@ -35,6 +35,7 @@
 #include "table/block_based_table_factory.h"
 #include "util/compression.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 AdvancedColumnFamilyOptions::AdvancedColumnFamilyOptions() {

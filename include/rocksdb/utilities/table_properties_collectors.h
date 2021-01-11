@@ -10,6 +10,7 @@
 
 #include "rocksdb/table_properties.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // A factory of a table property collector that marks a SST

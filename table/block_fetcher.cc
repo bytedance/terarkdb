@@ -29,6 +29,7 @@
 #include "util/string_util.h"
 #include "util/xxhash.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 inline

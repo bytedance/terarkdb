@@ -9,6 +9,7 @@
 #include <memory>
 #include "rocksdb/utilities/table_properties_collectors.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 CompactOnDeletionCollector::CompactOnDeletionCollector(

@@ -9,6 +9,7 @@
 #include "monitoring/histogram_windowing.h"
 #include "util/testharness.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class HistogramTest : public testing::Test {};

@@ -15,6 +15,7 @@
 // MUTEX_DEBUG_MILLISECONDS set 0 to disable
 #define MUTEX_DEBUG_MILLISECONDS 0
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 class InstrumentedCondVar;
 

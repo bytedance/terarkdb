@@ -12,6 +12,7 @@
 #include "rocksdb/utilities/object_registry.h"
 #include "util/testharness.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Normalizes trivial differences across Envs such that these test cases can

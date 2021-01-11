@@ -7,6 +7,7 @@
 
 #include "rocksdb/db.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 ManagedSnapshot::ManagedSnapshot(DB* db) : db_(db),

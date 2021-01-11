@@ -20,6 +20,7 @@
 #include "table/partitioned_filter_block.h"
 
 // Without anonymous namespace here, we fail the warning -Wmissing-prototypes
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 // using namespace TERARKDB_NAMESPACE;
 // Create a index builder based on its type.

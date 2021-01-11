@@ -9,6 +9,7 @@
 #include "rocksdb/comparator.h"
 #include "util/testutil.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class RangeTombstoneFragmenterTest : public testing::Test {};

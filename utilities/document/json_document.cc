@@ -140,6 +140,7 @@ void CreateObject(std::unique_ptr<char[]>* data, fbson::FbsonValue** value) {
 
 }  // namespace
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 

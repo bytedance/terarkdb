@@ -54,6 +54,7 @@ static const size_t kPageSize = sysconf(_SC_PAGESIZE);
 static const size_t kPageSize = 4 * 1024;
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 static const int kDelayMicros = 100000;

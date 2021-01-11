@@ -11,6 +11,7 @@
 // See ../doc/log_format.txt for more detail.
 
 #pragma once
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace log {
 

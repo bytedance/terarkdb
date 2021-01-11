@@ -15,6 +15,7 @@
 
 #include "rocksdb/env.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Creates a new T using the factory function that was registered with a pattern

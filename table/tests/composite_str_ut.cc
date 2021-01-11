@@ -17,6 +17,7 @@ using namespace std;
 
 static const size_t KEY_LEN = 18;
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
   struct TerarkZipTableOptions {};

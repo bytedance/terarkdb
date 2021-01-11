@@ -41,6 +41,7 @@
 #include "port/port.h"
 #include "util/thread_operation.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class ColumnFamilyHandle;

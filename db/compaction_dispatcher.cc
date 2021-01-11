@@ -156,6 +156,7 @@ void save_to(string_stream& ss, const T& x) {
 #ifdef USE_AJSON
 using namespace TERARKDB_NAMESPACE;
 #else
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 template <class DataIO>
@@ -246,6 +247,7 @@ AJSON(CompactionWorkerContext, user_comparator, merge_operator,
 }  // namespace TERARKDB_NAMESPACE
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 template <class T>

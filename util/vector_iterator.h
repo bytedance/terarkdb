@@ -9,6 +9,7 @@
 #include "rocksdb/slice.h"
 #include "table/internal_iterator.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Iterator over a vector of keys/values

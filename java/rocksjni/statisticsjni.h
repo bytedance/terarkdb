@@ -15,6 +15,7 @@
 #include "rocksdb/statistics.h"
 #include "monitoring/statistics.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
   class StatisticsJni : public StatisticsImpl {

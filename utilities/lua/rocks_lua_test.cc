@@ -18,6 +18,7 @@
 #include "rocksdb/utilities/lua/rocks_lua_compaction_filter.h"
 #include "util/testharness.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class StopOnErrorLogger : public Logger {

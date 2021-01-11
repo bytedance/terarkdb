@@ -32,6 +32,7 @@ DEFINE_int32(nthread_write, 1, "insert %");
 DEFINE_int32(nthread_read, 1, "lookup %");
 DEFINE_int32(nthread_erase, 1, "erase %");
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 //

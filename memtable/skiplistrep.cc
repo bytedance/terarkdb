@@ -13,6 +13,7 @@
 #include "table/terark_zip_internal.h"
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace {
 template <class ComparatorType>

@@ -13,6 +13,7 @@
 #include "table/scoped_arena_iterator.h"
 #include "util/arena.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 void TableReader::RangeScan(const Slice* begin,

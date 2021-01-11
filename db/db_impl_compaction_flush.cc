@@ -24,6 +24,7 @@
 #include "util/sst_file_manager_impl.h"
 #include "util/sync_point.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 bool DBImpl::EnoughRoomForCompaction(

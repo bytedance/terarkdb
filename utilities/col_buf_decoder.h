@@ -13,6 +13,7 @@
 #include "util/coding.h"
 #include "utilities/col_buf_encoder.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct ColDeclaration;

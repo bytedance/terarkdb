@@ -6,6 +6,7 @@
 #include <mutex>
 #include <cstdlib>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 /* GLOBAL DIFINE */
 // #define DEBUG

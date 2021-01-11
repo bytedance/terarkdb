@@ -6,6 +6,7 @@
 #pragma once
 #include "rocksdb/types.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Callback class that control GC of duplicate keys in flush/compaction

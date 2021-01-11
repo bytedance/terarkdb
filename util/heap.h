@@ -11,6 +11,7 @@
 #include "port/port.h"
 #include "util/autovector.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Binary heap implementation optimized for use in multi-way merge sort.

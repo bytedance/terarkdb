@@ -24,6 +24,7 @@
 #include "util/sync_point.h"
 #include "utilities/util/factory.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 const uint64_t kRangeTombstoneSentinel =

@@ -40,6 +40,7 @@
 #include "table/data_block_footer.h"
 #include "util/coding.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 BlockBuilder::BlockBuilder(

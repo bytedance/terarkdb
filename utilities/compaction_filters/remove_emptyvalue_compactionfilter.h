@@ -12,6 +12,7 @@
 #include "rocksdb/compaction_filter.h"
 #include "rocksdb/slice.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class RemoveEmptyValueCompactionFilter : public CompactionFilter {

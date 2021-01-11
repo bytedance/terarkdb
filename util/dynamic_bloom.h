@@ -14,6 +14,7 @@
 #include <atomic>
 #include <memory>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Slice;

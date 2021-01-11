@@ -61,6 +61,7 @@
 #include "util/trace_replay.h"
 #include "utilities/console/server.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Arena;

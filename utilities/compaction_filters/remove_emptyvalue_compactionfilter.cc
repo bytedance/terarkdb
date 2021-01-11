@@ -10,6 +10,7 @@
 #include "rocksdb/slice.h"
 #include "utilities/compaction_filters/remove_emptyvalue_compactionfilter.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 const char* RemoveEmptyValueCompactionFilter::Name() const {

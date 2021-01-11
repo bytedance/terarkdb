@@ -20,6 +20,7 @@
 #include "utilities/merge_operators.h"
 #include "util/testharness.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 bool use_compression;

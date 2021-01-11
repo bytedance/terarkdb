@@ -8,6 +8,7 @@
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/slice.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class StringAppendOperator : public AssociativeMergeOperator {

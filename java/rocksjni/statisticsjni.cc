@@ -8,6 +8,7 @@
 
 #include "rocksjni/statisticsjni.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
   StatisticsJni::StatisticsJni(std::shared_ptr<Statistics> stats)

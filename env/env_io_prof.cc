@@ -7,6 +7,7 @@
 #define BOOST_CURRENT_FUNCTION "(unknown)"
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class IOProfSequentialFile : public SequentialFileWrapper {

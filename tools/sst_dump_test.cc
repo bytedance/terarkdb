@@ -19,6 +19,7 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 const uint32_t optLength = 100;

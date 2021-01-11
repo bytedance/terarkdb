@@ -11,6 +11,7 @@
 #include "util/murmurhash.h"
 #include "rocksdb/options.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 const uint32_t kCuckooMurmurSeedMultiplier = 816922183;

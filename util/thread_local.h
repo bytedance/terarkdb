@@ -13,6 +13,7 @@
 
 #include "util/autovector.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Cleanup function that will be called for a stored thread local

@@ -14,6 +14,7 @@
 
 #include "rocksdb/utilities/transaction_db_mutex.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class TransactionDBMutexImpl : public TransactionDBMutex {

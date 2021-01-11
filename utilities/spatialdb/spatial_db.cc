@@ -33,6 +33,7 @@
 #include "utilities/spatialdb/utils.h"
 #include "port/port.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace spatial {
 

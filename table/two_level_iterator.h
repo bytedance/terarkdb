@@ -13,6 +13,7 @@
 #include "table/iterator_wrapper.h"
 #include "util/iterator_cache.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct ReadOptions;

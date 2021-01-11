@@ -14,6 +14,7 @@
 
 #include <atomic>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace compression_cache {
 

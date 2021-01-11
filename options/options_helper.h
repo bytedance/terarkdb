@@ -18,6 +18,7 @@
 #include "rocksdb/universal_compaction.h"
 #include "table/terark_zip_table.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,

@@ -16,6 +16,7 @@
 #ifdef USE_HDFS
 #include <hdfs.h>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Thrown during execution when there is an issue with the supplied
@@ -238,6 +239,7 @@ class HdfsEnv : public Env {
 #else // USE_HDFS
 
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 static const Status notsup;

@@ -8,6 +8,7 @@
 #include "utilities/cassandra/format.h"
 #include "utilities/cassandra/test_utils.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace cassandra {
 

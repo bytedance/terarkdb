@@ -10,6 +10,7 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Simple implementation of SlicePart variants of Put().  Child classes

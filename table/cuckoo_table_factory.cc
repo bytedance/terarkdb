@@ -11,6 +11,7 @@
 #include "table/cuckoo_table_builder.h"
 #include "table/cuckoo_table_reader.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 Status CuckooTableFactory::NewTableReader(

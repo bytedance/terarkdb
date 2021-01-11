@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace cassandra {
 namespace {

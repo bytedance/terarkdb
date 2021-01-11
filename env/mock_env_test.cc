@@ -10,6 +10,7 @@
 #include "rocksdb/env.h"
 #include "util/testharness.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class MockEnvTest : public testing::Test {

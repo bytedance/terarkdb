@@ -22,6 +22,7 @@
 
 using std::string;
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class WriteCallbackTest : public testing::Test {

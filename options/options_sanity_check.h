@@ -9,6 +9,7 @@
 #include <unordered_map>
 
 #ifndef ROCKSDB_LITE
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 // This enum defines the RocksDB options sanity level.
 enum OptionsSanityCheckLevel : unsigned char {

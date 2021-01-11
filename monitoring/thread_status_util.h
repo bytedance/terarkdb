@@ -12,6 +12,7 @@
 #include "rocksdb/env.h"
 #include "rocksdb/thread_status.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class ColumnFamilyData;

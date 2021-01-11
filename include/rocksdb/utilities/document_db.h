@@ -13,6 +13,7 @@
 #include "rocksdb/utilities/json_document.h"
 #include "rocksdb/db.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // IMPORTANT: DocumentDB is a work in progress. It is unstable and we might

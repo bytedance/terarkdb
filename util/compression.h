@@ -41,6 +41,7 @@
 #if ZSTD_VERSION_NUMBER >= 10103  // v1.1.3+
 #include <zdict.h>
 #endif  // ZSTD_VERSION_NUMBER >= 10103
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 // Need this for the context allocation override
 // On windows we need to do this explicitly
@@ -107,6 +108,7 @@ class ZSTDUncompressCachedData {
 #endif  // ZSTD
 
 #if !(defined ZSTD) || !(ZSTD_VERSION_NUMBER >= 500)
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 class ZSTDUncompressCachedData {
   void* padding;  // unused
@@ -133,6 +135,7 @@ class ZSTDUncompressCachedData {
 #include "port/xpress.h"
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Instantiate this class and pass it to the uncompression API below

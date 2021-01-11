@@ -9,6 +9,7 @@
 
 #include "db/column_family.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 void FlushScheduler::ScheduleFlush(ColumnFamilyData* cfd) {

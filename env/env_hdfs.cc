@@ -30,6 +30,7 @@
 // will reside on the same HDFS cluster.
 //
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {
@@ -608,6 +609,7 @@ Status NewHdfsEnv(Env** hdfs_env, const std::string& fsname) {
 #else // USE_HDFS
 
 // dummy placeholders used when HDFS is not available
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 Status HdfsEnv::NewSequentialFile(const std::string& /*fname*/,
                                   std::unique_ptr<SequentialFile>* /*result*/,

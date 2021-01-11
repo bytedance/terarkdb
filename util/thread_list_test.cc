@@ -12,6 +12,7 @@
 
 #ifdef ROCKSDB_USING_THREAD_STATUS
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class SimulatedBackgroundTask {

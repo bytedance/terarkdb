@@ -23,6 +23,7 @@
 #include "util/allocator.h"
 #include "util/mutexlock.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Arena : public Allocator {

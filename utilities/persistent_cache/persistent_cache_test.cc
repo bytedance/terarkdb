@@ -16,6 +16,7 @@
 
 #include "utilities/persistent_cache/block_cache_tier.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 static const double kStressFactor = .125;

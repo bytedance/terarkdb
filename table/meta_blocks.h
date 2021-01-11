@@ -19,6 +19,7 @@
 #include "table/format.h"
 #include "util/kv_map.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class BlockBuilder;

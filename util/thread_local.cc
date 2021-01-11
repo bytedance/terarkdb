@@ -26,6 +26,7 @@
 #include <boost/fiber/fss.hpp>
 #endif
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct Entry {

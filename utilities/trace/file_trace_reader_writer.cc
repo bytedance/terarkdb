@@ -9,6 +9,7 @@
 #include "util/file_reader_writer.h"
 #include "util/trace_replay.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 const unsigned int FileTraceReader::kBufferSize = 1024;  // 1KB

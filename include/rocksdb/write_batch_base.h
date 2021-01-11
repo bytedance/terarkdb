@@ -10,6 +10,7 @@
 
 #include <cstddef>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Slice;

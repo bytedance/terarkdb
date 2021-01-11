@@ -22,6 +22,7 @@ extern std::vector<std::string> rocksdb_kill_prefix_blacklist;
 #define TEST_KILL_RANDOM(kill_point, rocksdb_kill_odds)
 #else
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 // Kill the process with probability 1/odds for testing.
 extern void TestKillRandom(std::string kill_point, int odds,
@@ -48,6 +49,7 @@ extern void TestKillRandom(std::string kill_point, int odds,
 #define INIT_SYNC_POINT_SINGLETONS()
 #else
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // This class provides facility to reproduce race conditions deterministically

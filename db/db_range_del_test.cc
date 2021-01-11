@@ -8,6 +8,7 @@
 #include "util/testutil.h"
 #include "utilities/merge_operators.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBRangeDelTest : public DBTestBase {

@@ -10,6 +10,7 @@
 #include "rocksdb/table.h"
 #include "util/hash.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 uint64_t gene_seed() {

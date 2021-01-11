@@ -32,6 +32,7 @@
 #undef DeleteFile
 #undef GetTickCount
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace port {
 

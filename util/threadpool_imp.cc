@@ -31,6 +31,7 @@
 #include <thread>
 #include <vector>
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 void ThreadPoolImpl::PthreadCall(const char* label, int result) {

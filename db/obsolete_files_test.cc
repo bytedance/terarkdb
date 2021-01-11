@@ -32,6 +32,7 @@ using std::cout;
 using std::endl;
 using std::flush;
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class ObsoleteFilesTest : public testing::Test {

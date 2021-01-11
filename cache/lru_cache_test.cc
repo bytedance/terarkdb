@@ -10,6 +10,7 @@
 #include "port/port.h"
 #include "util/testharness.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class LRUCacheTest : public testing::Test {

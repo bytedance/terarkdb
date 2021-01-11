@@ -16,6 +16,7 @@
 #include "util/sync_point.h"
 #include "utilities/persistent_cache/block_cache_tier_file.h"
 
+#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 //
