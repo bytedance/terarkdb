@@ -923,7 +923,6 @@ IF(WITH_TESTS OR WITH_TOOLS)
   add_library(testharness OBJECT util/testharness.cc util/mock_time_env.cc)
   target_link_libraries(testharness gtest)
 ENDIF()
-
 if(WITH_TESTS)
   set(TESTS
         cache/cache_test.cc

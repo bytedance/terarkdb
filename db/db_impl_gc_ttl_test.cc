@@ -82,7 +82,9 @@ TEST_F(DBImplGCTTL_Test, L0FileExpiredTest) {
   ASSERT_TRUE(flag);
   ASSERT_EQ(L0FilesNums, mark);
   dbfull()->CompactRange(CompactRangeOptions(),nullptr, nullptr);
+  dbfull()->ScheduleGCTTL();
   dbfull()->TEST_WaitForCompact();
+
   Close();
 }
 
