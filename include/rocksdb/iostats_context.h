@@ -5,14 +5,15 @@
 #pragma once
 
 #include <stdint.h>
+
 #include <string>
 
 #include "rocksdb/perf_level.h"
+#include "rocksdb/terark_namespace.h"
 
 // A thread local context for gathering io-stats efficiently and transparently.
 // Use SetPerfLevel(PerfLevel::kEnableTime) to enable time stats.
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct IOStatsContext {

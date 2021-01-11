@@ -16,9 +16,9 @@
 #include "monitoring/perf_context_imp.h"
 #include "port/port.h"
 #include "rocksdb/filter_policy.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 FullFilterBlockBuilder::FullFilterBlockBuilder(
@@ -148,7 +148,7 @@ bool FullFilterBlockReader::PrefixMayMatch(
 }
 
 bool FullFilterBlockReader::MayMatch(const Slice& entry) {
-  if (contents_.size() != 0)  {
+  if (contents_.size() != 0) {
     if (filter_bits_reader_->MayMatch(entry)) {
       PERF_COUNTER_ADD(bloom_sst_hit_count, 1);
       return true;
@@ -172,10 +172,11 @@ size_t FullFilterBlockReader::ApproximateMemoryUsage() const {
   return usage;
 }
 
-bool FullFilterBlockReader::RangeMayExist(const Slice* iterate_upper_bound,
-    const Slice& user_key, const SliceTransform* prefix_extractor,
-    const Comparator* comparator, const Slice* const const_ikey_ptr,
-    bool* filter_checked, bool need_upper_bound_check) {
+bool FullFilterBlockReader::RangeMayExist(
+    const Slice* iterate_upper_bound, const Slice& user_key,
+    const SliceTransform* prefix_extractor, const Comparator* comparator,
+    const Slice* const const_ikey_ptr, bool* filter_checked,
+    bool need_upper_bound_check) {
   if (!prefix_extractor || !prefix_extractor->InDomain(user_key)) {
     *filter_checked = false;
     return true;
@@ -192,9 +193,9 @@ bool FullFilterBlockReader::RangeMayExist(const Slice* iterate_upper_bound,
   }
 }
 
-bool FullFilterBlockReader::IsFilterCompatible(
-    const Slice* iterate_upper_bound, const Slice& prefix,
-    const Comparator* comparator) {
+bool FullFilterBlockReader::IsFilterCompatible(const Slice* iterate_upper_bound,
+                                               const Slice& prefix,
+                                               const Comparator* comparator) {
   // Try to reuse the bloom filter in the SST table if prefix_extractor in
   // mutable_cf_options has changed. If range [user_key, upper_bound) all
   // share the same prefix then we may still be able to use the bloom filter.

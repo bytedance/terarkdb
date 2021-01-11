@@ -1,6 +1,7 @@
 #include "chaos_test.hpp"
 
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class ChaosTest {
@@ -175,14 +176,16 @@ class ChaosTest {
     options.create_if_missing = true;
     options.create_missing_column_families = true;
     options.use_aio_reads = (flags_ & TestAsync) ? true : false;
-    options.table_factory.reset(TERARKDB_NAMESPACE::NewBlockBasedTableFactory(bbto));
+    options.table_factory.reset(
+        TERARKDB_NAMESPACE::NewBlockBasedTableFactory(bbto));
 #ifdef WITH_TERARK_ZIP
     if (flags_ & TestTerark) {
       tzto.localTempDir = dbname_;
       tzto.indexNestLevel = 3;
       tzto.checksumLevel = 2;
       tzto.entropyAlgo = TERARKDB_NAMESPACE::TerarkZipTableOptions::kHuffman;
-      // tzto.entropyAlgo = TERARKDB_NAMESPACE::TerarkZipTableOptions::kNoEntropy;
+      // tzto.entropyAlgo =
+      // TERARKDB_NAMESPACE::TerarkZipTableOptions::kNoEntropy;
       tzto.terarkZipMinLevel = 0;
       tzto.debugLevel = 0;
       tzto.indexNestScale = 8;
@@ -211,8 +214,8 @@ class ChaosTest {
       tzto.disableCompressDict = false;
       tzto.optimizeCpuL3Cache = false;
       tzto.forceMetaInMemory = false;
-      options.table_factory.reset(
-          TERARKDB_NAMESPACE::NewTerarkZipTableFactory(tzto, options.table_factory));
+      options.table_factory.reset(TERARKDB_NAMESPACE::NewTerarkZipTableFactory(
+          tzto, options.table_factory));
     }
 #endif
   }
@@ -723,8 +726,8 @@ class ChaosTest {
     if (flags_ & TestIter) {
       ctx.iter.resize(hs.size());
       for (size_t i = 0; i < hs.size(); ++i) {
-        ctx.iter[i] =
-            std::unique_ptr<TERARKDB_NAMESPACE::Iterator>(db->NewIterator(ctx.ro, hs[i]));
+        ctx.iter[i] = std::unique_ptr<TERARKDB_NAMESPACE::Iterator>(
+            db->NewIterator(ctx.ro, hs[i]));
       }
     }
     ctx.ss.resize(hs.size());
@@ -786,7 +789,8 @@ class ChaosTest {
       options.compaction_style = TERARKDB_NAMESPACE::kCompactionStyleLevel;
       options.write_buffer_size = size_t(file_size_base * 1.2);
       options.enable_lazy_compaction = true;
-      cfDescriptors.emplace_back(TERARKDB_NAMESPACE::kDefaultColumnFamilyName, options);
+      cfDescriptors.emplace_back(TERARKDB_NAMESPACE::kDefaultColumnFamilyName,
+                                 options);
       options.compaction_style = TERARKDB_NAMESPACE::kCompactionStyleUniversal;
       options.write_buffer_size = size_t(file_size_base * 1.1);
       options.enable_lazy_compaction = true;

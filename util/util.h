@@ -7,17 +7,20 @@
 
 #include <utility>
 
+#include "rocksdb/terark_namespace.h"
+
 #ifndef FALLTHROUGH_INTENDED
 #if defined(__clang__)
 #define FALLTHROUGH_INTENDED [[clang::fallthrough]]
 #elif defined(__GNUC__) && __GNUC__ >= 7
 #define FALLTHROUGH_INTENDED [[gnu::fallthrough]]
 #else
-#define FALLTHROUGH_INTENDED do {} while (0)
+#define FALLTHROUGH_INTENDED \
+  do {                       \
+  } while (0)
 #endif
 #endif
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 template <class T>
 void call_destructor(T* ptr) {

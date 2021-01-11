@@ -6,6 +6,7 @@
 #include "table/full_filter_block.h"
 
 #include "rocksdb/filter_policy.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/full_filter_bits_builder.h"
 #include "util/coding.h"
 #include "util/hash.h"
@@ -13,7 +14,6 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class TestFilterBitsBuilder : public FilterBitsBuilder {
@@ -61,7 +61,6 @@ class TestFilterBitsReader : public FilterBitsReader {
   uint32_t len_;
 };
 
-
 class TestHashFilter : public FilterPolicy {
  public:
   virtual const char* Name() const override { return "TestHashFilter"; }
@@ -89,8 +88,8 @@ class TestHashFilter : public FilterPolicy {
     return new TestFilterBitsBuilder();
   }
 
-  virtual FilterBitsReader* GetFilterBitsReader(const Slice& contents)
-      const override {
+  virtual FilterBitsReader* GetFilterBitsReader(
+      const Slice& contents) const override {
     return new TestFilterBitsReader(contents);
   }
 };

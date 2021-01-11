@@ -17,6 +17,7 @@ int main() {
 #include "rocksdb/db.h"
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block_based_table_factory.h"
 #include "table/get_context.h"
 #include "table/internal_iterator.h"
@@ -30,7 +31,6 @@ int main() {
 using GFLAGS_NAMESPACE::ParseCommandLineFlags;
 using GFLAGS_NAMESPACE::SetUsageMessage;
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {
@@ -220,9 +220,10 @@ void TableReaderBenchmark(Options& opts, EnvOptions& env_options,
             }
           }
           if (count != r2_len) {
-            fprintf(
-                stderr, "Iterator cannot iterate expected number of entries. "
-                "Expected %d but got %d\n", r2_len, count);
+            fprintf(stderr,
+                    "Iterator cannot iterate expected number of entries. "
+                    "Expected %d but got %d\n",
+                    r2_len, count);
             assert(false);
           }
           delete iter;
@@ -257,14 +258,16 @@ void TableReaderBenchmark(Options& opts, EnvOptions& env_options,
 }  // namespace
 }  // namespace TERARKDB_NAMESPACE
 
-DEFINE_bool(query_empty, false, "query non-existing keys instead of existing "
+DEFINE_bool(query_empty, false,
+            "query non-existing keys instead of existing "
             "ones.");
 DEFINE_int32(num_keys1, 4096, "number of distinguish prefix of keys");
 DEFINE_int32(num_keys2, 512, "number of distinguish keys for each prefix");
 DEFINE_int32(iter, 3, "query non-existing keys instead of existing ones");
 DEFINE_int32(prefix_len, 16, "Prefix length used for iterators and indexes");
 DEFINE_bool(iterator, false, "For test iterator");
-DEFINE_bool(through_db, false, "If enable, a DB instance will be created and "
+DEFINE_bool(through_db, false,
+            "If enable, a DB instance will be created and "
             "the query will be against DB. Otherwise, will be directly against "
             "a table reader.");
 DEFINE_bool(mmap_read, true, "Whether use mmap read");
@@ -283,8 +286,8 @@ int main(int argc, char** argv) {
   std::shared_ptr<TERARKDB_NAMESPACE::TableFactory> tf;
   TERARKDB_NAMESPACE::Options options;
   if (FLAGS_prefix_len < 16) {
-    options.prefix_extractor.reset(TERARKDB_NAMESPACE::NewFixedPrefixTransform(
-        FLAGS_prefix_len));
+    options.prefix_extractor.reset(
+        TERARKDB_NAMESPACE::NewFixedPrefixTransform(FLAGS_prefix_len));
   }
   TERARKDB_NAMESPACE::ReadOptions ro;
   TERARKDB_NAMESPACE::EnvOptions env_options;
@@ -313,8 +316,8 @@ int main(int argc, char** argv) {
     plain_table_options.hash_table_ratio = 0.75;
 
     tf.reset(new TERARKDB_NAMESPACE::PlainTableFactory(plain_table_options));
-    options.prefix_extractor.reset(TERARKDB_NAMESPACE::NewFixedPrefixTransform(
-        FLAGS_prefix_len));
+    options.prefix_extractor.reset(
+        TERARKDB_NAMESPACE::NewFixedPrefixTransform(FLAGS_prefix_len));
 #else
     fprintf(stderr, "Cuckoo table is not supported in lite mode\n");
     exit(1);
@@ -330,10 +333,10 @@ int main(int argc, char** argv) {
     bool measured_by_nanosecond = FLAGS_time_unit == "nanosecond";
 
     options.table_factory = tf;
-    TERARKDB_NAMESPACE::TableReaderBenchmark(options, env_options, ro, FLAGS_num_keys1,
-                                  FLAGS_num_keys2, FLAGS_iter, FLAGS_prefix_len,
-                                  FLAGS_query_empty, FLAGS_iterator,
-                                  FLAGS_through_db, measured_by_nanosecond);
+    TERARKDB_NAMESPACE::TableReaderBenchmark(
+        options, env_options, ro, FLAGS_num_keys1, FLAGS_num_keys2, FLAGS_iter,
+        FLAGS_prefix_len, FLAGS_query_empty, FLAGS_iterator, FLAGS_through_db,
+        measured_by_nanosecond);
   } else {
     return 1;
   }

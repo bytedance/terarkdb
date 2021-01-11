@@ -8,17 +8,19 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #ifndef ROCKSDB_JEMALLOC
-# error This file can only be part of jemalloc aware build
+#error This file can only be part of jemalloc aware build
 #endif
 
 #include <stdexcept>
+
 #include "jemalloc/jemalloc.h"
 #include "port/win/port_win.h"
+#include "rocksdb/terark_namespace.h"
 
 #if defined(ZSTD) && defined(ZSTD_STATIC_LINKING_ONLY)
 #include <zstd.h>
 #if (ZSTD_VERSION_NUMBER >= 500)
-#include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 namespace port {
 void* JemallocAllocateForZSTD(void* /* opaque */, size_t size) {
@@ -30,15 +32,14 @@ void JemallocDeallocateForZSTD(void* /* opaque */, void* address) {
 ZSTD_customMem GetJeZstdAllocationOverrides() {
   return {JemallocAllocateForZSTD, JemallocDeallocateForZSTD, nullptr};
 }
-} // namespace port
-} // namespace TERARKDB_NAMESPACE
-#endif // (ZSTD_VERSION_NUMBER >= 500)
-#endif // defined(ZSTD) defined(ZSTD_STATIC_LINKING_ONLY)
+}  // namespace port
+}  // namespace TERARKDB_NAMESPACE
+#endif  // (ZSTD_VERSION_NUMBER >= 500)
+#endif  // defined(ZSTD) defined(ZSTD_STATIC_LINKING_ONLY)
 
 // Global operators to be replaced by a linker when this file is
 // a part of the build
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace port {
 void* jemalloc_aligned_alloc(size_t size, size_t alignment) ROCKSDB_NOEXCEPT {

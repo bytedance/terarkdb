@@ -1,23 +1,12 @@
-// project headers
+
 #include "terark_zip_table_builder.h"
 
-#include "terark_zip_common.h"
-// std headers
+#include <zstd/zstd.h>
+
+#include <boost/range/algorithm.hpp>
 #include <cfloat>
 #include <exception>
 #include <future>
-// boost headers
-#include <boost/range/algorithm.hpp>
-// rocksdb headers
-#include <db/version_edit.h>
-#include <rocksdb/compaction_filter.h>
-#include <rocksdb/merge_operator.h>
-#include <table/meta_blocks.h>
-#include <util/async_task.h>
-#include <util/c_style_callback.h>
-#include <util/xxhash.h>
-#include <util/string_util.h>
-// terark headers
 #include <terark/io/MemStream.hpp>
 #include <terark/lcast.hpp>
 #include <terark/num_to_str.hpp>
@@ -28,10 +17,18 @@
 #include <terark/zbs/plain_blob_store.hpp>
 #include <terark/zbs/zero_length_blob_store.hpp>
 #include <terark/zbs/zip_offset_blob_store.hpp>
-// third party
-#include <zstd/zstd.h>
 
+#include "db/version_edit.h"
+#include "rocksdb/compaction_filter.h"
+#include "rocksdb/merge_operator.h"
 #include "rocksdb/terark_namespace.h"
+#include "table/meta_blocks.h"
+#include "table/terark_zip_common.h"
+#include "util/async_task.h"
+#include "util/c_style_callback.h"
+#include "util/string_util.h"
+#include "util/xxhash.h"
+
 namespace TERARKDB_NAMESPACE {
 
 using namespace terark;
@@ -354,7 +351,8 @@ void TerarkZipTableBuilder::RangeStatus::AddValueBit() {
 }
 
 TerarkZipTableBuilder::KeyValueStatus::KeyValueStatus(
-    TERARKDB_NAMESPACE::TerarkZipTableBuilder::RangeStatus&& s, freq_hist_o1&& f) {
+    TERARKDB_NAMESPACE::TerarkZipTableBuilder::RangeStatus&& s,
+    freq_hist_o1&& f) {
   status = std::move(s);
   valueFreq = std::move(f);
   isFullValue = true;
@@ -796,14 +794,16 @@ Status TerarkZipTableBuilder::Finish(
 } catch (const std::exception& ex) {
   fprintf(stderr, "TerarkZipTableBuilder::Finish():this=%12p:ex.what()=%s",
           this, ex.what());
-  WARN(ioptions_.info_log, "TerarkZipTableBuilder::Finish():this=%12p:ex.what()=%s",
-      this, ex.what());
+  WARN(ioptions_.info_log,
+       "TerarkZipTableBuilder::Finish():this=%12p:ex.what()=%s", this,
+       ex.what());
   return AbortFinish(ex);
 }
 
 std::unique_ptr<TERARKDB_NAMESPACE::AsyncTask<TERARKDB_NAMESPACE::Status>>
 TerarkZipTableBuilder::Async(std::function<Status()> func, void* tag) {
-  auto task = std::unique_ptr<TERARKDB_NAMESPACE::AsyncTask<TERARKDB_NAMESPACE::Status>>(
+  auto task = std::unique_ptr<
+      TERARKDB_NAMESPACE::AsyncTask<TERARKDB_NAMESPACE::Status>>(
       new AsyncTask<Status>([func]() {
         try {
           return func();
@@ -1132,8 +1132,7 @@ void TerarkZipTableBuilder::BuildReorderMap(std::unique_ptr<TerarkIndex>& index,
        "    raw-val =%9.4f GB  zip-val =%9.4f GB  avg-val =%7.2f  avg-zval "
        "=%7.2f\n",
        this, index->Name().data(), store->name(),
-       index->Info(buffer, sizeof buffer),
-       store->total_data_size() * 1.0 / 1e9,
+       index->Info(buffer, sizeof buffer), store->total_data_size() * 1.0 / 1e9,
        store->get_mmap().size() * 1.0 / 1e9,
        store->total_data_size() * 1.0 / store->num_records(),
        store->get_mmap().size() * 1.0 / store->num_records());
@@ -1511,7 +1510,7 @@ class TerarkValueReader {
   NativeDataInput<InputBuffer> reader;
   valvec<byte_t> buffer;
 
-  void checkEOF(){
+  void checkEOF() {
     if (terark_unlikely(reader.eof())) {
       FileStream* fp = &files[++index]->value.fp;
       fp->rewind();
@@ -1519,10 +1518,11 @@ class TerarkValueReader {
     }
   }
 
-public:
-  TerarkValueReader(const valvec<std::shared_ptr<FilePair>>& _files) : files(_files) {}
+ public:
+  TerarkValueReader(const valvec<std::shared_ptr<FilePair>>& _files)
+      : files(_files) {}
 
-  uint64_t readUInt64(){
+  uint64_t readUInt64() {
     checkEOF();
     return reader.load_as<uint64_t>();
   }
@@ -1532,7 +1532,7 @@ public:
     reader.load_add(*buffer);
   }
 
-  void rewind(){
+  void rewind() {
     index = 0;
     FileStream* fp = &files.front()->value.fp;
     fp->rewind();
@@ -1841,7 +1841,7 @@ Status TerarkZipTableBuilder::WriteIndexStore(
   size_t typeSize;
   size_t offset;
   if (params.NeedsReorder()) {
-    params.type.swap(kvs.type); // kvs.type will be written to file
+    params.type.swap(kvs.type);  // kvs.type will be written to file
     ZReorderMap reorder(params.tmpReorderFile.fpath);
     t7 = g_pf.now();
     std::string reorder_tmp = tmpSentryFile_.path + ".reorder-tmp";
@@ -1980,98 +1980,121 @@ Status TerarkZipTableBuilder::WriteSSTFile(
     g_sumEntryNum += properties_.num_entries;
   }
   size_t dictBlockSize = dict.memory.empty() ? 0 : dictBlock.size();
-  INFO(ioptions_.info_log,
-       "TerarkZipTableBuilder::Finish():this=%12p:\n"
-       "  second pass time =%8.2f's,%8.3f'MB/sec, value only(%4.1f%% of KV)\n"
-       "   wait indexing time = %7.2f's,\n"
-       "  remap KeyValue time = %7.2f's, %8.3f'MB/sec (all stages of remap)\n"
-       "    Get OrderMap time = %7.2f's, %8.3f'MB/sec (index lex order gen)\n"
-       "  rebuild zvType time = %7.2f's, %8.3f'MB/sec\n"
-       "  write SST data time = %7.2f's, %8.3f'MB/sec\n"
-       "   dict compress time = %7.2f's, %8.3f'MB/sec\n"
-       "    z-dict build time = %7.2f's, sample length = %7.3f'MB, throughput = %6.3f'MB/sec\n"
-       "    zip my value time = %7.2f's, unzip  length = %7.3f'GB\n"
-       "    zip my value throughput = %7.3f'MB/sec\n"
-       "    zip pipeline throughput = %7.3f'MB/sec\n"
-       "    entries = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
-       "    usrkeys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
-       "    seq expand size = %zd  multi value expand size = %zd entropy size = %.4f GB\n"
-       "    UnZipSize{ index =%9.4f GB  value =%9.4f GB  dict =%7.2f MB  all =%9.4f GB }\n"
-       "    __ZipSize{ index =%9.4f GB  value =%9.4f GB  dict =%7.2f MB  all =%9.4f GB }\n"
-       "    UnZip/Zip{ index =%9.4f     value =%9.4f     dict =%7.2f     all =%9.4f    }\n"
-       "    Zip/UnZip{ index =%9.4f     value =%9.4f     dict =%7.2f     all =%9.4f    }\n"
-       "----------------------------\n"
-       "    total value len =%14.6f GB     avg =%8.3f KB (by entry num)\n"
-       "    total  key  len =%14.6f GB     avg =%8.3f KB\n"
-       "    total ukey  len =%14.6f GB     avg =%8.3f KB\n"
-       "    total ukey  num =%17.9f Billion\n"
-       "    total entry num =%17.9f Billion\n"
-       "    write speed all =%17.9f MB/sec (with    version num)\n"
-       "    write speed all =%17.9f MB/sec (without version num)"
-  , this, g_pf.sf(t3, t4)
-  , properties_.raw_value_size*1.0 / g_pf.uf(t3, t4)
-  , properties_.raw_value_size*100.0 / rawBytes
+  INFO(
+      ioptions_.info_log,
+      "TerarkZipTableBuilder::Finish():this=%12p:\n"
+      "  second pass time =%8.2f's,%8.3f'MB/sec, value only(%4.1f%% of KV)\n"
+      "   wait indexing time = %7.2f's,\n"
+      "  remap KeyValue time = %7.2f's, %8.3f'MB/sec (all stages of remap)\n"
+      "    Get OrderMap time = %7.2f's, %8.3f'MB/sec (index lex order gen)\n"
+      "  rebuild zvType time = %7.2f's, %8.3f'MB/sec\n"
+      "  write SST data time = %7.2f's, %8.3f'MB/sec\n"
+      "   dict compress time = %7.2f's, %8.3f'MB/sec\n"
+      "    z-dict build time = %7.2f's, sample length = %7.3f'MB, throughput = "
+      "%6.3f'MB/sec\n"
+      "    zip my value time = %7.2f's, unzip  length = %7.3f'GB\n"
+      "    zip my value throughput = %7.3f'MB/sec\n"
+      "    zip pipeline throughput = %7.3f'MB/sec\n"
+      "    entries = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  "
+      "avg-zval = %.2f\n"
+      "    usrkeys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  "
+      "avg-zval = %.2f\n"
+      "    seq expand size = %zd  multi value expand size = %zd entropy size = "
+      "%.4f GB\n"
+      "    UnZipSize{ index =%9.4f GB  value =%9.4f GB  dict =%7.2f MB  all "
+      "=%9.4f GB }\n"
+      "    __ZipSize{ index =%9.4f GB  value =%9.4f GB  dict =%7.2f MB  all "
+      "=%9.4f GB }\n"
+      "    UnZip/Zip{ index =%9.4f     value =%9.4f     dict =%7.2f     all "
+      "=%9.4f    }\n"
+      "    Zip/UnZip{ index =%9.4f     value =%9.4f     dict =%7.2f     all "
+      "=%9.4f    }\n"
+      "----------------------------\n"
+      "    total value len =%14.6f GB     avg =%8.3f KB (by entry num)\n"
+      "    total  key  len =%14.6f GB     avg =%8.3f KB\n"
+      "    total ukey  len =%14.6f GB     avg =%8.3f KB\n"
+      "    total ukey  num =%17.9f Billion\n"
+      "    total entry num =%17.9f Billion\n"
+      "    write speed all =%17.9f MB/sec (with    version num)\n"
+      "    write speed all =%17.9f MB/sec (without version num)",
+      this, g_pf.sf(t3, t4), properties_.raw_value_size * 1.0 / g_pf.uf(t3, t4),
+      properties_.raw_value_size * 100.0 / rawBytes
 
-  , g_pf.sf(t4, t5) // wait indexing time
-  , g_pf.sf(t5, t8), double(offset_) / g_pf.uf(t5, t8)
+      ,
+      g_pf.sf(t4, t5)  // wait indexing time
+      ,
+      g_pf.sf(t5, t8), double(offset_) / g_pf.uf(t5, t8)
 
-  , g_pf.sf(t5, t6), properties_.index_size / g_pf.uf(t5, t6) // index lex walk
+                           ,
+      g_pf.sf(t5, t6),
+      properties_.index_size / g_pf.uf(t5, t6)  // index lex walk
 
-  , g_pf.sf(t6, t7), stat.keyCount * 2 / 8 / (g_pf.uf(t6, t7) + 1.0) // rebuild zvType
+      ,
+      g_pf.sf(t6, t7),
+      stat.keyCount * 2 / 8 / (g_pf.uf(t6, t7) + 1.0)  // rebuild zvType
 
-  , g_pf.sf(t7, t8), double(offset_) / g_pf.uf(t7, t8) // write SST data
+      ,
+      g_pf.sf(t7, t8), double(offset_) / g_pf.uf(t7, t8)  // write SST data
 
-  , g_pf.uf(td) / 1e6, dictSize_ / (g_pf.uf(td) + 1.0) // dict compress
+      ,
+      g_pf.uf(td) / 1e6, dictSize_ / (g_pf.uf(td) + 1.0)  // dict compress
 
-  , dzstat.dictBuildTime, realsampleLenSum / 1e6 // z-dict build
-  , realsampleLenSum / dzstat.dictBuildTime / 1e6
+      ,
+      dzstat.dictBuildTime, realsampleLenSum / 1e6  // z-dict build
+      ,
+      realsampleLenSum / dzstat.dictBuildTime / 1e6
 
-  , dzstat.dictZipTime, properties_.raw_value_size / 1e9 // zip my value
-  , properties_.raw_value_size / dzstat.dictZipTime / 1e6
-  , dzstat.pipelineThroughBytes / dzstat.dictZipTime / 1e6
+      ,
+      dzstat.dictZipTime, properties_.raw_value_size / 1e9  // zip my value
+      ,
+      properties_.raw_value_size / dzstat.dictZipTime / 1e6,
+      dzstat.pipelineThroughBytes / dzstat.dictZipTime / 1e6
 
-  , size_t(properties_.num_entries)
-  , double(properties_.raw_key_size)   / properties_.num_entries
-  , double(properties_.index_size)     / properties_.num_entries
-  , double(properties_.raw_value_size) / properties_.num_entries
-  , double(properties_.data_size)      / properties_.num_entries
+      ,
+      size_t(properties_.num_entries),
+      double(properties_.raw_key_size) / properties_.num_entries,
+      double(properties_.index_size) / properties_.num_entries,
+      double(properties_.raw_value_size) / properties_.num_entries,
+      double(properties_.data_size) / properties_.num_entries
 
-  , stat.keyCount
-  , double(sumKeyLen)                  / stat.keyCount
-  , double(properties_.index_size)     / stat.keyCount
-  , double(properties_.raw_value_size + seqExpandSize_ + multiValueExpandSize_) / stat.keyCount
-  , double(properties_.data_size)      / stat.keyCount
+      ,
+      stat.keyCount, double(sumKeyLen) / stat.keyCount,
+      double(properties_.index_size) / stat.keyCount,
+      double(properties_.raw_value_size + seqExpandSize_ +
+             multiValueExpandSize_) /
+          stat.keyCount,
+      double(properties_.data_size) / stat.keyCount
 
-  , seqExpandSize_, multiValueExpandSize_, entropy / 1e9
+      ,
+      seqExpandSize_, multiValueExpandSize_, entropy / 1e9
 
-  , sumKeyLen / 1e9
-  , properties_.raw_value_size / 1e9
-  , dictSize_ / 1e6
-  , rawBytes / 1e9
+      ,
+      sumKeyLen / 1e9, properties_.raw_value_size / 1e9, dictSize_ / 1e6,
+      rawBytes / 1e9
 
-  , properties_.index_size / 1e9
-  , properties_.data_size / 1e9
-  , dictBlockSize / 1e6
-  , offset_ / 1e9
+      ,
+      properties_.index_size / 1e9, properties_.data_size / 1e9,
+      dictBlockSize / 1e6, offset_ / 1e9
 
-  , double(sumKeyLen) / properties_.index_size
-  , double(properties_.raw_value_size) / properties_.data_size
-  , double(dictSize_) / std::max<size_t>(dictBlockSize, 1)
-  , double(rawBytes) / offset_
+      ,
+      double(sumKeyLen) / properties_.index_size,
+      double(properties_.raw_value_size) / properties_.data_size,
+      double(dictSize_) / std::max<size_t>(dictBlockSize, 1),
+      double(rawBytes) / offset_
 
-  , properties_.index_size / double(sumKeyLen)
-  , properties_.data_size / double(properties_.raw_value_size)
-  , dictBlockSize / std::max<double>(dictSize_, 1)
-  , offset_ / double(rawBytes)
+      ,
+      properties_.index_size / double(sumKeyLen),
+      properties_.data_size / double(properties_.raw_value_size),
+      dictBlockSize / std::max<double>(dictSize_, 1), offset_ / double(rawBytes)
 
-  , g_sumValueLen / 1e9, g_sumValueLen / 1e3 / g_sumEntryNum
-  , g_sumKeyLen / 1e9, g_sumKeyLen / 1e3 / g_sumEntryNum
-  , g_sumUserKeyLen / 1e9, g_sumUserKeyLen / 1e3 / g_sumUserKeyNum
-  , g_sumUserKeyNum / 1e9
-  , g_sumEntryNum / 1e9
-  , (g_sumKeyLen + g_sumValueLen) / g_pf.uf(g_lastTime, t8)
-  , (g_sumKeyLen + g_sumValueLen - g_sumEntryNum * 8) / g_pf.uf(g_lastTime, t8)
-  );
+                                                          ,
+      g_sumValueLen / 1e9, g_sumValueLen / 1e3 / g_sumEntryNum,
+      g_sumKeyLen / 1e9, g_sumKeyLen / 1e3 / g_sumEntryNum,
+      g_sumUserKeyLen / 1e9, g_sumUserKeyLen / 1e3 / g_sumUserKeyNum,
+      g_sumUserKeyNum / 1e9, g_sumEntryNum / 1e9,
+      (g_sumKeyLen + g_sumValueLen) / g_pf.uf(g_lastTime, t8),
+      (g_sumKeyLen + g_sumValueLen - g_sumEntryNum * 8) /
+          g_pf.uf(g_lastTime, t8));
   return s;
 }
 
@@ -2188,98 +2211,121 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(
     g_sumUserKeyNum += numKeys;
     g_sumEntryNum += properties_.num_entries;
   }
-  INFO(ioptions_.info_log,
-       "TerarkZipTableBuilder::FinishMulti():this=%12p:\n"
-       "  second pass time =%8.2f's,%8.3f'MB/sec, value only(%4.1f%% of KV)\n"
-       "   wait indexing time = %7.2f's,\n"
-       "  remap KeyValue time = %7.2f's, %8.3f'MB/sec (all stages of remap)\n"
-       "    Get OrderMap time = %7.2f's, %8.3f'MB/sec (index lex order gen)\n"
-       "  rebuild zvType time = %7.2f's, %8.3f'MB/sec\n"
-       "  write SST data time = %7.2f's, %8.3f'MB/sec\n"
-       "   dict compress time = %7.2f's, %8.3f'MB/sec\n"
-       "    z-dict build time = %7.2f's, sample length = %7.3f'MB, throughput = %6.3f'MB/sec\n"
-       "    zip my value time = %7.2f's, unzip  length = %7.3f'GB\n"
-       "    zip my value throughput = %7.3f'MB/sec\n"
-       "    zip pipeline throughput = %7.3f'MB/sec\n"
-       "    entries = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
-       "    usrkeys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
-       "    seq expand size = %zd  multi value expand size = %zd entropy size = %0.4f GB\n"
-       "    UnZipSize{ index =%9.4f GB  value =%9.4f GB  dict =%7.2f MB  all =%9.4f GB }\n"
-       "    __ZipSize{ index =%9.4f GB  value =%9.4f GB  dict =%7.2f MB  all =%9.4f GB }\n"
-       "    UnZip/Zip{ index =%9.4f     value =%9.4f     dict =%7.2f     all =%9.4f    }\n"
-       "    Zip/UnZip{ index =%9.4f     value =%9.4f     dict =%7.2f     all =%9.4f    }\n"
-       "----------------------------\n"
-       "    total value len =%14.6f GB     avg =%8.3f KB (by entry num)\n"
-       "    total  key  len =%14.6f GB     avg =%8.3f KB\n"
-       "    total ukey  len =%14.6f GB     avg =%8.3f KB\n"
-       "    total ukey  num =%17.9f Billion\n"
-       "    total entry num =%17.9f Billion\n"
-       "    write speed all =%17.9f MB/sec (with    version num)\n"
-       "    write speed all =%17.9f MB/sec (without version num)"
-  , this, g_pf.sf(t3, t4)
-  , properties_.raw_value_size*1.0 / g_pf.uf(t3, t4)
-  , properties_.raw_value_size*100.0 / rawBytes
+  INFO(
+      ioptions_.info_log,
+      "TerarkZipTableBuilder::FinishMulti():this=%12p:\n"
+      "  second pass time =%8.2f's,%8.3f'MB/sec, value only(%4.1f%% of KV)\n"
+      "   wait indexing time = %7.2f's,\n"
+      "  remap KeyValue time = %7.2f's, %8.3f'MB/sec (all stages of remap)\n"
+      "    Get OrderMap time = %7.2f's, %8.3f'MB/sec (index lex order gen)\n"
+      "  rebuild zvType time = %7.2f's, %8.3f'MB/sec\n"
+      "  write SST data time = %7.2f's, %8.3f'MB/sec\n"
+      "   dict compress time = %7.2f's, %8.3f'MB/sec\n"
+      "    z-dict build time = %7.2f's, sample length = %7.3f'MB, throughput = "
+      "%6.3f'MB/sec\n"
+      "    zip my value time = %7.2f's, unzip  length = %7.3f'GB\n"
+      "    zip my value throughput = %7.3f'MB/sec\n"
+      "    zip pipeline throughput = %7.3f'MB/sec\n"
+      "    entries = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  "
+      "avg-zval = %.2f\n"
+      "    usrkeys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  "
+      "avg-zval = %.2f\n"
+      "    seq expand size = %zd  multi value expand size = %zd entropy size = "
+      "%0.4f GB\n"
+      "    UnZipSize{ index =%9.4f GB  value =%9.4f GB  dict =%7.2f MB  all "
+      "=%9.4f GB }\n"
+      "    __ZipSize{ index =%9.4f GB  value =%9.4f GB  dict =%7.2f MB  all "
+      "=%9.4f GB }\n"
+      "    UnZip/Zip{ index =%9.4f     value =%9.4f     dict =%7.2f     all "
+      "=%9.4f    }\n"
+      "    Zip/UnZip{ index =%9.4f     value =%9.4f     dict =%7.2f     all "
+      "=%9.4f    }\n"
+      "----------------------------\n"
+      "    total value len =%14.6f GB     avg =%8.3f KB (by entry num)\n"
+      "    total  key  len =%14.6f GB     avg =%8.3f KB\n"
+      "    total ukey  len =%14.6f GB     avg =%8.3f KB\n"
+      "    total ukey  num =%17.9f Billion\n"
+      "    total entry num =%17.9f Billion\n"
+      "    write speed all =%17.9f MB/sec (with    version num)\n"
+      "    write speed all =%17.9f MB/sec (without version num)",
+      this, g_pf.sf(t3, t4), properties_.raw_value_size * 1.0 / g_pf.uf(t3, t4),
+      properties_.raw_value_size * 100.0 / rawBytes
 
-  , g_pf.sf(t4, t5) // wait indexing time
-  , g_pf.sf(t5, t8), double(offset_) / g_pf.uf(t5, t8)
+      ,
+      g_pf.sf(t4, t5)  // wait indexing time
+      ,
+      g_pf.sf(t5, t8), double(offset_) / g_pf.uf(t5, t8)
 
-  , g_pf.sf(t5, t6), properties_.index_size / g_pf.uf(t5, t6) // index lex walk
+                           ,
+      g_pf.sf(t5, t6),
+      properties_.index_size / g_pf.uf(t5, t6)  // index lex walk
 
-  , g_pf.sf(t6, t7), numKeys * 2 / 8 / (g_pf.uf(t6, t7) + 1.0) // rebuild zvType
+      ,
+      g_pf.sf(t6, t7),
+      numKeys * 2 / 8 / (g_pf.uf(t6, t7) + 1.0)  // rebuild zvType
 
-  , g_pf.sf(t7, t8), double(offset_) / g_pf.uf(t7, t8) // write SST data
+      ,
+      g_pf.sf(t7, t8), double(offset_) / g_pf.uf(t7, t8)  // write SST data
 
-  , g_pf.uf(td) / 1e6, dictSize_ / (g_pf.uf(td) + 1.0) // dict compress
+      ,
+      g_pf.uf(td) / 1e6, dictSize_ / (g_pf.uf(td) + 1.0)  // dict compress
 
-  , dzstat.dictBuildTime, realsampleLenSum / 1e6 // z-dict build
-  , realsampleLenSum / dzstat.dictBuildTime / 1e6
+      ,
+      dzstat.dictBuildTime, realsampleLenSum / 1e6  // z-dict build
+      ,
+      realsampleLenSum / dzstat.dictBuildTime / 1e6
 
-  , dzstat.dictZipTime, properties_.raw_value_size / 1e9 // zip my value
-  , properties_.raw_value_size / dzstat.dictZipTime / 1e6
-  , dzstat.pipelineThroughBytes / dzstat.dictZipTime / 1e6
+      ,
+      dzstat.dictZipTime, properties_.raw_value_size / 1e9  // zip my value
+      ,
+      properties_.raw_value_size / dzstat.dictZipTime / 1e6,
+      dzstat.pipelineThroughBytes / dzstat.dictZipTime / 1e6
 
-  , size_t(properties_.num_entries)
-  , double(properties_.raw_key_size)   / properties_.num_entries
-  , double(properties_.index_size)     / properties_.num_entries
-  , double(properties_.raw_value_size) / properties_.num_entries
-  , double(properties_.data_size)      / properties_.num_entries
+      ,
+      size_t(properties_.num_entries),
+      double(properties_.raw_key_size) / properties_.num_entries,
+      double(properties_.index_size) / properties_.num_entries,
+      double(properties_.raw_value_size) / properties_.num_entries,
+      double(properties_.data_size) / properties_.num_entries
 
-  , numKeys
-  , double(sumKeyLen)                  / numKeys
-  , double(properties_.index_size)     / numKeys
-  , double(properties_.raw_value_size + seqExpandSize_ + multiValueExpandSize_) / numKeys
-  , double(properties_.data_size)      / numKeys
+      ,
+      numKeys, double(sumKeyLen) / numKeys,
+      double(properties_.index_size) / numKeys,
+      double(properties_.raw_value_size + seqExpandSize_ +
+             multiValueExpandSize_) /
+          numKeys,
+      double(properties_.data_size) / numKeys
 
-  , seqExpandSize_, multiValueExpandSize_, entropy / 1e9
+      ,
+      seqExpandSize_, multiValueExpandSize_, entropy / 1e9
 
-  , sumKeyLen / 1e9
-  , properties_.raw_value_size / 1e9
-  , dictSize_ / 1e6
-  , rawBytes / 1e9
+      ,
+      sumKeyLen / 1e9, properties_.raw_value_size / 1e9, dictSize_ / 1e6,
+      rawBytes / 1e9
 
-  , properties_.index_size / 1e9
-  , properties_.data_size / 1e9
-  , dictBlockSize / 1e6
-  , offset_ / 1e9
+      ,
+      properties_.index_size / 1e9, properties_.data_size / 1e9,
+      dictBlockSize / 1e6, offset_ / 1e9
 
-  , double(sumKeyLen) / properties_.index_size
-  , double(properties_.raw_value_size) / properties_.data_size
-  , double(dictSize_) / std::max<double>(dictBlockSize, 1)
-  , double(rawBytes) / offset_
+      ,
+      double(sumKeyLen) / properties_.index_size,
+      double(properties_.raw_value_size) / properties_.data_size,
+      double(dictSize_) / std::max<double>(dictBlockSize, 1),
+      double(rawBytes) / offset_
 
-  , properties_.index_size / double(sumKeyLen)
-  , properties_.data_size / double(properties_.raw_value_size)
-  , dictBlockSize / std::max<double>(dictSize_, 1)
-  , offset_ / double(rawBytes)
+      ,
+      properties_.index_size / double(sumKeyLen),
+      properties_.data_size / double(properties_.raw_value_size),
+      dictBlockSize / std::max<double>(dictSize_, 1), offset_ / double(rawBytes)
 
-  , g_sumValueLen / 1e9, g_sumValueLen / 1e3 / g_sumEntryNum
-  , g_sumKeyLen / 1e9, g_sumKeyLen / 1e3 / g_sumEntryNum
-  , g_sumUserKeyLen / 1e9, g_sumUserKeyLen / 1e3 / g_sumUserKeyNum
-  , g_sumUserKeyNum / 1e9
-  , g_sumEntryNum / 1e9
-  , (g_sumKeyLen + g_sumValueLen) / g_pf.uf(g_lastTime, t8)
-  , (g_sumKeyLen + g_sumValueLen - g_sumEntryNum * 8) / g_pf.uf(g_lastTime, t8)
-  );
+                                                          ,
+      g_sumValueLen / 1e9, g_sumValueLen / 1e3 / g_sumEntryNum,
+      g_sumKeyLen / 1e9, g_sumKeyLen / 1e3 / g_sumEntryNum,
+      g_sumUserKeyLen / 1e9, g_sumUserKeyLen / 1e3 / g_sumUserKeyNum,
+      g_sumUserKeyNum / 1e9, g_sumEntryNum / 1e9,
+      (g_sumKeyLen + g_sumValueLen) / g_pf.uf(g_lastTime, t8),
+      (g_sumKeyLen + g_sumValueLen - g_sumEntryNum * 8) /
+          g_pf.uf(g_lastTime, t8));
   return s;
 }
 
@@ -2555,8 +2601,7 @@ Status GetTerarkZipTableOptionsFromMap(
 }
 
 Status GetTerarkZipTableOptionsFromString(
-    const TerarkZipTableOptions& table_options,
-    const std::string& opts_str,
+    const TerarkZipTableOptions& table_options, const std::string& opts_str,
     TerarkZipTableOptions* new_table_options) {
   std::unordered_map<std::string, std::string> opts_map;
   Status s = StringToMap(opts_str, &opts_map);

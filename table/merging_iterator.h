@@ -10,9 +10,9 @@
 #pragma once
 
 #include "db/dbformat.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/types.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Comparator;
@@ -47,8 +47,7 @@ class MergeIteratorBuilder {
 
   // Add iter to the merging iterator.
   void AddIterator(InternalIterator* iter);
-  void AddIterator(InternalIterator* iter,
-                   SeparateHelper* separate_helper);
+  void AddIterator(InternalIterator* iter, SeparateHelper* separate_helper);
 
   // Get arena used to build the merging iterator. It is called one a child
   // iterator needs to be allocated.

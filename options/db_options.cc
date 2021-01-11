@@ -16,10 +16,10 @@
 #include "rocksdb/cache.h"
 #include "rocksdb/env.h"
 #include "rocksdb/sst_file_manager.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/wal_filter.h"
 #include "util/logging.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 ImmutableDBOptions::ImmutableDBOptions() : ImmutableDBOptions(Options()) {}

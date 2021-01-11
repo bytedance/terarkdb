@@ -14,12 +14,12 @@
 #include "rocksdb/comparator.h"
 #include "rocksdb/db.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/optimistic_transaction_db.h"
 #include "util/cast_util.h"
 #include "util/string_util.h"
 #include "utilities/transactions/transaction_util.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct WriteOptions;
@@ -28,7 +28,8 @@ OptimisticTransaction::OptimisticTransaction(
     OptimisticTransactionDB* txn_db, const WriteOptions& write_options,
     const OptimisticTransactionOptions& txn_options)
     : TransactionBaseImpl(txn_db->GetBaseDB(), write_options,
-                          txn_options.index_type), txn_db_(txn_db) {
+                          txn_options.index_type),
+      txn_db_(txn_db) {
   Initialize(txn_options);
 }
 

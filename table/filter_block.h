@@ -18,19 +18,21 @@
 
 #pragma once
 
-#include <memory>
 #include <stddef.h>
 #include <stdint.h>
+
+#include <memory>
 #include <string>
 #include <vector>
+
+#include "format.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/table.h"
-#include "util/hash.h"
-#include "format.h"
-
 #include "rocksdb/terark_namespace.h"
+#include "util/hash.h"
+
 namespace TERARKDB_NAMESPACE {
 
 const uint64_t kNotValid = ULLONG_MAX;
@@ -49,11 +51,11 @@ class FilterBlockBuilder {
   explicit FilterBlockBuilder() {}
   virtual ~FilterBlockBuilder() {}
 
-  virtual bool IsBlockBased() = 0;                    // If is blockbased filter
+  virtual bool IsBlockBased() = 0;  // If is blockbased filter
   virtual void StartBlock(uint64_t block_offset) = 0;  // Start new block filter
-  virtual void Add(const Slice& key) = 0;      // Add a key to current filter
-  virtual size_t NumAdded() const = 0;         // Number of keys added
-  Slice Finish() {                             // Generate Filter
+  virtual void Add(const Slice& key) = 0;  // Add a key to current filter
+  virtual size_t NumAdded() const = 0;     // Number of keys added
+  Slice Finish() {                         // Generate Filter
     const BlockHandle empty_handle;
     Status dont_care_status;
     auto ret = Finish(empty_handle, &dont_care_status);
@@ -124,11 +126,13 @@ class FilterBlockReader {
   virtual void CacheDependencies(bool /*pin*/,
                                  const SliceTransform* /*prefix_extractor*/) {}
 
-  virtual bool RangeMayExist(
-      const Slice* /*iterate_upper_bound*/, const Slice& user_key,
-      const SliceTransform* prefix_extractor,
-      const Comparator* /*comparator*/, const Slice* const const_ikey_ptr,
-      bool* filter_checked, bool /*need_upper_bound_check*/) {
+  virtual bool RangeMayExist(const Slice* /*iterate_upper_bound*/,
+                             const Slice& user_key,
+                             const SliceTransform* prefix_extractor,
+                             const Comparator* /*comparator*/,
+                             const Slice* const const_ikey_ptr,
+                             bool* filter_checked,
+                             bool /*need_upper_bound_check*/) {
     *filter_checked = true;
     Slice prefix = prefix_extractor->Transform(user_key);
     return PrefixMayMatch(prefix, prefix_extractor, kNotValid, false,

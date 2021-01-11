@@ -1,29 +1,27 @@
-// project headers
-#include "terark_zip_table_reader.h"
 
-#include "terark_zip_common.h"
-// rocksdb headers
-#include <table/get_context.h>
-#include <table/internal_iterator.h>
-#include <table/meta_blocks.h>
-#include <table/sst_file_writer_collectors.h>
-#include <util/util.h>
-// terark headers
+#include "table/terark_zip_table_reader.h"
+
+#include <zstd/zstd.h>
+
 #include <terark/lcast.hpp>
 #include <terark/util/crc.hpp>
 #include <terark/util/function.hpp>
 #include <terark/util/hugepage.hpp>
+#include <terark/zbs/blob_store_file_header.hpp>  // for isChecksumVerifyEnabled()
+
+#include "rocksdb/terark_namespace.h"
+#include "table/get_context.h"
+#include "table/internal_iterator.h"
+#include "table/meta_blocks.h"
+#include "table/sst_file_writer_collectors.h"
+#include "table/terark_zip_common.h"
+#include "util/util.h"
 
 #ifndef _MSC_VER
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/unistd.h>
 #endif
-
-// for isChecksumVerifyEnabled()
-#include <terark/zbs/blob_store_file_header.hpp>
-// third party
-#include <zstd/zstd.h>
 
 namespace {
 using namespace TERARKDB_NAMESPACE;
@@ -210,7 +208,6 @@ static bool Overlap(const fstring& a, const fstring& b) {
 
 }  // namespace
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 Status ReadMetaBlockAdapte(RandomAccessFileReader* file, uint64_t file_size,

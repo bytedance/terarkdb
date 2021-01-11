@@ -9,9 +9,9 @@
 
 #include "db/dbformat.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // The merge context for merging a user key.

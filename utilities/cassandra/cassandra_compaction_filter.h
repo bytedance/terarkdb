@@ -5,10 +5,11 @@
 
 #pragma once
 #include <string>
+
 #include "rocksdb/compaction_filter.h"
 #include "rocksdb/slice.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 namespace cassandra {
 
@@ -24,20 +25,20 @@ namespace cassandra {
  * promoted to kValue type after serials of merging in compaction.
  */
 class CassandraCompactionFilter : public CompactionFilter {
-public:
- explicit CassandraCompactionFilter(bool purge_ttl_on_expiration,
-                                    int32_t gc_grace_period_in_seconds)
-     : purge_ttl_on_expiration_(purge_ttl_on_expiration),
-       gc_grace_period_in_seconds_(gc_grace_period_in_seconds) {}
+ public:
+  explicit CassandraCompactionFilter(bool purge_ttl_on_expiration,
+                                     int32_t gc_grace_period_in_seconds)
+      : purge_ttl_on_expiration_(purge_ttl_on_expiration),
+        gc_grace_period_in_seconds_(gc_grace_period_in_seconds) {}
 
- const char* Name() const override;
- virtual Decision FilterV2(int level, const Slice& key, ValueType value_type,
-                           const Slice& existing_value_meta,
-                           const LazyBuffer& existing_value,
-                           LazyBuffer* new_value,
-                           std::string* skip_until) const override;
+  const char* Name() const override;
+  virtual Decision FilterV2(int level, const Slice& key, ValueType value_type,
+                            const Slice& existing_value_meta,
+                            const LazyBuffer& existing_value,
+                            LazyBuffer* new_value,
+                            std::string* skip_until) const override;
 
-private:
+ private:
   bool purge_ttl_on_expiration_;
   int32_t gc_grace_period_in_seconds_;
 };

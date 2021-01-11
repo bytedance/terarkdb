@@ -8,15 +8,14 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "rocksdb/status.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 /**

@@ -7,17 +7,19 @@
 
 #include <stddef.h>
 #include <stdint.h>
+
 #include <memory>
 #include <string>
 #include <vector>
+
+#include "db/dbformat.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/slice_transform.h"
-#include "db/dbformat.h"
-#include "util/hash.h"
-#include "table/filter_block.h"
-
 #include "rocksdb/terark_namespace.h"
+#include "table/filter_block.h"
+#include "util/hash.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class FilterPolicy;
@@ -109,11 +111,14 @@ class FullFilterBlockReader : public FilterBlockReader {
       uint64_t block_offset = kNotValid, const bool no_io = false,
       const Slice* const const_ikey_ptr = nullptr) override;
   virtual size_t ApproximateMemoryUsage() const override;
-  virtual bool RangeMayExist(const Slice* iterate_upper_bound, const Slice& user_key,
+  virtual bool RangeMayExist(const Slice* iterate_upper_bound,
+                             const Slice& user_key,
                              const SliceTransform* prefix_extractor,
                              const Comparator* comparator,
-                             const Slice* const const_ikey_ptr, bool* filter_checked,
+                             const Slice* const const_ikey_ptr,
+                             bool* filter_checked,
                              bool need_upper_bound_check) override;
+
  private:
   const SliceTransform* prefix_extractor_;
   Slice contents_;
@@ -126,9 +131,8 @@ class FullFilterBlockReader : public FilterBlockReader {
   FullFilterBlockReader(const FullFilterBlockReader&);
   bool MayMatch(const Slice& entry);
   void operator=(const FullFilterBlockReader&);
-  bool IsFilterCompatible(const Slice* iterate_upper_bound,
-                          const Slice& prefix, const Comparator* comparator);
-
+  bool IsFilterCompatible(const Slice* iterate_upper_bound, const Slice& prefix,
+                          const Comparator* comparator);
 };
 
 }  // namespace TERARKDB_NAMESPACE

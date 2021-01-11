@@ -14,9 +14,10 @@
 
 #include <atomic>
 #include <cstddef>
-#include "rocksdb/cache.h"
 
+#include "rocksdb/cache.h"
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class WriteBufferManager {

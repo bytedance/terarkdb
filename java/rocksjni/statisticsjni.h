@@ -12,22 +12,23 @@
 #include <memory>
 #include <set>
 #include <string>
-#include "rocksdb/statistics.h"
-#include "monitoring/statistics.h"
 
+#include "monitoring/statistics.h"
+#include "rocksdb/statistics.h"
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
-  class StatisticsJni : public StatisticsImpl {
-   public:
-     StatisticsJni(std::shared_ptr<Statistics> stats);
-     StatisticsJni(std::shared_ptr<Statistics> stats,
-         const std::set<uint32_t> ignore_histograms);
-     virtual bool HistEnabledForType(uint32_t type) const override;
+class StatisticsJni : public StatisticsImpl {
+ public:
+  StatisticsJni(std::shared_ptr<Statistics> stats);
+  StatisticsJni(std::shared_ptr<Statistics> stats,
+                const std::set<uint32_t> ignore_histograms);
+  virtual bool HistEnabledForType(uint32_t type) const override;
 
-   private:
-     const std::set<uint32_t> m_ignore_histograms;
- };
+ private:
+  const std::set<uint32_t> m_ignore_histograms;
+};
 
 }  // namespace TERARKDB_NAMESPACE
 

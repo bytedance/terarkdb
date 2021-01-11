@@ -5,9 +5,9 @@
 
 #pragma once
 
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/types.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DB;

@@ -14,9 +14,9 @@
 
 #include "port/port.h"
 #include "rocksdb/cache.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/hash.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Single cache shard interface.

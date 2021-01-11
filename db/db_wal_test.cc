@@ -11,10 +11,10 @@
 #include "options/options_helper.h"
 #include "port/port.h"
 #include "port/stack_trace.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/fault_injection_test_env.h"
 #include "util/sync_point.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 class DBWALTest : public DBTestBase {
  public:
@@ -231,7 +231,8 @@ TEST_F(DBWALTest, SyncWALNotWaitWrite) {
   });
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
 
-  TERARKDB_NAMESPACE::port::Thread thread([&]() { ASSERT_OK(Put("foo2", "bar2")); });
+  TERARKDB_NAMESPACE::port::Thread thread(
+      [&]() { ASSERT_OK(Put("foo2", "bar2")); });
   // Moving this to SyncWAL before the actual fsync
   // TEST_SYNC_POINT("DBWALTest::SyncWALNotWaitWrite:1");
   ASSERT_OK(db_->SyncWAL());
@@ -1316,11 +1317,11 @@ TEST_F(DBWALTest, RecoverFromCorruptedWALWithoutFlush) {
                                          /*len%=*/.1, /*wal=*/j, trunc);
           // Skip the test if DB won't open.
           if (!TryReopen(options).ok()) {
-            ASSERT_TRUE(options.wal_recovery_mode ==
-                            WALRecoveryMode::kAbsoluteConsistency ||
-                        (!trunc &&
-                         options.wal_recovery_mode ==
-                             WALRecoveryMode::kTolerateCorruptedTailRecords));
+            ASSERT_TRUE(
+                options.wal_recovery_mode ==
+                    WALRecoveryMode::kAbsoluteConsistency ||
+                (!trunc && options.wal_recovery_mode ==
+                               WALRecoveryMode::kTolerateCorruptedTailRecords));
             continue;
           }
           ASSERT_OK(TryReopen(options));

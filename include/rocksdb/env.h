@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/thread_status.h"
 
 #ifdef _WIN32
@@ -34,7 +35,6 @@
 #undef GetCurrentTime
 #endif
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class FileLock;

@@ -11,6 +11,7 @@
 #endif
 
 #include <inttypes.h>
+
 #include <mutex>
 #include <queue>
 #include <set>
@@ -24,6 +25,7 @@
 #include "db/snapshot_checker.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/transaction_db.h"
 #include "util/set_comparator.h"
 #include "util/string_util.h"
@@ -32,7 +34,6 @@
 #include "utilities/transactions/transaction_lock_mgr.h"
 #include "utilities/transactions/write_prepared_txn.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #define ROCKS_LOG_DETAILS(LGR, FMT, ...) \
@@ -665,12 +666,9 @@ class WritePreparedCommitEntryPreReleaseCallback : public PreReleaseCallback {
  public:
   // includes_data indicates that the commit also writes non-empty
   // CommitTimeWriteBatch to memtable, which needs to be committed separately.
-  WritePreparedCommitEntryPreReleaseCallback(WritePreparedTxnDB* db,
-                                             DBImpl* db_impl,
-                                             SequenceNumber prep_seq,
-                                             size_t prep_batch_cnt,
-                                             size_t data_batch_cnt = 0,
-                                             bool publish_seq = true)
+  WritePreparedCommitEntryPreReleaseCallback(
+      WritePreparedTxnDB* db, DBImpl* db_impl, SequenceNumber prep_seq,
+      size_t prep_batch_cnt, size_t data_batch_cnt = 0, bool publish_seq = true)
       : db_(db),
         db_impl_(db_impl),
         prep_seq_(prep_seq),

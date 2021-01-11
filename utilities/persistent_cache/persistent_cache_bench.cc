@@ -15,18 +15,17 @@ int main() { fprintf(stderr, "Please install gflags to run tools\n"); }
 #include <sstream>
 #include <unordered_map>
 
-#include "rocksdb/env.h"
-
-#include "utilities/persistent_cache/block_cache_tier.h"
-#include "utilities/persistent_cache/persistent_cache_tier.h"
-#include "utilities/persistent_cache/volatile_tier_impl.h"
-
 #include "monitoring/histogram.h"
 #include "port/port.h"
+#include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block_builder.h"
 #include "util/gflags_compat.h"
 #include "util/mutexlock.h"
 #include "util/stop_watch.h"
+#include "utilities/persistent_cache/block_cache_tier.h"
+#include "utilities/persistent_cache/persistent_cache_tier.h"
+#include "utilities/persistent_cache/volatile_tier_impl.h"
 
 DEFINE_int32(nsec, 10, "nsec");
 DEFINE_int32(nthread_write, 1, "Insert threads");
@@ -43,7 +42,6 @@ DEFINE_string(cache_type, "block_cache",
 DEFINE_bool(benchmark, false, "Benchmark mode");
 DEFINE_int32(volatile_cache_pct, 10, "Percentage of cache in memory tier.");
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 std::unique_ptr<PersistentCacheTier> NewVolatileCache() {
@@ -236,7 +234,7 @@ class CacheTierBenchmark {
       fprintf(stderr, "%s\n", status.ToString().c_str());
     }
     assert(status.ok());
-    assert(size == (size_t) FLAGS_iosize);
+    assert(size == (size_t)FLAGS_iosize);
 
     // adjust stats
     const size_t elapsed_micro = timer.ElapsedNanos() / 1000;

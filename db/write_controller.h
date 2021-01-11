@@ -9,9 +9,10 @@
 
 #include <atomic>
 #include <memory>
-#include "rocksdb/rate_limiter.h"
 
+#include "rocksdb/rate_limiter.h"
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class Env;

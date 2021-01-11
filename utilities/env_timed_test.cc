@@ -7,13 +7,12 @@
 
 #include "rocksdb/env.h"
 #include "rocksdb/perf_context.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/testharness.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
-class TimedEnvTest : public testing::Test {
-};
+class TimedEnvTest : public testing::Test {};
 
 TEST_F(TimedEnvTest, BasicTest) {
   SetPerfLevel(PerfLevel::kEnableTime);

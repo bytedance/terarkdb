@@ -40,6 +40,7 @@
 #include "env/env_chroot.h"
 #include "port/port.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/log_buffer.h"
 #include "util/mutexlock.h"
@@ -54,7 +55,6 @@ static const size_t kPageSize = sysconf(_SC_PAGESIZE);
 static const size_t kPageSize = 4 * 1024;
 #endif
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 static const int kDelayMicros = 100000;

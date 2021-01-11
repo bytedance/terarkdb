@@ -1,5 +1,6 @@
 #include <rocksdb/env.h>
 
+#include "rocksdb/terark_namespace.h"
 #include "utilities/ioprof/ioprof.h"
 #ifdef BOOSTLIB
 #include <boost/current_function.hpp>
@@ -7,7 +8,6 @@
 #define BOOST_CURRENT_FUNCTION "(unknown)"
 #endif
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class IOProfSequentialFile : public SequentialFileWrapper {

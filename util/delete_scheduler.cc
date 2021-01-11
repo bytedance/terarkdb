@@ -12,12 +12,12 @@
 
 #include "port/port.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/logging.h"
 #include "util/mutexlock.h"
 #include "util/sst_file_manager_impl.h"
 #include "util/sync_point.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 DeleteScheduler::DeleteScheduler(Env* env, int64_t rate_bytes_per_sec,

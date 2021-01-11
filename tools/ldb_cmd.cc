@@ -32,6 +32,7 @@
 #include "port/dirent.h"
 #include "rocksdb/cache.h"
 #include "rocksdb/table_properties.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/backupable_db.h"
 #include "rocksdb/utilities/checkpoint.h"
 #include "rocksdb/utilities/debug.h"
@@ -50,7 +51,6 @@
 #include "utilities/ttl/db_ttl_impl.h"
 #include "utilities/util/function.hpp"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 const std::string LDBCommand::ARG_DB = "db";
@@ -1618,7 +1618,8 @@ std::vector<std::string> ReduceDBLevelsCommand::PrepareArgs(
   std::vector<std::string> ret;
   ret.push_back("reduce_levels");
   ret.push_back("--" + ARG_DB + "=" + db_path);
-  ret.push_back("--" + ARG_NEW_LEVELS + "=" + TERARKDB_NAMESPACE::ToString(new_levels));
+  ret.push_back("--" + ARG_NEW_LEVELS + "=" +
+                TERARKDB_NAMESPACE::ToString(new_levels));
   if (print_old_level) {
     ret.push_back("--" + ARG_PRINT_OLD_LEVELS);
   }

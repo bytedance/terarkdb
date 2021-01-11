@@ -9,11 +9,12 @@
 
 #pragma once
 
-#include <memory>
 #include <functional>
+#include <memory>
 #include <type_traits>
 
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 namespace port {
 
@@ -22,27 +23,25 @@ namespace port {
 //  -- is that it dynamically allocates its internals that are automatically
 //     freed when  the thread terminates and not on the destruction of the
 //     object. This makes it difficult to control the source of memory
-//     allocation 
+//     allocation
 //  -  This implements Pimpl so we can easily replace the guts of the
 //      object in our private version if necessary.
 class WindowsThread {
-
   struct Data;
 
-  std::shared_ptr<Data>  data_;
-  unsigned int           th_id_;
+  std::shared_ptr<Data> data_;
+  unsigned int th_id_;
 
   void Init(std::function<void()>&&);
 
-public:
-
+ public:
   typedef void* native_handle_type;
 
   // Construct with no thread
   WindowsThread();
 
   // Template constructor
-  // 
+  //
   // This templated constructor accomplishes several things
   //
   // - Allows the class as whole to be not a template
@@ -65,17 +64,12 @@ public:
   //   dependent type that both checks the signature conformance to ensure
   //   that all of the necessary arguments are provided and allows pimpl
   //   implementation.
-  template<class Fn,
-    class... Args,
-    class = typename std::enable_if<
-      !std::is_same<typename std::decay<Fn>::type,
-                    WindowsThread>::value>::type>
-  explicit WindowsThread(Fn&& fx, Args&&... ax) :
-      WindowsThread() {
-
+  template <class Fn, class... Args,
+            class = typename std::enable_if<!std::is_same<
+                typename std::decay<Fn>::type, WindowsThread>::value>::type>
+  explicit WindowsThread(Fn&& fx, Args&&... ax) : WindowsThread() {
     // Use binder to create a single callable entity
-    auto binder = std::bind(std::forward<Fn>(fx),
-      std::forward<Args>(ax)...);
+    auto binder = std::bind(std::forward<Fn>(fx), std::forward<Args>(ax)...);
     // Use std::function to take advantage of the type erasure
     // so we can still hide implementation within pimpl
     // This also makes sure that the binder signature is compliant
@@ -83,7 +77,6 @@ public:
 
     Init(std::move(target));
   }
-
 
   ~WindowsThread();
 
@@ -109,14 +102,12 @@ public:
 
   void swap(WindowsThread&);
 };
-} // namespace port
-} // namespace TERARKDB_NAMESPACE
+}  // namespace port
+}  // namespace TERARKDB_NAMESPACE
 
 namespace std {
-  inline
-  void swap(TERARKDB_NAMESPACE::port::WindowsThread& th1,
-    TERARKDB_NAMESPACE::port::WindowsThread& th2) {
-    th1.swap(th2);
-  }
-} // namespace std
-
+inline void swap(TERARKDB_NAMESPACE::port::WindowsThread& th1,
+                 TERARKDB_NAMESPACE::port::WindowsThread& th2) {
+  th1.swap(th2);
+}
+}  // namespace std

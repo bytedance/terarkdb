@@ -13,9 +13,6 @@
 #include <fcntl.h>
 
 #include <algorithm>
-#include <set>
-#include <thread>
-#include <unordered_set>
 #include <utility>
 #ifndef OS_WIN
 #include <unistd.h>
@@ -24,13 +21,10 @@
 #include <alloca.h>
 #endif
 
-#include "cache/lru_cache.h"
 #include "db/db_impl.h"
 #include "db/db_test_util.h"
-#include "db/dbformat.h"
 #include "db/job_context.h"
 #include "db/version_set.h"
-#include "db/write_batch_internal.h"
 #include "env/mock_env.h"
 #include "memtable/hash_linklist_rep.h"
 #include "monitoring/thread_status_util.h"
@@ -49,15 +43,12 @@
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/snapshot.h"
 #include "rocksdb/table.h"
-#include "rocksdb/table_properties.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/thread_status.h"
 #include "rocksdb/utilities/checkpoint.h"
-#include "rocksdb/utilities/optimistic_transaction_db.h"
 #include "rocksdb/utilities/write_batch_with_index.h"
-#include "table/block_based_table_factory.h"
 #include "table/mock_table.h"
 #include "table/plain_table_factory.h"
-#include "table/scoped_arena_iterator.h"
 #include "util/compression.h"
 #include "util/file_reader_writer.h"
 #include "util/filename.h"
@@ -69,7 +60,6 @@
 #include "util/testutil.h"
 #include "utilities/merge_operators.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBTest : public DBTestBase {
@@ -5716,11 +5706,11 @@ TEST_F(DBTest, HardLimit) {
   CreateAndReopenWithCF({"pikachu"}, options);
 
   std::atomic<int> callback_count(0);
-  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack("DBImpl::DelayWrite:Wait",
-                                                 [&](void* /*arg*/) {
-                                                   callback_count.fetch_add(1);
-                                                   sleeping_task_low.WakeUp();
-                                                 });
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
+      "DBImpl::DelayWrite:Wait", [&](void* /*arg*/) {
+        callback_count.fetch_add(1);
+        sleeping_task_low.WakeUp();
+      });
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
 
   Random rnd(301);

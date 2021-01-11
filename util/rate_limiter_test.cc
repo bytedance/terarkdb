@@ -14,16 +14,17 @@
 #include "util/rate_limiter.h"
 
 #include <inttypes.h>
+
 #include <chrono>
 #include <limits>
 
 #include "db/db_test_util.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/random.h"
 #include "util/sync_point.h"
 #include "util/testharness.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // TODO(yhchiang): the rate will not be accurate when we run test in parallel.

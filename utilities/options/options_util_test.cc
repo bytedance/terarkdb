@@ -8,6 +8,8 @@
 #define __STDC_FORMAT_MACROS
 #endif
 
+#include "rocksdb/utilities/options_util.h"
+
 #include <inttypes.h>
 
 #include <cctype>
@@ -16,7 +18,7 @@
 #include "options/options_parser.h"
 #include "rocksdb/db.h"
 #include "rocksdb/table.h"
-#include "rocksdb/utilities/options_util.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/random.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
@@ -29,8 +31,8 @@ using GFLAGS_NAMESPACE::ParseCommandLineFlags;
 DEFINE_bool(enable_print, false, "Print options generated to console.");
 #endif  // GFLAGS
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
+
 class OptionsUtilTest : public testing::Test {
  public:
   OptionsUtilTest() : rnd_(0xFB) {
@@ -142,10 +144,9 @@ class DummyMergeOperator : public MergeOperator {
     return false;
   }
 
-  virtual bool PartialMergeMulti(const Slice& /*key*/,
-                                 const std::vector<LazyBuffer>& /*operand_list*/,
-                                 LazyBuffer* /*new_value*/,
-                                 Logger* /*logger*/) const override {
+  virtual bool PartialMergeMulti(
+      const Slice& /*key*/, const std::vector<LazyBuffer>& /*operand_list*/,
+      LazyBuffer* /*new_value*/, Logger* /*logger*/) const override {
     return false;
   }
 

@@ -6,6 +6,7 @@
 #pragma once
 
 #include <stdint.h>
+
 #include <cassert>
 #include <cstdlib>
 #include <mutex>
@@ -13,6 +14,7 @@
 #include <vector>
 
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 // This class is used to track the log files with outstanding prepare entries.
@@ -57,6 +59,5 @@ class LogsWithPrepTracker {
   // both logs_with_prep_ and prepared_section_completed_.
   std::unordered_map<uint64_t, uint64_t> prepared_section_completed_;
   std::mutex prepared_section_completed_mutex_;
-
 };
 }  // namespace TERARKDB_NAMESPACE

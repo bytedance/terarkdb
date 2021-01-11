@@ -20,13 +20,13 @@
 #include "rocksdb/rate_limiter.h"
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block_based_table_factory.h"
 #include "table/plain_table_factory.h"
 #include "table/terark_zip_table.h"
 #include "util/cast_util.h"
 #include "util/string_util.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
@@ -1086,8 +1086,8 @@ Status ParseColumnFamilyOption(const std::string& name,
             "unable to parse the specified CF option " + name);
       }
       new_options->table_factory.reset(NewTerarkZipTableFactory(
-          tzto,
-          std::shared_ptr<TERARKDB_NAMESPACE::TableFactory>(NewBlockBasedTableFactory())));
+          tzto, std::shared_ptr<TERARKDB_NAMESPACE::TableFactory>(
+                    NewBlockBasedTableFactory())));
 #endif
     } else {
       auto iter = cf_options_type_info.find(name);
@@ -1418,8 +1418,8 @@ Status GetTableFactoryFromMap(
       return s;
     }
     table_factory->reset(NewTerarkZipTableFactory(
-        tzt_opt,
-        std::shared_ptr<TERARKDB_NAMESPACE::TableFactory>(NewBlockBasedTableFactory())));
+        tzt_opt, std::shared_ptr<TERARKDB_NAMESPACE::TableFactory>(
+                     NewBlockBasedTableFactory())));
     return Status::OK();
 #endif
   }

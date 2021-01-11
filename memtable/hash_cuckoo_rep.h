@@ -9,10 +9,10 @@
 #pragma once
 #ifndef ROCKSDB_LITE
 #include "port/port.h"
-#include "rocksdb/slice_transform.h"
 #include "rocksdb/memtablerep.h"
-
+#include "rocksdb/slice_transform.h"
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class HashCuckooRepFactory : public MemTableRepFactory {

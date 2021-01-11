@@ -20,10 +20,10 @@
 #include "options/cf_options.h"
 #include "rocksdb/options.h"
 #include "rocksdb/table_properties.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 #include "util/file_reader_writer.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Slice;

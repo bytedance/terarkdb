@@ -10,12 +10,12 @@
 #include "db/db_iter.h"
 #include "db/merge_context.h"
 #include "monitoring/perf_context_imp.h"
+#include "rocksdb/terark_namespace.h"
 #if !defined(_MSC_VER) && !defined(__APPLE__)
 #include <sys/unistd.h>
 #include <table/terark_zip_table.h>
 #endif
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE
@@ -232,7 +232,7 @@ Status DB::OpenForReadOnly(
   return s;
 }
 
-#else   // !ROCKSDB_LITE
+#else  // !ROCKSDB_LITE
 
 Status DB::OpenForReadOnly(const Options& /*options*/,
                            const std::string& /*dbname*/, DB** /*dbptr*/,

@@ -10,16 +10,16 @@
 #ifndef ROCKSDB_LITE
 
 #include <stdint.h>
-#include "rocksdb/sst_dump_tool.h"
 
 #include "rocksdb/filter_policy.h"
+#include "rocksdb/sst_dump_tool.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block_based_table_factory.h"
 #include "table/table_builder.h"
 #include "util/file_reader_writer.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 const uint32_t optLength = 100;
@@ -136,7 +136,8 @@ TEST_F(SSTDumpToolTest, EmptyFilter) {
 }
 
 TEST_F(SSTDumpToolTest, FilterBlock) {
-  table_options_.filter_policy.reset(TERARKDB_NAMESPACE::NewBloomFilterPolicy(10, true));
+  table_options_.filter_policy.reset(
+      TERARKDB_NAMESPACE::NewBloomFilterPolicy(10, true));
   std::string file_path = MakeFilePath("rocksdb_sst_test.sst");
   createSST(file_path, table_options_);
 
@@ -153,7 +154,8 @@ TEST_F(SSTDumpToolTest, FilterBlock) {
 }
 
 TEST_F(SSTDumpToolTest, FullFilterBlock) {
-  table_options_.filter_policy.reset(TERARKDB_NAMESPACE::NewBloomFilterPolicy(10, false));
+  table_options_.filter_policy.reset(
+      TERARKDB_NAMESPACE::NewBloomFilterPolicy(10, false));
   std::string file_path = MakeFilePath("rocksdb_sst_test.sst");
   createSST(file_path, table_options_);
 
@@ -170,7 +172,8 @@ TEST_F(SSTDumpToolTest, FullFilterBlock) {
 }
 
 TEST_F(SSTDumpToolTest, GetProperties) {
-  table_options_.filter_policy.reset(TERARKDB_NAMESPACE::NewBloomFilterPolicy(10, false));
+  table_options_.filter_policy.reset(
+      TERARKDB_NAMESPACE::NewBloomFilterPolicy(10, false));
   std::string file_path = MakeFilePath("rocksdb_sst_test.sst");
   createSST(file_path, table_options_);
 
@@ -187,7 +190,8 @@ TEST_F(SSTDumpToolTest, GetProperties) {
 }
 
 TEST_F(SSTDumpToolTest, CompressedSizes) {
-  table_options_.filter_policy.reset(TERARKDB_NAMESPACE::NewBloomFilterPolicy(10, false));
+  table_options_.filter_policy.reset(
+      TERARKDB_NAMESPACE::NewBloomFilterPolicy(10, false));
   std::string file_path = MakeFilePath("rocksdb_sst_test.sst");
   createSST(file_path, table_options_);
 

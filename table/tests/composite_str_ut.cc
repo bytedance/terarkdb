@@ -3,72 +3,70 @@
 #include <iostream>
 #include <map>
 #include <string>
-#include <vector>
-
+#include <terark/idx/terark_zip_index.hpp>
 #include <terark/io/FileStream.hpp>
 #include <terark/rank_select.hpp>
-#include <terark/idx/terark_zip_index.hpp>
-
-#include "../terark_zip_common.h"
+#include <vector>
 
 #include "index_composite_ut.h"
+#include "rocksdb/terark_namespace.h"
+#include "table/terark_zip_common.h"
 
 using namespace std;
 
 static const size_t KEY_LEN = 18;
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
-  struct TerarkZipTableOptions {};
+struct TerarkZipTableOptions {};
 
-  class FileWriter {
-  public:
-    std::string path;
-    FileStream  fp;
-    NativeDataOutput<OutputBuffer> writer;
-    ~FileWriter() {}
-    void open() {
-      fp.open(path.c_str(), "wb+");
-      fp.disbuf();
-      writer.attach(&fp);
-    }
-    void close() {
-      writer.flush_buffer();
-      fp.close();
-    }
-  };
-}
+class FileWriter {
+ public:
+  std::string path;
+  FileStream fp;
+  NativeDataOutput<OutputBuffer> writer;
+  ~FileWriter() {}
+  void open() {
+    fp.open(path.c_str(), "wb+");
+    fp.disbuf();
+    writer.attach(&fp);
+  }
+  void close() {
+    writer.flush_buffer();
+    fp.close();
+  }
+};
+}  // namespace TERARKDB_NAMESPACE
 
 namespace {
-  vector<string> keys;
-  string key_path;
-  string index_path;
-  TerarkIndex::KeyStat stat;
+vector<string> keys;
+string key_path;
+string index_path;
+TerarkIndex::KeyStat stat;
 
-  void clear() {
-    keys.clear();
-    key_path.clear();
-    index_path.clear();
-    stat.minKey.clear();
-    stat.maxKey.clear();
-    memset(&stat, 0, sizeof(stat));
-    ::remove(key_path.c_str());
-    ::remove(index_path.c_str());
-  }
-
-  TerarkIndex* save_reload(TerarkIndex* index,
-                           const TerarkIndex::Factory* factory) {
-    FileStream writer(index_path, "wb");
-    index->SaveMmap([&writer](const void* data, size_t size) {
-        writer.ensureWrite(data, size);
-      });
-    writer.flush();
-    writer.close();
-    delete index;
-    return TerarkIndex::LoadFile(index_path).release();
-  }
+void clear() {
+  keys.clear();
+  key_path.clear();
+  index_path.clear();
+  stat.minKey.clear();
+  stat.maxKey.clear();
+  memset(&stat, 0, sizeof(stat));
+  ::remove(key_path.c_str());
+  ::remove(index_path.c_str());
 }
+
+TerarkIndex* save_reload(TerarkIndex* index,
+                         const TerarkIndex::Factory* factory) {
+  FileStream writer(index_path, "wb");
+  index->SaveMmap([&writer](const void* data, size_t size) {
+    writer.ensureWrite(data, size);
+  });
+  writer.flush();
+  writer.close();
+  delete index;
+  return TerarkIndex::LoadFile(index_path).release();
+}
+}  // namespace
 
 /*
  * il256 il256
@@ -78,11 +76,11 @@ static void init_data_il256_il256_ascend() {
   fwriter.path = key_path;
   fwriter.open();
   keys.resize(100);
-  char carr[18] = { 0 };
+  char carr[18] = {0};
   for (int i = 0; i < 100; i++) {
     keys[i] = string(carr, carr + KEY_LEN);
   }
-	for (int i = 0; i < 10; i += 2) {
+  for (int i = 0; i < 10; i += 2) {
     carr[7] = i;
     for (int j = 0; j < 10; j++) {
       carr[15] = j;
@@ -97,7 +95,7 @@ static void init_data_il256_il256_ascend() {
       }
       keys[i * 10 + j] = string(carr, KEY_LEN);
     }
-	}
+  }
   fwriter.close();
   stat.numKeys = 50;
   stat.commonPrefixLen = 0;
@@ -107,15 +105,15 @@ static void init_data_il256_il256_ascend() {
 }
 
 static void init_data_il256_il256_descend() {
-    TERARKDB_NAMESPACE::FileWriter fwriter;
+  TERARKDB_NAMESPACE::FileWriter fwriter;
   fwriter.path = key_path;
   fwriter.open();
   keys.resize(100);
-  char carr[18] = { 0 };
+  char carr[18] = {0};
   for (int i = 0; i < 100; i++) {
     keys[i] = string(carr, carr + KEY_LEN);
   }
-	for (int i = 8; i >= 0; i -= 2) {
+  for (int i = 8; i >= 0; i -= 2) {
     carr[7] = i;
     for (int j = 9; j >= 0; j--) {
       carr[15] = j;
@@ -127,7 +125,7 @@ static void init_data_il256_il256_descend() {
       }
       keys[i * 10 + j] = string(carr, KEY_LEN);
     }
-	}
+  }
   fwriter.close();
   stat.numKeys = 50;
   stat.commonPrefixLen = 0;
@@ -152,7 +150,8 @@ void test_il256_il256_str(DataStored dtype) {
   // build index
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
-  auto factory = TERARKDB_NAMESPACE::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_BigUint");
+  auto factory = TERARKDB_NAMESPACE::TerarkIndex::GetFactory(
+      "CompositeUintIndex_IL_256_32_IL_256_32_BigUint");
   {
     size_t memsz = factory->MemSizeForBuild(stat);
     assert(memsz < stat.sumKeyLen * 0.8);
@@ -176,7 +175,7 @@ void test_il256_il256_str(DataStored dtype) {
     }
   }
   {
-    char arr[KEY_LEN] = { 0 };
+    char arr[KEY_LEN] = {0};
     for (size_t i = 1; i < 10; i += 2) {
       arr[7] = i;
       for (size_t j = 0; j < 10; j++) {
@@ -190,7 +189,7 @@ void test_il256_il256_str(DataStored dtype) {
   auto iter = index->NewIterator();
   {
     // seek to 1st, next()
-    char arr[KEY_LEN] = { 0 };
+    char arr[KEY_LEN] = {0};
     assert(iter->SeekToFirst());
     assert(iter->DictRank() == 0);
     assert(fstring(arr, KEY_LEN) == iter->key());
@@ -198,8 +197,7 @@ void test_il256_il256_str(DataStored dtype) {
       arr[7] = i;
       for (int j = 0; j < 10; j++) {
         arr[15] = j;
-        if (i == 0 && j == 0)
-          continue;
+        if (i == 0 && j == 0) continue;
         assert(iter->Next());
         assert(iter->DictRank() == i / 2 * 10 + j);
         assert(fstring(arr, KEY_LEN) == iter->key());
@@ -209,7 +207,7 @@ void test_il256_il256_str(DataStored dtype) {
   }
   {
     // seek to last, prev()
-    char arr[KEY_LEN] = { 0 };
+    char arr[KEY_LEN] = {0};
     assert(iter->SeekToLast());
     assert(iter->DictRank() == 49);
     for (int i = 8; i >= 0; i -= 2) {
@@ -229,7 +227,7 @@ void test_il256_il256_str(DataStored dtype) {
   }
   {
     // seek matches
-    char arr[KEY_LEN] = { 0 };
+    char arr[KEY_LEN] = {0};
     for (int i = 0; i < 9; i += 2) {
       arr[7] = i;
       for (int j = 9; j >= 0; j--) {
@@ -244,30 +242,31 @@ void test_il256_il256_str(DataStored dtype) {
   }
   {
     // seek larger than larger @apple
-    char arr[KEY_LEN] = { 0 };
-    arr[7] = 20; arr[15] = 0;
+    char arr[KEY_LEN] = {0};
+    arr[7] = 20;
+    arr[15] = 0;
     assert(iter->Seek(fstring(arr, KEY_LEN)) == false);
     // smaller than smaller
-    char sarr[4] = { 0 };
+    char sarr[4] = {0};
     assert(iter->Seek(fstring(sarr, 4)));
     assert(iter->DictRank() == 0);
     //
-    char marr[12] = { 0 };
+    char marr[12] = {0};
     marr[7] = 4;
     assert(iter->Seek(fstring(marr, 12)));
     assert(iter->DictRank() == 2 * 10 + 0);
-    arr[7] = 4; arr[15] = 0;
+    arr[7] = 4;
+    arr[15] = 0;
     assert(fstring(arr, KEY_LEN) == iter->key());
   }
   {
     // lower_bound
-    char arr[KEY_LEN + 1] = { 0 };
+    char arr[KEY_LEN + 1] = {0};
     arr[KEY_LEN] = 1;
     for (int i = 0; i < 9; i += 2) {
       arr[7] = i;
       for (int j = 0; j < 9; j++) {
-        if (i == 8 && j == 9)
-          break;
+        if (i == 8 && j == 9) break;
         arr[15] = j;
         int expected = i / 2 * 10 + j + 1;
         assert(iter->Seek(fstring(arr, KEY_LEN + 1)));
@@ -277,15 +276,18 @@ void test_il256_il256_str(DataStored dtype) {
   }
   {
     // cross index1st boundary lower_bound
-    char arr[KEY_LEN] = { 0 };
-    arr[7] = 4; arr[15] = 14;
+    char arr[KEY_LEN] = {0};
+    arr[7] = 4;
+    arr[15] = 14;
     assert(iter->Seek(fstring(arr, KEY_LEN)));
     int expected = (4 + 2) / 2 * 10;
     assert(iter->DictRank() == expected);
 
-    arr[7] = 8; arr[15] = 9;
+    arr[7] = 8;
+    arr[15] = 9;
     assert(iter->Seek(fstring(arr, KEY_LEN)));
-    arr[7] = 8; arr[15] = 10;
+    arr[7] = 8;
+    arr[15] = 10;
     assert(iter->Seek(fstring(arr, KEY_LEN)) == false);
   }
   printf("\tIterator done\n");
@@ -293,7 +295,6 @@ void test_il256_il256_str(DataStored dtype) {
   delete index;
   clear();
 }
-
 
 /*
  * allone il256
@@ -303,8 +304,8 @@ static void init_data_allone_il256_ascend() {
   fwriter.path = key_path;
   fwriter.open();
   keys.resize(110);
-  char carr[KEY_LEN] = { 0 };
-	for (int i = 0; i < 11; i++) {
+  char carr[KEY_LEN] = {0};
+  for (int i = 0; i < 11; i++) {
     carr[7] = i;
     for (int j = 0; j < 10; j++) {
       carr[15] = j;
@@ -319,7 +320,7 @@ static void init_data_allone_il256_ascend() {
       }
       keys[i * 10 + j] = string(carr, KEY_LEN);
     }
-	}
+  }
   fwriter.close();
   stat.numKeys = 100;
   stat.commonPrefixLen = 0;
@@ -333,8 +334,8 @@ static void init_data_allone_il256_descend() {
   fwriter.path = key_path;
   fwriter.open();
   keys.resize(110);
-  char carr[KEY_LEN] = { 0 };
-	for (int i = 10; i >= 0; i--) {
+  char carr[KEY_LEN] = {0};
+  for (int i = 10; i >= 0; i--) {
     carr[7] = i;
     for (int j = 9; j >= 0; j--) {
       carr[15] = j;
@@ -349,7 +350,7 @@ static void init_data_allone_il256_descend() {
       }
       keys[i * 10 + j] = string(carr, KEY_LEN);
     }
-	}
+  }
   fwriter.close();
   stat.numKeys = 100;
   stat.commonPrefixLen = 0;
@@ -374,7 +375,8 @@ void test_allone_il256_str(DataStored dtype) {
   // build index
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
-  auto factory = TERARKDB_NAMESPACE::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_BigUint");
+  auto factory = TERARKDB_NAMESPACE::TerarkIndex::GetFactory(
+      "CompositeUintIndex_IL_256_32_IL_256_32_BigUint");
   {
     size_t memsz = factory->MemSizeForBuild(stat);
     assert(memsz < stat.sumKeyLen * 0.8);
@@ -402,7 +404,7 @@ void test_allone_il256_str(DataStored dtype) {
   auto iter = index->NewIterator();
   {
     // seek to 1st, next()
-    char arr[KEY_LEN] = { 0 };
+    char arr[KEY_LEN] = {0};
     assert(iter->SeekToFirst());
     assert(iter->DictRank() == 0);
     assert(fstring(arr, KEY_LEN) == iter->key());
@@ -410,8 +412,7 @@ void test_allone_il256_str(DataStored dtype) {
       arr[7] = i;
       for (int j = 0; j < 10; j++) {
         arr[15] = j;
-        if (i == 0 && j == 0)
-          continue;
+        if (i == 0 && j == 0) continue;
         assert(iter->Next());
         assert(iter->DictRank() == i * 10 + j);
         assert(fstring(arr, KEY_LEN) == iter->key());
@@ -421,7 +422,7 @@ void test_allone_il256_str(DataStored dtype) {
   }
   {
     // seek to last, prev()
-    char arr[KEY_LEN] = { 0 };
+    char arr[KEY_LEN] = {0};
     assert(iter->SeekToLast());
     assert(iter->DictRank() == 99);
     for (int i = 9; i >= 0; i--) {
@@ -441,7 +442,7 @@ void test_allone_il256_str(DataStored dtype) {
   }
   {
     // seek matches
-    char arr[KEY_LEN] = { 0 };
+    char arr[KEY_LEN] = {0};
     for (int i = 0; i < 9; i++) {
       arr[7] = i;
       for (int j = 9; j >= 0; j--) {
@@ -455,30 +456,31 @@ void test_allone_il256_str(DataStored dtype) {
   }
   {
     // seek larger than larger @apple
-    char arr[KEY_LEN] = { 0 };
-    arr[7] = 20; arr[15] = 0;
+    char arr[KEY_LEN] = {0};
+    arr[7] = 20;
+    arr[15] = 0;
     assert(iter->Seek(fstring(arr, KEY_LEN)) == false);
     // smaller than smaller
-    char sarr[4] = { 0 };
+    char sarr[4] = {0};
     assert(iter->Seek(fstring(sarr, 4)));
     assert(iter->DictRank() == 0);
     //
-    char marr[12] = { 0 };
+    char marr[12] = {0};
     marr[7] = 4;
     assert(iter->Seek(fstring(marr, 12)));
     assert(iter->DictRank() == 4 * 10 + 0);
-    arr[7] = 4; arr[15] = 0;
+    arr[7] = 4;
+    arr[15] = 0;
     assert(fstring(arr, KEY_LEN) == iter->key());
   }
   {
     // lower_bound
-    char arr[KEY_LEN + 1] = { 0 };
+    char arr[KEY_LEN + 1] = {0};
     arr[KEY_LEN] = 1;
     for (int i = 0; i < 9; i++) {
       arr[7] = i;
       for (int j = 0; j < 9; j++) {
-        if (i == 9 && j == 9)
-          break;
+        if (i == 9 && j == 9) break;
         arr[15] = j;
         int idx = i * 10 + j + 1;
         assert(iter->Seek(fstring(arr, KEY_LEN + 1)));
@@ -488,15 +490,18 @@ void test_allone_il256_str(DataStored dtype) {
   }
   {
     // cross index1st boundary lower_bound
-    char arr[KEY_LEN] = { 0 };
-    arr[7] = 4; arr[15] = 14;
+    char arr[KEY_LEN] = {0};
+    arr[7] = 4;
+    arr[15] = 14;
     assert(iter->Seek(fstring(arr, KEY_LEN)));
     int idx = (4 + 1) * 10;
     assert(iter->DictRank() == idx);
 
-    arr[7] = 9; arr[15] = 9;
+    arr[7] = 9;
+    arr[15] = 9;
     assert(iter->Seek(fstring(arr, KEY_LEN)));
-    arr[7] = 9; arr[15] = 10;
+    arr[7] = 9;
+    arr[15] = 10;
     assert(iter->Seek(fstring(arr, KEY_LEN)) == false);
   }
   printf("\tIterator done\n");
@@ -513,8 +518,8 @@ static void init_data_allone_allzero() {
   fwriter.path = key_path;
   fwriter.open();
   keys.resize(110);
-  char carr[KEY_LEN] = { 0 };
-	for (int i = 0; i < 110; i++) {
+  char carr[KEY_LEN] = {0};
+  for (int i = 0; i < 110; i++) {
     carr[7] = i;
     carr[15] = i;
     // keep the last 10 elem for 'Find Fail Test'
@@ -527,7 +532,7 @@ static void init_data_allone_allzero() {
       stat.maxKey.assign(carr, carr + KEY_LEN);
     }
     keys[i] = string(carr, KEY_LEN);
-	}
+  }
   fwriter.close();
   stat.numKeys = 100;
   stat.commonPrefixLen = 0;
@@ -549,7 +554,8 @@ void test_allone_allzero_str(DataStored dtype) {
   // build index
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
-  auto factory = TERARKDB_NAMESPACE::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_BigUint");
+  auto factory = TERARKDB_NAMESPACE::TerarkIndex::GetFactory(
+      "CompositeUintIndex_IL_256_32_IL_256_32_BigUint");
   {
     size_t memsz = factory->MemSizeForBuild(stat);
     assert(memsz < stat.sumKeyLen * 0.8);
@@ -577,12 +583,13 @@ void test_allone_allzero_str(DataStored dtype) {
   auto iter = index->NewIterator();
   {
     // seek to 1st, next()
-    char arr[KEY_LEN] = { 0 };
+    char arr[KEY_LEN] = {0};
     assert(iter->SeekToFirst());
     assert(iter->DictRank() == 0);
     assert(fstring(arr, KEY_LEN) == iter->key());
     for (int i = 1; i < 100; i++) {
-      arr[7] = i; arr[15] = i;
+      arr[7] = i;
+      arr[15] = i;
       assert(iter->Next());
       assert(iter->DictRank() == i);
       assert(fstring(arr, KEY_LEN) == iter->key());
@@ -591,11 +598,12 @@ void test_allone_allzero_str(DataStored dtype) {
   }
   {
     // seek to last, prev()
-    char arr[KEY_LEN] = { 0 };
+    char arr[KEY_LEN] = {0};
     assert(iter->SeekToLast());
     assert(iter->DictRank() == 99);
     for (int i = 98; i >= 0; i--) {
-      arr[7] = i; arr[15] = i;
+      arr[7] = i;
+      arr[15] = i;
       assert(iter->Prev());
       assert(iter->DictRank() == i);
       assert(fstring(arr, KEY_LEN) == iter->key());
@@ -604,9 +612,10 @@ void test_allone_allzero_str(DataStored dtype) {
   }
   {
     // seek matches
-    char arr[KEY_LEN] = { 0 };
+    char arr[KEY_LEN] = {0};
     for (int i = 0; i < 100; i++) {
-      arr[7] = i; arr[15] = i;
+      arr[7] = i;
+      arr[15] = i;
       assert(iter->Seek(keys[i]));
       assert(iter->DictRank() == i);
       assert(fstring(arr, KEY_LEN) == iter->key());
@@ -614,29 +623,31 @@ void test_allone_allzero_str(DataStored dtype) {
   }
   {
     // seek larger than larger @apple
-    char arr[KEY_LEN] = { 0 };
-    arr[7] = 120; arr[15] = 0;
+    char arr[KEY_LEN] = {0};
+    arr[7] = 120;
+    arr[15] = 0;
     assert(iter->Seek(fstring(arr, KEY_LEN)) == false);
     // smaller than smaller
-    char sarr[4] = { 0 };
+    char sarr[4] = {0};
     assert(iter->Seek(fstring(sarr, 4)));
     assert(iter->DictRank() == 0);
     //
-    char marr[12] = { 0 };
+    char marr[12] = {0};
     marr[7] = 4;
     assert(iter->Seek(fstring(marr, 12)));
     assert(iter->DictRank() == 4);
-    arr[7] = 4; arr[15] = 4;
+    arr[7] = 4;
+    arr[15] = 4;
     assert(fstring(arr, KEY_LEN) == iter->key());
   }
   {
     // lower_bound
-    char arr[KEY_LEN + 1] = { 0 };
+    char arr[KEY_LEN + 1] = {0};
     arr[KEY_LEN] = 1;
     for (int i = 0; i < 100; i++) {
-      arr[7] = i; arr[15] = i;
-      if (i == 99)
-        break;
+      arr[7] = i;
+      arr[15] = i;
+      if (i == 99) break;
       int idx = i + 1;
       assert(iter->Seek(fstring(arr, KEY_LEN + 1)));
       assert(iter->DictRank() == idx);
@@ -662,8 +673,8 @@ static void init_data_seek_short_target() {
   fwriter.path = key_path;
   fwriter.open();
   keys.resize(400);
-  byte_t carr[KEY_LEN] = { 0 };
-	for (int i = 0; i < 4; i++) {
+  byte_t carr[KEY_LEN] = {0};
+  for (int i = 0; i < 4; i++) {
     carr[6] = i;
     for (int j = 0; j < 250; j++) {
       carr[7] = j;
@@ -675,7 +686,7 @@ static void init_data_seek_short_target() {
         stat.maxKey.assign(carr, carr + KEY_LEN);
       }
     }
-	}
+  }
   fwriter.close();
   stat.numKeys = 1000;
   stat.commonPrefixLen = 0;
@@ -692,13 +703,15 @@ void test_data_seek_short_target_str() {
   init_data_seek_short_target();
   {
     size_t celen;
-    assert(TERARKDB_NAMESPACE::TerarkIndex::SeekCostEffectiveIndexLen(stat, celen));
+    assert(TERARKDB_NAMESPACE::TerarkIndex::SeekCostEffectiveIndexLen(stat,
+                                                                      celen));
     assert(celen == 2);
   }
   // build index
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
-  auto factory = TERARKDB_NAMESPACE::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_BigUint");
+  auto factory = TERARKDB_NAMESPACE::TerarkIndex::GetFactory(
+      "CompositeUintIndex_IL_256_32_IL_256_32_BigUint");
   {
     size_t memsz = factory->MemSizeForBuild(stat);
     assert(memsz < stat.sumKeyLen * 0.8);
@@ -706,7 +719,7 @@ void test_data_seek_short_target_str() {
   }
   TERARKDB_NAMESPACE::TerarkZipTableOptions tableOpt;
   TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
-  //assert(index->Name() == string("CompositeUintIndex_FewZero32_AllZero"));
+  // assert(index->Name() == string("CompositeUintIndex_FewZero32_AllZero"));
   assert(index->Name() == string("CompositeUintIndex_IL_256_32_AllZero"));
   printf("\tbuild done\n");
   // save & reload
@@ -717,7 +730,7 @@ void test_data_seek_short_target_str() {
   auto iter = index->NewIterator();
   {
     // seek lower_bound
-    char arr[7] = { 0 };
+    char arr[7] = {0};
     arr[6] = 2;
     assert(iter->Seek(fstring(arr, arr + 7)));
     assert(iter->DictRank() == 250 * 2);

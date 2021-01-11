@@ -4,11 +4,13 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include "utilities/col_buf_encoder.h"
+
 #include <cstring>
 #include <string>
-#include "port/port.h"
 
+#include "port/port.h"
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 ColBufEncoder::~ColBufEncoder() {}

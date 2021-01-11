@@ -12,9 +12,9 @@
 
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "utilities/merge_operators.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Constructor: also specify the delimiter character.

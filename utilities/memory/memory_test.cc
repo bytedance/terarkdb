@@ -8,6 +8,7 @@
 #include "db/db_impl.h"
 #include "rocksdb/cache.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/memory_util.h"
 #include "rocksdb/utilities/stackable_db.h"
 #include "table/block_based_table_factory.h"
@@ -15,7 +16,6 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class MemoryTest : public testing::Test {

@@ -6,12 +6,11 @@
 #ifndef ROCKSDB_LITE
 #include "table/cuckoo_table_factory.h"
 
-#include "db/dbformat.h"
 #include "rocksdb/convenience.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/cuckoo_table_builder.h"
 #include "table/cuckoo_table_reader.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 Status CuckooTableFactory::NewTableReader(

@@ -7,6 +7,7 @@
 
 #include "rocksdb/lazy_buffer.h"
 #include "rocksdb/merge_operator.h"
+#include "rocksdb/terark_namespace.h"
 #include "utilities/merge_operators.h"
 
 using TERARKDB_NAMESPACE::LazyBuffer;
@@ -84,7 +85,6 @@ class MaxOperator : public MergeOperator {
 
 }  // end of anonymous namespace
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 std::shared_ptr<MergeOperator> MergeOperators::CreateMaxOperator() {

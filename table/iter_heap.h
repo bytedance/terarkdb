@@ -7,9 +7,9 @@
 #pragma once
 
 #include "db/dbformat.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/iterator_wrapper.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // When used with std::priority_queue, this comparison functor puts the
@@ -22,6 +22,7 @@ class MaxIteratorComparator {
   bool operator()(IteratorWrapper* a, IteratorWrapper* b) const {
     return comparator_->Compare(a->key(), b->key()) < 0;
   }
+
  private:
   const InternalKeyComparator* comparator_;
 };
@@ -36,6 +37,7 @@ class MinIteratorComparator {
   bool operator()(IteratorWrapper* a, IteratorWrapper* b) const {
     return comparator_->Compare(a->key(), b->key()) > 0;
   }
+
  private:
   const InternalKeyComparator* comparator_;
 };

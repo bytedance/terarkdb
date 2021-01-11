@@ -14,9 +14,9 @@
 #include "db/error_handler.h"
 #include "port/port.h"
 #include "rocksdb/sst_file_manager.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/delete_scheduler.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Env;

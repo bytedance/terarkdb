@@ -5,9 +5,10 @@
 #include <terark/hash_strmap.hpp>
 #include <terark/util/throw.hpp>
 
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/write_batch_with_index.h"
-#include "terark_zip_common.h"
-#include "terark_zip_table.h"
+#include "table/terark_zip_common.h"
+#include "table/terark_zip_table.h"
 #ifdef _MSC_VER
 #include <Windows.h>
 #define strcasecmp _stricmp
@@ -44,7 +45,6 @@ void DictZipBlobStore_setZipThreads(int zipThreads);
   MyGetUInt(obj.compaction_options_universal, name, \
             obj.compaction_options_universal.name)
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 void TerarkZipDeleteTempFiles(const std::string& tmpPath) {
@@ -335,7 +335,6 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo,
   MyOverrideBool(tzo, forceMetaInMemory);
   MyOverrideBool(tzo, enableEntropyStore);
 
-
   MyOverrideDouble(tzo, sampleRatio);
   MyOverrideDouble(tzo, indexCacheRatio);
   MyOverrideDouble(tzo, cbtMinKeyRatio);
@@ -343,7 +342,6 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo,
   MyOverrideInt(tzo, minDictZipValueSize);
   MyOverrideInt(tzo, minPreadLen);
   MyOverrideInt(tzo, cbtHashBits);
-
 
   MyOverrideXiB(tzo, softZipWorkingMemLimit);
   MyOverrideXiB(tzo, hardZipWorkingMemLimit);
@@ -465,7 +463,8 @@ void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
   dbo.env->SetBackgroundThreads(
       dbo.max_background_compactions + dbo.max_background_garbage_collections,
       TERARKDB_NAMESPACE::Env::LOW);
-  dbo.env->SetBackgroundThreads(dbo.max_background_flushes, TERARKDB_NAMESPACE::Env::HIGH);
+  dbo.env->SetBackgroundThreads(dbo.max_background_flushes,
+                                TERARKDB_NAMESPACE::Env::HIGH);
 }
 
 class TerarkBlackListCF : public terark::hash_strmap<> {

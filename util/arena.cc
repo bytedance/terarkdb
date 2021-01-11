@@ -19,12 +19,11 @@
 #include <sys/mman.h>
 #endif
 #include <algorithm>
-#include "port/port.h"
+
 #include "rocksdb/env.h"
-#include "util/logging.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/sync_point.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // MSVC complains that it is already defined since it is static in the header.

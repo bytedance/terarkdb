@@ -6,16 +6,17 @@
 #ifndef ROCKSDB_LITE
 
 #include "rocksdb/utilities/env_mirror.h"
+
 #include "env/mock_env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/testharness.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class EnvMirrorTest : public testing::Test {
  public:
   Env* default_;
-  MockEnv* a_, *b_;
+  MockEnv *a_, *b_;
   EnvMirror* env_;
   const EnvOptions soptions_;
 
@@ -97,8 +98,9 @@ TEST_F(EnvMirrorTest, Basics) {
   ASSERT_TRUE(
       !env_->NewSequentialFile("/dir/non_existent", &seq_file, soptions_).ok());
   ASSERT_TRUE(!seq_file);
-  ASSERT_TRUE(!env_->NewRandomAccessFile("/dir/non_existent", &rand_file,
-                                         soptions_).ok());
+  ASSERT_TRUE(
+      !env_->NewRandomAccessFile("/dir/non_existent", &rand_file, soptions_)
+           .ok());
   ASSERT_TRUE(!rand_file);
 
   // Check that deleting works.

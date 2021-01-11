@@ -11,10 +11,10 @@
 #include <vector>
 
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/types.h"
 #include "utilities/util/factory.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // -- Table Properties
@@ -195,8 +195,8 @@ struct TablePropertiesBase {
   uint64_t fixed_key_len = 0;
   // ID of column family for this SST file, corresponding to the CF identified
   // by column_family_name.
-  uint64_t column_family_id =
-      TERARKDB_NAMESPACE::TablePropertiesCollectorFactory::Context::kUnknownColumnFamily;
+  uint64_t column_family_id = TERARKDB_NAMESPACE::
+      TablePropertiesCollectorFactory::Context::kUnknownColumnFamily;
   // The time when the SST file was created.
   // Since SST files are immutable, this is equivalent to last modified time.
   uint64_t creation_time = 0;

@@ -26,6 +26,7 @@
 #include "rocksdb/statistics.h"
 #include "rocksdb/table.h"
 #include "rocksdb/table_properties.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block.h"
 #include "table/block_based_filter_block.h"
 #include "table/block_based_table_factory.h"
@@ -47,7 +48,6 @@
 #include "util/string_util.h"
 #include "util/sync_point.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 extern const uint64_t kBlockBasedTableMagicNumber;
@@ -2942,7 +2942,8 @@ Status BlockBasedTable::DumpTable(WritableFile* out_file,
         out_file->Append("  Properties block handle: ");
         out_file->Append(meta_iter->value().ToString(true).c_str());
         out_file->Append("\n");
-      } else if (meta_iter->key() == TERARKDB_NAMESPACE::kCompressionDictBlock) {
+      } else if (meta_iter->key() ==
+                 TERARKDB_NAMESPACE::kCompressionDictBlock) {
         out_file->Append("  Compression dictionary block handle: ");
         out_file->Append(meta_iter->value().ToString(true).c_str());
         out_file->Append("\n");
@@ -2978,7 +2979,8 @@ Status BlockBasedTable::DumpTable(WritableFile* out_file,
     if (!rep_->filter && !table_properties_base->filter_policy_name.empty()) {
       // Support only BloomFilter as off now
       TERARKDB_NAMESPACE::BlockBasedTableOptions table_options;
-      table_options.filter_policy.reset(TERARKDB_NAMESPACE::NewBloomFilterPolicy(1));
+      table_options.filter_policy.reset(
+          TERARKDB_NAMESPACE::NewBloomFilterPolicy(1));
       if (table_properties_base->filter_policy_name.compare(
               table_options.filter_policy->Name()) == 0) {
         std::string filter_block_key = kFilterBlockPrefix;

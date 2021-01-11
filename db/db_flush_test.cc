@@ -9,10 +9,10 @@
 
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/fault_injection_test_env.h"
 #include "util/sync_point.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBFlushTest : public DBTestBase {
@@ -42,7 +42,7 @@ TEST_F(DBFlushTest, FlushWhileWritingManifest) {
   Reopen(options);
   FlushOptions no_wait;
   no_wait.wait = false;
-  no_wait.allow_write_stall=true;
+  no_wait.allow_write_stall = true;
 
   SyncPoint::GetInstance()->LoadDependency(
       {{"VersionSet::LogAndApply:WriteManifest",
@@ -276,8 +276,8 @@ TEST_F(DBFlushTest, ManualFlushFailsInReadOnlyMode) {
   dbfull()->TEST_WaitForFlushMemTable();
 #ifndef ROCKSDB_LITE
   uint64_t num_bg_errors;
-  ASSERT_TRUE(db_->GetIntProperty(DB::Properties::kBackgroundErrors,
-                                  &num_bg_errors));
+  ASSERT_TRUE(
+      db_->GetIntProperty(DB::Properties::kBackgroundErrors, &num_bg_errors));
   ASSERT_GT(num_bg_errors, 0);
 #endif  // ROCKSDB_LITE
 

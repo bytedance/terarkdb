@@ -3,10 +3,10 @@
 #endif
 
 #include "key_path_analysis.hpp"
+#include "rocksdb/terark_namespace.h"
 
 using namespace TERARKDB_NAMESPACE;
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 extern const uint64_t kPlainTableMagicNumber;
 extern const uint64_t kLegacyPlainTableMagicNumber;
@@ -136,8 +136,9 @@ Status KeyPathAnalysis::GetTableReader(const std::string& sst_fname) {
   auto s = options_.env->GetFileSize(sst_fname, &file_size);
   // std::cout << "Try ReadTableProperties, file_size = " << file_size
   //          << std::endl;
-  s = TERARKDB_NAMESPACE::ReadTableProperties(file_reader_.get(), file_size, magic_number,
-                                   ioptions_, &table_properties);
+  s = TERARKDB_NAMESPACE::ReadTableProperties(file_reader_.get(), file_size,
+                                              magic_number, ioptions_,
+                                              &table_properties);
   if (s.ok()) {
     table_properties_.reset(table_properties);
     // TODO init options based on different magic number
@@ -167,15 +168,16 @@ void KeyPathAnalysis::Get(const std::string& sst_fname, const Slice& key) {
   auto s = GetTableReader(sst_fname);
 
   LazyBuffer val;
-  TERARKDB_NAMESPACE::GetContext ctx(options_.comparator, options_.merge_operator.get(),
-                          nullptr, nullptr, GetContext::GetState::kNotFound,
-                          key, &val, nullptr, nullptr, nullptr, nullptr,
-                          nullptr, nullptr, nullptr);
+  TERARKDB_NAMESPACE::GetContext ctx(
+      options_.comparator, options_.merge_operator.get(), nullptr, nullptr,
+      GetContext::GetState::kNotFound, key, &val, nullptr, nullptr, nullptr,
+      nullptr, nullptr, nullptr, nullptr);
   auto table_properties = table_reader_->GetTableProperties();
   std::cout << "Table Entries: " << table_properties_->num_entries << ", ";
   std::cout << "Table CF Name: " << table_properties_->column_family_name
             << std::endl;
-  s = table_reader_->Get(TERARKDB_NAMESPACE::ReadOptions(), key, &ctx, nullptr, false);
+  s = table_reader_->Get(TERARKDB_NAMESPACE::ReadOptions(), key, &ctx, nullptr,
+                         false);
   if (s.ok()) {
     std::cout << "KEY FOUND, KEY = " << key.ToString(true) << std::endl;
   } else {
@@ -185,7 +187,8 @@ void KeyPathAnalysis::Get(const std::string& sst_fname, const Slice& key) {
 
 void KeyPathAnalysis::Seek(const std::string& sst_fname, const Slice& key) {
   auto s = GetTableReader(sst_fname);
-  auto it = table_reader_->NewIterator(TERARKDB_NAMESPACE::ReadOptions(), nullptr);
+  auto it =
+      table_reader_->NewIterator(TERARKDB_NAMESPACE::ReadOptions(), nullptr);
   // std::cout << "Table Entries: " << table_properties_->num_entries <<
   // std::endl; std::cout << "Table CF Name: " <<
   // table_properties_->column_family_name
@@ -234,7 +237,8 @@ void KeyPathAnalysis::Seek(const std::string& sst_fname, const Slice& key) {
  */
 void KeyPathAnalysis::ListKeys(const std::string& sst_fname, bool print_val) {
   auto s = GetTableReader(sst_fname);
-  auto it = table_reader_->NewIterator(TERARKDB_NAMESPACE::ReadOptions(), nullptr);
+  auto it =
+      table_reader_->NewIterator(TERARKDB_NAMESPACE::ReadOptions(), nullptr);
   std::cout << "Print all keys: " << std::endl;
 
   int cnt = 0;

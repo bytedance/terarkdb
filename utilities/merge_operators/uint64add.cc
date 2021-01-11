@@ -8,6 +8,7 @@
 #include "rocksdb/env.h"
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/logging.h"
 #include "utilities/merge_operators.h"
@@ -60,7 +61,6 @@ class UInt64AddOperator : public AssociativeMergeOperator {
 
 }  // namespace
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 std::shared_ptr<MergeOperator> MergeOperators::CreateUInt64AddOperator() {

@@ -8,8 +8,8 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class DBTestInPlaceUpdate : public DBTestBase {
@@ -74,7 +74,7 @@ TEST_F(DBTestInPlaceUpdate, InPlaceUpdateCallbackSmallerSize) {
     options.env = env_;
     options.write_buffer_size = 100000;
     options.inplace_callback =
-      TERARKDB_NAMESPACE::DBTestInPlaceUpdate::updateInPlaceSmallerSize;
+        TERARKDB_NAMESPACE::DBTestInPlaceUpdate::updateInPlaceSmallerSize;
     options.allow_concurrent_memtable_write = false;
     Reopen(options);
     CreateAndReopenWithCF({"pikachu"}, options);
@@ -103,7 +103,7 @@ TEST_F(DBTestInPlaceUpdate, InPlaceUpdateCallbackSmallerVarintSize) {
     options.env = env_;
     options.write_buffer_size = 100000;
     options.inplace_callback =
-      TERARKDB_NAMESPACE::DBTestInPlaceUpdate::updateInPlaceSmallerVarintSize;
+        TERARKDB_NAMESPACE::DBTestInPlaceUpdate::updateInPlaceSmallerVarintSize;
     options.allow_concurrent_memtable_write = false;
     Reopen(options);
     CreateAndReopenWithCF({"pikachu"}, options);
@@ -132,7 +132,7 @@ TEST_F(DBTestInPlaceUpdate, InPlaceUpdateCallbackLargeNewValue) {
     options.env = env_;
     options.write_buffer_size = 100000;
     options.inplace_callback =
-      TERARKDB_NAMESPACE::DBTestInPlaceUpdate::updateInPlaceLargerSize;
+        TERARKDB_NAMESPACE::DBTestInPlaceUpdate::updateInPlaceLargerSize;
     options.allow_concurrent_memtable_write = false;
     Reopen(options);
     CreateAndReopenWithCF({"pikachu"}, options);

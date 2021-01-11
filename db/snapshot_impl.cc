@@ -3,15 +3,14 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
-#include "rocksdb/snapshot.h"
-
 #include "rocksdb/db.h"
-
+#include "rocksdb/snapshot.h"
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
-ManagedSnapshot::ManagedSnapshot(DB* db) : db_(db),
-                                           snapshot_(db->GetSnapshot()) {}
+ManagedSnapshot::ManagedSnapshot(DB* db)
+    : db_(db), snapshot_(db->GetSnapshot()) {}
 
 ManagedSnapshot::ManagedSnapshot(DB* db, const Snapshot* _snapshot)
     : db_(db), snapshot_(_snapshot) {}
@@ -22,6 +21,6 @@ ManagedSnapshot::~ManagedSnapshot() {
   }
 }
 
-const Snapshot* ManagedSnapshot::snapshot() { return snapshot_;}
+const Snapshot* ManagedSnapshot::snapshot() { return snapshot_; }
 
 }  // namespace TERARKDB_NAMESPACE

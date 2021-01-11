@@ -6,8 +6,8 @@
 #include "util/iterator_cache.h"
 
 #include "db/range_del_aggregator.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 IteratorCache::IteratorCache(const DependenceMap& dependence_map,

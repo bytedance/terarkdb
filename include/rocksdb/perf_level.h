@@ -6,9 +6,11 @@
 #pragma once
 
 #include <stdint.h>
+
 #include <string>
 
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 // How much perf stats to collect. Affects perf_context and iostats_context.

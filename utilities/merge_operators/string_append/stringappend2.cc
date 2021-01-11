@@ -12,9 +12,9 @@
 
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "utilities/merge_operators.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Implementation for the merge operation (concatenates two strings)
@@ -132,8 +132,8 @@ MergeOperators::CreateStringAppendTESTOperator() {
   return std::make_shared<StringAppendTESTOperator>(',');
 }
 
-std::shared_ptr<MergeOperator>
-MergeOperators::CreateStringAppendTESTOperator(std::string delim) {
+std::shared_ptr<MergeOperator> MergeOperators::CreateStringAppendTESTOperator(
+    std::string delim) {
   return std::make_shared<StringAppendTESTOperator>(delim);
 }
 

@@ -7,6 +7,7 @@
 
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "utilities/merge_operators.h"
 
 using namespace TERARKDB_NAMESPACE;
@@ -75,7 +76,6 @@ class PutOperatorV2 : public PutOperator {
 
 }  // end of anonymous namespace
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 std::shared_ptr<MergeOperator> MergeOperators::CreateDeprecatedPutOperator() {

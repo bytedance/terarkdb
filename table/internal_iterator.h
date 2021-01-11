@@ -7,13 +7,14 @@
 #pragma once
 
 #include <string>
+
 #include "rocksdb/comparator.h"
 #include "rocksdb/iterator.h"
 #include "rocksdb/lazy_buffer.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/format.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class InternalIteratorCommon : public Cleanable {

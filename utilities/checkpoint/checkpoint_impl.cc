@@ -16,6 +16,7 @@
 #endif
 
 #include <inttypes.h>
+
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -24,13 +25,13 @@
 #include "port/port.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/transaction_log.h"
 #include "rocksdb/utilities/checkpoint.h"
 #include "util/file_util.h"
 #include "util/filename.h"
 #include "util/sync_point.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 Status Checkpoint::Create(DB* db, Checkpoint** checkpoint_ptr) {
@@ -43,26 +44,26 @@ Status Checkpoint::CreateCheckpoint(const std::string& /*checkpoint_dir*/,
   return Status::NotSupported("");
 }
 
-void CheckpointImpl::CleanStagingDirectory(
-    const std::string& full_private_path, Logger* info_log) {
-    std::vector<std::string> subchildren;
+void CheckpointImpl::CleanStagingDirectory(const std::string& full_private_path,
+                                           Logger* info_log) {
+  std::vector<std::string> subchildren;
   Status s = db_->GetEnv()->FileExists(full_private_path);
   if (s.IsNotFound()) {
     return;
   }
-  ROCKS_LOG_INFO(info_log, "File exists %s -- %s",
-                 full_private_path.c_str(), s.ToString().c_str());
+  ROCKS_LOG_INFO(info_log, "File exists %s -- %s", full_private_path.c_str(),
+                 s.ToString().c_str());
   db_->GetEnv()->GetChildren(full_private_path, &subchildren);
   for (auto& subchild : subchildren) {
     std::string subchild_path = full_private_path + "/" + subchild;
     s = db_->GetEnv()->DeleteFile(subchild_path);
-    ROCKS_LOG_INFO(info_log, "Delete file %s -- %s",
-                   subchild_path.c_str(), s.ToString().c_str());
+    ROCKS_LOG_INFO(info_log, "Delete file %s -- %s", subchild_path.c_str(),
+                   s.ToString().c_str());
   }
   // finally delete the private dir
   s = db_->GetEnv()->DeleteDir(full_private_path);
-  ROCKS_LOG_INFO(info_log, "Delete dir %s -- %s",
-                 full_private_path.c_str(), s.ToString().c_str());
+  ROCKS_LOG_INFO(info_log, "Delete dir %s -- %s", full_private_path.c_str(),
+                 s.ToString().c_str());
 }
 
 // Builds an openable snapshot of RocksDB
@@ -94,10 +95,9 @@ Status CheckpointImpl::CreateCheckpoint(const std::string& checkpoint_dir,
 
   std::string full_private_path =
       checkpoint_dir.substr(0, final_nonslash_idx + 1) + ".tmp";
-  ROCKS_LOG_INFO(
-      db_options.info_log,
-      "Snapshot process -- using temporary directory %s",
-      full_private_path.c_str());
+  ROCKS_LOG_INFO(db_options.info_log,
+                 "Snapshot process -- using temporary directory %s",
+                 full_private_path.c_str());
   CleanStagingDirectory(full_private_path, db_options.info_log.get());
   // create snapshot directory
   s = db_->GetEnv()->CreateDir(full_private_path);

@@ -6,11 +6,11 @@
 #include "table/adaptive_table_factory.h"
 
 #include "port/port.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/format.h"
 #include "table/table_builder.h"
 #include "utilities/util/factory.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 AdaptiveTableFactory::AdaptiveTableFactory(
@@ -132,7 +132,7 @@ extern TableFactory* NewAdaptiveTableFactory(
 
 }  // namespace TERARKDB_NAMESPACE
 
-TERARK_FACTORY_INSTANTIATE_GNS(TERARKDB_NAMESPACE::TableFactory*, const std::string&,
-                               TERARKDB_NAMESPACE::Status*);
+TERARK_FACTORY_INSTANTIATE_GNS(TERARKDB_NAMESPACE::TableFactory*,
+                               const std::string&, TERARKDB_NAMESPACE::Status*);
 
 #endif  // ROCKSDB_LITE

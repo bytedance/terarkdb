@@ -12,6 +12,7 @@
 #include "db/version_edit.h"
 #include "include/rocksdb/comparator.h"
 #include "include/rocksdb/types.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 #include "table/scoped_arena_iterator.h"
 #include "table/table_builder.h"
@@ -19,7 +20,6 @@
 #include "util/kv_map.h"
 #include "util/vector_iterator.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 TruncatedRangeDelIterator::TruncatedRangeDelIterator(

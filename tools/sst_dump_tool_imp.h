@@ -5,15 +5,15 @@
 #pragma once
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/sst_dump_tool.h"
-
 #include <memory>
 #include <string>
+
 #include "db/dbformat.h"
 #include "options/cf_options.h"
+#include "rocksdb/sst_dump_tool.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/file_reader_writer.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class SstFileDumper {

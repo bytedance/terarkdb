@@ -21,10 +21,10 @@
 #include "monitoring/perf_context_imp.h"
 #include "monitoring/thread_status_updater.h"
 #include "monitoring/thread_status_util.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/sst_file_manager_impl.h"
 #include "util/sync_point.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 bool DBImpl::EnoughRoomForCompaction(

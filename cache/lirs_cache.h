@@ -4,9 +4,9 @@
 
 #include "cache/sharded_cache.h"
 #include "port/port.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/autovector.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct LIRSHandle {

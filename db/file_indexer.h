@@ -12,11 +12,12 @@
 #include <functional>
 #include <limits>
 #include <vector>
+
 #include "port/port.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/arena.h"
 #include "util/autovector.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Comparator;
@@ -70,7 +71,7 @@ class FileIndexer {
 
   struct IndexUnit {
     IndexUnit()
-      : smallest_lb(0), largest_lb(0), smallest_rb(-1), largest_rb(-1) {}
+        : smallest_lb(0), largest_lb(0), smallest_rb(-1), largest_rb(-1) {}
     // During file search, a key is compared against smallest and largest
     // from a FileMetaData. It can have 3 possible outcomes:
     // (1) key is smaller than smallest, implying it is also smaller than

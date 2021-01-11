@@ -19,10 +19,10 @@
 #include "rocksdb/iterator.h"
 #include "rocksdb/lazy_buffer.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/write_batch.h"
 #include "rocksdb/write_batch_base.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class ColumnFamilyHandle;

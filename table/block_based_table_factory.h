@@ -18,8 +18,8 @@
 #include "options/options_parser.h"
 #include "rocksdb/flush_block_policy.h"
 #include "rocksdb/table.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 struct EnvOptions;

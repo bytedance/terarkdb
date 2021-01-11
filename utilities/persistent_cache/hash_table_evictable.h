@@ -9,11 +9,11 @@
 
 #include <functional>
 
+#include "rocksdb/terark_namespace.h"
 #include "util/random.h"
 #include "utilities/persistent_cache/hash_table.h"
 #include "utilities/persistent_cache/lrulist.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Evictable Hash Table

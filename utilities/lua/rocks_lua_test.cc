@@ -15,10 +15,10 @@
 #include "port/stack_trace.h"
 #include "rocksdb/compaction_filter.h"
 #include "rocksdb/db.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/lua/rocks_lua_compaction_filter.h"
 #include "util/testharness.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class StopOnErrorLogger : public Logger {
@@ -30,7 +30,6 @@ class StopOnErrorLogger : public Logger {
     FAIL();
   }
 };
-
 
 class RocksLuaTest : public testing::Test {
  public:
@@ -57,9 +56,8 @@ class RocksLuaTest : public testing::Test {
     const int kKeySize = 10;
     const int kValueSize = 50;
     const int kKeysPerFlush = 2;
-    auto factory =
-        std::make_shared<TERARKDB_NAMESPACE::lua::RocksLuaCompactionFilterFactory>(
-            lua_opt);
+    auto factory = std::make_shared<
+        TERARKDB_NAMESPACE::lua::RocksLuaCompactionFilterFactory>(lua_opt);
     if (output_factory != nullptr) {
       *output_factory = factory;
     }
@@ -152,19 +150,17 @@ TEST_F(RocksLuaTest, GetName) {
   lua_opt.error_log = std::make_shared<StopOnErrorLogger>();
   const std::string kScriptName = "SimpleLuaCompactionFilter";
   lua_opt.lua_script =
-      std::string(
-          "function Filter(level, key, existing_value)\n"
-          "  return false, false, \"\"\n"
-          "end\n"
-          "\n"
-          "function FilterMergeOperand(level, key, operand)\n"
-          "  return false\n"
-          "end\n"
-          "function Name()\n"
-          "  return \"") + kScriptName + "\"\n"
+      "function Filter(level, key, existing_value)\n"
+      "  return false, false, \"\"\n"
+      "end\n"
+      "\n"
+      "function FilterMergeOperand(level, key, operand)\n"
+      "  return false\n"
+      "end\n"
+      "function Name()\n"
+      "  return \"" + kScriptName + "\"\n"
       "end\n"
       "\n";
-
   std::shared_ptr<CompactionFilterFactory> factory =
       std::make_shared<lua::RocksLuaCompactionFilterFactory>(lua_opt);
   std::string factory_name(factory->Name());
@@ -377,7 +373,8 @@ TEST_F(RocksLuaTest, DynamicChangeScript) {
       "\n";
 
   std::unordered_map<std::string, std::string> kvs;
-  std::shared_ptr<TERARKDB_NAMESPACE::lua::RocksLuaCompactionFilterFactory> factory;
+  std::shared_ptr<TERARKDB_NAMESPACE::lua::RocksLuaCompactionFilterFactory>
+      factory;
   CreateDBWithLuaCompactionFilter(lua_opt, db_path, &kvs, 30, &factory);
   uint64_t count = 0;
   ASSERT_TRUE(db_->GetIntProperty(

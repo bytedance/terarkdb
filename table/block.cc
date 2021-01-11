@@ -20,13 +20,13 @@
 #include "port/port.h"
 #include "port/stack_trace.h"
 #include "rocksdb/comparator.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block_prefix_index.h"
 #include "table/data_block_footer.h"
 #include "table/format.h"
 #include "util/coding.h"
 #include "util/logging.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Helper routine: decode the next block entry starting at "p",

@@ -55,6 +55,7 @@ int main() {
 #include "rocksdb/slice.h"
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/statistics.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/backupable_db.h"
 #include "rocksdb/utilities/checkpoint.h"
 #include "rocksdb/utilities/db_ttl.h"
@@ -163,12 +164,14 @@ DEFINE_bool(verbose, false, "Verbose");
 DEFINE_bool(progress_reports, true,
             "If true, db_stress will report number of finished operations");
 
-DEFINE_uint64(db_write_buffer_size, TERARKDB_NAMESPACE::Options().db_write_buffer_size,
+DEFINE_uint64(db_write_buffer_size,
+              TERARKDB_NAMESPACE::Options().db_write_buffer_size,
               "Number of bytes to buffer in all memtables before compacting");
 
-DEFINE_int32(write_buffer_size,
-             static_cast<int32_t>(TERARKDB_NAMESPACE::Options().write_buffer_size),
-             "Number of bytes to buffer in memtable before compacting");
+DEFINE_int32(
+    write_buffer_size,
+    static_cast<int32_t>(TERARKDB_NAMESPACE::Options().write_buffer_size),
+    "Number of bytes to buffer in memtable before compacting");
 
 DEFINE_int32(max_write_buffer_number,
              TERARKDB_NAMESPACE::Options().max_write_buffer_number,
@@ -213,7 +216,8 @@ DEFINE_int64(compressed_cache_size, -1,
              "Number of bytes to use as a cache of compressed data."
              " Negative means use default settings.");
 
-DEFINE_int32(compaction_style, TERARKDB_NAMESPACE::Options().compaction_style, "");
+DEFINE_int32(compaction_style, TERARKDB_NAMESPACE::Options().compaction_style,
+             "");
 
 DEFINE_int32(level0_file_num_compaction_trigger,
              TERARKDB_NAMESPACE::Options().level0_file_num_compaction_trigger,
@@ -228,18 +232,20 @@ DEFINE_int32(level0_stop_writes_trigger,
              "Number of files in level-0 that will trigger put stop.");
 
 DEFINE_int32(block_size,
-             static_cast<int32_t>(TERARKDB_NAMESPACE::BlockBasedTableOptions().block_size),
+             static_cast<int32_t>(
+                 TERARKDB_NAMESPACE::BlockBasedTableOptions().block_size),
              "Number of bytes in a block.");
 
-DEFINE_int32(
-    format_version,
-    static_cast<int32_t>(TERARKDB_NAMESPACE::BlockBasedTableOptions().format_version),
-    "Format version of SST files.");
+DEFINE_int32(format_version,
+             static_cast<int32_t>(
+                 TERARKDB_NAMESPACE::BlockBasedTableOptions().format_version),
+             "Format version of SST files.");
 
-DEFINE_int32(index_block_restart_interval,
-             TERARKDB_NAMESPACE::BlockBasedTableOptions().index_block_restart_interval,
-             "Number of keys between restart points "
-             "for delta encoding of keys in index block.");
+DEFINE_int32(
+    index_block_restart_interval,
+    TERARKDB_NAMESPACE::BlockBasedTableOptions().index_block_restart_interval,
+    "Number of keys between restart points "
+    "for delta encoding of keys in index block.");
 
 DEFINE_int32(max_background_compactions,
              TERARKDB_NAMESPACE::Options().max_background_compactions,
@@ -258,7 +264,8 @@ DEFINE_int32(compaction_thread_pool_variations, 2,
              "Range of background thread pool size variations when adjusted "
              "periodically.");
 
-DEFINE_int32(max_background_flushes, TERARKDB_NAMESPACE::Options().max_background_flushes,
+DEFINE_int32(max_background_flushes,
+             TERARKDB_NAMESPACE::Options().max_background_flushes,
              "The maximum number of concurrent background flushes "
              "that can occur in parallel.");
 
@@ -349,9 +356,10 @@ DEFINE_bool(mmap_write, TERARKDB_NAMESPACE::Options().allow_mmap_writes,
 DEFINE_bool(use_direct_reads, TERARKDB_NAMESPACE::Options().use_direct_reads,
             "Use O_DIRECT for reading data");
 
-DEFINE_bool(use_direct_io_for_flush_and_compaction,
-            TERARKDB_NAMESPACE::Options().use_direct_io_for_flush_and_compaction,
-            "Use O_DIRECT for writing data");
+DEFINE_bool(
+    use_direct_io_for_flush_and_compaction,
+    TERARKDB_NAMESPACE::Options().use_direct_io_for_flush_and_compaction,
+    "Use O_DIRECT for writing data");
 
 DEFINE_bool(use_aio_reads, TERARKDB_NAMESPACE::Options().use_aio_reads,
             "Use aio for reading data");
@@ -378,7 +386,8 @@ extern std::vector<std::string> rocksdb_kill_prefix_blacklist;
 
 DEFINE_bool(disable_wal, false, "If true, do not write WAL for write.");
 
-DEFINE_int64(target_file_size_base, TERARKDB_NAMESPACE::Options().target_file_size_base,
+DEFINE_int64(target_file_size_base,
+             TERARKDB_NAMESPACE::Options().target_file_size_base,
              "Target level-1 file size for compaction");
 
 DEFINE_int32(target_file_size_multiplier, 1,
@@ -501,7 +510,8 @@ static const bool FLAGS_num_iterations_dummy __attribute__((__unused__)) =
     RegisterFlagValidator(&FLAGS_num_iterations, &ValidateUint32Range);
 
 namespace {
-enum TERARKDB_NAMESPACE::CompressionType StringToCompressionType(const char* ctype) {
+enum TERARKDB_NAMESPACE::CompressionType StringToCompressionType(
+    const char* ctype) {
   assert(ctype);
 
   if (!strcasecmp(ctype, "none"))
@@ -574,7 +584,8 @@ DEFINE_int32(compression_zstd_max_train_bytes, 0,
              "trainer.");
 
 DEFINE_string(checksum_type, "kCRC32c", "Algorithm to use to checksum blocks");
-static enum TERARKDB_NAMESPACE::ChecksumType FLAGS_checksum_type_e = TERARKDB_NAMESPACE::kCRC32c;
+static enum TERARKDB_NAMESPACE::ChecksumType FLAGS_checksum_type_e =
+    TERARKDB_NAMESPACE::kCRC32c;
 
 DEFINE_string(hdfs, "", "Name of hdfs environment");
 // posix or hdfs environment
@@ -658,7 +669,6 @@ DEFINE_bool(use_full_merge_v1, false,
             "On true, use a merge operator that implement the deprecated "
             "version of FullMerge");
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // convert long to a big-endian slice key
@@ -2180,7 +2190,7 @@ class StressTest {
             "TestBackupRestore\n");
     std::terminate();
   }
-#else   // ROCKSDB_LITE
+#else  // ROCKSDB_LITE
   virtual Status TestBackupRestore(ThreadState* thread,
                                    const std::vector<int>& rand_column_families,
                                    const std::vector<int64_t>& rand_keys) {
@@ -2391,7 +2401,8 @@ class StressTest {
       options_.max_background_compactions = FLAGS_max_background_compactions;
       options_.max_background_flushes = FLAGS_max_background_flushes;
       options_.compaction_style =
-          static_cast<TERARKDB_NAMESPACE::CompactionStyle>(FLAGS_compaction_style);
+          static_cast<TERARKDB_NAMESPACE::CompactionStyle>(
+              FLAGS_compaction_style);
       options_.prefix_extractor.reset(
           NewFixedPrefixTransform(FLAGS_prefix_size));
       options_.max_open_files = FLAGS_open_files;

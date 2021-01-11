@@ -12,6 +12,7 @@
 #include "db/column_family.h"
 #include "db/version_set.h"
 #include "rocksdb/cache.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/write_buffer_manager.h"
 #include "table/mock_table.h"
 #include "util/file_reader_writer.h"
@@ -19,7 +20,6 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // TODO(icanadi) Mock out everything else:

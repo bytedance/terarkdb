@@ -19,8 +19,8 @@
 #include <string>
 
 #include "rocksdb/slice.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class Status {

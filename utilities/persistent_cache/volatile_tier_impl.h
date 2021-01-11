@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "rocksdb/cache.h"
+#include "rocksdb/terark_namespace.h"
 #include "utilities/persistent_cache/hash_table.h"
 #include "utilities/persistent_cache/hash_table_evictable.h"
 #include "utilities/persistent_cache/persistent_cache_tier.h"
@@ -38,7 +39,7 @@
 // implementation is not concurrent at this point though.
 //
 // The eviction algorithm is LRU
-#include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class VolatileCacheTier : public PersistentCacheTier {

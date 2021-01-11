@@ -9,17 +9,17 @@
 #pragma once
 #include <algorithm>
 #include <cmath>
-#include <string>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
-#include "rocksdb/utilities/geo_db.h"
-#include "rocksdb/utilities/stackable_db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/status.h"
-
 #include "rocksdb/terark_namespace.h"
+#include "rocksdb/utilities/geo_db.h"
+#include "rocksdb/utilities/stackable_db.h"
+
 namespace TERARKDB_NAMESPACE {
 
 // A specific implementation of GeoDB
@@ -71,9 +71,7 @@ class GeoDBImpl : public GeoDB {
    public:
     unsigned int x;
     unsigned int y;
-    Pixel(unsigned int a, unsigned int b) :
-     x(a), y(b) {
-    }
+    Pixel(unsigned int a, unsigned int b) : x(a), y(b) {}
   };
 
   // A Tile in the geoid
@@ -81,9 +79,7 @@ class GeoDBImpl : public GeoDB {
    public:
     unsigned int x;
     unsigned int y;
-    Tile(unsigned int a, unsigned int b) :
-     x(a), y(b) {
-    }
+    Tile(unsigned int a, unsigned int b) : x(a), y(b) {}
   };
 
   // convert a gps location to quad coordinate
@@ -138,13 +134,12 @@ class GeoDBImpl : public GeoDB {
 
   // Convert a quadkey to a tile and its level of detail
   static void QuadKeyToTile(std::string quadkey, Tile* tile,
-                            int *levelOfDetail);
+                            int* levelOfDetail);
 
   // Return the distance between two positions on the earth
-  static double distance(double lat1, double lon1,
-                         double lat2, double lon2);
-  static GeoPosition displaceLatLon(double lat, double lon,
-                                    double deltay, double deltax);
+  static double distance(double lat1, double lon1, double lat2, double lon2);
+  static GeoPosition displaceLatLon(double lat, double lon, double deltay,
+                                    double deltax);
 
   //
   // Returns the top left position after applying the delta to
@@ -157,27 +152,23 @@ class GeoDBImpl : public GeoDB {
   //
   // Returns the bottom right position after applying the delta to
   // the specified position
-  static GeoPosition boundingBottomRight(const GeoPosition& in,
-                                         double radius) {
+  static GeoPosition boundingBottomRight(const GeoPosition& in, double radius) {
     return displaceLatLon(in.latitude, in.longitude, radius, radius);
   }
 
   //
   // Get all quadkeys within a radius of a specified position
   //
-  Status searchQuadIds(const GeoPosition& position,
-                       double radius,
+  Status searchQuadIds(const GeoPosition& position, double radius,
                        std::vector<std::string>* quadKeys);
 
   //
   // Create keys for accessing rocksdb table(s)
   //
-  static std::string MakeKey1(const GeoPosition& pos,
-                              Slice id,
+  static std::string MakeKey1(const GeoPosition& pos, Slice id,
                               std::string quadkey);
   static std::string MakeKey2(Slice id);
-  static std::string MakeKey1Prefix(std::string quadkey,
-                                    Slice id);
+  static std::string MakeKey1Prefix(std::string quadkey, Slice id);
   static std::string MakeQuadKeyPrefix(std::string quadkey);
 };
 

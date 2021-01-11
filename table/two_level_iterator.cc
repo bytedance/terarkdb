@@ -11,14 +11,13 @@
 
 #include "db/version_edit.h"
 #include "rocksdb/options.h"
-#include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block.h"
 #include "table/format.h"
 #include "util/arena.h"
 #include "util/heap.h"
 #include "utilities/util/function.hpp"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {

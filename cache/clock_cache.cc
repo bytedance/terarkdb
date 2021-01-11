@@ -9,12 +9,14 @@
 
 #include "cache/clock_cache.h"
 
+#include "rocksdb/terark_namespace.h"
+
 #ifndef SUPPORT_CLOCK_CACHE
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
-std::shared_ptr<Cache> NewClockCache(size_t /*capacity*/, int /*num_shard_bits*/,
+std::shared_ptr<Cache> NewClockCache(size_t /*capacity*/,
+                                     int /*num_shard_bits*/,
                                      bool /*strict_capacity_limit*/) {
   // Clock cache not supported.
   return nullptr;
@@ -25,6 +27,7 @@ std::shared_ptr<Cache> NewClockCache(size_t /*capacity*/, int /*num_shard_bits*/
 #else
 
 #include <assert.h>
+
 #include <atomic>
 #include <deque>
 
@@ -33,14 +36,12 @@ std::shared_ptr<Cache> NewClockCache(size_t /*capacity*/, int /*num_shard_bits*/
 #ifndef ROCKSDB_USE_RTTI
 #define TBB_USE_EXCEPTIONS 0
 #endif
-#include "tbb/concurrent_hash_map.h"
-
 #include "cache/sharded_cache.h"
 #include "port/port.h"
+#include "tbb/concurrent_hash_map.h"
 #include "util/autovector.h"
 #include "util/mutexlock.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {

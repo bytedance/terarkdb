@@ -20,11 +20,11 @@
 #include "rocksdb/options.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table_properties.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/types.h"
 #include "table/scoped_arena_iterator.h"
 #include "util/event_logger.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct Options;

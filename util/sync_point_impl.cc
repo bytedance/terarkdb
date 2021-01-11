@@ -5,8 +5,9 @@
 
 #include "util/sync_point_impl.h"
 
-#ifndef NDEBUG
 #include "rocksdb/terark_namespace.h"
+
+#ifndef NDEBUG
 namespace TERARKDB_NAMESPACE {
 
 void TestKillRandom(std::string kill_point, int odds,
@@ -30,8 +31,8 @@ void TestKillRandom(std::string kill_point, int odds,
   }
 }
 
-
-void SyncPoint::Data::LoadDependency(const std::vector<SyncPointPair>& dependencies) {
+void SyncPoint::Data::LoadDependency(
+    const std::vector<SyncPointPair>& dependencies) {
   std::lock_guard<std::mutex> lock(mutex_);
   successors_.clear();
   predecessors_.clear();
@@ -44,8 +45,8 @@ void SyncPoint::Data::LoadDependency(const std::vector<SyncPointPair>& dependenc
 }
 
 void SyncPoint::Data::LoadDependencyAndMarkers(
-  const std::vector<SyncPointPair>& dependencies,
-  const std::vector<SyncPointPair>& markers) {
+    const std::vector<SyncPointPair>& dependencies,
+    const std::vector<SyncPointPair>& markers) {
   std::lock_guard<std::mutex> lock(mutex_);
   successors_.clear();
   predecessors_.clear();
@@ -126,5 +127,5 @@ void SyncPoint::Data::Process(const std::string& point, void* cb_arg) {
   cleared_points_.insert(point);
   cv_.notify_all();
 }
-} // rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif

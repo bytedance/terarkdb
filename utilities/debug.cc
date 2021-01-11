@@ -8,8 +8,8 @@
 #include "rocksdb/utilities/debug.h"
 
 #include "db/db_impl.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 Status GetAllKeyVersions(DB* db, Slice begin_key, Slice end_key,
@@ -52,10 +52,9 @@ Status GetAllKeyVersions(DB* db, Slice begin_key, Slice end_key,
     if (!s.ok()) {
       return s;
     }
-    key_versions->emplace_back(ikey.user_key.ToString() /* _user_key */,
-                               value.ToString() /* _value */,
-                               ikey.sequence /* _sequence */,
-                               static_cast<int>(ikey.type) /* _type */);
+    key_versions->emplace_back(
+        ikey.user_key.ToString() /* _user_key */, value.ToString() /* _value */,
+        ikey.sequence /* _sequence */, static_cast<int>(ikey.type) /* _type */);
     if (++num_keys >= max_num_ikeys) {
       break;
     }

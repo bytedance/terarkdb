@@ -14,22 +14,21 @@
 #include "port/port.h"
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/transaction_log.h"
 #include "rocksdb/types.h"
 #include "util/filename.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class LogFileImpl : public LogFile {
  public:
   LogFileImpl(uint64_t logNum, WalFileType logType, SequenceNumber startSeq,
-              uint64_t sizeBytes) :
-    logNumber_(logNum),
-    type_(logType),
-    startSequence_(startSeq),
-    sizeFileBytes_(sizeBytes) {
-  }
+              uint64_t sizeBytes)
+      : logNumber_(logNum),
+        type_(logType),
+        startSequence_(startSeq),
+        sizeFileBytes_(sizeBytes) {}
 
   std::string PathName() const override {
     if (type_ == kArchivedLogFile) {
@@ -46,7 +45,7 @@ class LogFileImpl : public LogFile {
 
   uint64_t SizeFileBytes() const override { return sizeFileBytes_; }
 
-  bool operator < (const LogFile& that) const {
+  bool operator<(const LogFile& that) const {
     return LogNumber() < that.LogNumber();
   }
 
@@ -55,7 +54,6 @@ class LogFileImpl : public LogFile {
   WalFileType type_;
   SequenceNumber startSequence_;
   uint64_t sizeFileBytes_;
-
 };
 
 class TransactionLogIteratorImpl : public TransactionLogIterator {
@@ -104,8 +102,8 @@ class TransactionLogIteratorImpl : public TransactionLogIterator {
     virtual void Info(const char* s) { ROCKS_LOG_INFO(info_log, "%s", s); }
   } reporter_;
 
-  SequenceNumber currentBatchSeq_; // sequence number at start of current batch
-  SequenceNumber currentLastSeq_; // last sequence in the current batch
+  SequenceNumber currentBatchSeq_;  // sequence number at start of current batch
+  SequenceNumber currentLastSeq_;   // last sequence in the current batch
   // Used only to get latest seq. num
   // TODO(icanadi) can this be just a callback?
 #ifndef ROCKSDB_LITE

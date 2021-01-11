@@ -9,7 +9,6 @@
 
 #include "db/db_iter.h"
 
-#include <iostream>
 #include <limits>
 #include <string>
 
@@ -23,16 +22,13 @@
 #include "rocksdb/iterator.h"
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 #include "util/arena.h"
-#include "util/filename.h"
 #include "util/logging.h"
-#include "util/mutexlock.h"
 #include "util/string_util.h"
-#include "util/trace_replay.h"
 #include "util/util.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #if 0

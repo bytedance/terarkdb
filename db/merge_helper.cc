@@ -13,12 +13,12 @@
 #include "port/likely.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/db.h"
-#include "table/iterator_wrapper.h"
 #include "rocksdb/merge_operator.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/format.h"
 #include "table/internal_iterator.h"
+#include "table/iterator_wrapper.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 MergeHelper::MergeHelper(Env* env, const Comparator* user_comparator,
@@ -116,10 +116,11 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
 //
 // TODO: Avoid the snapshot stripe map lookup in CompactionRangeDelAggregator
 // and just pass the StripeRep corresponding to the stripe being merged.
-Status MergeHelper::MergeUntil(
-    const Slice& user_key, CombinedInternalIterator* iter,
-    CompactionRangeDelAggregator* range_del_agg,
-    const SequenceNumber stop_before, const bool at_bottom) {
+Status MergeHelper::MergeUntil(const Slice& user_key,
+                               CombinedInternalIterator* iter,
+                               CompactionRangeDelAggregator* range_del_agg,
+                               const SequenceNumber stop_before,
+                               const bool at_bottom) {
   // Get a copy of the internal key, before it's invalidated by iter->Next()
   // Also maintain the list of merge operands seen.
   assert(HasOperator());
@@ -184,7 +185,6 @@ Status MergeHelper::MergeUntil(
 
     assert(IsValueType(ikey.type));
     if (ikey.type != kTypeMerge && ikey.type != kTypeMergeIndex) {
-
       // hit a put/delete/single delete
       //   => merge the put value or a nullptr with operands_
       //   => store result in operands_.back() (and update keys_.back())
@@ -213,8 +213,8 @@ Status MergeHelper::MergeUntil(
       }
       LazyBuffer merge_result;
       s = TimedFullMerge(user_merge_operator_, ikey.user_key, val_ptr,
-                         merge_context_.GetOperands(), &merge_result,
-                         logger_, stats_, env_);
+                         merge_context_.GetOperands(), &merge_result, logger_,
+                         stats_, env_);
 
       // We store the result in keys_.back() and operands_.back()
       // if nothing went wrong (i.e.: no operand corruption on disk)
@@ -419,4 +419,4 @@ CompactionFilter::Decision MergeHelper::FilterMerge(
   return ret;
 }
 
-} // namespace TERARKDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE

@@ -10,8 +10,8 @@
 #include <string>
 
 #include "rocksdb/env.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 // Returns an Env that translates paths such that the root directory appears to

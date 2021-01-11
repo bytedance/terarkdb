@@ -1,10 +1,5 @@
 #pragma once
 
-#include <cassert>
-#include <cstdio>
-#include <cstring>
-#include <iostream>
-
 #include <options/cf_options.h>
 #include <rocksdb/env.h>
 #include <rocksdb/options.h>
@@ -17,9 +12,15 @@
 #include <table/terark_zip_internal.h>
 #include <table/terark_zip_table.h>
 
-using namespace TERARKDB_NAMESPACE;
+#include <cassert>
+#include <cstdio>
+#include <cstring>
+#include <iostream>
 
 #include "rocksdb/terark_namespace.h"
+
+using namespace TERARKDB_NAMESPACE;
+
 namespace TERARKDB_NAMESPACE {
 extern const uint64_t kPlainTableMagicNumber;
 extern const uint64_t kLegacyPlainTableMagicNumber;
@@ -53,7 +54,8 @@ class DeleteRange {
     } else if (magic_number == TERARKDB_NAMESPACE::kPlainTableMagicNumber) {
       std::cout << "Magic Number Table Type: "
                 << "kPlainTableMagicNumber" << std::endl;
-    } else if (magic_number == TERARKDB_NAMESPACE::kLegacyPlainTableMagicNumber) {
+    } else if (magic_number ==
+               TERARKDB_NAMESPACE::kLegacyPlainTableMagicNumber) {
       std::cout << "Magic Number Table Type: "
                 << "kLegacyPlainTableMagicNumber" << std::endl;
     } else {
@@ -110,8 +112,8 @@ class DeleteRange {
     std::cout << "Try ReadTableProperties, file_size = " << file_size
               << std::endl;
     s = TERARKDB_NAMESPACE::ReadTableProperties(file_reader_.get(), file_size,
-                                     magic_number, ioptions_,
-                                     &table_properties);
+                                                magic_number, ioptions_,
+                                                &table_properties);
     if (s.ok()) {
       table_properties_.reset(table_properties);
       // TODO init options based on different magic number
@@ -135,8 +137,8 @@ class DeleteRange {
       return Status::Aborted();
     }
 
-    // auto ts_it =
-    //     table_reader_->NewRangeTombstoneIterator(TERARKDB_NAMESPACE::ReadOptions());
+    // auto ts_it = table_reader_->NewRangeTombstoneIterator(
+    //     TERARKDB_NAMESPACE::ReadOptions());
     // if (ts_it && ts_it->Valid()) {
     //   ts_it->SeekToFirst();
     //   while (ts_it) {

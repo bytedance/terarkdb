@@ -1,5 +1,7 @@
 #include "terark_zip_memtable.h"
 
+#include "rocksdb/terark_namespace.h"
+
 #if defined(_MSC_VER)
 //#include <windows.h>
 #else
@@ -37,7 +39,6 @@ inline const char* build_key(terark::fstring user_key, uint64_t tag,
 
 }  // namespace
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace details = terark_memtable_details;

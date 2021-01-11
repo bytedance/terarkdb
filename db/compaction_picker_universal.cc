@@ -24,14 +24,13 @@
 #include "db/column_family.h"
 #include "db/map_builder.h"
 #include "monitoring/statistics.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/filename.h"
 #include "util/log_buffer.h"
-#include "util/random.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
 #include "utilities/util/function.hpp"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace {
 // Used in universal compaction when trivial move is enabled.

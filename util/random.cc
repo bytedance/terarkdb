@@ -7,11 +7,12 @@
 #include "util/random.h"
 
 #include <stdint.h>
-#include <string.h>
+
 #include <thread>
 #include <utility>
 
 #include "port/likely.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/thread_local.h"
 
 #ifdef ROCKSDB_SUPPORT_THREAD_LOCAL
@@ -20,7 +21,6 @@
 #define STORAGE_DECL static
 #endif
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 Random* Random::GetTLSInstance() {

@@ -11,18 +11,17 @@
 #include <string>
 #include <vector>
 
+#include "port/port.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/env.h"
-
+#include "rocksdb/terark_namespace.h"
+#include "util/crc32c.h"
+#include "util/file_reader_writer.h"
+#include "util/mutexlock.h"
 #include "utilities/persistent_cache/block_cache_tier_file_buffer.h"
 #include "utilities/persistent_cache/lrulist.h"
 #include "utilities/persistent_cache/persistent_cache_tier.h"
 #include "utilities/persistent_cache/persistent_cache_util.h"
-
-#include "port/port.h"
-#include "util/crc32c.h"
-#include "util/file_reader_writer.h"
-#include "util/mutexlock.h"
 
 // The io code path of persistent cache uses pipelined architecture
 //
@@ -45,7 +44,7 @@
 //
 // Write IO code path :
 //
-#include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class WriteableCacheFile;

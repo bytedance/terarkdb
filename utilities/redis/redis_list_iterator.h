@@ -44,9 +44,9 @@
 
 #include "redis_list_exception.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 /// An abstraction over the "list" concept.
@@ -84,7 +84,7 @@ class RedisListIterator {
 
     // If non-empty, but less than 4 bytes, data must be corrupt
     if (num_bytes_ < sizeof(length_)) {
-      ThrowError("Corrupt header.");    // Will break control flow
+      ThrowError("Corrupt header.");  // Will break control flow
     }
 
     // Good. The first bytes specify the number of elements
@@ -96,7 +96,7 @@ class RedisListIterator {
     //   if possible.
     if (length_ > 0) {
       if (cur_byte_ + sizeof(cur_elem_length_) <= num_bytes_) {
-        cur_elem_length_ = DecodeFixed32(data_+cur_byte_);
+        cur_elem_length_ = DecodeFixed32(data_ + cur_byte_);
       } else {
         ThrowError("Corrupt data for first element.");
       }
@@ -108,9 +108,7 @@ class RedisListIterator {
 
   /// Reserve some space for the result_.
   /// Equivalent to result_.reserve(bytes).
-  void Reserve(int bytes) {
-    result_.reserve(bytes);
-  }
+  void Reserve(int bytes) { result_.reserve(bytes); }
 
   /// Go to next element in data file.
   /// Also writes the current element to result_.
@@ -124,8 +122,8 @@ class RedisListIterator {
   /// Drops/skips the current element. It will not be written to result_.
   RedisListIterator& Skip() {
     MoveNext();
-    --length_;          // One less item
-    --cur_elem_;        // We moved one forward, but index did not change
+    --length_;    // One less item
+    --cur_elem_;  // We moved one forward, but index did not change
     return *this;
   }
 
@@ -156,14 +154,12 @@ class RedisListIterator {
     }
 
     // Dereference the element
-    *curElem = Slice(data_+cur_byte_+sizeof(cur_elem_length_),
-                     cur_elem_length_);
+    *curElem =
+        Slice(data_ + cur_byte_ + sizeof(cur_elem_length_), cur_elem_length_);
   }
 
   // Number of elements
-  int Length() const {
-    return length_;
-  }
+  int Length() const { return length_; }
 
   // Number of bytes in the final representation (i.e: WriteResult().size())
   int Size() const {
@@ -173,9 +169,7 @@ class RedisListIterator {
   }
 
   // Reached the end?
-  bool Done() const {
-    return cur_byte_ >= num_bytes_ || cur_elem_ >= length_;
-  }
+  bool Done() const { return cur_byte_ >= num_bytes_ || cur_elem_ >= length_; }
 
   /// Returns a string representing the final, edited, data.
   /// Assumes that all bytes of data_ in the range [0,cur_byte_) have been read
@@ -188,10 +182,10 @@ class RedisListIterator {
     // The header should currently be filled with dummy data (0's)
     // Correctly update the header.
     // Note, this is safe since result_ is a vector (guaranteed contiguous)
-    EncodeFixed32(&result_[0],length_);
+    EncodeFixed32(&result_[0], length_);
 
     // Append the remainder of the data to the result.
-    result_.insert(result_.end(),data_+cur_byte_, data_ +num_bytes_);
+    result_.insert(result_.end(), data_ + cur_byte_, data_ + num_bytes_);
 
     // Seek to end of file
     cur_byte_ = num_bytes_;
@@ -199,11 +193,10 @@ class RedisListIterator {
     cur_elem_length_ = 0;
 
     // Return the result
-    return Slice(result_.data(),result_.size());
+    return Slice(result_.data(), result_.size());
   }
 
- public: // Static public functions
-
+ public:  // Static public functions
   /// An upper-bound on the amount of bytes needed to store this element.
   /// This is used to hide representation information from the client.
   /// E.G. This can be used to compute the bytes we want to Reserve().
@@ -212,16 +205,15 @@ class RedisListIterator {
     return static_cast<uint32_t>(sizeof(uint32_t) + elem.size());
   }
 
- private: // Private functions
-
+ private:  // Private functions
   /// Initializes the result_ string.
   /// It will fill the first few bytes with 0's so that there is
   ///  enough space for header information when we need to write later.
   /// Currently, "header information" means: the length (number of elements)
   /// Assumes that result_ is empty to begin with
   void InitializeResult() {
-    assert(result_.empty());            // Should always be true.
-    result_.resize(sizeof(uint32_t),0); // Put a block of 0's as the header
+    assert(result_.empty());              // Should always be true.
+    result_.resize(sizeof(uint32_t), 0);  // Put a block of 0's as the header
   }
 
   /// Go to the next element (used in Push() and Skip())
@@ -249,7 +241,7 @@ class RedisListIterator {
     }
 
     // Set the new element's length
-    cur_elem_length_ = DecodeFixed32(data_+cur_byte_);
+    cur_elem_length_ = DecodeFixed32(data_ + cur_byte_);
 
     return;
   }
@@ -264,9 +256,8 @@ class RedisListIterator {
     }
 
     // Append the cur element.
-    result_.insert(result_.end(),
-                   data_+cur_byte_,
-                   data_+cur_byte_+ sizeof(uint32_t) + cur_elem_length_);
+    result_.insert(result_.end(), data_ + cur_byte_,
+                   data_ + cur_byte_ + sizeof(uint32_t) + cur_elem_length_);
   }
 
   /// Will ThrowError() if necessary.
@@ -295,16 +286,16 @@ class RedisListIterator {
   }
 
  private:
-  const char* const data_;      // A pointer to the data (the first byte)
-  const uint32_t num_bytes_;    // The number of bytes in this list
+  const char* const data_;    // A pointer to the data (the first byte)
+  const uint32_t num_bytes_;  // The number of bytes in this list
 
-  uint32_t cur_byte_;           // The current byte being read
-  uint32_t cur_elem_;           // The current element being read
-  uint32_t cur_elem_length_;    // The number of bytes in current element
+  uint32_t cur_byte_;         // The current byte being read
+  uint32_t cur_elem_;         // The current element being read
+  uint32_t cur_elem_length_;  // The number of bytes in current element
 
-  uint32_t length_;             // The number of elements in this list
-  std::vector<char> result_;    // The output data
+  uint32_t length_;           // The number of elements in this list
+  std::vector<char> result_;  // The output data
 };
 
-} // namespace TERARKDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

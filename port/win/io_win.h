@@ -16,9 +16,9 @@
 
 #include "rocksdb/env.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/aligned_buffer.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace port {
 

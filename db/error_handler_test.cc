@@ -12,12 +12,12 @@
 #include "port/stack_trace.h"
 #include "rocksdb/perf_context.h"
 #include "rocksdb/sst_file_manager.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/fault_injection_test_env.h"
 #if !defined(ROCKSDB_LITE)
 #include "util/sync_point.h"
 #endif
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBErrorHandlingTest : public DBTestBase {
@@ -26,15 +26,18 @@ class DBErrorHandlingTest : public DBTestBase {
 };
 
 class DBErrorHandlingEnv : public EnvWrapper {
-  public:
-    DBErrorHandlingEnv() : EnvWrapper(Env::Default()),
-      trig_no_space(false), trig_io_error(false) {}
+ public:
+  DBErrorHandlingEnv()
+      : EnvWrapper(Env::Default()),
+        trig_no_space(false),
+        trig_io_error(false) {}
 
-    void SetTrigNoSpace() {trig_no_space = true;}
-    void SetTrigIoError() {trig_io_error = true;}
-  private:
-    bool trig_no_space;
-    bool trig_io_error;
+  void SetTrigNoSpace() { trig_no_space = true; }
+  void SetTrigIoError() { trig_io_error = true; }
+
+ private:
+  bool trig_no_space;
+  bool trig_io_error;
 };
 
 class ErrorHandlerListener : public EventListener {
@@ -63,8 +66,7 @@ class ErrorHandlerListener : public EventListener {
   }
 
   void OnErrorRecoveryBegin(BackgroundErrorReason /*reason*/,
-                            Status /*bg_error*/,
-                            bool* auto_recovery) override {
+                            Status /*bg_error*/, bool* auto_recovery) override {
     if (*auto_recovery && no_auto_recovery_) {
       *auto_recovery = false;
     }
@@ -145,8 +147,7 @@ TEST_F(DBErrorHandlingTest, FLushWriteError) {
   DestroyAndReopen(options);
 
   Put(Key(0), "val");
-  SyncPoint::GetInstance()->SetCallBack(
-      "FlushJob::Start", [&](void *) {
+  SyncPoint::GetInstance()->SetCallBack("FlushJob::Start", [&](void*) {
     fault_env->SetFilesystemActive(false, Status::NoSpace("Out of space"));
   });
   SyncPoint::GetInstance()->EnableProcessing();
@@ -180,14 +181,13 @@ TEST_F(DBErrorHandlingTest, CompactionWriteError) {
   ASSERT_EQ(s, Status::OK());
 
   listener->OverrideBGError(
-      Status(Status::NoSpace(), Status::Severity::kHardError)
-      );
+      Status(Status::NoSpace(), Status::Severity::kHardError));
   listener->EnableAutoRecovery(false);
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->LoadDependency(
       {{"FlushMemTableFinished", "BackgroundCallCompaction:0"}});
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
-      "BackgroundCallCompaction:0", [&](void *) {
-      fault_env->SetFilesystemActive(false, Status::NoSpace("Out of space"));
+      "BackgroundCallCompaction:0", [&](void*) {
+        fault_env->SetFilesystemActive(false, Status::NoSpace("Out of space"));
       });
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
 
@@ -222,8 +222,8 @@ TEST_F(DBErrorHandlingTest, CorruptionError) {
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->LoadDependency(
       {{"FlushMemTableFinished", "BackgroundCallCompaction:0"}});
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
-      "BackgroundCallCompaction:0", [&](void *) {
-      fault_env->SetFilesystemActive(false, Status::Corruption("Corruption"));
+      "BackgroundCallCompaction:0", [&](void*) {
+        fault_env->SetFilesystemActive(false, Status::Corruption("Corruption"));
       });
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
 
@@ -232,7 +232,8 @@ TEST_F(DBErrorHandlingTest, CorruptionError) {
   ASSERT_EQ(s, Status::OK());
 
   s = dbfull()->TEST_WaitForCompact();
-  ASSERT_EQ(s.severity(), TERARKDB_NAMESPACE::Status::Severity::kUnrecoverableError);
+  ASSERT_EQ(s.severity(),
+            TERARKDB_NAMESPACE::Status::Severity::kUnrecoverableError);
 
   fault_env->SetFilesystemActive(true);
   s = dbfull()->Resume();
@@ -317,7 +318,7 @@ TEST_F(DBErrorHandlingTest, WALWriteError) {
   {
     WriteBatch batch;
 
-    for (auto i = 0; i<100; ++i) {
+    for (auto i = 0; i < 100; ++i) {
       batch.Put(Key(i), RandomString(&rnd, 1024));
     }
 
@@ -330,16 +331,18 @@ TEST_F(DBErrorHandlingTest, WALWriteError) {
     WriteBatch batch;
     int write_error = 0;
 
-    for (auto i = 100; i<199; ++i) {
+    for (auto i = 100; i < 199; ++i) {
       batch.Put(Key(i), RandomString(&rnd, 1024));
     }
 
-    SyncPoint::GetInstance()->SetCallBack("WritableFileWriter::Append:BeforePrepareWrite", [&](void*) {
-      write_error++;
-      if (write_error > 2) {
-        fault_env->SetFilesystemActive(false, Status::NoSpace("Out of space"));
-      }
-    });
+    SyncPoint::GetInstance()->SetCallBack(
+        "WritableFileWriter::Append:BeforePrepareWrite", [&](void*) {
+          write_error++;
+          if (write_error > 2) {
+            fault_env->SetFilesystemActive(false,
+                                           Status::NoSpace("Out of space"));
+          }
+        });
     SyncPoint::GetInstance()->EnableProcessing();
     WriteOptions wopts;
     wopts.sync = true;
@@ -349,7 +352,7 @@ TEST_F(DBErrorHandlingTest, WALWriteError) {
   SyncPoint::GetInstance()->DisableProcessing();
   fault_env->SetFilesystemActive(true);
   ASSERT_EQ(listener->WaitForRecovery(5000000), true);
-  for (auto i=0; i<199; ++i) {
+  for (auto i = 0; i < 199; ++i) {
     if (i < 100) {
       ASSERT_NE(Get(Key(i)), "NOT_FOUND");
     } else {
@@ -357,7 +360,7 @@ TEST_F(DBErrorHandlingTest, WALWriteError) {
     }
   }
   Reopen(options);
-  for (auto i=0; i<199; ++i) {
+  for (auto i = 0; i < 199; ++i) {
     if (i < 100) {
       ASSERT_NE(Get(Key(i)), "NOT_FOUND");
     } else {

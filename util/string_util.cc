@@ -27,9 +27,9 @@
 
 #include "rocksdb/env.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "utilities/util/function.hpp"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 const std::string kNullptrString = "nullptr";

@@ -4,10 +4,10 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 #pragma once
-#include "rocksdb/perf_level.h"
 #include "port/port.h"
-
+#include "rocksdb/perf_level.h"
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 #ifdef ROCKSDB_SUPPORT_THREAD_LOCAL

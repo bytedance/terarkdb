@@ -15,9 +15,10 @@
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
 #include "rocksdb/status.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
+
 // Constructs the DBOptions and ColumnFamilyDescriptors by loading the
 // latest RocksDB options file stored in the specified rocksdb database.
 //

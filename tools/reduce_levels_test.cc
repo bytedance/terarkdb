@@ -9,17 +9,17 @@
 #include "db/db_impl.h"
 #include "db/version_set.h"
 #include "rocksdb/db.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/ldb_cmd.h"
 #include "tools/ldb_cmd_impl.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class ReduceLevelTest : public testing::Test {
-public:
+ public:
   ReduceLevelTest() {
     dbname_ = test::PerThreadDBPath("db_reduce_levels_test");
     DestroyDB(dbname_, Options());
@@ -75,7 +75,7 @@ public:
     return atoi(property.c_str());
   }
 
-private:
+ private:
   std::string dbname_;
   DB* db_;
 };
@@ -84,7 +84,8 @@ Status ReduceLevelTest::OpenDB(bool create_if_missing, int num_levels) {
   TERARKDB_NAMESPACE::Options opt;
   opt.num_levels = num_levels;
   opt.create_if_missing = create_if_missing;
-  TERARKDB_NAMESPACE::Status st = TERARKDB_NAMESPACE::DB::Open(opt, dbname_, &db_);
+  TERARKDB_NAMESPACE::Status st =
+      TERARKDB_NAMESPACE::DB::Open(opt, dbname_, &db_);
   if (!st.ok()) {
     fprintf(stderr, "Can't open the db:%s\n", st.ToString().c_str());
   }
@@ -92,8 +93,9 @@ Status ReduceLevelTest::OpenDB(bool create_if_missing, int num_levels) {
 }
 
 bool ReduceLevelTest::ReduceLevels(int target_level) {
-  std::vector<std::string> args = TERARKDB_NAMESPACE::ReduceDBLevelsCommand::PrepareArgs(
-      dbname_, target_level, false);
+  std::vector<std::string> args =
+      TERARKDB_NAMESPACE::ReduceDBLevelsCommand::PrepareArgs(
+          dbname_, target_level, false);
   LDBCommand* level_reducer = LDBCommand::InitFromCmdLineArgs(
       args, Options(), LDBOptions(), nullptr, LDBCommand::SelectCommand);
   level_reducer->Run();
@@ -201,7 +203,7 @@ TEST_F(ReduceLevelTest, All_Levels) {
   CloseDB();
 }
 
-}
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

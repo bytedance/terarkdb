@@ -14,6 +14,7 @@
 #include "db/version_edit.h"
 #include "monitoring/perf_context_imp.h"
 #include "rocksdb/statistics.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/get_context.h"
 #include "table/internal_iterator.h"
 #include "table/iterator_wrapper.h"
@@ -27,7 +28,6 @@
 #include "util/stop_watch.h"
 #include "util/sync_point.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {

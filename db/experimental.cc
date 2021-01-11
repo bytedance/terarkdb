@@ -6,8 +6,8 @@
 #include "rocksdb/experimental.h"
 
 #include "db/db_impl.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 namespace experimental {
 

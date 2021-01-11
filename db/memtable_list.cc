@@ -23,13 +23,13 @@
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/iterator.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/merging_iterator.h"
 #include "util/c_style_callback.h"
 #include "util/coding.h"
 #include "util/log_buffer.h"
 #include "util/sync_point.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class InternalKeyComparator;

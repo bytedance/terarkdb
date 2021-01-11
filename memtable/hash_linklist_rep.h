@@ -8,10 +8,10 @@
 
 #pragma once
 #ifndef ROCKSDB_LITE
-#include "rocksdb/slice_transform.h"
 #include "rocksdb/memtablerep.h"
-
+#include "rocksdb/slice_transform.h"
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class HashLinkListRepFactory : public MemTableRepFactory {
@@ -35,9 +35,7 @@ class HashLinkListRepFactory : public MemTableRepFactory {
       Allocator* allocator, const SliceTransform* transform,
       Logger* logger) override;
 
-  virtual const char* Name() const override {
-    return "HashLinkListRepFactory";
-  }
+  virtual const char* Name() const override { return "HashLinkListRepFactory"; }
 
  private:
   const size_t bucket_count_;
@@ -47,5 +45,5 @@ class HashLinkListRepFactory : public MemTableRepFactory {
   bool if_log_bucket_dist_when_flash_;
 };
 
-}
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

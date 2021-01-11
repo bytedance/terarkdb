@@ -8,8 +8,6 @@
 #include "db/compaction_job.h"
 
 #include <algorithm>
-#include <map>
-#include <string>
 #include <tuple>
 
 #include "db/column_family.h"
@@ -18,6 +16,7 @@
 #include "rocksdb/cache.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/write_buffer_manager.h"
 #include "table/mock_table.h"
 #include "util/file_reader_writer.h"
@@ -26,7 +25,6 @@
 #include "util/testutil.h"
 #include "utilities/merge_operators.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {

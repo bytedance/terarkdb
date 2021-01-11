@@ -6,9 +6,9 @@
 #pragma once
 #include "monitoring/perf_step_timer.h"
 #include "rocksdb/iostats_context.h"
+#include "rocksdb/terark_namespace.h"
 
 #ifdef ROCKSDB_SUPPORT_THREAD_LOCAL
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 extern __thread IOStatsContext iostats_context;
 }  // namespace TERARKDB_NAMESPACE
@@ -17,8 +17,10 @@ extern __thread IOStatsContext iostats_context;
 #define IOSTATS_ADD(metric, value) (iostats_context.metric += value)
 
 // Increase metric value only when it is positive
-#define IOSTATS_ADD_IF_POSITIVE(metric, value)   \
-  if (value > 0) { IOSTATS_ADD(metric, value); }
+#define IOSTATS_ADD_IF_POSITIVE(metric, value) \
+  if (value > 0) {                             \
+    IOSTATS_ADD(metric, value);                \
+  }
 
 // reset a specific counter to zero
 #define IOSTATS_RESET(metric) (iostats_context.metric = 0)

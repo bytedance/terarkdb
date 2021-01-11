@@ -33,13 +33,12 @@
 #include "memtable/hash_skiplist_rep.h"
 #include "monitoring/thread_status_util.h"
 #include "options/options_helper.h"
-#include "table/block_based_table_factory.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/merging_iterator.h"
 #include "util/autovector.h"
 #include "util/compression.h"
 #include "util/sst_file_manager_impl.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 ColumnFamilyHandleImpl::ColumnFamilyHandleImpl(

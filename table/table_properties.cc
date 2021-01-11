@@ -8,12 +8,12 @@
 #include "port/port.h"
 #include "rocksdb/env.h"
 #include "rocksdb/iterator.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block.h"
 #include "table/internal_iterator.h"
 #include "table/table_properties_internal.h"
 #include "util/string_util.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 const uint32_t TablePropertiesCollectorFactory::Context::kUnknownColumnFamily =
@@ -117,8 +117,9 @@ std::string TablePropertiesBase::ToString(const std::string& prop_delim,
                  prop_delim, kv_delim);
 
   AppendProperty(result, "column family ID",
-                 column_family_id == TERARKDB_NAMESPACE::TablePropertiesCollectorFactory::
-                                         Context::kUnknownColumnFamily
+                 column_family_id ==
+                         TERARKDB_NAMESPACE::TablePropertiesCollectorFactory::
+                             Context::kUnknownColumnFamily
                      ? std::string("N/A")
                      : TERARKDB_NAMESPACE::ToString(column_family_id),
                  prop_delim, kv_delim);

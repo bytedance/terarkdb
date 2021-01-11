@@ -26,13 +26,13 @@ int main() {
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/trace_reader_writer.h"
 #include "tools/trace_analyzer_tool.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 #include "util/trace_replay.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {
@@ -83,7 +83,7 @@ class TraceAnalyzerTest : public testing::Test {
     single_iter->Seek("a");
     single_iter->SeekForPrev("b");
     delete single_iter;
-    std::this_thread::sleep_for (std::chrono::seconds(1));
+    std::this_thread::sleep_for(std::chrono::seconds(1));
 
     db_->Get(ro, "g", &value);
 

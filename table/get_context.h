@@ -10,11 +10,12 @@
 #include "db/read_callback.h"
 #include "rocksdb/env.h"
 #include "rocksdb/statistics.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/types.h"
 #include "table/block.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
+
 class MergeContext;
 
 struct GetContextStats {

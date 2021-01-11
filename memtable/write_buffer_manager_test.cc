@@ -8,9 +8,10 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "rocksdb/write_buffer_manager.h"
-#include "util/testharness.h"
 
 #include "rocksdb/terark_namespace.h"
+#include "util/testharness.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class WriteBufferManagerTest : public testing::Test {};

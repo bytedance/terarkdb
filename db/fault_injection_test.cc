@@ -19,6 +19,7 @@
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/write_batch.h"
 #include "util/fault_injection_test_env.h"
 #include "util/filename.h"
@@ -28,7 +29,6 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 static const int kValueSize = 1000;

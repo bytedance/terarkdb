@@ -8,10 +8,11 @@
 #include <algorithm>
 #include <cstdint>
 #include <functional>
+
 #include "port/port.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/autovector.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Binary heap implementation optimized for use in multi-way merge sort.
@@ -38,12 +39,12 @@ namespace TERARKDB_NAMESPACE {
 // std::priority_queue: the comparison operator is expected to provide the
 // less-than relation, but top() will return the maximum.
 
-template<typename T, typename Compare = std::less<T>,
-         class VectorType = autovector<T>>
+template <typename T, typename Compare = std::less<T>,
+          class VectorType = autovector<T>>
 class BinaryHeap {
  public:
-  BinaryHeap() { }
-  explicit BinaryHeap(Compare cmp) : cmp_(std::move(cmp)) { }
+  BinaryHeap() {}
+  explicit BinaryHeap(Compare cmp) : cmp_(std::move(cmp)) {}
 
   void push(const T& value) {
     data_.push_back(value);

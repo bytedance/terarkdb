@@ -11,9 +11,9 @@
 #include "db/dbformat.h"
 #include "options/db_options.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/compression.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // ImmutableCFOptions is a data struct used by RocksDB internal. It contains a

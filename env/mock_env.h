@@ -12,12 +12,13 @@
 #include <map>
 #include <string>
 #include <vector>
+
+#include "port/port.h"
 #include "rocksdb/env.h"
 #include "rocksdb/status.h"
-#include "port/port.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/mutexlock.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class MemFile;

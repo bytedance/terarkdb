@@ -10,8 +10,8 @@
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
 #include "rocksdb/perf_context.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 // DB tests related to bloom filter.
@@ -649,7 +649,8 @@ class WrappedBloom : public FilterPolicy {
 
   void CreateFilter(const TERARKDB_NAMESPACE::Slice* keys, int n,
                     std::string* dst) const override {
-    std::unique_ptr<TERARKDB_NAMESPACE::Slice[]> user_keys(new TERARKDB_NAMESPACE::Slice[n]);
+    std::unique_ptr<TERARKDB_NAMESPACE::Slice[]> user_keys(
+        new TERARKDB_NAMESPACE::Slice[n]);
     for (int i = 0; i < n; ++i) {
       user_keys[i] = convertKey(keys[i]);
     }
@@ -668,7 +669,10 @@ class WrappedBloom : public FilterPolicy {
   const FilterPolicy* filter_;
   mutable uint32_t counter_;
 
-  TERARKDB_NAMESPACE::Slice convertKey(const TERARKDB_NAMESPACE::Slice& key) const { return key; }
+  TERARKDB_NAMESPACE::Slice convertKey(
+      const TERARKDB_NAMESPACE::Slice& key) const {
+    return key;
+  }
 };
 }  // namespace
 
@@ -798,7 +802,8 @@ class BloomStatsTestWithParam
     partition_filters_ = std::get<2>(GetParam());
 
     options_.create_if_missing = true;
-    options_.prefix_extractor.reset(TERARKDB_NAMESPACE::NewFixedPrefixTransform(4));
+    options_.prefix_extractor.reset(
+        TERARKDB_NAMESPACE::NewFixedPrefixTransform(4));
     options_.memtable_prefix_bloom_size_ratio =
         8.0 * 1024.0 / static_cast<double>(options_.write_buffer_size);
     if (use_block_table_) {
@@ -1395,7 +1400,7 @@ TEST_F(DBBloomFilterTest, DynamicBloomFilterMultipleSST) {
     options.create_if_missing = true;
     options.enable_lazy_compaction = false;
     options.prepare_log_writer_num = 0;
-    options.blob_size = -1; 
+    options.blob_size = -1;
     options.prefix_extractor.reset(NewFixedPrefixTransform(1));
     options.disable_auto_compactions = true;
     options.statistics = CreateDBStatistics();

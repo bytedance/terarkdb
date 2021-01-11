@@ -20,6 +20,7 @@
 #include "db/write_batch_internal.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/transaction_log.h"
 #include "util/filename.h"
 #include "util/string_util.h"
@@ -32,7 +33,6 @@ using std::cout;
 using std::endl;
 using std::flush;
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class ObsoleteFilesTest : public testing::Test {

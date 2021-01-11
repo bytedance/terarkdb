@@ -8,12 +8,13 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "rocksdb/iterator.h"
+
 #include "db/dbformat.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 #include "table/iterator_wrapper.h"
 #include "util/arena.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 Cleanable::Cleanable() {
@@ -23,9 +24,7 @@ Cleanable::Cleanable() {
 
 Cleanable::~Cleanable() { DoCleanup(); }
 
-Cleanable::Cleanable(Cleanable&& other) noexcept {
-  *this = std::move(other);
-}
+Cleanable::Cleanable(Cleanable&& other) noexcept { *this = std::move(other); }
 
 Cleanable& Cleanable::operator=(Cleanable&& other) noexcept {
   if (this != &other) {

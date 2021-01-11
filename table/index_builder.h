@@ -17,12 +17,13 @@
 #include <unordered_map>
 
 #include "rocksdb/comparator.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block_based_table_factory.h"
 #include "table/block_builder.h"
 #include "table/format.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
+
 // The interface for building index.
 // Instruction for adding a new concrete IndexBuilder:
 //  1. Create a subclass instantiated from IndexBuilder.
@@ -390,7 +391,7 @@ class PartitionedIndexBuilder : public IndexBuilder {
     std::unique_ptr<ShortenedIndexBuilder> value;
   };
   std::list<Entry> entries_;  // list of partitioned indexes and their keys
-  BlockBuilder index_block_builder_;  // top-level index builder
+  BlockBuilder index_block_builder_;              // top-level index builder
   BlockBuilder index_block_builder_without_seq_;  // same for user keys
   // the active partition index builder
   ShortenedIndexBuilder* sub_index_builder_;

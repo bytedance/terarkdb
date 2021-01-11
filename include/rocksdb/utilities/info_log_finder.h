@@ -10,8 +10,8 @@
 
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 // This function can be used to list the Information logs,

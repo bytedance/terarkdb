@@ -8,11 +8,11 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #pragma once
+#include "rocksdb/terark_namespace.h"
 #include "table/block.h"
 #include "table/format.h"
 #include "util/memory_allocator.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 class BlockFetcher {
  public:

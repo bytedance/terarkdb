@@ -20,11 +20,11 @@
 #include "db/column_family.h"
 #include "db/version_set.h"
 #include "rocksdb/compaction_filter.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
 #include "utilities/util/factory.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 const uint64_t kRangeTombstoneSentinel =

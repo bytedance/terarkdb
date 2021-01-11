@@ -32,6 +32,7 @@
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table_properties.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/ldb_cmd.h"
 #include "table/block.h"
 #include "table/block_based_table_builder.h"
@@ -49,7 +50,6 @@
 #include <table/terark_zip_table.h>
 #endif
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 SstFileDumper::SstFileDumper(const std::string& file_path, bool verify_checksum,
@@ -246,8 +246,8 @@ Status SstFileDumper::ReadTableProperties(uint64_t table_magic_number,
                                           RandomAccessFileReader* file,
                                           uint64_t file_size) {
   TableProperties* table_properties = nullptr;
-  Status s = TERARKDB_NAMESPACE::ReadTableProperties(file, file_size, table_magic_number,
-                                          ioptions_, &table_properties);
+  Status s = TERARKDB_NAMESPACE::ReadTableProperties(
+      file, file_size, table_magic_number, ioptions_, &table_properties);
   if (s.ok()) {
     table_properties_.reset(table_properties);
   } else {
@@ -606,7 +606,8 @@ int SSTDumpTool::Run(int argc, char** argv) {
       filename = std::string(dir_or_file) + "/" + filename;
     }
 
-    TERARKDB_NAMESPACE::SstFileDumper dumper(filename, verify_checksum, output_hex);
+    TERARKDB_NAMESPACE::SstFileDumper dumper(filename, verify_checksum,
+                                             output_hex);
     if (!dumper.getStatus().ok()) {
       fprintf(stderr, "%s: %s\n", filename.c_str(),
               dumper.getStatus().ToString().c_str());

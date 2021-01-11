@@ -54,6 +54,7 @@
 #include "rocksdb/rate_limiter.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/slice_transform.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/object_registry.h"
 #include "rocksdb/utilities/optimistic_transaction_db.h"
 #include "rocksdb/utilities/options_util.h"
@@ -308,7 +309,8 @@ DEFINE_bool(enable_numa, false,
             "CPU and memory of same node. Use \"$numactl --hardware\" command "
             "to see NUMA memory architecture.");
 
-DEFINE_int64(db_write_buffer_size, TERARKDB_NAMESPACE::Options().db_write_buffer_size,
+DEFINE_int64(db_write_buffer_size,
+             TERARKDB_NAMESPACE::Options().db_write_buffer_size,
              "Number of bytes to buffer in all memtables before compacting");
 
 DEFINE_bool(cost_write_buffer_to_cache, false,
@@ -347,7 +349,8 @@ DEFINE_int32(max_write_buffer_number_to_maintain,
              "after they are flushed.  If this value is set to -1, "
              "'max_write_buffer_number' will be used.");
 
-DEFINE_int32(max_background_jobs, TERARKDB_NAMESPACE::Options().max_background_jobs,
+DEFINE_int32(max_background_jobs,
+             TERARKDB_NAMESPACE::Options().max_background_jobs,
              "The maximum number of concurrent background jobs that can occur "
              "in parallel.");
 
@@ -376,16 +379,19 @@ DEFINE_uint64(subcompactions, 1,
 static const bool FLAGS_subcompactions_dummy __attribute__((__unused__)) =
     RegisterFlagValidator(&FLAGS_subcompactions, &ValidateUint32Range);
 
-DEFINE_int32(max_background_flushes, TERARKDB_NAMESPACE::Options().max_background_flushes,
+DEFINE_int32(max_background_flushes,
+             TERARKDB_NAMESPACE::Options().max_background_flushes,
              "The maximum number of concurrent background flushes"
              " that can occur in parallel.");
 
 static TERARKDB_NAMESPACE::CompactionStyle FLAGS_compaction_style_e;
-DEFINE_int32(compaction_style, (int32_t)TERARKDB_NAMESPACE::Options().compaction_style,
+DEFINE_int32(compaction_style,
+             (int32_t)TERARKDB_NAMESPACE::Options().compaction_style,
              "style of compaction: level-based, universal and fifo");
 
 static TERARKDB_NAMESPACE::CompactionPri FLAGS_compaction_pri_e;
-DEFINE_int32(compaction_pri, (int32_t)TERARKDB_NAMESPACE::Options().compaction_pri,
+DEFINE_int32(compaction_pri,
+             (int32_t)TERARKDB_NAMESPACE::Options().compaction_pri,
              "priority of files to compaction: by size or by data age");
 
 DEFINE_int32(universal_size_ratio, 0,
@@ -455,33 +461,39 @@ DEFINE_bool(
     "Pin top-level index of partitioned index/filter blocks in block cache.");
 
 DEFINE_int32(block_size,
-             static_cast<int32_t>(TERARKDB_NAMESPACE::BlockBasedTableOptions().block_size),
+             static_cast<int32_t>(
+                 TERARKDB_NAMESPACE::BlockBasedTableOptions().block_size),
              "Number of bytes in a block.");
 
+DEFINE_int32(format_version,
+             static_cast<int32_t>(
+                 TERARKDB_NAMESPACE::BlockBasedTableOptions().format_version),
+             "Format version of SST files.");
+
 DEFINE_int32(
-    format_version,
-    static_cast<int32_t>(TERARKDB_NAMESPACE::BlockBasedTableOptions().format_version),
-    "Format version of SST files.");
+    block_restart_interval,
+    TERARKDB_NAMESPACE::BlockBasedTableOptions().block_restart_interval,
+    "Number of keys between restart points "
+    "for delta encoding of keys in data block.");
 
-DEFINE_int32(block_restart_interval,
-             TERARKDB_NAMESPACE::BlockBasedTableOptions().block_restart_interval,
-             "Number of keys between restart points "
-             "for delta encoding of keys in data block.");
+DEFINE_int32(
+    index_block_restart_interval,
+    TERARKDB_NAMESPACE::BlockBasedTableOptions().index_block_restart_interval,
+    "Number of keys between restart points "
+    "for delta encoding of keys in index block.");
 
-DEFINE_int32(index_block_restart_interval,
-             TERARKDB_NAMESPACE::BlockBasedTableOptions().index_block_restart_interval,
-             "Number of keys between restart points "
-             "for delta encoding of keys in index block.");
+DEFINE_int32(
+    read_amp_bytes_per_bit,
+    TERARKDB_NAMESPACE::BlockBasedTableOptions().read_amp_bytes_per_bit,
+    "Number of bytes per bit to be used in block read-amp bitmap");
 
-DEFINE_int32(read_amp_bytes_per_bit,
-             TERARKDB_NAMESPACE::BlockBasedTableOptions().read_amp_bytes_per_bit,
-             "Number of bytes per bit to be used in block read-amp bitmap");
+DEFINE_bool(
+    enable_index_compression,
+    TERARKDB_NAMESPACE::BlockBasedTableOptions().enable_index_compression,
+    "Compress the index block");
 
-DEFINE_bool(enable_index_compression,
-            TERARKDB_NAMESPACE::BlockBasedTableOptions().enable_index_compression,
-            "Compress the index block");
-
-DEFINE_bool(block_align, TERARKDB_NAMESPACE::BlockBasedTableOptions().block_align,
+DEFINE_bool(block_align,
+            TERARKDB_NAMESPACE::BlockBasedTableOptions().block_align,
             "Align data blocks on page size");
 
 DEFINE_bool(use_data_block_hash_index, false,
@@ -505,7 +517,8 @@ DEFINE_int32(open_files, TERARKDB_NAMESPACE::Options().max_open_files,
              "Maximum number of files to keep open at the same time"
              " (use default if == 0)");
 
-DEFINE_int32(file_opening_threads, TERARKDB_NAMESPACE::Options().max_file_opening_threads,
+DEFINE_int32(file_opening_threads,
+             TERARKDB_NAMESPACE::Options().max_file_opening_threads,
              "If open_files is set to -1, this option set the number of "
              "threads that will be used to open files during DB::Open()");
 
@@ -594,7 +607,8 @@ DEFINE_string(truth_db, "/dev/shm/truth_db/dbbench",
 
 DEFINE_int32(num_levels, 7, "The total number of levels");
 
-DEFINE_int64(target_file_size_base, TERARKDB_NAMESPACE::Options().target_file_size_base,
+DEFINE_int64(target_file_size_base,
+             TERARKDB_NAMESPACE::Options().target_file_size_base,
              "Target file size at level-1");
 
 DEFINE_int32(target_file_size_multiplier,
@@ -880,7 +894,8 @@ DEFINE_bool(enable_pipelined_write, true,
 DEFINE_bool(allow_concurrent_memtable_write, true,
             "Allow multi-writers to update mem tables in parallel.");
 
-DEFINE_bool(inplace_update_support, TERARKDB_NAMESPACE::Options().inplace_update_support,
+DEFINE_bool(inplace_update_support,
+            TERARKDB_NAMESPACE::Options().inplace_update_support,
             "Support in-place memtable update for smaller or same-size values");
 
 DEFINE_uint64(inplace_update_num_locks,
@@ -935,7 +950,8 @@ DEFINE_uint64(
     "If non-zero, db_bench will rate-limit the reads from RocksDB. This "
     "is the global rate in ops/second.");
 
-DEFINE_uint64(max_compaction_bytes, TERARKDB_NAMESPACE::Options().max_compaction_bytes,
+DEFINE_uint64(max_compaction_bytes,
+              TERARKDB_NAMESPACE::Options().max_compaction_bytes,
               "Max bytes allowed in one compaction");
 
 #ifndef ROCKSDB_LITE
@@ -970,14 +986,16 @@ DEFINE_bool(mmap_write, TERARKDB_NAMESPACE::Options().allow_mmap_writes,
 DEFINE_bool(use_direct_reads, TERARKDB_NAMESPACE::Options().use_direct_reads,
             "Use O_DIRECT for reading data");
 
-DEFINE_bool(use_direct_io_for_flush_and_compaction,
-            TERARKDB_NAMESPACE::Options().use_direct_io_for_flush_and_compaction,
-            "Use O_DIRECT for background flush and compaction writes");
+DEFINE_bool(
+    use_direct_io_for_flush_and_compaction,
+    TERARKDB_NAMESPACE::Options().use_direct_io_for_flush_and_compaction,
+    "Use O_DIRECT for background flush and compaction writes");
 
 DEFINE_bool(use_aio_reads, TERARKDB_NAMESPACE::Options().use_aio_reads,
             "Use aio_read+fiber for reading data");
 
-DEFINE_bool(advise_random_on_open, TERARKDB_NAMESPACE::Options().advise_random_on_open,
+DEFINE_bool(advise_random_on_open,
+            TERARKDB_NAMESPACE::Options().advise_random_on_open,
             "Advise random access on table file open");
 
 DEFINE_string(compaction_fadvice, "NORMAL",
@@ -988,7 +1006,8 @@ static auto FLAGS_compaction_fadvice_e =
 DEFINE_bool(use_tailing_iterator, false,
             "Use tailing iterator to access a series of keys instead of get");
 
-DEFINE_bool(use_adaptive_mutex, TERARKDB_NAMESPACE::Options().use_adaptive_mutex,
+DEFINE_bool(use_adaptive_mutex,
+            TERARKDB_NAMESPACE::Options().use_adaptive_mutex,
             "Use adaptive mutex");
 
 DEFINE_uint64(bytes_per_sync, TERARKDB_NAMESPACE::Options().bytes_per_sync,
@@ -996,7 +1015,8 @@ DEFINE_uint64(bytes_per_sync, TERARKDB_NAMESPACE::Options().bytes_per_sync,
               " being written, in the background. Issue one request for every"
               " bytes_per_sync written. 0 turns it off.");
 
-DEFINE_uint64(wal_bytes_per_sync, TERARKDB_NAMESPACE::Options().wal_bytes_per_sync,
+DEFINE_uint64(wal_bytes_per_sync,
+              TERARKDB_NAMESPACE::Options().wal_bytes_per_sync,
               "Allows OS to incrementally sync WAL files to disk while they are"
               " being written, in the background. Issue one request for every"
               " wal_bytes_per_sync written. 0 turns it off.");
@@ -1059,7 +1079,8 @@ DEFINE_bool(identity_as_first_hash, false,
             "table becomes an identity function. This is only valid when key "
             "is 8 bytes");
 DEFINE_bool(dump_malloc_stats, true, "Dump malloc stats in LOG ");
-DEFINE_uint64(stats_dump_period_sec, TERARKDB_NAMESPACE::Options().stats_dump_period_sec,
+DEFINE_uint64(stats_dump_period_sec,
+              TERARKDB_NAMESPACE::Options().stats_dump_period_sec,
               "Gap between printing stats to log in seconds");
 DEFINE_uint64(stats_persist_period_sec,
               rocksdb::Options().stats_persist_period_sec,
@@ -1162,7 +1183,6 @@ static const bool FLAGS_table_cache_numshardbits_dummy
     __attribute__((__unused__)) = RegisterFlagValidator(
         &FLAGS_table_cache_numshardbits, &ValidateTableCacheNumshardbits);
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {
@@ -1351,7 +1371,7 @@ struct DBWithColumnFamilies {
   DB* db;
 #ifndef ROCKSDB_LITE
   OptimisticTransactionDB* opt_txn_db;
-#endif                              // ROCKSDB_LITE
+#endif  // ROCKSDB_LITE
   std::atomic<size_t> num_created;  // Need to be updated after all the
                                     // new entries in cfh are set.
   size_t num_hot;  // Number of column families to be queried at each moment.
@@ -3443,8 +3463,8 @@ class Benchmark {
       tzto.cbtEntryPerTrie = FLAGS_cbt_entry_per_trie;
       TERARKDB_NAMESPACE::TerarkZipDeleteTempFiles(tzto.localTempDir);
       FLAGS_env->CreateDir(FLAGS_db);
-      options.table_factory.reset(
-          TERARKDB_NAMESPACE::NewTerarkZipTableFactory(tzto, options.table_factory));
+      options.table_factory.reset(TERARKDB_NAMESPACE::NewTerarkZipTableFactory(
+          tzto, options.table_factory));
     }
 #endif
 
@@ -5789,7 +5809,8 @@ int db_bench_tool(int argc, char** argv) {
     initialized = true;
   }
   ParseCommandLineFlags(&argc, &argv, true);
-  FLAGS_compaction_style_e = (TERARKDB_NAMESPACE::CompactionStyle)FLAGS_compaction_style;
+  FLAGS_compaction_style_e =
+      (TERARKDB_NAMESPACE::CompactionStyle)FLAGS_compaction_style;
 #ifndef ROCKSDB_LITE
   if (FLAGS_statistics && !FLAGS_statistics_string.empty()) {
     fprintf(stderr,
@@ -5811,7 +5832,8 @@ int db_bench_tool(int argc, char** argv) {
   if (FLAGS_statistics) {
     dbstats = TERARKDB_NAMESPACE::CreateDBStatistics();
   }
-  FLAGS_compaction_pri_e = (TERARKDB_NAMESPACE::CompactionPri)FLAGS_compaction_pri;
+  FLAGS_compaction_pri_e =
+      (TERARKDB_NAMESPACE::CompactionPri)FLAGS_compaction_pri;
 
   std::vector<std::string> fanout = TERARKDB_NAMESPACE::StringSplit(
       FLAGS_max_bytes_for_level_multiplier_additional, ',');

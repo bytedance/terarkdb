@@ -11,10 +11,10 @@
 #include <string>
 
 #include "comparator_lambda.h"
+#include "rocksdb/terark_namespace.h"
 #include "utilities/util/factory.h"
 #include "utilities/util/function.hpp"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Slice;

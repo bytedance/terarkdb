@@ -9,6 +9,7 @@
 #include <functional>
 
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 bool BlockCacheTierMetadata::Insert(BlockCacheFile* file) {
@@ -33,8 +34,8 @@ BlockCacheFile* BlockCacheTierMetadata::Evict() {
 }
 
 void BlockCacheTierMetadata::Clear() {
-  cache_file_index_.Clear([](BlockCacheFile* arg){ delete arg; });
-  block_index_.Clear([](BlockInfo* arg){ delete arg; });
+  cache_file_index_.Clear([](BlockCacheFile* arg) { delete arg; });
+  block_index_.Clear([](BlockInfo* arg) { delete arg; });
 }
 
 BlockInfo* BlockCacheTierMetadata::Insert(const Slice& key, const LBA& lba) {

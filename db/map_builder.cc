@@ -26,6 +26,7 @@
 #include "db/event_helpers.h"
 #include "db/range_del_aggregator.h"
 #include "monitoring/thread_status_util.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/merging_iterator.h"
 #include "table/two_level_iterator.h"
 #include "util/c_style_callback.h"
@@ -33,7 +34,6 @@
 #include "util/sst_file_manager_impl.h"
 #include "version_set.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct FileMetaDataBoundBuilder {

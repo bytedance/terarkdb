@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+
 #include <algorithm>
 #include <functional>
 #include <map>
@@ -21,10 +22,10 @@
 #include "rocksdb/ldb_tool.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/db_ttl.h"
 #include "rocksdb/utilities/ldb_cmd_execute_result.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class LDBCommand {

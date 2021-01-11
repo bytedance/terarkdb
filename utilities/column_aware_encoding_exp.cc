@@ -14,9 +14,12 @@
 #ifdef GFLAGS
 
 #include <inttypes.h>
+
 #include <vector>
+
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block_based_table_builder.h"
 #include "table/block_based_table_reader.h"
 #include "table/format.h"
@@ -43,7 +46,6 @@ DEFINE_bool(stat, false,
 DEFINE_string(compression_type, "kNoCompression",
               "The compression algorithm used to compress data blocks");
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class ColumnAwareEncodingExp {

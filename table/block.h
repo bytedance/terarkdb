@@ -28,13 +28,13 @@
 #include "rocksdb/options.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block_prefix_index.h"
 #include "table/data_block_hash_index.h"
 #include "table/internal_iterator.h"
 #include "util/random.h"
 #include "util/sync_point.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct BlockContents;
@@ -45,9 +45,10 @@ class DataBlockIter;
 class IndexBlockIter;
 class BlockPrefixIndex;
 
-// BlockReadAmpBitmap is a bitmap that map the TERARKDB_NAMESPACE::Block data bytes to
-// a bitmap with ratio bytes_per_bit. Whenever we access a range of bytes in
-// the Block we update the bitmap and increment READ_AMP_ESTIMATE_USEFUL_BYTES.
+// BlockReadAmpBitmap is a bitmap that map the TERARKDB_NAMESPACE::Block data
+// bytes to a bitmap with ratio bytes_per_bit. Whenever we access a range of
+// bytes in the Block we update the bitmap and increment
+// READ_AMP_ESTIMATE_USEFUL_BYTES.
 class BlockReadAmpBitmap {
  public:
   explicit BlockReadAmpBitmap(size_t block_size, size_t bytes_per_bit,

@@ -14,11 +14,11 @@
 #include <vector>
 
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/trace_reader_writer.h"
 #include "rocksdb/write_batch.h"
 #include "util/trace_replay.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBImpl;
@@ -216,9 +216,11 @@ class TraceAnalyzer {
   uint64_t time_series_start_;
   uint32_t sample_max_;
   uint32_t cur_time_sec_;
-  std::unique_ptr<TERARKDB_NAMESPACE::WritableFile> trace_sequence_f_;  // readable trace
-  std::unique_ptr<TERARKDB_NAMESPACE::WritableFile> qps_f_;             // overall qps
-  std::unique_ptr<TERARKDB_NAMESPACE::WritableFile> cf_qps_f_;  // The qps of each CF>
+  std::unique_ptr<TERARKDB_NAMESPACE::WritableFile>
+      trace_sequence_f_;                                     // readable trace
+  std::unique_ptr<TERARKDB_NAMESPACE::WritableFile> qps_f_;  // overall qps
+  std::unique_ptr<TERARKDB_NAMESPACE::WritableFile>
+      cf_qps_f_;  // The qps of each CF>
   std::unique_ptr<TERARKDB_NAMESPACE::SequentialFile> wkey_input_f_;
   std::vector<TypeUnit> ta_;  // The main statistic collecting data structure
   std::map<uint32_t, CfUnit> cfs_;  // All the cf_id appears in this trace;
@@ -234,14 +236,16 @@ class TraceAnalyzer {
   Status StatsUnitCorrelationUpdate(StatsUnit& unit, const uint32_t& type,
                                     const uint64_t& ts, const std::string& key);
   Status OpenStatsOutputFiles(const std::string& type, TraceStats& new_stats);
-  Status CreateOutputFile(const std::string& type, const std::string& cf_name,
-                          const std::string& ending,
-                          std::unique_ptr<TERARKDB_NAMESPACE::WritableFile>* f_ptr);
+  Status CreateOutputFile(
+      const std::string& type, const std::string& cf_name,
+      const std::string& ending,
+      std::unique_ptr<TERARKDB_NAMESPACE::WritableFile>* f_ptr);
   void CloseOutputFiles();
 
   void PrintStatistics();
-  Status TraceUnitWriter(std::unique_ptr<TERARKDB_NAMESPACE::WritableFile>& f_ptr,
-                         TraceUnit& unit);
+  Status TraceUnitWriter(
+      std::unique_ptr<TERARKDB_NAMESPACE::WritableFile>& f_ptr,
+      TraceUnit& unit);
   Status WriteTraceSequence(const uint32_t& type, const uint32_t& cf_id,
                             const std::string& key, const size_t value_size,
                             const uint64_t ts);

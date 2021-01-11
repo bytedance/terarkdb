@@ -16,16 +16,12 @@
 
 #include <functional>
 #include <limits>
-#include <map>
 #include <memory>
-#include <string>
-#include <vector>
 
-
+#include "rocksdb/terark_namespace.h"
 #include "third-party/fbson/FbsonDocument.h"
 #include "third-party/fbson/FbsonJsonParser.h"
 #include "third-party/fbson/FbsonUtil.h"
-#include "util/coding.h"
 
 using std::placeholders::_1;
 
@@ -41,8 +37,7 @@ size_t ObjectNumElem(const fbson::ObjectVal& objectVal) {
 }
 
 template <typename Func>
-void InitJSONDocument(std::unique_ptr<char[]>* data,
-                      fbson::FbsonValue** value,
+void InitJSONDocument(std::unique_ptr<char[]>* data, fbson::FbsonValue** value,
                       Func f) {
   // TODO(stash): maybe add function to FbsonDocument to avoid creating array?
   fbson::FbsonWriter writer;
@@ -56,34 +51,35 @@ void InitJSONDocument(std::unique_ptr<char[]>* data,
   char* buf = new char[writer.getOutput()->getSize()];
   memcpy(buf, writer.getOutput()->getBuffer(), writer.getOutput()->getSize());
 
-  *value = ((fbson::FbsonDocument *)buf)->getValue();
+  *value = ((fbson::FbsonDocument*)buf)->getValue();
   assert((*value)->isArray());
   assert(((fbson::ArrayVal*)*value)->numElem() == 1);
   *value = ((fbson::ArrayVal*)*value)->get(0);
   data->reset(buf);
 }
 
-void InitString(std::unique_ptr<char[]>* data,
-                fbson::FbsonValue** value,
+void InitString(std::unique_ptr<char[]>* data, fbson::FbsonValue** value,
                 const std::string& s) {
-  InitJSONDocument(data, value, std::bind(
-      [](fbson::FbsonWriter& writer, const std::string& str) -> uint32_t {
-        bool res __attribute__((__unused__)) = writer.writeStartString();
-        assert(res);
-        auto bytesWritten = writer.writeString(str.c_str(),
-                            static_cast<uint32_t>(str.length()));
-        res = writer.writeEndString();
-        assert(res);
-        // If the string is empty, then bytesWritten == 0, and assert in
-        // InitJsonDocument will fail.
-        return bytesWritten + static_cast<uint32_t>(str.empty());
-      },
-  _1, s));
+  InitJSONDocument(
+      data, value,
+      std::bind(
+          [](fbson::FbsonWriter& writer, const std::string& str) -> uint32_t {
+            bool res __attribute__((__unused__)) = writer.writeStartString();
+            assert(res);
+            auto bytesWritten = writer.writeString(
+                str.c_str(), static_cast<uint32_t>(str.length()));
+            res = writer.writeEndString();
+            assert(res);
+            // If the string is empty, then bytesWritten == 0, and assert in
+            // InitJsonDocument will fail.
+            return bytesWritten + static_cast<uint32_t>(str.empty());
+          },
+          _1, s));
 }
 
 bool IsNumeric(fbson::FbsonValue* value) {
-  return value->isInt8() || value->isInt16() ||
-         value->isInt32() ||  value->isInt64();
+  return value->isInt8() || value->isInt16() || value->isInt32() ||
+         value->isInt64();
 }
 
 int64_t GetInt64ValFromFbsonNumericType(fbson::FbsonValue* value) {
@@ -119,8 +115,7 @@ void CreateArray(std::unique_ptr<char[]>* data, fbson::FbsonValue** value) {
   res = writer.writeEndArray();
   assert(res);
   data->reset(new char[writer.getOutput()->getSize()]);
-  memcpy(data->get(),
-         writer.getOutput()->getBuffer(),
+  memcpy(data->get(), writer.getOutput()->getBuffer(),
          writer.getOutput()->getSize());
   *value = reinterpret_cast<fbson::FbsonDocument*>(data->get())->getValue();
 }
@@ -132,58 +127,48 @@ void CreateObject(std::unique_ptr<char[]>* data, fbson::FbsonValue** value) {
   res = writer.writeEndObject();
   assert(res);
   data->reset(new char[writer.getOutput()->getSize()]);
-  memcpy(data->get(),
-         writer.getOutput()->getBuffer(),
+  memcpy(data->get(), writer.getOutput()->getBuffer(),
          writer.getOutput()->getSize());
   *value = reinterpret_cast<fbson::FbsonDocument*>(data->get())->getValue();
 }
 
 }  // namespace
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
-
 
 // TODO(stash): find smth easier
 JSONDocument::JSONDocument() {
-  InitJSONDocument(&data_,
-                   &value_,
+  InitJSONDocument(&data_, &value_,
                    std::bind(&fbson::FbsonWriter::writeNull, _1));
 }
 
 JSONDocument::JSONDocument(bool b) {
-  InitJSONDocument(&data_,
-                   &value_,
+  InitJSONDocument(&data_, &value_,
                    std::bind(&fbson::FbsonWriter::writeBool, _1, b));
 }
 
 JSONDocument::JSONDocument(double d) {
-  InitJSONDocument(&data_,
-                   &value_,
+  InitJSONDocument(&data_, &value_,
                    std::bind(&fbson::FbsonWriter::writeDouble, _1, d));
 }
 
 JSONDocument::JSONDocument(int8_t i) {
-  InitJSONDocument(&data_,
-                   &value_,
+  InitJSONDocument(&data_, &value_,
                    std::bind(&fbson::FbsonWriter::writeInt8, _1, i));
 }
 
 JSONDocument::JSONDocument(int16_t i) {
-  InitJSONDocument(&data_,
-                   &value_,
+  InitJSONDocument(&data_, &value_,
                    std::bind(&fbson::FbsonWriter::writeInt16, _1, i));
 }
 
 JSONDocument::JSONDocument(int32_t i) {
-  InitJSONDocument(&data_,
-                   &value_,
+  InitJSONDocument(&data_, &value_,
                    std::bind(&fbson::FbsonWriter::writeInt32, _1, i));
 }
 
 JSONDocument::JSONDocument(int64_t i) {
-  InitJSONDocument(&data_,
-                   &value_,
+  InitJSONDocument(&data_, &value_,
                    std::bind(&fbson::FbsonWriter::writeInt64, _1, i));
 }
 
@@ -191,8 +176,7 @@ JSONDocument::JSONDocument(const std::string& s) {
   InitString(&data_, &value_, s);
 }
 
-JSONDocument::JSONDocument(const char* s) : JSONDocument(std::string(s)) {
-}
+JSONDocument::JSONDocument(const char* s) : JSONDocument(std::string(s)) {}
 
 void JSONDocument::InitFromValue(const fbson::FbsonValue* val) {
   data_.reset(new char[val->numPackedBytes()]);
@@ -316,7 +300,7 @@ size_t JSONDocument::Count() const {
   if (IsObject()) {
     // TODO(stash): add to fbson?
     const fbson::ObjectVal& objectVal =
-          *reinterpret_cast<fbson::ObjectVal*>(value_);
+        *reinterpret_cast<fbson::ObjectVal*>(value_);
     return ObjectNumElem(objectVal);
   } else if (IsArray()) {
     auto arrayVal = reinterpret_cast<fbson::ArrayVal*>(value_);
@@ -334,34 +318,24 @@ JSONDocument JSONDocument::operator[](size_t i) const {
   return ans;
 }
 
-bool JSONDocument::IsNull() const {
-  return value_->isNull();
-}
+bool JSONDocument::IsNull() const { return value_->isNull(); }
 
-bool JSONDocument::IsArray() const {
-  return value_->isArray();
-}
+bool JSONDocument::IsArray() const { return value_->isArray(); }
 
 bool JSONDocument::IsBool() const {
   return value_->isTrue() || value_->isFalse();
 }
 
-bool JSONDocument::IsDouble() const {
-  return value_->isDouble();
-}
+bool JSONDocument::IsDouble() const { return value_->isDouble(); }
 
 bool JSONDocument::IsInt64() const {
-  return value_->isInt8() || value_->isInt16() ||
-         value_->isInt32() || value_->isInt64();
+  return value_->isInt8() || value_->isInt16() || value_->isInt32() ||
+         value_->isInt64();
 }
 
-bool JSONDocument::IsObject() const {
-  return value_->isObject();
-}
+bool JSONDocument::IsObject() const { return value_->isObject(); }
 
-bool JSONDocument::IsString() const {
-  return value_->isString();
-}
+bool JSONDocument::IsString() const { return value_->isString(); }
 
 bool JSONDocument::GetBool() const {
   assert(IsBool());
@@ -421,14 +395,13 @@ bool CompareFbsonValue(fbson::FbsonValue* left, fbson::FbsonValue* right) {
     case fbson::FbsonType::T_String:
     case fbson::FbsonType::T_Double:
       return CompareSimpleTypes(left, right);
-    case fbson::FbsonType::T_Object:
-    {
+    case fbson::FbsonType::T_Object: {
       auto leftObject = reinterpret_cast<fbson::ObjectVal*>(left);
       auto rightObject = reinterpret_cast<fbson::ObjectVal*>(right);
       if (ObjectNumElem(*leftObject) != ObjectNumElem(*rightObject)) {
         return false;
       }
-      for (auto && keyValue : *leftObject) {
+      for (auto&& keyValue : *leftObject) {
         std::string str(keyValue.getKeyStr(), keyValue.klen());
         if (rightObject->find(str.c_str()) == nullptr) {
           return false;
@@ -440,8 +413,7 @@ bool CompareFbsonValue(fbson::FbsonValue* left, fbson::FbsonValue* right) {
       }
       return true;
     }
-    case fbson::FbsonType::T_Array:
-    {
+    case fbson::FbsonType::T_Array: {
       auto leftArr = reinterpret_cast<fbson::ArrayVal*>(left);
       auto rightArr = reinterpret_cast<fbson::ArrayVal*>(right);
       if (leftArr->numElem() != rightArr->numElem()) {
@@ -470,13 +442,9 @@ bool JSONDocument::operator!=(const JSONDocument& rhs) const {
   return !(*this == rhs);
 }
 
-JSONDocument JSONDocument::Copy() const {
-  return JSONDocument(value_, true);
-}
+JSONDocument JSONDocument::Copy() const { return JSONDocument(value_, true); }
 
-bool JSONDocument::IsOwner() const {
-  return data_.get() != nullptr;
-}
+bool JSONDocument::IsOwner() const { return data_.get() != nullptr; }
 
 std::string JSONDocument::DebugString() const {
   fbson::FbsonToJson fbsonToJson;
@@ -496,8 +464,8 @@ JSONDocument* JSONDocument::ParseJSON(const char* json) {
   }
 
   auto fbsonVal = fbson::FbsonDocument::createValue(
-                    parser.getWriter().getOutput()->getBuffer(),
-              static_cast<uint32_t>(parser.getWriter().getOutput()->getSize()));
+      parser.getWriter().getOutput()->getBuffer(),
+      static_cast<uint32_t>(parser.getWriter().getOutput()->getSize()));
 
   if (fbsonVal == nullptr) {
     return nullptr;
@@ -528,8 +496,8 @@ JSONDocument* JSONDocument::Deserialize(const Slice& src) {
     assert(false);
   }
   input.remove_prefix(1);
-  auto value = fbson::FbsonDocument::createValue(input.data(),
-                static_cast<uint32_t>(input.size()));
+  auto value = fbson::FbsonDocument::createValue(
+      input.data(), static_cast<uint32_t>(input.size()));
   if (value == nullptr) {
     return nullptr;
   }
@@ -543,67 +511,57 @@ class JSONDocument::const_item_iterator::Impl {
 
   explicit Impl(It it) : it_(it) {}
 
-  const char* getKeyStr() const {
-    return it_->getKeyStr();
-  }
+  const char* getKeyStr() const { return it_->getKeyStr(); }
 
-  uint8_t klen() const {
-    return it_->klen();
-  }
+  uint8_t klen() const { return it_->klen(); }
 
-  It& operator++() {
-    return ++it_;
-  }
+  It& operator++() { return ++it_; }
 
-  bool operator!=(const Impl& other) {
-    return it_ != other.it_;
-  }
+  bool operator!=(const Impl& other) { return it_ != other.it_; }
 
-  fbson::FbsonValue* value() const {
-    return it_->value();
-  }
+  fbson::FbsonValue* value() const { return it_->value(); }
 
  private:
   It it_;
 };
 
 JSONDocument::const_item_iterator::const_item_iterator(Impl* impl)
-: it_(impl) {}
+    : it_(impl) {}
 
 JSONDocument::const_item_iterator::const_item_iterator(const_item_iterator&& a)
-: it_(std::move(a.it_)) {}
+    : it_(std::move(a.it_)) {}
 
 JSONDocument::const_item_iterator&
-  JSONDocument::const_item_iterator::operator++() {
+JSONDocument::const_item_iterator::operator++() {
   ++(*it_);
   return *this;
 }
 
 bool JSONDocument::const_item_iterator::operator!=(
-                                  const const_item_iterator& other) {
+    const const_item_iterator& other) {
   return *it_ != *(other.it_);
 }
 
-JSONDocument::const_item_iterator::~const_item_iterator() {
-}
+JSONDocument::const_item_iterator::~const_item_iterator() {}
 
 JSONDocument::const_item_iterator::value_type
-  JSONDocument::const_item_iterator::operator*() {
-  return JSONDocument::const_item_iterator::value_type(std::string(it_->getKeyStr(), it_->klen()),
-    JSONDocument(it_->value(), false));
+JSONDocument::const_item_iterator::operator*() {
+  return JSONDocument::const_item_iterator::value_type(
+      std::string(it_->getKeyStr(), it_->klen()),
+      JSONDocument(it_->value(), false));
 }
 
 JSONDocument::ItemsIteratorGenerator::ItemsIteratorGenerator(
-                                      const fbson::ObjectVal& object)
-  : object_(object) {}
+    const fbson::ObjectVal& object)
+    : object_(object) {}
 
-JSONDocument::const_item_iterator
-      JSONDocument::ItemsIteratorGenerator::begin() const {
+JSONDocument::const_item_iterator JSONDocument::ItemsIteratorGenerator::begin()
+    const {
   return const_item_iterator(new const_item_iterator::Impl(object_.begin()));
 }
 
-JSONDocument::const_item_iterator
-      JSONDocument::ItemsIteratorGenerator::end() const {
+JSONDocument::const_item_iterator JSONDocument::ItemsIteratorGenerator::end()
+    const {
   return const_item_iterator(new const_item_iterator::Impl(object_.end()));
 }
 

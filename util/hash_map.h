@@ -10,9 +10,9 @@
 #include <array>
 #include <utility>
 
+#include "rocksdb/terark_namespace.h"
 #include "util/autovector.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // This is similar to std::unordered_map, except that it tries to avoid

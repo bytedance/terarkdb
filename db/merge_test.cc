@@ -4,23 +4,24 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 #include <assert.h>
-#include <memory>
-#include <iostream>
 
+#include <iostream>
+#include <memory>
+
+#include "db/db_impl.h"
+#include "db/dbformat.h"
+#include "db/write_batch_internal.h"
 #include "port/stack_trace.h"
 #include "rocksdb/cache.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/merge_operator.h"
-#include "rocksdb/utilities/db_ttl.h"
-#include "db/dbformat.h"
-#include "db/db_impl.h"
-#include "db/write_batch_internal.h"
-#include "utilities/merge_operators.h"
-#include "util/testharness.h"
-
 #include "rocksdb/terark_namespace.h"
+#include "rocksdb/utilities/db_ttl.h"
+#include "util/testharness.h"
+#include "utilities/merge_operators.h"
+
 namespace TERARKDB_NAMESPACE {
 
 bool use_compression;
@@ -39,10 +40,8 @@ class CountMergeOperator : public AssociativeMergeOperator {
     mergeOperator_ = MergeOperators::CreateUInt64AddOperator();
   }
 
-  virtual bool Merge(const Slice& key,
-                     const Slice* existing_value,
-                     const Slice& value,
-                     std::string* new_value,
+  virtual bool Merge(const Slice& key, const Slice* existing_value,
+                     const Slice& value, std::string* new_value,
                      Logger* logger) const override {
     assert(new_value->empty());
     ++num_merge_operator_calls;
@@ -52,12 +51,9 @@ class CountMergeOperator : public AssociativeMergeOperator {
     }
 
     LazyBuffer new_buffer(new_value);
-    bool merge_result = mergeOperator_->PartialMerge(
-        key,
-        LazyBuffer(*existing_value),
-        LazyBuffer(value),
-        &new_buffer,
-        logger);
+    bool merge_result =
+        mergeOperator_->PartialMerge(key, LazyBuffer(*existing_value),
+                                     LazyBuffer(value), &new_buffer, logger);
     if (merge_result) {
       auto s = std::move(new_buffer).dump(new_value);
       merge_result = s.ok();
@@ -75,9 +71,7 @@ class CountMergeOperator : public AssociativeMergeOperator {
                                              logger);
   }
 
-  virtual const char* Name() const override {
-    return "UInt64AddOperator";
-  }
+  virtual const char* Name() const override { return "UInt64AddOperator"; }
 
  private:
   std::shared_ptr<MergeOperator> mergeOperator_;
@@ -118,7 +112,6 @@ std::shared_ptr<DB> OpenDb(const std::string& dbname, const bool ttl = false,
 // set, add, get and remove
 // This is a quick implementation without a Merge operation.
 class Counters {
-
  protected:
   std::shared_ptr<DB> db_;
 
@@ -202,7 +195,6 @@ class Counters {
     return get(key, &base) && set(key, base + value);
   }
 
-
   // convenience functions for testing
   void assert_set(const std::string& key, uint64_t value) {
     assert(set(key, value));
@@ -214,27 +206,25 @@ class Counters {
     uint64_t value = default_;
     int result = get(key, &value);
     assert(result);
-    if (result == 0) exit(1); // Disable unused variable warning.
+    if (result == 0) exit(1);  // Disable unused variable warning.
     return value;
   }
 
   void assert_add(const std::string& key, uint64_t value) {
     int result = add(key, value);
     assert(result);
-    if (result == 0) exit(1); // Disable unused variable warning.
+    if (result == 0) exit(1);  // Disable unused variable warning.
   }
 };
 
 // Implement 'add' directly with the new Merge operation
 class MergeBasedCounters : public Counters {
  private:
-  WriteOptions merge_option_; // for merge
+  WriteOptions merge_option_;  // for merge
 
  public:
   explicit MergeBasedCounters(std::shared_ptr<DB> db, uint64_t defaultCount = 0)
-      : Counters(db, defaultCount),
-        merge_option_() {
-  }
+      : Counters(db, defaultCount), merge_option_() {}
 
   // mapped to a rocksdb Merge operation
   virtual bool add(const std::string& key, uint64_t value) override {
@@ -255,14 +245,13 @@ class MergeBasedCounters : public Counters {
 void dumpDb(DB* db) {
   auto it = std::unique_ptr<Iterator>(db->NewIterator(ReadOptions()));
   for (it->SeekToFirst(); it->Valid(); it->Next()) {
-    //uint64_t value = DecodeFixed64(it->value().data());
-    //std::cout << it->key().ToString() << ": " << value << std::endl;
+    // uint64_t value = DecodeFixed64(it->value().data());
+    // std::cout << it->key().ToString() << ": " << value << std::endl;
   }
   assert(it->status().ok());  // Check for any errors found during the scan
 }
 
 void testCounters(Counters& counters, DB* db, bool test_compaction) {
-
   FlushOptions o;
   o.wait = true;
 
@@ -282,7 +271,7 @@ void testCounters(Counters& counters, DB* db, bool test_compaction) {
   if (test_compaction) db->Flush(o);
 
   // 1+2 = 3
-  assert(counters.assert_get("a")== 3);
+  assert(counters.assert_get("a") == 3);
 
   dumpDb(db);
 
@@ -303,14 +292,13 @@ void testCounters(Counters& counters, DB* db, bool test_compaction) {
 
     dumpDb(db);
 
-    assert(counters.assert_get("a")== 3);
+    assert(counters.assert_get("a") == 3);
     assert(counters.assert_get("b") == sum);
   }
 }
 
 void testSuccessiveMerge(Counters& counters, size_t max_num_merges,
                          size_t num_merges) {
-
   counters.assert_remove("z");
   uint64_t sum = 0;
 
@@ -410,7 +398,6 @@ void testSingleBatchSuccessiveMerge(DB* db, size_t max_num_merges,
 }
 
 void runTest(const std::string& dbname, const bool use_ttl = false) {
-
   {
     auto db = OpenDb(dbname, use_ttl);
 

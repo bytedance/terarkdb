@@ -15,9 +15,9 @@
 #include "db/dbformat.h"
 #include "db/log_writer.h"
 #include "rocksdb/db.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/iterator_cache.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct FileMetaData;

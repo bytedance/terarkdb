@@ -9,10 +9,10 @@
 #include <string>
 #include <vector>
 
-#include "rocksdb/utilities/stackable_db.h"
 #include "rocksdb/status.h"
-
 #include "rocksdb/terark_namespace.h"
+#include "rocksdb/utilities/stackable_db.h"
+
 namespace TERARKDB_NAMESPACE {
 
 //
@@ -24,7 +24,7 @@ struct GeoDBOptions {
   // Default: nullptr
   Logger* info_log;
 
-  explicit GeoDBOptions(Logger* _info_log = nullptr):info_log(_info_log) { }
+  explicit GeoDBOptions(Logger* _info_log = nullptr) : info_log(_info_log) {}
 };
 
 //
@@ -35,9 +35,8 @@ class GeoPosition {
   double latitude;
   double longitude;
 
-  explicit GeoPosition(double la = 0, double lo = 0) :
-    latitude(la), longitude(lo) {
-  }
+  explicit GeoPosition(double la = 0, double lo = 0)
+      : latitude(la), longitude(lo) {}
 };
 
 //
@@ -55,9 +54,8 @@ class GeoObject {
   GeoObject() {}
 
   GeoObject(const GeoPosition& pos, const std::string& i,
-            const std::string& val) :
-    position(pos), id(i), value(val) {
-  }
+            const std::string& val)
+      : position(pos), id(i), value(val) {}
 };
 
 class GeoIterator {
@@ -92,12 +90,12 @@ class GeoDB : public StackableDB {
 
   // Retrieve the value of the object located at the specified GPS
   // location and is identified by the 'id'.
-  virtual Status GetByPosition(const GeoPosition& pos,
-                               const Slice& id, std::string* value) = 0;
+  virtual Status GetByPosition(const GeoPosition& pos, const Slice& id,
+                               std::string* value) = 0;
 
   // Retrieve the value of the object identified by the 'id'. This method
   // could be potentially slower than GetByPosition
-  virtual Status GetById(const Slice& id, GeoObject*  object) = 0;
+  virtual Status GetById(const Slice& id, GeoObject* object) = 0;
 
   // Delete the specified object
   virtual Status Remove(const Slice& id) = 0;
@@ -106,8 +104,7 @@ class GeoDB : public StackableDB {
   // specified gps location. If 'number_of_values' is specified,
   // then the iterator is capped to that number of objects.
   // The radius is specified in 'meters'.
-  virtual GeoIterator* SearchRadial(const GeoPosition& pos,
-                                    double radius,
+  virtual GeoIterator* SearchRadial(const GeoPosition& pos, double radius,
                                     int number_of_values = INT_MAX) = 0;
 };
 

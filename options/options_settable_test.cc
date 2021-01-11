@@ -15,6 +15,7 @@
 
 #include "options/options_helper.h"
 #include "rocksdb/convenience.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/testharness.h"
 
 #ifndef GFLAGS
@@ -25,7 +26,6 @@ using GFLAGS_NAMESPACE::ParseCommandLineFlags;
 DEFINE_bool(enable_print, false, "Print options generated to console.");
 #endif  // GFLAGS
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Verify options are settable from options strings.

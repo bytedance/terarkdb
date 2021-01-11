@@ -6,18 +6,20 @@
 #pragma once
 #ifndef ROCKSDB_LITE
 #include <stdint.h>
+
 #include <string>
 #include <vector>
+
 #include "rocksdb/options.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table.h"
 #include "rocksdb/table_properties.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/bloom_block.h"
 #include "table/plain_table_index.h"
 #include "table/plain_table_key_coding.h"
 #include "table/table_builder.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class BlockBuilder;
@@ -25,7 +27,7 @@ class BlockHandle;
 class WritableFile;
 class TableBuilder;
 
-class PlainTableBuilder: public TableBuilder {
+class PlainTableBuilder : public TableBuilder {
  public:
   // Create a builder that will store the contents of the table it is
   // building in *file.  Does not close the file.  It is up to the

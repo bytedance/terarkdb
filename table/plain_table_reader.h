@@ -18,6 +18,7 @@
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/table.h"
 #include "rocksdb/table_properties.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/plain_table_factory.h"
 #include "table/plain_table_index.h"
 #include "table/table_reader.h"
@@ -25,7 +26,6 @@
 #include "util/dynamic_bloom.h"
 #include "util/file_reader_writer.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Block;

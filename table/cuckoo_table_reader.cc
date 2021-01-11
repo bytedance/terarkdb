@@ -18,6 +18,7 @@
 
 #include "rocksdb/iterator.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/cuckoo_table_factory.h"
 #include "table/get_context.h"
 #include "table/internal_iterator.h"
@@ -26,7 +27,6 @@
 #include "util/coding.h"
 #include "utilities/util/valvec.hpp"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace {
 const uint64_t CACHE_LINE_MASK = ~((uint64_t)CACHE_LINE_SIZE - 1);

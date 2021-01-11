@@ -8,10 +8,12 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "util/testharness.h"
+
 #include <string>
 #include <thread>
 
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 namespace test {
 
@@ -19,8 +21,7 @@ namespace test {
   if (s.ok()) {
     return ::testing::AssertionSuccess();
   } else {
-    return ::testing::AssertionFailure() << s_expr << std::endl
-                                         << s.ToString();
+    return ::testing::AssertionFailure() << s_expr << std::endl << s.ToString();
   }
 }
 

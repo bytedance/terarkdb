@@ -11,8 +11,8 @@
 
 #include "rocksdb/env.h"
 #include "rocksdb/statistics.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class RateLimiter {

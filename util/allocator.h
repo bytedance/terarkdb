@@ -13,9 +13,10 @@
 #pragma once
 #include <cerrno>
 #include <cstddef>
-#include "rocksdb/write_buffer_manager.h"
 
 #include "rocksdb/terark_namespace.h"
+#include "rocksdb/write_buffer_manager.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class Logger;

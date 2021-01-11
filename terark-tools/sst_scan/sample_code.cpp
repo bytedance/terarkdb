@@ -1,52 +1,52 @@
 // @author zhaoming.274@bytedance.com
 
-#pragma warning(disable:4996)
+#pragma warning(disable : 4996)
 
-#include <cinttypes>
-#include <utility>
-#include <iterator>
-#include <memory>
-#include <cstdlib>
-#include <vector>
-#include <iostream>
-#include <thread>
-#include <chrono>
-#include <cctype>
-#include <iomanip>
-
-#include <util/filename.h>
-#include <rocksdb/db.h>
-#include <rocksdb/utilities/transaction_db.h>
-#include <rocksdb/utilities/optimistic_transaction_db.h>
+#include <db/memtable.h>
 #include <rocksdb/compaction_filter.h>
+#include <rocksdb/convenience.h>
+#include <rocksdb/db.h>
+#include <rocksdb/experimental.h>
 #include <rocksdb/memtablerep.h>
-#include <rocksdb/table.h>
+#include <rocksdb/merge_operator.h>
 #include <rocksdb/slice.h>
 #include <rocksdb/slice_transform.h>
 #include <rocksdb/sst_file_writer.h>
-#include <rocksdb/merge_operator.h>
-#include <rocksdb/experimental.h>
-#include <rocksdb/convenience.h>
-#include <terark/lcast.hpp>
+#include <rocksdb/table.h>
+#include <rocksdb/terark_namespace.h>
+#include <rocksdb/utilities/optimistic_transaction_db.h>
+#include <rocksdb/utilities/transaction_db.h>
 #include <rocksdb/utilities/write_batch_with_index.h>
 #include <table/get_context.h>
-#include <table/table_reader.h>
+#include <table/iterator_wrapper.h>
 #include <table/table_builder.h>
+#include <table/table_reader.h>
+#include <terark/zbs/sufarr_inducedsort.h>
+#include <util/coding.h>
+#include <util/filename.h>
 #include <utilities/merge_operators/string_append/stringappend.h>
 #include <utilities/merge_operators/string_append/stringappend2.h>
-#include <rocksdb/convenience.h>
-#include <table/iterator_wrapper.h>
-#include <terark/stdtypes.hpp>
-#include <terark/util/mmap.hpp>
-#include <terark/mempool_lock_none.hpp>
-#include <terark/rank_select.hpp>
-#include <util/coding.h>
-#include <db/memtable.h>
+
+#include <cctype>
+#include <chrono>
+#include <cinttypes>
+#include <cstdlib>
+#include <iomanip>
+#include <iostream>
+#include <iterator>
+#include <memory>
 #include <terark/fsa/cspptrie.inl>
 #include <terark/io/FileStream.hpp>
+#include <terark/lcast.hpp>
+#include <terark/mempool_lock_none.hpp>
+#include <terark/rank_select.hpp>
+#include <terark/stdtypes.hpp>
+#include <terark/util/mmap.hpp>
 #include <terark/zbs/dict_zip_blob_store.hpp>
-#include <terark/zbs/sufarr_inducedsort.h>
 #include <terark/zbs/zip_reorder_map.hpp>
+#include <thread>
+#include <utility>
+#include <vector>
 //#include "split_iterator.h"
 
 #define TEST_TERARK 1
@@ -57,7 +57,6 @@
 # include <table/terark_zip_common.h>
 # include <table/terark_zip_table.h>
 #else
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
   struct TerarkZipTableOptions{};
 }

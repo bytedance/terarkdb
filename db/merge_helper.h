@@ -17,9 +17,9 @@
 #include "rocksdb/compaction_filter.h"
 #include "rocksdb/env.h"
 #include "rocksdb/lazy_buffer.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/stop_watch.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class CombinedInternalIterator;
@@ -79,17 +79,17 @@ class MergeHelper {
   // - ShutdownInProgress: interrupted by shutdown (*shutting_down == true).
   //
   // REQUIRED: The first key in the input is not corrupted.
-  Status MergeUntil(
-      const Slice& user_key, CombinedInternalIterator* iter,
-      CompactionRangeDelAggregator* range_del_agg = nullptr,
-      const SequenceNumber stop_before = 0, const bool at_bottom = false);
+  Status MergeUntil(const Slice& user_key, CombinedInternalIterator* iter,
+                    CompactionRangeDelAggregator* range_del_agg = nullptr,
+                    const SequenceNumber stop_before = 0,
+                    const bool at_bottom = false);
 
   // Filters a merge operand using the compaction filter specified
   // in the constructor. Returns the decision that the filter made.
   // Uses compaction_filter_value_ and compaction_filter_skip_until_ for the
   // optional outputs of compaction filter.
-  CompactionFilter::Decision FilterMerge(
-      const Slice& user_key, const LazyBuffer& value);
+  CompactionFilter::Decision FilterMerge(const Slice& user_key,
+                                         const LazyBuffer& value);
 
   // Query the merge result
   // These are valid until the next MergeUntil call
@@ -151,7 +151,7 @@ class MergeHelper {
   const CompactionFilter* compaction_filter_;
   const std::atomic<bool>* shutting_down_;
   Logger* logger_;
-  bool assert_valid_internal_key_; // enforce no internal key corruption?
+  bool assert_valid_internal_key_;  // enforce no internal key corruption?
   bool allow_single_operand_;
   SequenceNumber latest_snapshot_;
   const SnapshotChecker* const snapshot_checker_;
@@ -200,4 +200,4 @@ class MergeOutputIterator {
   std::vector<LazyBuffer>::const_reverse_iterator it_values_;
 };
 
-} // namespace TERARKDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE
