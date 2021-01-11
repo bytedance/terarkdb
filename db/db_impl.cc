@@ -17,6 +17,7 @@
 #endif
 
 #include <algorithm>
+#include <cinttypes>
 #include <cstdio>
 #include <map>
 #include <set>
@@ -929,12 +930,10 @@ void DBImpl::ScheduleGCTTL() {
   uint64_t marked_count = 0;
   uint64_t nowSeconds = env_->NowMicros() / 1000U / 1000U;
   auto should_marked_for_compacted = [&](uint64_t ratio_expire_time,
-                                        uint64_t scan_gap_expire_time,
-                                        uint64_t now) {
+                                         uint64_t scan_gap_expire_time,
+                                         uint64_t now) {
     ROCKS_LOG_INFO(immutable_db_options_.info_log,
-                   "SST Table property info: % PRIu64 "
-                   ",% PRIu64 "
-                   ",% PRIu64 ",
+                   "SST Table property info:%" PRIu64 ",%" PRIu64 ",%" PRIu64,
                    ratio_expire_time, scan_gap_expire_time, now);
     return (std::min(ratio_expire_time, scan_gap_expire_time) <= now);
   };
