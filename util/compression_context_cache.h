@@ -19,7 +19,7 @@
 
 #include <stdint.h>
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 class ZSTDUncompressCachedData;
 
 class CompressionContextCache {
@@ -42,4 +42,4 @@ class CompressionContextCache {
   Rep* rep_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

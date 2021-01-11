@@ -9,7 +9,7 @@
 #include "rocksdb/listener.h"
 #include "rocksdb/status.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class DBImpl;
 

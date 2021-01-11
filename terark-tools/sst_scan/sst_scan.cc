@@ -12,12 +12,12 @@
 #include <stack>
 #include <unordered_map>
 
-using namespace rocksdb;
+using namespace TERARKDB_NAMESPACE;
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 extern const uint64_t kPlainTableMagicNumber;
 extern const uint64_t kLegacyPlainTableMagicNumber;
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 namespace terark {
 

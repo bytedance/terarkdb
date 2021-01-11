@@ -23,7 +23,7 @@
 #include "table/internal_iterator.h"
 #include "util/file_reader_writer.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Slice;
 class Status;
@@ -189,4 +189,4 @@ class TableBuilder {
   virtual TableProperties GetTableProperties() const = 0;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

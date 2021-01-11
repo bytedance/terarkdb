@@ -14,7 +14,7 @@
 #include <atomic>
 #include <memory>
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Slice;
 class Allocator;

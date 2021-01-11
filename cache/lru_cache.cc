@@ -20,7 +20,7 @@
 
 #include "util/mutexlock.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 LRUHandleTable::LRUHandleTable() : list_(nullptr), length_(0), elems_(0) {
   Resize();
@@ -562,4 +562,4 @@ std::shared_ptr<Cache> NewLRUCache(
                                     std::move(memory_allocator));
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

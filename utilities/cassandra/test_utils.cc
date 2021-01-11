@@ -5,7 +5,7 @@
 
 #include "test_utils.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace cassandra {
 const char kData[] = {'d', 'a', 't', 'a'};
 const char kExpiringData[] = {'e', 'd', 'a', 't', 'a'};

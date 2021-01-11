@@ -10,7 +10,7 @@
 
 #include <cstddef>
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Slice;
 class Status;
@@ -122,4 +122,4 @@ class WriteBatchBase {
   virtual void SetMaxBytes(size_t max_bytes) = 0;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

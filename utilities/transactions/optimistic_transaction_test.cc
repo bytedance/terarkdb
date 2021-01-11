@@ -21,7 +21,7 @@
 
 using std::string;
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class OptimisticTransactionTest : public testing::Test {
  public:
@@ -1378,7 +1378,7 @@ TEST_F(OptimisticTransactionTest, SequenceNumberAfterRecoverTest) {
   delete transaction;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

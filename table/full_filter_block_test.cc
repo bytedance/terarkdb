@@ -13,7 +13,7 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class TestFilterBitsBuilder : public FilterBitsBuilder {
  public:
@@ -217,7 +217,7 @@ TEST_F(FullFilterBlockTest, SingleChunk) {
   ASSERT_TRUE(!reader.KeyMayMatch("other", nullptr));
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

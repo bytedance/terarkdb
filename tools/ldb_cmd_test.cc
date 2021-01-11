@@ -23,12 +23,12 @@ TEST_F(LdbCmdTest, HexToString) {
   };
 
   for (const auto& inPair : inputMap) {
-    auto actual = rocksdb::LDBCommand::HexToString(inPair.first);
+    auto actual = TERARKDB_NAMESPACE::LDBCommand::HexToString(inPair.first);
     auto expected = inPair.second;
     for (unsigned int i = 0; i < actual.length(); i++) {
       EXPECT_EQ(expected[i], static_cast<int>((signed char) actual[i]));
     }
-    auto reverse = rocksdb::LDBCommand::StringToHex(actual);
+    auto reverse = TERARKDB_NAMESPACE::LDBCommand::StringToHex(actual);
     EXPECT_STRCASEEQ(inPair.first.c_str(), reverse.c_str());
   }
 }
@@ -39,7 +39,7 @@ TEST_F(LdbCmdTest, HexToStringBadInputs) {
   };
   for (const auto badInput : badInputs) {
     try {
-      rocksdb::LDBCommand::HexToString(badInput);
+      TERARKDB_NAMESPACE::LDBCommand::HexToString(badInput);
       std::cerr << "Should fail on bad hex value: " << badInput << "\n";
       FAIL();
     } catch (...) {

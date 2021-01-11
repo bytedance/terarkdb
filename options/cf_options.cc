@@ -18,7 +18,7 @@
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 ImmutableCFOptions::ImmutableCFOptions(const Options& options)
     : ImmutableCFOptions(ImmutableDBOptions(options), options) {}
@@ -235,4 +235,4 @@ void MutableCFOptions::Dump(Logger* log) const {
 MutableCFOptions::MutableCFOptions(const Options& options)
     : MutableCFOptions(ColumnFamilyOptions(options)) {}
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

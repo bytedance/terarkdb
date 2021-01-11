@@ -7,7 +7,7 @@
 
 #include "rocksdb/types.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class DB;
 
@@ -45,4 +45,4 @@ class ManagedSnapshot {
   const Snapshot* snapshot_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -4,7 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 // This file implements the "bridge" between Java and C++
-// for rocksdb::MergeOperator.
+// for TERARKDB_NAMESPACE::MergeOperator.
 
 #include <jni.h>
 #include <stdio.h>
@@ -32,8 +32,8 @@
  */
 jlong Java_org_rocksdb_StringAppendOperator_newSharedStringAppendOperator(
     JNIEnv* /*env*/, jclass /*jclazz*/, jchar jdelim) {
-  auto* sptr_string_append_op = new std::shared_ptr<rocksdb::MergeOperator>(
-      rocksdb::MergeOperators::CreateStringAppendOperator((char)jdelim));
+  auto* sptr_string_append_op = new std::shared_ptr<TERARKDB_NAMESPACE::MergeOperator>(
+      TERARKDB_NAMESPACE::MergeOperators::CreateStringAppendOperator((char)jdelim));
   return reinterpret_cast<jlong>(sptr_string_append_op);
 }
 
@@ -46,7 +46,7 @@ void Java_org_rocksdb_StringAppendOperator_disposeInternal(JNIEnv* /*env*/,
                                                            jobject /*jobj*/,
                                                            jlong jhandle) {
   auto* sptr_string_append_op =
-      reinterpret_cast<std::shared_ptr<rocksdb::MergeOperator>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::MergeOperator>*>(jhandle);
   delete sptr_string_append_op;  // delete std::shared_ptr
 }
 
@@ -59,7 +59,7 @@ void Java_org_rocksdb_StringAppendOperator_disposeInternal(JNIEnv* /*env*/,
 jlong Java_org_rocksdb_StringAppendOperatorWithVariableDelimitor_newSharedStringAppendTESTOperator(
         JNIEnv* env, jclass /*jclazz*/, jbyteArray jdelim) {
   jboolean has_exception = JNI_FALSE;
-  std::string delim = rocksdb::JniUtil::byteString<std::string>(
+  std::string delim = TERARKDB_NAMESPACE::JniUtil::byteString<std::string>(
           env, jdelim,
           [](const char* str, const size_t len) { return std::string(str, len); },
           &has_exception);
@@ -68,8 +68,8 @@ jlong Java_org_rocksdb_StringAppendOperatorWithVariableDelimitor_newSharedString
     return 0;
   }
 
-  auto* sptr_string_append_test_op = new std::shared_ptr<rocksdb::MergeOperator>(
-          rocksdb::MergeOperators::CreateStringAppendTESTOperator(delim));
+  auto* sptr_string_append_test_op = new std::shared_ptr<TERARKDB_NAMESPACE::MergeOperator>(
+          TERARKDB_NAMESPACE::MergeOperators::CreateStringAppendTESTOperator(delim));
   return reinterpret_cast<jlong>(sptr_string_append_test_op);
 }
 
@@ -82,7 +82,7 @@ void Java_org_rocksdb_StringAppendOperatorWithVariableDelimitor_disposeInternal(
                                                                                 jobject /*jobj*/,
                                                                                 jlong jhandle) {
   auto* sptr_string_append_test_op =
-          reinterpret_cast<std::shared_ptr<rocksdb::MergeOperator>*>(jhandle);
+          reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::MergeOperator>*>(jhandle);
   delete sptr_string_append_test_op;  // delete std::shared_ptr
 }
 
@@ -93,8 +93,8 @@ void Java_org_rocksdb_StringAppendOperatorWithVariableDelimitor_disposeInternal(
  */
 jlong Java_org_rocksdb_UInt64AddOperator_newSharedUInt64AddOperator(
     JNIEnv* /*env*/, jclass /*jclazz*/) {
-  auto* sptr_uint64_add_op = new std::shared_ptr<rocksdb::MergeOperator>(
-      rocksdb::MergeOperators::CreateUInt64AddOperator());
+  auto* sptr_uint64_add_op = new std::shared_ptr<TERARKDB_NAMESPACE::MergeOperator>(
+      TERARKDB_NAMESPACE::MergeOperators::CreateUInt64AddOperator());
   return reinterpret_cast<jlong>(sptr_uint64_add_op);
 }
 
@@ -107,6 +107,6 @@ void Java_org_rocksdb_UInt64AddOperator_disposeInternal(JNIEnv* /*env*/,
                                                         jobject /*jobj*/,
                                                         jlong jhandle) {
   auto* sptr_uint64_add_op =
-      reinterpret_cast<std::shared_ptr<rocksdb::MergeOperator>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::MergeOperator>*>(jhandle);
   delete sptr_uint64_add_op;  // delete std::shared_ptr
 }

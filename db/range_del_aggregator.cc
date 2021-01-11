@@ -19,7 +19,7 @@
 #include "util/kv_map.h"
 #include "util/vector_iterator.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 TruncatedRangeDelIterator::TruncatedRangeDelIterator(
     std::unique_ptr<FragmentedRangeTombstoneIterator> iter,
@@ -488,4 +488,4 @@ InternalIteratorBase<Slice>* NewTruncatedRangeDelMergingIter(
                                           children);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

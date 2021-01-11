@@ -7,7 +7,7 @@
 
 #include "options/options_sanity_check.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 OptionsSanityCheckLevel SanityCheckLevelHelper(
@@ -33,6 +33,6 @@ OptionsSanityCheckLevel BBTOptionSanityCheckLevel(
   return SanityCheckLevelHelper(sanity_level_bbt_options, option_name);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // !ROCKSDB_LITE

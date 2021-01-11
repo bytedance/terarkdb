@@ -13,7 +13,7 @@
 #include "options/cf_options.h"
 #include "util/file_reader_writer.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class SstFileDumper {
  public:
@@ -79,6 +79,6 @@ class SstFileDumper {
   std::unique_ptr<TableProperties> table_properties_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

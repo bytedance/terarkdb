@@ -19,7 +19,7 @@
 #include "rocksdb/lazy_buffer.h"
 #include "util/stop_watch.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class CombinedInternalIterator;
 class Comparator;
@@ -199,4 +199,4 @@ class MergeOutputIterator {
   std::vector<LazyBuffer>::const_reverse_iterator it_values_;
 };
 
-} // namespace rocksdb
+} // namespace TERARKDB_NAMESPACE

@@ -21,16 +21,16 @@ Perf snippet for "cycles" event:
 
 ```
   Children  Self    Command   Shared Object  Symbol
-+   30.33%  30.17%  db_bench  db_bench       [.] rocksdb::StatisticsImpl::recordTick
-+    3.65%   0.98%  db_bench  db_bench       [.] rocksdb::StatisticsImpl::measureTime
++   30.33%  30.17%  db_bench  db_bench       [.] TERARKDB_NAMESPACE::StatisticsImpl::recordTick
++    3.65%   0.98%  db_bench  db_bench       [.] TERARKDB_NAMESPACE::StatisticsImpl::measureTime
 ```
 
 Perf snippet for "cache-misses" event:
 
 ```
   Children  Self    Command   Shared Object  Symbol
-+   19.54%  19.50%  db_bench  db_bench 	     [.] rocksdb::StatisticsImpl::recordTick
-+    3.44%   0.57%  db_bench  db_bench       [.] rocksdb::StatisticsImpl::measureTime
++   19.54%  19.50%  db_bench  db_bench 	     [.] TERARKDB_NAMESPACE::StatisticsImpl::recordTick
++    3.44%   0.57%  db_bench  db_bench       [.] TERARKDB_NAMESPACE::StatisticsImpl::measureTime
 ```
 
 The high CPU overhead for updating tickers and histograms corresponds well to the high cache misses.
@@ -49,16 +49,16 @@ Perf snippet for "cycles" event:
 
 ```
   Children  Self    Command   Shared Object  Symbol
-+    2.96%  0.87%   db_bench  db_bench       [.] rocksdb::StatisticsImpl::recordTick
-+    1.37%  0.10%   db_bench  db_bench       [.] rocksdb::StatisticsImpl::measureTime
++    2.96%  0.87%   db_bench  db_bench       [.] TERARKDB_NAMESPACE::StatisticsImpl::recordTick
++    1.37%  0.10%   db_bench  db_bench       [.] TERARKDB_NAMESPACE::StatisticsImpl::measureTime
 ```
 
 Perf snippet for "cache-misses" event:
 
 ```
   Children  Self    Command   Shared Object  Symbol
-+    1.21%  0.65%   db_bench  db_bench       [.] rocksdb::StatisticsImpl::recordTick
-     0.08%  0.00%   db_bench  db_bench       [.] rocksdb::StatisticsImpl::measureTime
++    1.21%  0.65%   db_bench  db_bench       [.] TERARKDB_NAMESPACE::StatisticsImpl::recordTick
+     0.08%  0.00%   db_bench  db_bench       [.] TERARKDB_NAMESPACE::StatisticsImpl::measureTime
 ```
 
 To measure statistics query latency, we ran sysbench with 4K OLTP clients concurrently with one client that queries statistics repeatedly. Times shown are in milliseconds.
@@ -84,16 +84,16 @@ Perf snippet for "cycles" event:
 
 ```
   Children  Self    Command   Shared Object  Symbol
-+    2.96%  0.87%   db_bench  db_bench       [.] rocksdb::StatisticsImpl::recordTick
-+    1.37%  0.10%   db_bench  db_bench       [.] rocksdb::StatisticsImpl::measureTime
++    2.96%  0.87%   db_bench  db_bench       [.] TERARKDB_NAMESPACE::StatisticsImpl::recordTick
++    1.37%  0.10%   db_bench  db_bench       [.] TERARKDB_NAMESPACE::StatisticsImpl::measureTime
 ```
 
 Perf snippet for "cache-misses" event:
 
 ```
   Children  Self    Command   Shared Object  Symbol
-+    1.21%  0.65%   db_bench  db_bench       [.] rocksdb::StatisticsImpl::recordTick
-     0.08%  0.00%   db_bench  db_bench       [.] rocksdb::StatisticsImpl::measureTime
++    1.21%  0.65%   db_bench  db_bench       [.] TERARKDB_NAMESPACE::StatisticsImpl::recordTick
+     0.08%  0.00%   db_bench  db_bench       [.] TERARKDB_NAMESPACE::StatisticsImpl::measureTime
 ```
 
 Query latency is measured same as before with times in milliseconds. Average latency improved by 6.3x compared to thread-local.

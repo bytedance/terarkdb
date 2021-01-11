@@ -9,7 +9,7 @@
 #include "env/mock_env.h"
 #include "util/testharness.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class EnvMirrorTest : public testing::Test {
  public:
@@ -204,7 +204,7 @@ TEST_F(EnvMirrorTest, LargeWrite) {
   delete[] scratch;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

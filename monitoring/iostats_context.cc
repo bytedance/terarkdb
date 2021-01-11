@@ -7,7 +7,7 @@
 #include "monitoring/iostats_context_imp.h"
 #include "rocksdb/env.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 #ifdef ROCKSDB_SUPPORT_THREAD_LOCAL
 __thread IOStatsContext iostats_context;
@@ -57,4 +57,4 @@ std::string IOStatsContext::ToString(bool exclude_zero_counters) const {
   return ss.str();
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

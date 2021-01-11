@@ -7,7 +7,7 @@
 #define BOOST_CURRENT_FUNCTION "(unknown)"
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class IOProfSequentialFile : public SequentialFileWrapper {
  public:
@@ -197,4 +197,4 @@ class IOProfEnv : public EnvWrapper {
 
 Env* NewIOProfEnv(Env* base_env) { return new IOProfEnv(base_env); }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

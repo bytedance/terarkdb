@@ -17,7 +17,7 @@ using namespace std;
 
 static const size_t KEY_LEN = 18;
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
   struct TerarkZipTableOptions {};
 
@@ -73,7 +73,7 @@ namespace {
  * il256 il256
  */
 static void init_data_il256_il256_ascend() {
-  rocksdb::FileWriter fwriter;
+  TERARKDB_NAMESPACE::FileWriter fwriter;
   fwriter.path = key_path;
   fwriter.open();
   keys.resize(100);
@@ -106,7 +106,7 @@ static void init_data_il256_il256_ascend() {
 }
 
 static void init_data_il256_il256_descend() {
-    rocksdb::FileWriter fwriter;
+    TERARKDB_NAMESPACE::FileWriter fwriter;
   fwriter.path = key_path;
   fwriter.open();
   keys.resize(100);
@@ -151,13 +151,13 @@ void test_il256_il256_str(DataStored dtype) {
   // build index
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
-  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_BigUint");
+  auto factory = TERARKDB_NAMESPACE::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_BigUint");
   {
     size_t memsz = factory->MemSizeForBuild(stat);
     assert(memsz < stat.sumKeyLen * 0.8);
     printf("\tcompress check done\n");
   }
-  rocksdb::TerarkZipTableOptions tableOpt;
+  TERARKDB_NAMESPACE::TerarkZipTableOptions tableOpt;
   TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
   assert(index->Name() == string("CompositeUintIndex_IL_256_32_IL_256_32"));
   printf("\tbuild done\n");
@@ -298,7 +298,7 @@ void test_il256_il256_str(DataStored dtype) {
  * allone il256
  */
 static void init_data_allone_il256_ascend() {
-  rocksdb::FileWriter fwriter;
+  TERARKDB_NAMESPACE::FileWriter fwriter;
   fwriter.path = key_path;
   fwriter.open();
   keys.resize(110);
@@ -328,7 +328,7 @@ static void init_data_allone_il256_ascend() {
 }
 
 static void init_data_allone_il256_descend() {
-  rocksdb::FileWriter fwriter;
+  TERARKDB_NAMESPACE::FileWriter fwriter;
   fwriter.path = key_path;
   fwriter.open();
   keys.resize(110);
@@ -373,13 +373,13 @@ void test_allone_il256_str(DataStored dtype) {
   // build index
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
-  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_BigUint");
+  auto factory = TERARKDB_NAMESPACE::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_BigUint");
   {
     size_t memsz = factory->MemSizeForBuild(stat);
     assert(memsz < stat.sumKeyLen * 0.8);
     printf("\tcompress check done\n");
   }
-  rocksdb::TerarkZipTableOptions tableOpt;
+  TERARKDB_NAMESPACE::TerarkZipTableOptions tableOpt;
   TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
   assert(index->Name() == string("CompositeUintIndex_AllOne_IL_256_32"));
   printf("\tbuild done\n");
@@ -508,7 +508,7 @@ void test_allone_il256_str(DataStored dtype) {
  * allone allzero
  */
 static void init_data_allone_allzero() {
-  rocksdb::FileWriter fwriter;
+  TERARKDB_NAMESPACE::FileWriter fwriter;
   fwriter.path = key_path;
   fwriter.open();
   keys.resize(110);
@@ -548,13 +548,13 @@ void test_allone_allzero_str(DataStored dtype) {
   // build index
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
-  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_BigUint");
+  auto factory = TERARKDB_NAMESPACE::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_BigUint");
   {
     size_t memsz = factory->MemSizeForBuild(stat);
     assert(memsz < stat.sumKeyLen * 0.8);
     printf("\tcompress check done\n");
   }
-  rocksdb::TerarkZipTableOptions tableOpt;
+  TERARKDB_NAMESPACE::TerarkZipTableOptions tableOpt;
   TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
   assert(index->Name() == string("CompositeUintIndex_AllOne_AllZero"));
   printf("\tbuild done\n");
@@ -657,7 +657,7 @@ void test_allone_allzero_str(DataStored dtype) {
  * keep in mind, treat like string, compare from left to right
  */
 static void init_data_seek_short_target() {
-  rocksdb::FileWriter fwriter;
+  TERARKDB_NAMESPACE::FileWriter fwriter;
   fwriter.path = key_path;
   fwriter.open();
   keys.resize(400);
@@ -691,19 +691,19 @@ void test_data_seek_short_target_str() {
   init_data_seek_short_target();
   {
     size_t celen;
-    assert(rocksdb::TerarkIndex::SeekCostEffectiveIndexLen(stat, celen));
+    assert(TERARKDB_NAMESPACE::TerarkIndex::SeekCostEffectiveIndexLen(stat, celen));
     assert(celen == 2);
   }
   // build index
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
-  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_BigUint");
+  auto factory = TERARKDB_NAMESPACE::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_BigUint");
   {
     size_t memsz = factory->MemSizeForBuild(stat);
     assert(memsz < stat.sumKeyLen * 0.8);
     printf("\tcompress check done\n");
   }
-  rocksdb::TerarkZipTableOptions tableOpt;
+  TERARKDB_NAMESPACE::TerarkZipTableOptions tableOpt;
   TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
   //assert(index->Name() == string("CompositeUintIndex_FewZero32_AllZero"));
   assert(index->Name() == string("CompositeUintIndex_IL_256_32_AllZero"));

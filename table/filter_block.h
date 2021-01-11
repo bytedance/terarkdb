@@ -30,7 +30,7 @@
 #include "util/hash.h"
 #include "format.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 const uint64_t kNotValid = ULLONG_MAX;
 class FilterPolicy;
@@ -146,4 +146,4 @@ class FilterBlockReader {
   int level_ = -1;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

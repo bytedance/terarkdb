@@ -6,7 +6,7 @@
 
 #include "rocksdb/env.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 class HistReporterHandle {
  public:
   HistReporterHandle() = default;
@@ -62,4 +62,4 @@ class MetricsReporterFactory {
                                                   const std::string& tags,
                                                   Logger* log) = 0;
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

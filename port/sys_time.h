@@ -16,7 +16,7 @@
 
 #include <time.h>
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 namespace port {
 

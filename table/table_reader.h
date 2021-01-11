@@ -14,7 +14,7 @@
 #include "rocksdb/slice_transform.h"
 #include "table/internal_iterator.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Cache;
 class Iterator;
@@ -130,4 +130,4 @@ class TableReader {
   virtual void Close() {}
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

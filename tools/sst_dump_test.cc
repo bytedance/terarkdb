@@ -19,7 +19,7 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 const uint32_t optLength = 100;
 
@@ -40,8 +40,8 @@ static std::string MakeValue(int i) {
 
 void createSST(const std::string& file_name,
                const BlockBasedTableOptions& table_options) {
-  std::shared_ptr<rocksdb::TableFactory> tf;
-  tf.reset(new rocksdb::BlockBasedTableFactory(table_options));
+  std::shared_ptr<TERARKDB_NAMESPACE::TableFactory> tf;
+  tf.reset(new TERARKDB_NAMESPACE::BlockBasedTableFactory(table_options));
 
   std::unique_ptr<WritableFile> file;
   Env* env = Env::Default();
@@ -50,7 +50,7 @@ void createSST(const std::string& file_name,
   Options opts;
   const ImmutableCFOptions imoptions(opts);
   const MutableCFOptions moptions(opts);
-  rocksdb::InternalKeyComparator ikc(opts.comparator);
+  TERARKDB_NAMESPACE::InternalKeyComparator ikc(opts.comparator);
   std::unique_ptr<TableBuilder> tb;
 
   ASSERT_OK(env->NewWritableFile(file_name, &file, env_options));
@@ -125,7 +125,7 @@ TEST_F(SSTDumpToolTest, EmptyFilter) {
   char* usage[3];
   PopulateCommandArgs(file_path, "--command=raw", usage);
 
-  rocksdb::SSTDumpTool tool;
+  TERARKDB_NAMESPACE::SSTDumpTool tool;
   ASSERT_TRUE(!tool.Run(3, usage));
 
   cleanup(file_path);
@@ -135,14 +135,14 @@ TEST_F(SSTDumpToolTest, EmptyFilter) {
 }
 
 TEST_F(SSTDumpToolTest, FilterBlock) {
-  table_options_.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, true));
+  table_options_.filter_policy.reset(TERARKDB_NAMESPACE::NewBloomFilterPolicy(10, true));
   std::string file_path = MakeFilePath("rocksdb_sst_test.sst");
   createSST(file_path, table_options_);
 
   char* usage[3];
   PopulateCommandArgs(file_path, "--command=raw", usage);
 
-  rocksdb::SSTDumpTool tool;
+  TERARKDB_NAMESPACE::SSTDumpTool tool;
   ASSERT_TRUE(!tool.Run(3, usage));
 
   cleanup(file_path);
@@ -152,14 +152,14 @@ TEST_F(SSTDumpToolTest, FilterBlock) {
 }
 
 TEST_F(SSTDumpToolTest, FullFilterBlock) {
-  table_options_.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
+  table_options_.filter_policy.reset(TERARKDB_NAMESPACE::NewBloomFilterPolicy(10, false));
   std::string file_path = MakeFilePath("rocksdb_sst_test.sst");
   createSST(file_path, table_options_);
 
   char* usage[3];
   PopulateCommandArgs(file_path, "--command=raw", usage);
 
-  rocksdb::SSTDumpTool tool;
+  TERARKDB_NAMESPACE::SSTDumpTool tool;
   ASSERT_TRUE(!tool.Run(3, usage));
 
   cleanup(file_path);
@@ -169,14 +169,14 @@ TEST_F(SSTDumpToolTest, FullFilterBlock) {
 }
 
 TEST_F(SSTDumpToolTest, GetProperties) {
-  table_options_.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
+  table_options_.filter_policy.reset(TERARKDB_NAMESPACE::NewBloomFilterPolicy(10, false));
   std::string file_path = MakeFilePath("rocksdb_sst_test.sst");
   createSST(file_path, table_options_);
 
   char* usage[3];
   PopulateCommandArgs(file_path, "--show_properties", usage);
 
-  rocksdb::SSTDumpTool tool;
+  TERARKDB_NAMESPACE::SSTDumpTool tool;
   ASSERT_TRUE(!tool.Run(3, usage));
 
   cleanup(file_path);
@@ -186,14 +186,14 @@ TEST_F(SSTDumpToolTest, GetProperties) {
 }
 
 TEST_F(SSTDumpToolTest, CompressedSizes) {
-  table_options_.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
+  table_options_.filter_policy.reset(TERARKDB_NAMESPACE::NewBloomFilterPolicy(10, false));
   std::string file_path = MakeFilePath("rocksdb_sst_test.sst");
   createSST(file_path, table_options_);
 
   char* usage[3];
   PopulateCommandArgs(file_path, "--command=recompress", usage);
 
-  rocksdb::SSTDumpTool tool;
+  TERARKDB_NAMESPACE::SSTDumpTool tool;
   ASSERT_TRUE(!tool.Run(3, usage));
 
   cleanup(file_path);
@@ -201,7 +201,7 @@ TEST_F(SSTDumpToolTest, CompressedSizes) {
     delete[] usage[i];
   }
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

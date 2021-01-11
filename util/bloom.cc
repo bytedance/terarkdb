@@ -16,7 +16,7 @@
 #include "util/coding.h"
 #include "util/hash.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class BlockBasedFilterBlockBuilder;
 class FullFilterBlockBuilder;
@@ -375,4 +375,4 @@ const FilterPolicy* NewBloomFilterPolicy(int bits_per_key,
   return new BloomFilterPolicy(bits_per_key, use_block_based_builder);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

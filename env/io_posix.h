@@ -23,7 +23,7 @@
 #define POSIX_FADV_DONTNEED 4   /* [MC1] dont need these pages */
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 static std::string IOErrorMsg(const std::string& context,
                               const std::string& file_name) {
   if (file_name.empty()) {
@@ -258,4 +258,4 @@ class PosixDirectory : public Directory {
   int fd_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

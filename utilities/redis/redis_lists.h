@@ -16,7 +16,7 @@
 #include "redis_list_iterator.h"
 #include "redis_list_exception.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 /// The Redis functionality (see http://redis.io/commands#list)
 /// All functions may THROW a RedisListException
@@ -104,5 +104,5 @@ class RedisLists {
   std::unique_ptr<DB> db_;
 };
 
-} // namespace rocksdb
+} // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

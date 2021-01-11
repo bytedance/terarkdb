@@ -19,7 +19,7 @@
 
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 extern void MarkKeyMayExist(void* arg);
 extern bool SaveValue(void* arg, const ParsedInternalKey& parsed_key,
@@ -216,5 +216,5 @@ Status CompactedDBImpl::Open(const Options& options, const std::string& dbname,
   return s;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

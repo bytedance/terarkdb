@@ -12,7 +12,7 @@
 #include <vector>
 #include "util/coding.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 enum ColCompressionType {
   kColNoCompression,
@@ -216,4 +216,4 @@ struct KVPairColBufEncoders {
     value_checksum_buf->Finish();
   }
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

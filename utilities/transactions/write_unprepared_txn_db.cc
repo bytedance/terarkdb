@@ -13,7 +13,7 @@
 #include "rocksdb/utilities/transaction_db.h"
 #include "util/cast_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Instead of reconstructing a Transaction object, and calling rollback on it,
 // we can be more efficient with RollbackRecoveredTransaction by skipping
@@ -394,5 +394,5 @@ Status KeySetBuilder::MergeCF(uint32_t cf, const Slice& key,
   return Status::OK();
 }
 
-}  //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

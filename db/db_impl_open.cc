@@ -28,7 +28,7 @@
 #include <table/terark_zip_table.h>
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 Options SanitizeOptions(const std::string& dbname, const Options& src) {
   auto db_options = SanitizeOptions(dbname, DBOptions(src));
   ImmutableDBOptions immutable_db_options(db_options);
@@ -1407,4 +1407,4 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
   }
   return s;
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

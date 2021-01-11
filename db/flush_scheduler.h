@@ -10,7 +10,7 @@
 #include <mutex>
 #include <set>
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class ColumnFamilyData;
 
@@ -45,4 +45,4 @@ class FlushScheduler {
 #endif  // NDEBUG
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

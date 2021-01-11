@@ -24,7 +24,7 @@
 #include "table/scoped_arena_iterator.h"
 #include "util/event_logger.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct Options;
 struct FileMetaData;
@@ -90,4 +90,4 @@ extern Status BuildTable(
     const uint64_t oldest_key_time = 0,
     Env::WriteLifeTimeHint write_hint = Env::WLTH_NOT_SET);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

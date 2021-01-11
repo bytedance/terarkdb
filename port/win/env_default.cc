@@ -15,7 +15,7 @@
 #include "util/sync_point.h"
 #include "util/thread_local.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace port {
 
 // We choose not to destroy the env because joining the threads from the

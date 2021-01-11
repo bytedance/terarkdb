@@ -57,7 +57,7 @@
 #include "util/string_util.h"
 #include "util/util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // anon namespace for file-local types
 namespace {
@@ -1838,4 +1838,4 @@ size_t WriteBatchInternal::AppendedByteSize(size_t leftByteSize,
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -17,7 +17,7 @@
 #endif
 
 namespace cheapis {
-using namespace rocksdb;
+using namespace TERARKDB_NAMESPACE;
 
 constexpr char kBindAddr[] = "0.0.0.0";
 constexpr unsigned int kPort = 6379;
@@ -145,7 +145,7 @@ static void ServerCron(long *last_cron_time, long curr_time,
   }
 }
 
-int ServerMain(ServerRunner *runner, rocksdb::DBImpl *db,
+int ServerMain(ServerRunner *runner, TERARKDB_NAMESPACE::DBImpl *db,
                const std::string &path, Env *env, Logger *log) {
 #ifdef TERARKDB_ENABLE_CONSOLE
   const int el_fd = EventLoop<Client>::Open();

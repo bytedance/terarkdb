@@ -12,7 +12,7 @@
 #include "table/format.h"
 #include "util/memory_allocator.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 class BlockFetcher {
  public:
   // Read the block identified by "handle" from "file".
@@ -70,7 +70,7 @@ class BlockFetcher {
   CacheAllocationPtr compressed_buf_;
   char stack_buf_[kDefaultStackBufferSize];
   bool got_from_prefetch_buffer_ = false;
-  rocksdb::CompressionType compression_type_;
+  TERARKDB_NAMESPACE::CompressionType compression_type_;
 
   // return true if found
   bool TryGetUncompressBlockFromPersistentCache();
@@ -85,4 +85,4 @@ class BlockFetcher {
   void InsertUncompressedBlockToPersistentCacheIfNeeded();
   void CheckBlockChecksum();
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

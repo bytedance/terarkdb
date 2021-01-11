@@ -15,7 +15,7 @@
 #include "rocksdb/env.h"
 #include "utilities/util/terark_boost.hpp"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 // using boost::noncopyable;
 struct CompactionWorkerContext;
 struct CompactionWorkerResult;
@@ -55,4 +55,4 @@ class RemoteCompactionDispatcher : public CompactionDispatcher {
 extern std::shared_ptr<CompactionDispatcher> NewCommandLineCompactionDispatcher(
     std::string cmd);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

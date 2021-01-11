@@ -16,7 +16,7 @@
 
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE
 
@@ -919,4 +919,4 @@ Status CTREncryptionProvider::CreateCipherStreamFromPrefix(
 
 #endif // ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

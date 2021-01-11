@@ -35,7 +35,7 @@
 #include "table/block_based_table_factory.h"
 #include "util/compression.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 AdvancedColumnFamilyOptions::AdvancedColumnFamilyOptions() {
   assert(memtable_factory.get() != nullptr);
@@ -585,4 +585,4 @@ ReadOptions::ReadOptions(bool cksum, bool cache)
       aio_concurrency(32),
       iter_start_seqnum(0) {}
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

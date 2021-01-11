@@ -32,7 +32,7 @@
 
 #include "port/port.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 ColumnAwareEncodingReader::ColumnAwareEncodingReader(
     const std::string& file_path)
@@ -486,6 +486,6 @@ void ColumnAwareEncodingReader::GetColDeclarationsSecondary(
       true /* nullable */);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

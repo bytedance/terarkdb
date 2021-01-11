@@ -24,7 +24,7 @@
 #include "util/sst_file_manager_impl.h"
 #include "util/sync_point.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 bool DBImpl::EnoughRoomForCompaction(
     ColumnFamilyData* cfd, const std::vector<CompactionInputFiles>& inputs,
@@ -3228,4 +3228,4 @@ void DBImpl::SetSnapshotChecker(SnapshotChecker* snapshot_checker) {
   assert(!snapshot_checker_);
   snapshot_checker_.reset(snapshot_checker);
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

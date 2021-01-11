@@ -4,7 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 // This file implements the "bridge" between Java and C++ and enables
-// calling c++ rocksdb::WriteBatch methods testing from Java side.
+// calling c++ TERARKDB_NAMESPACE::WriteBatch methods testing from Java side.
 #include <memory>
 
 #include "db/memtable.h"
@@ -33,40 +33,40 @@
 jbyteArray Java_org_rocksdb_WriteBatchTest_getContents(JNIEnv* env,
                                                        jclass /*jclazz*/,
                                                        jlong jwb_handle) {
-  auto* b = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* b = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(b != nullptr);
 
   // todo: Currently the following code is directly copied from
   // db/write_bench_test.cc.  It could be implemented in java once
   // all the necessary components can be accessed via jni api.
 
-  rocksdb::InternalKeyComparator cmp(rocksdb::BytewiseComparator());
-  auto factory = std::make_shared<rocksdb::SkipListFactory>();
-  rocksdb::Options options;
-  rocksdb::WriteBufferManager wb(options.db_write_buffer_size);
+  TERARKDB_NAMESPACE::InternalKeyComparator cmp(TERARKDB_NAMESPACE::BytewiseComparator());
+  auto factory = std::make_shared<TERARKDB_NAMESPACE::SkipListFactory>();
+  TERARKDB_NAMESPACE::Options options;
+  TERARKDB_NAMESPACE::WriteBufferManager wb(options.db_write_buffer_size);
   options.memtable_factory = factory;
-  rocksdb::MemTable* mem = new rocksdb::MemTable(
-      cmp, rocksdb::ImmutableCFOptions(options),
-      rocksdb::MutableCFOptions(options), false, &wb, rocksdb::kMaxSequenceNumber,
+  TERARKDB_NAMESPACE::MemTable* mem = new TERARKDB_NAMESPACE::MemTable(
+      cmp, TERARKDB_NAMESPACE::ImmutableCFOptions(options),
+      TERARKDB_NAMESPACE::MutableCFOptions(options), false, &wb, TERARKDB_NAMESPACE::kMaxSequenceNumber,
       0 /* column_family_id */);
   mem->Ref();
   std::string state;
-  rocksdb::ColumnFamilyMemTablesDefault cf_mems_default(mem);
-  rocksdb::Status s =
-      rocksdb::WriteBatchInternal::InsertInto(b, &cf_mems_default, nullptr);
+  TERARKDB_NAMESPACE::ColumnFamilyMemTablesDefault cf_mems_default(mem);
+  TERARKDB_NAMESPACE::Status s =
+      TERARKDB_NAMESPACE::WriteBatchInternal::InsertInto(b, &cf_mems_default, nullptr);
   int count = 0;
-  rocksdb::Arena arena;
-  rocksdb::ScopedArenaIterator iter(
-      mem->NewIterator(rocksdb::ReadOptions(), &arena));
+  TERARKDB_NAMESPACE::Arena arena;
+  TERARKDB_NAMESPACE::ScopedArenaIterator iter(
+      mem->NewIterator(TERARKDB_NAMESPACE::ReadOptions(), &arena));
   for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
-    rocksdb::ParsedInternalKey ikey;
+    TERARKDB_NAMESPACE::ParsedInternalKey ikey;
     ikey.clear();
-    bool parsed = rocksdb::ParseInternalKey(iter->key(), &ikey);
+    bool parsed = TERARKDB_NAMESPACE::ParseInternalKey(iter->key(), &ikey);
     if (!parsed) {
       assert(parsed);
     }
     switch (ikey.type) {
-      case rocksdb::kTypeValue:
+      case TERARKDB_NAMESPACE::kTypeValue:
         state.append("Put(");
         state.append(ikey.user_key.ToString());
         state.append(", ");
@@ -74,7 +74,7 @@ jbyteArray Java_org_rocksdb_WriteBatchTest_getContents(JNIEnv* env,
         state.append(")");
         count++;
         break;
-      case rocksdb::kTypeMerge:
+      case TERARKDB_NAMESPACE::kTypeMerge:
         state.append("Merge(");
         state.append(ikey.user_key.ToString());
         state.append(", ");
@@ -82,19 +82,19 @@ jbyteArray Java_org_rocksdb_WriteBatchTest_getContents(JNIEnv* env,
         state.append(")");
         count++;
         break;
-      case rocksdb::kTypeDeletion:
+      case TERARKDB_NAMESPACE::kTypeDeletion:
         state.append("Delete(");
         state.append(ikey.user_key.ToString());
         state.append(")");
         count++;
         break;
-      case rocksdb::kTypeSingleDeletion:
+      case TERARKDB_NAMESPACE::kTypeSingleDeletion:
         state.append("SingleDelete(");
         state.append(ikey.user_key.ToString());
         state.append(")");
         count++;
         break;
-      case rocksdb::kTypeRangeDeletion:
+      case TERARKDB_NAMESPACE::kTypeRangeDeletion:
         state.append("DeleteRange(");
         state.append(ikey.user_key.ToString());
         state.append(", ");
@@ -102,7 +102,7 @@ jbyteArray Java_org_rocksdb_WriteBatchTest_getContents(JNIEnv* env,
         state.append(")");
         count++;
         break;
-      case rocksdb::kTypeLogData:
+      case TERARKDB_NAMESPACE::kTypeLogData:
         state.append("LogData(");
         state.append(ikey.user_key.ToString());
         state.append(")");
@@ -117,13 +117,13 @@ jbyteArray Java_org_rocksdb_WriteBatchTest_getContents(JNIEnv* env,
         break;
     }
     state.append("@");
-    state.append(rocksdb::NumberToString(ikey.sequence));
+    state.append(TERARKDB_NAMESPACE::NumberToString(ikey.sequence));
   }
   if (!s.ok()) {
     state.append(s.ToString());
-  } else if (rocksdb::WriteBatchInternal::Count(b) != count) {
+  } else if (TERARKDB_NAMESPACE::WriteBatchInternal::Count(b) != count) {
     state.append("Err:CountMismatch(expected=");
-    state.append(std::to_string(rocksdb::WriteBatchInternal::Count(b)));
+    state.append(std::to_string(TERARKDB_NAMESPACE::WriteBatchInternal::Count(b)));
     state.append(", actual=");
     state.append(std::to_string(count));
     state.append(")");
@@ -155,11 +155,11 @@ jbyteArray Java_org_rocksdb_WriteBatchTest_getContents(JNIEnv* env,
  */
 void Java_org_rocksdb_WriteBatchTestInternalHelper_setSequence(
     JNIEnv* /*env*/, jclass /*jclazz*/, jlong jwb_handle, jlong jsn) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
 
-  rocksdb::WriteBatchInternal::SetSequence(
-      wb, static_cast<rocksdb::SequenceNumber>(jsn));
+  TERARKDB_NAMESPACE::WriteBatchInternal::SetSequence(
+      wb, static_cast<TERARKDB_NAMESPACE::SequenceNumber>(jsn));
 }
 
 /*
@@ -170,10 +170,10 @@ void Java_org_rocksdb_WriteBatchTestInternalHelper_setSequence(
 jlong Java_org_rocksdb_WriteBatchTestInternalHelper_sequence(JNIEnv* /*env*/,
                                                              jclass /*jclazz*/,
                                                              jlong jwb_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
 
-  return static_cast<jlong>(rocksdb::WriteBatchInternal::Sequence(wb));
+  return static_cast<jlong>(TERARKDB_NAMESPACE::WriteBatchInternal::Sequence(wb));
 }
 
 /*
@@ -185,10 +185,10 @@ void Java_org_rocksdb_WriteBatchTestInternalHelper_append(JNIEnv* /*env*/,
                                                           jclass /*jclazz*/,
                                                           jlong jwb_handle_1,
                                                           jlong jwb_handle_2) {
-  auto* wb1 = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle_1);
+  auto* wb1 = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle_1);
   assert(wb1 != nullptr);
-  auto* wb2 = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle_2);
+  auto* wb2 = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle_2);
   assert(wb2 != nullptr);
 
-  rocksdb::WriteBatchInternal::Append(wb1, wb2);
+  TERARKDB_NAMESPACE::WriteBatchInternal::Append(wb1, wb2);
 }

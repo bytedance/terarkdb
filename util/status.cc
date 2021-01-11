@@ -15,7 +15,7 @@
 #include <cstring>
 #include "port/port.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 const char* Status::CopyState(const char* state) {
   assert(nullptr != state);
@@ -128,4 +128,4 @@ std::string Status::ToString() const {
   return result;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

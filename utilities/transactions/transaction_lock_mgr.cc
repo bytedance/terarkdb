@@ -29,7 +29,7 @@
 #include "util/thread_local.h"
 #include "utilities/transactions/pessimistic_transaction_db.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct LockInfo {
   bool exclusive;
@@ -748,5 +748,5 @@ void TransactionLockMgr::Resize(uint32_t target_size) {
   dlock_buffer_.Resize(target_size);
 }
 
-}  //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

@@ -14,7 +14,7 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/lazy_buffer.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace flink {
 
 static const std::size_t BITS_PER_BYTE = static_cast<std::size_t>(8);
@@ -190,4 +190,4 @@ static const FlinkCompactionFilter::Config DISABLED_CONFIG =
                                   std::numeric_limits<int64_t>::max(), nullptr};
 
 }  // namespace flink
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

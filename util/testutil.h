@@ -26,7 +26,7 @@
 #include "util/mutexlock.h"
 #include "util/random.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 class SequentialFile;
 class SequentialFileReader;
 
@@ -537,8 +537,8 @@ class FilterNumber : public CompactionFilter {
 
   std::string last_merge_operand_key() { return last_merge_operand_key_; }
 
-  bool Filter(int /*level*/, const rocksdb::Slice& /*key*/,
-              const rocksdb::Slice& value, std::string* /*new_value*/,
+  bool Filter(int /*level*/, const TERARKDB_NAMESPACE::Slice& /*key*/,
+              const TERARKDB_NAMESPACE::Slice& value, std::string* /*new_value*/,
               bool* /*value_changed*/) const override {
     if (value.size() == sizeof(uint64_t)) {
       return num_ == DecodeFixed64(value.data());
@@ -546,8 +546,8 @@ class FilterNumber : public CompactionFilter {
     return true;
   }
 
-  bool FilterMergeOperand(int /*level*/, const rocksdb::Slice& key,
-                          const rocksdb::Slice& value) const override {
+  bool FilterMergeOperand(int /*level*/, const TERARKDB_NAMESPACE::Slice& key,
+                          const TERARKDB_NAMESPACE::Slice& value) const override {
     last_merge_operand_key_ = key.ToString();
     if (value.size() == sizeof(uint64_t)) {
       return num_ == DecodeFixed64(value.data());
@@ -826,4 +826,4 @@ Status DestroyDir(Env* env, const std::string& dir);
 bool IsDirectIOSupported(Env* env, const std::string& dir);
 
 }  // namespace test
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

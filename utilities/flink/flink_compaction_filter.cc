@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <iostream>
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace flink {
 
 int64_t DeserializeTimestamp(const char* src, std::size_t offset) {
@@ -213,4 +213,4 @@ void FlinkCompactionFilter::SetUnexpiredListValue(const Slice& existing_value,
   }
 }
 }  // namespace flink
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

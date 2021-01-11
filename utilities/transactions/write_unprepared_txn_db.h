@@ -13,7 +13,7 @@
 #include "utilities/transactions/write_prepared_txn_db.h"
 #include "utilities/transactions/write_unprepared_txn.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class WriteUnpreparedTxn;
 
@@ -133,5 +133,5 @@ struct KeySetBuilder : public WriteBatch::Handler {
   }
 };
 
-}  //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

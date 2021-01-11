@@ -62,7 +62,7 @@ public abstract class AbstractCompactionFilterFactory<T extends AbstractCompacti
 
   /**
    * We override {@link RocksCallbackObject#disposeInternal()}
-   * as disposing of a rocksdb::AbstractCompactionFilterFactory requires
+   * as disposing of a TERARKDB_NAMESPACE::AbstractCompactionFilterFactory requires
    * a slightly different approach as it is a std::shared_ptr
    */
   @Override

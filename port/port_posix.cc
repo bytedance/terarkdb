@@ -24,7 +24,7 @@
 #include <cstdlib>
 #include "util/logging.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace port {
 
 static int PthreadCall(const char* label, int result) {
@@ -203,4 +203,4 @@ void cacheline_aligned_free(void *memblock) {
 
 
 }  // namespace port
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -12,7 +12,7 @@
 
 #include "db/compaction_picker.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 class FIFOCompactionPicker : public CompactionPicker {
  public:
   FIFOCompactionPicker(TableCache* table_cache, const EnvOptions& env_options,
@@ -50,5 +50,5 @@ class FIFOCompactionPicker : public CompactionPicker {
                                  VersionStorageInfo* version,
                                  LogBuffer* log_buffer);
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // !ROCKSDB_LITE

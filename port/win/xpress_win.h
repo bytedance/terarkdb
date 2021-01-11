@@ -11,7 +11,7 @@
 
 #include <string>
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace port {
 namespace xpress {
 

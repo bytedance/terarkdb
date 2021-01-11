@@ -99,7 +99,7 @@ std::string MaxKey;
 
 static thread_local std::mt19937_64 mt;
 std::hash<std::string> h1;
-std::string h(rocksdb::Slice key) { return std::to_string(h1(key.ToString())); }
+std::string h(TERARKDB_NAMESPACE::Slice key) { return std::to_string(h1(key.ToString())); }
 enum {
   TestIter = 1ULL << 0,
   TestTerark = 1ULL << 1,
@@ -111,21 +111,21 @@ enum {
   ReadOnly = 1ULL << 7,
   TestHash = 1ULL << 8,
 };
-class ComparatorRename : public rocksdb::Comparator {
+class ComparatorRename : public TERARKDB_NAMESPACE::Comparator {
  public:
   virtual const char *Name() const override { return n; }
 
-  virtual int Compare(const rocksdb::Slice &a,
-                      const rocksdb::Slice &b) const override {
+  virtual int Compare(const TERARKDB_NAMESPACE::Slice &a,
+                      const TERARKDB_NAMESPACE::Slice &b) const override {
     return c->Compare(a, b);
   }
 
-  virtual bool Equal(const rocksdb::Slice &a,
-                     const rocksdb::Slice &b) const override {
+  virtual bool Equal(const TERARKDB_NAMESPACE::Slice &a,
+                     const TERARKDB_NAMESPACE::Slice &b) const override {
     return c->Equal(a, b);
   }
   virtual void FindShortestSeparator(
-      std::string *start, const rocksdb::Slice &limit) const override {
+      std::string *start, const TERARKDB_NAMESPACE::Slice &limit) const override {
     c->FindShortestSeparator(start, limit);
   }
 
@@ -134,15 +134,15 @@ class ComparatorRename : public rocksdb::Comparator {
   }
 
   const char *n;
-  const rocksdb::Comparator *c;
+  const TERARKDB_NAMESPACE::Comparator *c;
 
-  ComparatorRename(const char *_n, const rocksdb::Comparator *_c)
+  ComparatorRename(const char *_n, const TERARKDB_NAMESPACE::Comparator *_c)
       : n(_n), c(_c) {}
 };
 
-class TestCompactionFilter : public rocksdb::CompactionFilter {
-  bool Filter(int /*level*/, const rocksdb::Slice &key,
-              const rocksdb::Slice &existing_value, std::string *new_value,
+class TestCompactionFilter : public TERARKDB_NAMESPACE::CompactionFilter {
+  bool Filter(int /*level*/, const TERARKDB_NAMESPACE::Slice &key,
+              const TERARKDB_NAMESPACE::Slice &existing_value, std::string *new_value,
               bool *value_changed) const override {
     assert(!existing_value.empty());
     // filter random
@@ -162,64 +162,64 @@ class TestCompactionFilter : public rocksdb::CompactionFilter {
   const char *Name() const override { return "TestCompactionFilter"; }
 };
 
-class TestMergeOperator : public rocksdb::StringAppendTESTOperator {
+class TestMergeOperator : public TERARKDB_NAMESPACE::StringAppendTESTOperator {
  public:
   // TestMergeOperator(char delim_char) :
-  // rocksdb::StringAppendOperator(delim_char) {}
+  // TERARKDB_NAMESPACE::StringAppendOperator(delim_char) {}
   TestMergeOperator(char delim_char)
-      : rocksdb::StringAppendTESTOperator(delim_char) {}
+      : TERARKDB_NAMESPACE::StringAppendTESTOperator(delim_char) {}
 
-  virtual rocksdb::Status Serialize(std::string * /*bytes*/) const override {
-    return rocksdb::Status::OK();
+  virtual TERARKDB_NAMESPACE::Status Serialize(std::string * /*bytes*/) const override {
+    return TERARKDB_NAMESPACE::Status::OK();
   }
-  virtual rocksdb::Status Deserialize(
-      const rocksdb::Slice & /*bytes*/) override {
-    return rocksdb::Status::OK();
+  virtual TERARKDB_NAMESPACE::Status Deserialize(
+      const TERARKDB_NAMESPACE::Slice & /*bytes*/) override {
+    return TERARKDB_NAMESPACE::Status::OK();
   }
 };
 
-class AsyncCompactionDispatcher : public rocksdb::RemoteCompactionDispatcher {
+class AsyncCompactionDispatcher : public TERARKDB_NAMESPACE::RemoteCompactionDispatcher {
  public:
-  class AsyncWorker : public rocksdb::RemoteCompactionDispatcher::Worker {
+  class AsyncWorker : public TERARKDB_NAMESPACE::RemoteCompactionDispatcher::Worker {
    public:
-    AsyncWorker(const rocksdb::Options &options)
-        : rocksdb::RemoteCompactionDispatcher::Worker(
-              rocksdb::EnvOptions(options), options.env) {}
+    AsyncWorker(const TERARKDB_NAMESPACE::Options &options)
+        : TERARKDB_NAMESPACE::RemoteCompactionDispatcher::Worker(
+              TERARKDB_NAMESPACE::EnvOptions(options), options.env) {}
     virtual std::string GenerateOutputFileName(size_t file_index) {
       return "worker";
     }
   };
 
-  AsyncCompactionDispatcher(rocksdb::Options options) : options_(options) {}
+  AsyncCompactionDispatcher(TERARKDB_NAMESPACE::Options options) : options_(options) {}
   virtual std::future<std::string> DoCompaction(
       const std::string data) override {
     AsyncWorker worker(options_);
     worker.DoCompaction(data);
     return std::async([]() -> std::string { return "test"; });
   }
-  rocksdb::Options options_;
+  TERARKDB_NAMESPACE::Options options_;
 };
 
 struct ReadContext {
-  rocksdb::ReadOptions ro;
+  TERARKDB_NAMESPACE::ReadOptions ro;
   uint64_t seqno;
-  std::vector<std::unique_ptr<rocksdb::Iterator>> iter;
+  std::vector<std::unique_ptr<TERARKDB_NAMESPACE::Iterator>> iter;
   size_t count = 0;
   std::string key;
-  std::vector<rocksdb::Status> ss;
-  std::vector<rocksdb::Slice> keys;
+  std::vector<TERARKDB_NAMESPACE::Status> ss;
+  std::vector<TERARKDB_NAMESPACE::Slice> keys;
   std::vector<std::string> values;
 #ifdef BOOSTLIB
   std::vector<boost::fibers::future<
-      std::tuple<rocksdb::Status, std::string, std::string>>>
+      std::tuple<TERARKDB_NAMESPACE::Status, std::string, std::string>>>
       futures;
 #else
   std::vector<
-      std::future<std::tuple<rocksdb::Status, std::string, std::string>>>
+      std::future<std::tuple<TERARKDB_NAMESPACE::Status, std::string, std::string>>>
       futures;
 #endif
   std::vector<std::string> async_values;
-  std::vector<rocksdb::Status> async_status;
+  std::vector<TERARKDB_NAMESPACE::Status> async_status;
   std::vector<std::string> multi_values;
 };
 
@@ -326,14 +326,14 @@ std::string get_value(size_t i, std::string &key) {
   value.append("#");
   value.append(str.data() + pos, str.data() + pos + size);
   value.append("#");
-  value.append(h(rocksdb::Slice(key)));
+  value.append(h(TERARKDB_NAMESPACE::Slice(key)));
   return value;
 }
 
-uint64_t get_snapshot_seqno(const rocksdb::Snapshot *s) {
+uint64_t get_snapshot_seqno(const TERARKDB_NAMESPACE::Snapshot *s) {
   return ((const uint64_t *)s)[1];
 };
 
-void set_snapshot_seqno(const rocksdb::Snapshot *s, uint64_t seqno) {
+void set_snapshot_seqno(const TERARKDB_NAMESPACE::Snapshot *s, uint64_t seqno) {
   ((uint64_t *)s)[1] = seqno;
 };

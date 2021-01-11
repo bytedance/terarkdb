@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <string>
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // How much perf stats to collect. Affects perf_context and iostats_context.
 enum PerfLevel : unsigned char {
@@ -27,4 +27,4 @@ void SetPerfLevel(PerfLevel level);
 // get current perf stats level for current thread
 PerfLevel GetPerfLevel();
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

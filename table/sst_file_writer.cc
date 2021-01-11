@@ -13,7 +13,7 @@
 #include "util/file_reader_writer.h"
 #include "util/sync_point.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 const std::string ExternalSstFilePropertyNames::kVersion =
     "rocksdb.external_sst_file.version";
@@ -311,4 +311,4 @@ uint64_t SstFileWriter::FileSize() {
 }
 #endif  // !ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

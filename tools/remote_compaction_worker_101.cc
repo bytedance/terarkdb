@@ -9,7 +9,7 @@
 #include <terark/util/linebuf.hpp>
 #include <thread>
 
-class MyWorker : public rocksdb::RemoteCompactionDispatcher::Worker {
+class MyWorker : public TERARKDB_NAMESPACE::RemoteCompactionDispatcher::Worker {
   std::string GenerateOutputFileName(size_t file_index) override {
     // make a file name
     std::ostringstream oss;
@@ -18,12 +18,12 @@ class MyWorker : public rocksdb::RemoteCompactionDispatcher::Worker {
   }
 
  public:
-  using rocksdb::RemoteCompactionDispatcher::Worker::Worker;
+  using TERARKDB_NAMESPACE::RemoteCompactionDispatcher::Worker::Worker;
 };
 
 int main() {
-  rocksdb::EnvOptions env_options;
-  MyWorker worker(env_options, rocksdb::Env::Default());
+  TERARKDB_NAMESPACE::EnvOptions env_options;
+  MyWorker worker(env_options, TERARKDB_NAMESPACE::Env::Default());
 
   // worker.RegistComparator(const Comparator*);
   // worker.RegistPrefixExtractor(std::shared_ptr<const SliceTransform>);
@@ -37,7 +37,7 @@ int main() {
 
   terark::LineBuf buf;
   buf.read_all(stdin);
-  std::cout << worker.DoCompaction(rocksdb::Slice(buf.p, buf.n));
+  std::cout << worker.DoCompaction(TERARKDB_NAMESPACE::Slice(buf.p, buf.n));
   return 0;
 }
 

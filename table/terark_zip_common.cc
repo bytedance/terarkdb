@@ -19,7 +19,7 @@
 #include <sys/types.h>
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 const char* StrDateTimeNow() {
   static thread_local char buf[64];
@@ -40,4 +40,4 @@ std::string demangle(const char* name) {
 #endif
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

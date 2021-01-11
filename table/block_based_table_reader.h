@@ -34,7 +34,7 @@
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class BlockHandle;
 class Cache;
@@ -701,4 +701,4 @@ class BlockBasedTableIterator<DataBlockIter, LazyBuffer>
   }
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

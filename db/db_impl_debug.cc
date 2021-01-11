@@ -13,7 +13,7 @@
 #include "db/error_handler.h"
 #include "monitoring/thread_status_updater.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 uint64_t DBImpl::TEST_GetLevel0TotalSize() {
   InstrumentedMutexLock l(&mutex_);
@@ -255,5 +255,5 @@ void DBImpl::TEST_WaitForTimedTaskRun(std::function<void()> callback) const {
     thread_dump_stats_->TEST_WaitForRun(callback);
   }
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // NDEBUG

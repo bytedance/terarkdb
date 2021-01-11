@@ -11,7 +11,7 @@
 #include <vector>
 #include <string>
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class DBImplReadOnly : public DBImpl {
  public:

@@ -26,7 +26,7 @@
 #include "util/stop_watch.h"
 #include "util/sync_point.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 // Without anonymous namespace here, we fail the warning -Wmissing-prototypes
 namespace {
 typedef BinaryHeap<IteratorWrapper*, MaxIteratorComparator> MergerMaxIterHeap;
@@ -432,4 +432,4 @@ InternalIterator* MergeIteratorBuilder::Finish() {
   return ret;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

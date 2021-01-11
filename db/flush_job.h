@@ -41,7 +41,7 @@
 #include "util/stop_watch.h"
 #include "util/thread_local.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class DBImpl;
 class MemTable;
@@ -144,4 +144,4 @@ class FlushJob {
   bool pick_memtable_called;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

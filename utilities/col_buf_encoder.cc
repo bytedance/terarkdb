@@ -8,7 +8,7 @@
 #include <string>
 #include "port/port.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 ColBufEncoder::~ColBufEncoder() {}
 
@@ -207,4 +207,4 @@ void VariableChunkColBufEncoder::Finish() {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

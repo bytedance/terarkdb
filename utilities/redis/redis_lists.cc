@@ -31,7 +31,7 @@
 #include "rocksdb/slice.h"
 #include "util/coding.h"
 
-namespace rocksdb
+namespace TERARKDB_NAMESPACE
 {
 
 /// Constructors
@@ -548,5 +548,5 @@ int RedisLists::Insert(const std::string& key, const std::string& pivot,
   return it.Length();
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

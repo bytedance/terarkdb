@@ -19,7 +19,7 @@
 #include "rocksdb/wal_filter.h"
 #include "util/logging.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 ImmutableDBOptions::ImmutableDBOptions() : ImmutableDBOptions(Options()) {}
 
@@ -320,4 +320,4 @@ void MutableDBOptions::Dump(Logger* log) const {
                    compaction_readahead_size);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

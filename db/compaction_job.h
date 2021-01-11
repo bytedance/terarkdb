@@ -51,7 +51,7 @@
 #include "util/stop_watch.h"
 #include "util/thread_local.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Arena;
 class ErrorHandler;
@@ -199,4 +199,4 @@ class CompactionJob {
   Env::WriteLifeTimeHint write_hint_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -6,7 +6,7 @@
 #include "port/port.h"
 #include "util/autovector.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct LIRSHandle {
   void* value;
@@ -162,4 +162,4 @@ class LIRSCache : public ShardedCache {
   int num_shards_ = 0;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

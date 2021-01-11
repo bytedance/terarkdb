@@ -34,7 +34,7 @@ static void usage(const char* prog) {
 struct KVTask : terark::PipelineTask {
     std::string key;
     std::string value;
-    rocksdb::Status status;
+    TERARKDB_NAMESPACE::Status status;
     KVTask(const char* k, size_t n) : key(k, n) {}
 };
 
@@ -56,7 +56,7 @@ int main(int argc, char* argv[]) {
   int log_level = 0;
   size_t bench_report = 0;
   size_t cnt1 = 0, cnt2 = 0;
-  rocksdb::Options opt;
+  TERARKDB_NAMESPACE::Options opt;
   opt.use_aio_reads = true;
   opt.use_direct_reads = true;
   bool quite = false;
@@ -114,9 +114,9 @@ GetoptDone:
     usage(argv[0]);
     return 1;
   }
-  rocksdb::DB* db = nullptr;
+  TERARKDB_NAMESPACE::DB* db = nullptr;
   std::string path = argv[optind];
-  rocksdb::Status s = rocksdb::DB::OpenForReadOnly(opt, path, &db);
+  TERARKDB_NAMESPACE::Status s = TERARKDB_NAMESPACE::DB::OpenForReadOnly(opt, path, &db);
   if (!s.ok()) {
     fprintf(stderr, "ERROR: Open(%s) = %s\n", path.c_str(), s.ToString().c_str());
     return 1;
@@ -147,7 +147,7 @@ GetoptDone:
   });
   pipeline | std::make_tuple(ncon, nfib, [db](PipelineTask* ptask) {
     KVTask* task = static_cast<KVTask*>(ptask);
-    rocksdb::ReadOptions rdopt;
+    TERARKDB_NAMESPACE::ReadOptions rdopt;
     task->status = db->Get(rdopt, task->key, &task->value);
     chomp(task->value);
   });

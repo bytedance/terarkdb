@@ -32,7 +32,7 @@
 #include "utilities/transactions/transaction_lock_mgr.h"
 #include "utilities/transactions/write_prepared_txn.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 #define ROCKS_LOG_DETAILS(LGR, FMT, ...) \
   ;  // due to overhead by default skip such lines
@@ -768,5 +768,5 @@ struct SubBatchCounter : public WriteBatch::Handler {
   bool WriteAfterCommit() const override { return false; }
 };
 
-}  //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

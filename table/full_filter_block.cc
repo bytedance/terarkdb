@@ -18,7 +18,7 @@
 #include "rocksdb/filter_policy.h"
 #include "util/coding.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 FullFilterBlockBuilder::FullFilterBlockBuilder(
     const SliceTransform* prefix_extractor, bool whole_key_filtering,
@@ -223,4 +223,4 @@ bool FullFilterBlockReader::IsFilterCompatible(
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

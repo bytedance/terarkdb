@@ -14,7 +14,7 @@
 #include "rocksdb/statistics.h"
 #include "rocksdb/status.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class SimCache;
 
@@ -86,4 +86,4 @@ class SimCache : public Cache {
   SimCache& operator=(const SimCache&);
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

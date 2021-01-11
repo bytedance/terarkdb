@@ -30,7 +30,7 @@
 #include "util/dynamic_bloom.h"
 #include "util/hash.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Mutex;
 template <class TValue>
@@ -494,4 +494,4 @@ class MemTable {
 
 extern const char* EncodeKey(std::string* scratch, const Slice& target);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

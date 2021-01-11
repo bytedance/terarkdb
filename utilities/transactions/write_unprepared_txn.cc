@@ -14,7 +14,7 @@
 #define __STDC_FORMAT_MACROS
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 bool WriteUnpreparedTxnReadCallback::IsVisible(SequenceNumber seq) {
   auto unprep_seqs = txn_->GetUnpreparedSequenceNumbers();
@@ -514,6 +514,6 @@ WriteUnpreparedTxn::GetUnpreparedSequenceNumbers() {
   return unprep_seqs_;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

@@ -12,7 +12,7 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class VersionBuilderTest : public testing::Test {
  public:
@@ -414,7 +414,7 @@ TEST_F(VersionBuilderTest, EstimatedActiveKeys) {
             (kEntriesPerFile - kDeletionsPerFile) * kNumFiles);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

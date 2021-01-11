@@ -8,7 +8,7 @@
 #include "db/event_helpers.h"
 #include "util/sst_file_manager_impl.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Maps to help decide the severity of an error based on the
 // BackgroundErrorReason, Code, SubCode and whether db_options.paranoid_checks

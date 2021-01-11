@@ -29,7 +29,7 @@ bool FLAGS_verbose = false;
 
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class DBIteratorStressTest : public testing::Test {
  public:
@@ -640,7 +640,7 @@ TEST_F(DBIteratorStressTest, StressTest) {
             << "\n  mutated on the fly: " << num_recently_removed << std::endl;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

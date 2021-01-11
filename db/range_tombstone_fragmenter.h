@@ -16,7 +16,7 @@
 #include "table/internal_iterator.h"
 #include "util/arena.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct FragmentedRangeTombstoneList {
  public:
@@ -253,4 +253,4 @@ class FragmentedRangeTombstoneIterator {
   mutable InternalKey current_start_key_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

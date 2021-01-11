@@ -25,7 +25,7 @@
 #include "table/block_based_table_factory.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE
 
@@ -1376,4 +1376,4 @@ const DBPropertyInfo* GetPropertyInfo(const Slice& /*property*/) {
 
 #endif  // !ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

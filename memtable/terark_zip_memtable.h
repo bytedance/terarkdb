@@ -23,7 +23,7 @@
 #include "terark/thread/instance_tls_owner.hpp"
 #include "util/arena.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Write token pairing with MainPatricia
 class MemWriterToken : public terark::Patricia::WriterToken {
@@ -312,4 +312,4 @@ class PatriciaTrieRepFactory : public MemTableRepFactory {
   virtual bool CanHandleDuplicatedKey() const override { return true; }
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

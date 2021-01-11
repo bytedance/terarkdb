@@ -19,7 +19,7 @@
 #include <windows.h>
 
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace port {
 
 std::string GetWindowsErrSz(DWORD err);

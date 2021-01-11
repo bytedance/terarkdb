@@ -19,7 +19,7 @@
 #include "util/logging.h"
 #include "utilities/util/factory.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 class BytewiseComparatorImpl : public Comparator {
@@ -226,6 +226,6 @@ TERARK_FACTORY_REGISTER_EX(ReverseBytewiseComparatorImpl,
 TERARK_FACTORY_REGISTER_EX(ReverseBytewiseComparatorImpl,
                            "rev:RocksDB_SE_v3.10", &ReverseBytewiseComparator);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
-TERARK_FACTORY_INSTANTIATE_GNS(const rocksdb::Comparator*);
+TERARK_FACTORY_INSTANTIATE_GNS(const TERARKDB_NAMESPACE::Comparator*);

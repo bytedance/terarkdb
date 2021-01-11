@@ -25,7 +25,7 @@
 #include "rocksdb/env.h"
 #include "rocksdb/status.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct BackupableDBOptions {
   // Where to keep the backup files. Has to be different than dbname_
@@ -330,5 +330,5 @@ class BackupEngine {
   virtual Status GarbageCollect() = 0;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

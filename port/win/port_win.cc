@@ -35,7 +35,7 @@
 
 #include "util/logging.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace port {
 
 #ifdef ROCKSDB_WINDOWS_UTF8_FILENAMES
@@ -208,7 +208,7 @@ int truncate(const char* path, int64_t length) {
     errno = EFAULT;
     return -1;
   }
-  return rocksdb::port::Truncate(path, length);
+  return TERARKDB_NAMESPACE::port::Truncate(path, length);
 }
 
 int Truncate(std::string path, int64_t len) {
@@ -260,4 +260,4 @@ void Crash(const std::string& srcfile, int srcline) {
 int GetMaxOpenFiles() { return -1; }
 
 }  // namespace port
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

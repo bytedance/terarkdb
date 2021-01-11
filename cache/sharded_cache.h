@@ -16,7 +16,7 @@
 #include "rocksdb/cache.h"
 #include "util/hash.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Single cache shard interface.
 class CacheShard {
@@ -100,4 +100,4 @@ class ShardedCache : public Cache {
 
 extern int GetDefaultCacheShardBits(size_t capacity);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

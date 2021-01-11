@@ -12,7 +12,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct TerarkZipTableOptions {
   // copy of DictZipBlobStore::Options::EntropyAlgo
@@ -166,6 +166,6 @@ std::shared_ptr<class TableFactory> SingleTerarkZipTableFactory(
 
 bool TerarkZipTablePrintCacheStat(const class TableFactory*, FILE*);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif /* TERARK_ZIP_TABLE_H_ */

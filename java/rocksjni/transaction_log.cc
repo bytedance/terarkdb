@@ -4,7 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 // This file implements the "bridge" between Java and C++ and enables
-// calling c++ rocksdb::Iterator methods from Java side.
+// calling c++ TERARKDB_NAMESPACE::Iterator methods from Java side.
 
 #include <jni.h>
 #include <stdio.h>
@@ -22,7 +22,7 @@
 void Java_org_rocksdb_TransactionLogIterator_disposeInternal(JNIEnv* /*env*/,
                                                              jobject /*jobj*/,
                                                              jlong handle) {
-  delete reinterpret_cast<rocksdb::TransactionLogIterator*>(handle);
+  delete reinterpret_cast<TERARKDB_NAMESPACE::TransactionLogIterator*>(handle);
 }
 
 /*
@@ -33,7 +33,7 @@ void Java_org_rocksdb_TransactionLogIterator_disposeInternal(JNIEnv* /*env*/,
 jboolean Java_org_rocksdb_TransactionLogIterator_isValid(JNIEnv* /*env*/,
                                                          jobject /*jobj*/,
                                                          jlong handle) {
-  return reinterpret_cast<rocksdb::TransactionLogIterator*>(handle)->Valid();
+  return reinterpret_cast<TERARKDB_NAMESPACE::TransactionLogIterator*>(handle)->Valid();
 }
 
 /*
@@ -44,7 +44,7 @@ jboolean Java_org_rocksdb_TransactionLogIterator_isValid(JNIEnv* /*env*/,
 void Java_org_rocksdb_TransactionLogIterator_next(JNIEnv* /*env*/,
                                                   jobject /*jobj*/,
                                                   jlong handle) {
-  reinterpret_cast<rocksdb::TransactionLogIterator*>(handle)->Next();
+  reinterpret_cast<TERARKDB_NAMESPACE::TransactionLogIterator*>(handle)->Next();
 }
 
 /*
@@ -55,10 +55,10 @@ void Java_org_rocksdb_TransactionLogIterator_next(JNIEnv* /*env*/,
 void Java_org_rocksdb_TransactionLogIterator_status(JNIEnv* env,
                                                     jobject /*jobj*/,
                                                     jlong handle) {
-  rocksdb::Status s =
-      reinterpret_cast<rocksdb::TransactionLogIterator*>(handle)->status();
+  TERARKDB_NAMESPACE::Status s =
+      reinterpret_cast<TERARKDB_NAMESPACE::TransactionLogIterator*>(handle)->status();
   if (!s.ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   }
 }
 
@@ -70,7 +70,7 @@ void Java_org_rocksdb_TransactionLogIterator_status(JNIEnv* env,
 jobject Java_org_rocksdb_TransactionLogIterator_getBatch(JNIEnv* env,
                                                          jobject /*jobj*/,
                                                          jlong handle) {
-  rocksdb::BatchResult batch_result =
-      reinterpret_cast<rocksdb::TransactionLogIterator*>(handle)->GetBatch();
-  return rocksdb::BatchResultJni::construct(env, batch_result);
+  TERARKDB_NAMESPACE::BatchResult batch_result =
+      reinterpret_cast<TERARKDB_NAMESPACE::TransactionLogIterator*>(handle)->GetBatch();
+  return TERARKDB_NAMESPACE::BatchResultJni::construct(env, batch_result);
 }

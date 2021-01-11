@@ -25,7 +25,7 @@
 #include "util/mutexlock.h"
 #include "util/random.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class TestWritableFile;
 class FaultInjectionTestEnv;
@@ -187,4 +187,4 @@ class FaultInjectionTestEnv : public EnvWrapper {
   Status error_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

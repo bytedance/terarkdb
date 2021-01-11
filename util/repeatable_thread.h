@@ -13,7 +13,7 @@
 #include "util/mock_time_env.h"
 #include "util/mutexlock.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class RepeatableThread {
  public:
@@ -150,4 +150,4 @@ class RepeatableThread {
   port::Thread thread_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

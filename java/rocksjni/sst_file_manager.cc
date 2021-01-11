@@ -4,7 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 // This file implements the "bridge" between Java and C++ and enables
-// calling C++ rocksdb::SstFileManager methods
+// calling C++ TERARKDB_NAMESPACE::SstFileManager methods
 // from Java side.
 
 #include <jni.h>
@@ -23,18 +23,18 @@ jlong Java_org_rocksdb_SstFileManager_newSstFileManager(
     JNIEnv* jnienv, jclass /*jcls*/, jlong jenv_handle, jlong jlogger_handle,
     jlong jrate_bytes, jdouble jmax_trash_db_ratio,
     jlong jmax_delete_chunk_bytes) {
-  auto* env = reinterpret_cast<rocksdb::Env*>(jenv_handle);
-  rocksdb::Status s;
-  rocksdb::SstFileManager* sst_file_manager = nullptr;
+  auto* env = reinterpret_cast<TERARKDB_NAMESPACE::Env*>(jenv_handle);
+  TERARKDB_NAMESPACE::Status s;
+  TERARKDB_NAMESPACE::SstFileManager* sst_file_manager = nullptr;
 
   if (jlogger_handle != 0) {
     auto* sptr_logger =
-        reinterpret_cast<std::shared_ptr<rocksdb::Logger>*>(jlogger_handle);
-    sst_file_manager = rocksdb::NewSstFileManager(
+        reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::Logger>*>(jlogger_handle);
+    sst_file_manager = TERARKDB_NAMESPACE::NewSstFileManager(
         env, *sptr_logger, "", jrate_bytes, true, &s, jmax_trash_db_ratio,
         jmax_delete_chunk_bytes);
   } else {
-    sst_file_manager = rocksdb::NewSstFileManager(env, nullptr, "", jrate_bytes,
+    sst_file_manager = TERARKDB_NAMESPACE::NewSstFileManager(env, nullptr, "", jrate_bytes,
                                                   true, &s, jmax_trash_db_ratio,
                                                   jmax_delete_chunk_bytes);
   }
@@ -43,10 +43,10 @@ jlong Java_org_rocksdb_SstFileManager_newSstFileManager(
     if (sst_file_manager != nullptr) {
       delete sst_file_manager;
     }
-    rocksdb::RocksDBExceptionJni::ThrowNew(jnienv, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(jnienv, s);
   }
   auto* sptr_sst_file_manager =
-      new std::shared_ptr<rocksdb::SstFileManager>(sst_file_manager);
+      new std::shared_ptr<TERARKDB_NAMESPACE::SstFileManager>(sst_file_manager);
 
   return reinterpret_cast<jlong>(sptr_sst_file_manager);
 }
@@ -60,7 +60,7 @@ void Java_org_rocksdb_SstFileManager_setMaxAllowedSpaceUsage(
     JNIEnv* /*env*/, jobject /*jobj*/, jlong jhandle,
     jlong jmax_allowed_space) {
   auto* sptr_sst_file_manager =
-      reinterpret_cast<std::shared_ptr<rocksdb::SstFileManager>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::SstFileManager>*>(jhandle);
   sptr_sst_file_manager->get()->SetMaxAllowedSpaceUsage(jmax_allowed_space);
 }
 
@@ -73,7 +73,7 @@ void Java_org_rocksdb_SstFileManager_setCompactionBufferSize(
     JNIEnv* /*env*/, jobject /*jobj*/, jlong jhandle,
     jlong jcompaction_buffer_size) {
   auto* sptr_sst_file_manager =
-      reinterpret_cast<std::shared_ptr<rocksdb::SstFileManager>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::SstFileManager>*>(jhandle);
   sptr_sst_file_manager->get()->SetCompactionBufferSize(
       jcompaction_buffer_size);
 }
@@ -86,7 +86,7 @@ void Java_org_rocksdb_SstFileManager_setCompactionBufferSize(
 jboolean Java_org_rocksdb_SstFileManager_isMaxAllowedSpaceReached(
     JNIEnv* /*env*/, jobject /*jobj*/, jlong jhandle) {
   auto* sptr_sst_file_manager =
-      reinterpret_cast<std::shared_ptr<rocksdb::SstFileManager>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::SstFileManager>*>(jhandle);
   return sptr_sst_file_manager->get()->IsMaxAllowedSpaceReached();
 }
 
@@ -99,7 +99,7 @@ jboolean
 Java_org_rocksdb_SstFileManager_isMaxAllowedSpaceReachedIncludingCompactions(
     JNIEnv* /*env*/, jobject /*jobj*/, jlong jhandle) {
   auto* sptr_sst_file_manager =
-      reinterpret_cast<std::shared_ptr<rocksdb::SstFileManager>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::SstFileManager>*>(jhandle);
   return sptr_sst_file_manager->get()
       ->IsMaxAllowedSpaceReachedIncludingCompactions();
 }
@@ -113,7 +113,7 @@ jlong Java_org_rocksdb_SstFileManager_getTotalSize(JNIEnv* /*env*/,
                                                    jobject /*jobj*/,
                                                    jlong jhandle) {
   auto* sptr_sst_file_manager =
-      reinterpret_cast<std::shared_ptr<rocksdb::SstFileManager>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::SstFileManager>*>(jhandle);
   return sptr_sst_file_manager->get()->GetTotalSize();
 }
 
@@ -126,17 +126,17 @@ jobject Java_org_rocksdb_SstFileManager_getTrackedFiles(JNIEnv* env,
                                                         jobject /*jobj*/,
                                                         jlong jhandle) {
   auto* sptr_sst_file_manager =
-      reinterpret_cast<std::shared_ptr<rocksdb::SstFileManager>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::SstFileManager>*>(jhandle);
   auto tracked_files = sptr_sst_file_manager->get()->GetTrackedFiles();
 
-  const jobject jtracked_files = rocksdb::HashMapJni::construct(
+  const jobject jtracked_files = TERARKDB_NAMESPACE::HashMapJni::construct(
       env, static_cast<uint32_t>(tracked_files.size()));
   if (jtracked_files == nullptr) {
     // exception occurred
     return nullptr;
   }
 
-  const rocksdb::HashMapJni::FnMapKV<const std::string, const uint64_t>
+  const TERARKDB_NAMESPACE::HashMapJni::FnMapKV<const std::string, const uint64_t>
       fn_map_kv =
           [env](const std::pair<const std::string, const uint64_t>& pair) {
             const jstring jtracked_file_path =
@@ -146,7 +146,7 @@ jobject Java_org_rocksdb_SstFileManager_getTrackedFiles(JNIEnv* env,
               return std::unique_ptr<std::pair<jobject, jobject>>(nullptr);
             }
             const jobject jtracked_file_size =
-                rocksdb::LongJni::valueOf(env, pair.second);
+                TERARKDB_NAMESPACE::LongJni::valueOf(env, pair.second);
             if (jtracked_file_size == nullptr) {
               // an error occurred
               return std::unique_ptr<std::pair<jobject, jobject>>(nullptr);
@@ -156,7 +156,7 @@ jobject Java_org_rocksdb_SstFileManager_getTrackedFiles(JNIEnv* env,
                                                 jtracked_file_size));
           };
 
-  if (!rocksdb::HashMapJni::putAll(env, jtracked_files, tracked_files.begin(),
+  if (!TERARKDB_NAMESPACE::HashMapJni::putAll(env, jtracked_files, tracked_files.begin(),
                                    tracked_files.end(), fn_map_kv)) {
     // exception occcurred
     return nullptr;
@@ -173,7 +173,7 @@ jobject Java_org_rocksdb_SstFileManager_getTrackedFiles(JNIEnv* env,
 jlong Java_org_rocksdb_SstFileManager_getDeleteRateBytesPerSecond(
     JNIEnv* /*env*/, jobject /*jobj*/, jlong jhandle) {
   auto* sptr_sst_file_manager =
-      reinterpret_cast<std::shared_ptr<rocksdb::SstFileManager>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::SstFileManager>*>(jhandle);
   return sptr_sst_file_manager->get()->GetDeleteRateBytesPerSecond();
 }
 
@@ -185,7 +185,7 @@ jlong Java_org_rocksdb_SstFileManager_getDeleteRateBytesPerSecond(
 void Java_org_rocksdb_SstFileManager_setDeleteRateBytesPerSecond(
     JNIEnv* /*env*/, jobject /*jobj*/, jlong jhandle, jlong jdelete_rate) {
   auto* sptr_sst_file_manager =
-      reinterpret_cast<std::shared_ptr<rocksdb::SstFileManager>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::SstFileManager>*>(jhandle);
   sptr_sst_file_manager->get()->SetDeleteRateBytesPerSecond(jdelete_rate);
 }
 
@@ -198,7 +198,7 @@ jdouble Java_org_rocksdb_SstFileManager_getMaxTrashDBRatio(JNIEnv* /*env*/,
                                                            jobject /*jobj*/,
                                                            jlong jhandle) {
   auto* sptr_sst_file_manager =
-      reinterpret_cast<std::shared_ptr<rocksdb::SstFileManager>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::SstFileManager>*>(jhandle);
   return sptr_sst_file_manager->get()->GetMaxTrashDBRatio();
 }
 
@@ -212,7 +212,7 @@ void Java_org_rocksdb_SstFileManager_setMaxTrashDBRatio(JNIEnv* /*env*/,
                                                         jlong jhandle,
                                                         jdouble jratio) {
   auto* sptr_sst_file_manager =
-      reinterpret_cast<std::shared_ptr<rocksdb::SstFileManager>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::SstFileManager>*>(jhandle);
   sptr_sst_file_manager->get()->SetMaxTrashDBRatio(jratio);
 }
 
@@ -225,6 +225,6 @@ void Java_org_rocksdb_SstFileManager_disposeInternal(JNIEnv* /*env*/,
                                                      jobject /*jobj*/,
                                                      jlong jhandle) {
   auto* sptr_sst_file_manager =
-      reinterpret_cast<std::shared_ptr<rocksdb::SstFileManager>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::SstFileManager>*>(jhandle);
   delete sptr_sst_file_manager;
 }

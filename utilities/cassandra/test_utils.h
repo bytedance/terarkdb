@@ -9,7 +9,7 @@
 #include "utilities/cassandra/format.h"
 #include "utilities/cassandra/serialize.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace cassandra {
 extern const char kData[];
 extern const char kExpiringData[];

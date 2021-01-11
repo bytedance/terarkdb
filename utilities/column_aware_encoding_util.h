@@ -15,7 +15,7 @@
 #include "options/cf_options.h"
 #include "table/block_based_table_reader.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct ColDeclaration;
 struct KVPairColDeclarations;
@@ -76,6 +76,6 @@ class ColumnAwareEncodingReader {
   std::unique_ptr<TableProperties> table_properties_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

@@ -10,7 +10,7 @@
 
 #include <functional>
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 /*
  * ThreadPool is a component that will spawn N background threads that will
@@ -54,4 +54,4 @@ class ThreadPool {
 // with `num_threads` background threads.
 extern ThreadPool* NewThreadPool(int num_threads);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

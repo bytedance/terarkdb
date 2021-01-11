@@ -11,7 +11,7 @@
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/memtablerep.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class HashSkipListRepFactory : public MemTableRepFactory {
  public:

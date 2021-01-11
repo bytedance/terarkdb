@@ -12,7 +12,7 @@
 #include "rocksdb/utilities/stackable_db.h"
 #include "rocksdb/status.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 //
 // Configurable options needed for setting up a Geo database
@@ -110,5 +110,5 @@ class GeoDB : public StackableDB {
                                     int number_of_values = INT_MAX) = 0;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

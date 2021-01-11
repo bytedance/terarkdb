@@ -29,7 +29,7 @@
 #include "util/log_buffer.h"
 #include "util/sync_point.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class InternalKeyComparator;
 class Mutex;
@@ -650,4 +650,4 @@ Status InstallMemtableAtomicFlushResults(
   return s;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

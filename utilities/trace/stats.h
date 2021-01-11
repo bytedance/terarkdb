@@ -7,7 +7,7 @@
 #include <numeric>
 #include <vector>
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 template <size_t MAX_LATENCY_US_FAST = 10 * 1000>  // 10ms
 class HistStats {
  public:
@@ -85,4 +85,4 @@ class HistStats {
   std::array<size_t, MAX_LATENCY_US_FAST> buckets_{};
   std::vector<size_t> large_nums_;
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -11,7 +11,7 @@
 #include "rocksdb/env.h"
 #include "util/filename.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 Status GetInfoLogList(DB* db, std::vector<std::string>* info_log_list) {
   uint64_t number = 0;
@@ -45,4 +45,4 @@ Status GetInfoLogList(DB* db, std::vector<std::string>* info_log_list) {
   }
   return Status::OK();
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

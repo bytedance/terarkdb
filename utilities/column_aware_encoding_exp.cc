@@ -43,7 +43,7 @@ DEFINE_bool(stat, false,
 DEFINE_string(compression_type, "kNoCompression",
               "The compression algorithm used to compress data blocks");
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class ColumnAwareEncodingExp {
  public:
@@ -141,7 +141,7 @@ class ColumnAwareEncodingExp {
   }
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   int arg_idx = ParseCommandLineFlags(&argc, &argv, true);
@@ -158,7 +158,7 @@ int main(int argc, char** argv) {
     fprintf(stderr, "Format must be 'primary' or 'secondary'\n");
     exit(1);
   }
-  rocksdb::ColumnAwareEncodingExp::Run(sst_file);
+  TERARKDB_NAMESPACE::ColumnAwareEncodingExp::Run(sst_file);
   return 0;
 }
 

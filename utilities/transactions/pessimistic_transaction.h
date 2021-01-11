@@ -28,7 +28,7 @@
 #include "utilities/transactions/transaction_base.h"
 #include "utilities/transactions/transaction_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class PessimisticTransactionDB;
 
@@ -221,6 +221,6 @@ class WriteCommittedTxn : public PessimisticTransaction {
   void operator=(const WriteCommittedTxn&);
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

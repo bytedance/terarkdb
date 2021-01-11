@@ -12,7 +12,7 @@
 #include "util/hash.h"
 #include "util/util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 uint32_t Hash(const char* data, size_t n, uint32_t seed) {
   // Similar to murmur hash
@@ -54,4 +54,4 @@ uint32_t Hash(const char* data, size_t n, uint32_t seed) {
   return h;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

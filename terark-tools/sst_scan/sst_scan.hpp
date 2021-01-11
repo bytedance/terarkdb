@@ -17,7 +17,7 @@
 #include <cstring>
 #include <iostream>
 
-using namespace rocksdb;
+using namespace TERARKDB_NAMESPACE;
 
 namespace terark {
 

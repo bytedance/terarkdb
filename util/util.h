@@ -17,7 +17,7 @@
 #endif
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 template <class T>
 void call_destructor(T* ptr) {
   ptr->~T();
@@ -27,4 +27,4 @@ template <class T, class... Args>
 void call_constructor(T* ptr, Args&&... args) {
   ::new (ptr) T(std::forward<Args>(args)...);
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -17,7 +17,7 @@ class Executor {
   virtual ~Executor() = default;
 
  public:
-  virtual void Submit(const rocksdb::autovector<nonstd::string_view>& argv,
+  virtual void Submit(const TERARKDB_NAMESPACE::autovector<nonstd::string_view>& argv,
                       Client* c, int fd) = 0;
 
   virtual void Execute(size_t n, long curr_time, EventLoop<Client>* el) = 0;
@@ -25,7 +25,7 @@ class Executor {
   virtual size_t GetTaskCount() const = 0;
 };
 
-std::unique_ptr<Executor> OpenExecutorMem(rocksdb::DBImpl* db);
+std::unique_ptr<Executor> OpenExecutorMem(TERARKDB_NAMESPACE::DBImpl* db);
 }  // namespace cheapis
 
 #endif  // CHEAPIS_EXECUTOR_H

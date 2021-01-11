@@ -45,7 +45,7 @@
 //
 // Write IO code path :
 //
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class WriteableCacheFile;
 struct BlockInfo;
@@ -290,6 +290,6 @@ class ThreadedWriter : public Writer {
   std::vector<port::Thread> threads_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif

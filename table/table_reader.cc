@@ -13,7 +13,7 @@
 #include "table/scoped_arena_iterator.h"
 #include "util/arena.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 void TableReader::RangeScan(const Slice* begin,
                             const SliceTransform* prefix_extractor, void* arg,
@@ -29,8 +29,8 @@ void TableReader::RangeScan(const Slice* begin,
 }
 
 void TableReader::UpdateMaxCoveringTombstoneSeq(
-    const rocksdb::ReadOptions& readOptions, const rocksdb::Slice& user_key,
-    rocksdb::SequenceNumber* max_covering_tombstone_seq) {
+    const TERARKDB_NAMESPACE::ReadOptions& readOptions, const TERARKDB_NAMESPACE::Slice& user_key,
+    TERARKDB_NAMESPACE::SequenceNumber* max_covering_tombstone_seq) {
   if (max_covering_tombstone_seq != nullptr &&
       !readOptions.ignore_range_deletions) {
     std::unique_ptr<FragmentedRangeTombstoneIterator> range_del_iter(
@@ -43,4 +43,4 @@ void TableReader::UpdateMaxCoveringTombstoneSeq(
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

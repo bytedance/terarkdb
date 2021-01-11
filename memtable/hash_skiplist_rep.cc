@@ -19,7 +19,7 @@
 #include "util/murmurhash.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace {
 
 class HashSkipListRep : public MemTableRep {
@@ -390,5 +390,5 @@ static MemTableRepFactory* NewHashSkipListRepFactory(
 
 ROCKSDB_REGISTER_MEM_TABLE("prefix_hash", HashSkipListRepFactory);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

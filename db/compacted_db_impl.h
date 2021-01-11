@@ -9,7 +9,7 @@
 #include <vector>
 #include <string>
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class CompactedDBImpl : public DBImpl {
  public:

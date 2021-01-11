@@ -14,7 +14,7 @@
 #include "rocksdb/table_properties.h"
 #include "util/event_logger.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class EventHelpers {
  public:
@@ -52,4 +52,4 @@ class EventHelpers {
       const FileDescriptor& fd, const TableFileCreationInfo& info);
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

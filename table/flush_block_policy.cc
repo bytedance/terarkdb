@@ -11,7 +11,7 @@
 
 #include <cassert>
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Flush block by size
 class FlushBlockBySizePolicy : public FlushBlockPolicy {
@@ -86,4 +86,4 @@ FlushBlockPolicy* FlushBlockBySizePolicyFactory::NewFlushBlockPolicy(
   return new FlushBlockBySizePolicy(size, deviation, false, data_block_builder);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

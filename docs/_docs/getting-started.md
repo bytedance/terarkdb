@@ -21,16 +21,16 @@ A rocksdb database has a name which corresponds to a file system directory. All 
 #include <assert>
 #include "rocksdb/db.h"
 
-rocksdb::DB* db;
-rocksdb::Options options;
+TERARKDB_NAMESPACE::DB* db;
+TERARKDB_NAMESPACE::Options options;
 options.create_if_missing = true;
-rocksdb::Status status =
-  rocksdb::DB::Open(options, "/tmp/testdb", &db);
+TERARKDB_NAMESPACE::Status status =
+  TERARKDB_NAMESPACE::DB::Open(options, "/tmp/testdb", &db);
 assert(status.ok());
 ...
 ```
 
-If you want to raise an error if the database already exists, add the following line before the rocksdb::DB::Open call:
+If you want to raise an error if the database already exists, add the following line before the TERARKDB_NAMESPACE::DB::Open call:
 
 ```c++
 options.error_if_exists = true;
@@ -38,11 +38,11 @@ options.error_if_exists = true;
 
 ## Status
 
-You may have noticed the `rocksdb::Status` type above. Values of this type are returned by most functions in RocksDB that may encounter
+You may have noticed the `TERARKDB_NAMESPACE::Status` type above. Values of this type are returned by most functions in RocksDB that may encounter
 an error. You can check if such a result is ok, and also print an associated error message:
 
 ```c++
-rocksdb::Status s = ...;
+TERARKDB_NAMESPACE::Status s = ...;
 if (!s.ok()) cerr << s.ToString() << endl;
 ```
 
@@ -62,9 +62,9 @@ The database provides Put, Delete, and Get methods to modify/query the database.
 
 ```c++
 std::string value;
-rocksdb::Status s = db->Get(rocksdb::ReadOptions(), key1, &value);
-if (s.ok()) s = db->Put(rocksdb::WriteOptions(), key2, value);
-if (s.ok()) s = db->Delete(rocksdb::WriteOptions(), key1);
+TERARKDB_NAMESPACE::Status s = db->Get(TERARKDB_NAMESPACE::ReadOptions(), key1, &value);
+if (s.ok()) s = db->Put(TERARKDB_NAMESPACE::WriteOptions(), key2, value);
+if (s.ok()) s = db->Delete(TERARKDB_NAMESPACE::WriteOptions(), key1);
 ```
 
 ## Further documentation

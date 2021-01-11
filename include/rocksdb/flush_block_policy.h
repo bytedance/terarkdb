@@ -8,7 +8,7 @@
 #include <string>
 #include "rocksdb/table.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Slice;
 class BlockBuilder;

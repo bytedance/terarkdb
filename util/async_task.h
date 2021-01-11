@@ -20,7 +20,7 @@
 #endif
 #include <functional>
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 template <typename T>
 class AsyncTask {
@@ -49,4 +49,4 @@ class AsyncTask {
       : promise(), future(promise.get_future()), func(std::move(f)) {}
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

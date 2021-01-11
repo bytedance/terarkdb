@@ -33,7 +33,7 @@
 #include "utilities/spatialdb/utils.h"
 #include "port/port.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace spatial {
 
 // Column families are used to store element's data and spatial indexes. We use
@@ -918,5 +918,5 @@ Status SpatialDB::Open(const SpatialDBOptions& options, const std::string& name,
 }
 
 }  // namespace spatial
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

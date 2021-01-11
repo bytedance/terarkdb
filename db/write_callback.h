@@ -7,7 +7,7 @@
 
 #include "rocksdb/status.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class DB;
 
@@ -24,4 +24,4 @@ class WriteCallback {
   virtual bool AllowWriteBatching() = 0;
 };
 
-}  //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE

@@ -9,7 +9,7 @@
 #undef FAILED
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class LDBCommandExecuteResult {
 public:

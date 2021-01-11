@@ -21,7 +21,7 @@
 // can still build
 #include <compressapi.h>
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace port {
 namespace xpress {
 

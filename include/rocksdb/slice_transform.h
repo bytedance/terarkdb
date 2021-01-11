@@ -18,7 +18,7 @@
 
 #include "utilities/util/factory.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Slice;
 
@@ -104,4 +104,4 @@ extern const SliceTransform* NewCappedPrefixTransform(size_t cap_len);
 
 extern const SliceTransform* NewNoopTransform();
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

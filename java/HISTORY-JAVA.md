@@ -34,7 +34,7 @@
 
 ## By 06/15/2014
 ### New Features
-* Added basic Java binding for rocksdb::Env such that multiple RocksDB can share the same thread pool and environment.
+* Added basic Java binding for TERARKDB_NAMESPACE::Env such that multiple RocksDB can share the same thread pool and environment.
 * Added RestoreBackupableDB
 
 ## By 05/30/2014
@@ -52,7 +52,7 @@
 ### New Features
 * Added Java binding for MultiGet.
 * Added static method RocksDB.loadLibrary(), which loads necessary library files.
-* Added Java bindings for 60+ rocksdb::Options.
+* Added Java bindings for 60+ TERARKDB_NAMESPACE::Options.
 * Added Java binding for BloomFilter.
 * Added Java binding for ReadOptions.
 * Added Java binding for memtables.
@@ -70,7 +70,7 @@
 ### New Features
 * Added Java binding for WriteOptions.
 * Added Java binding for WriteBatch, which enables batch-write.
-* Added Java binding for rocksdb::Options.
+* Added Java binding for TERARKDB_NAMESPACE::Options.
 * Added Java binding for block cache.
 * Added Java version DB Benchmark.
 

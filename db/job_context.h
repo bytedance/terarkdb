@@ -15,7 +15,7 @@
 #include "db/column_family.h"
 #include "db/log_writer.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class MemTable;
 struct SuperVersion;
@@ -246,4 +246,4 @@ struct JobContext {
   }
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

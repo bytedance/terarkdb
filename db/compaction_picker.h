@@ -22,7 +22,7 @@
 #include "rocksdb/options.h"
 #include "rocksdb/status.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Compaction;
 struct CompactionInputFiles;
@@ -384,4 +384,4 @@ CompressionOptions GetCompressionOptions(const ImmutableCFOptions& ioptions,
                                          int level,
                                          const bool enable_compression = true);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

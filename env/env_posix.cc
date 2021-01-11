@@ -81,7 +81,7 @@
 #define EXT4_SUPER_MAGIC 0xEF53
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 
@@ -1135,4 +1135,4 @@ Env* Env::Default() {
   return &default_env;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

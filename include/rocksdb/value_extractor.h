@@ -4,7 +4,7 @@
 
 #include "utilities/util/factory.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Slice;
 class Status;
@@ -42,4 +42,4 @@ class ValueExtractorFactory
   }
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

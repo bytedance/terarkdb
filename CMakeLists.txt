@@ -906,7 +906,7 @@ if(NOT WIN32 OR ROCKSDB_INSTALL_ON_WINDOWS)
   #  EXPORT RocksDBTargets
   #  COMPONENT devel
   #  DESTINATION ${package_config_destination}
-  #  NAMESPACE RocksDB::
+  #  NAMESPACE TERARKDB_NAMESPACE::
   #)
 
   install(

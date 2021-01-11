@@ -17,7 +17,7 @@ RocksDB options can be provided using a file or any string to RocksDB. The forma
 #include "rocksdb/table.h"
 #include "rocksdb/utilities/convenience.h"
 
-using namespace rocksdb;                                                                                           
+using namespace TERARKDB_NAMESPACE;                                                                                           
 
 int main(int argc, char** argv) {                                                                                  
   DB *db;

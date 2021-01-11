@@ -10,7 +10,7 @@
 #include "util/coding.h"
 #include "utilities/write_batch_with_index/write_batch_with_index_internal.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 using terark::lower_bound_0;
 using terark::MainPatricia;
@@ -385,4 +385,4 @@ const WriteBatchEntryIndexFactory* patricia_WriteBatchEntryIndexFactory(
   return &factory;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

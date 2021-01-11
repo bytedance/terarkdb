@@ -12,7 +12,7 @@
 #include "util/allocator.h"
 #include "util/arena.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 AllocTracker::AllocTracker(WriteBufferManager* write_buffer_manager)
     : write_buffer_manager_(write_buffer_manager),
@@ -59,4 +59,4 @@ void AllocTracker::FreeMem() {
     freed_ = true;
   }
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

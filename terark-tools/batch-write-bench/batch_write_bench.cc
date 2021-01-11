@@ -30,13 +30,13 @@ DEFINE_uint64(gb_per_thread, 1, "data size in GB");
 DEFINE_uint64(threads, 1, "thread count");
 DEFINE_uint64(batch_size, 64, "batch size");
 DEFINE_uint64(value_size, 16384, "batch size");
-DEFINE_int32(perf_level, rocksdb::PerfLevel::kDisable,
+DEFINE_int32(perf_level, TERARKDB_NAMESPACE::PerfLevel::kDisable,
              "Level of perf collection");
 
-void init_db_options(rocksdb::DBOptions& db_options_,  // NOLINT
+void init_db_options(TERARKDB_NAMESPACE::DBOptions& db_options_,  // NOLINT
                      const std::string& work_dir_,
-                     std::shared_ptr<rocksdb::SstFileManager> sst_file_manager_,
-                     std::shared_ptr<rocksdb::RateLimiter> rate_limiter_) {
+                     std::shared_ptr<TERARKDB_NAMESPACE::SstFileManager> sst_file_manager_,
+                     std::shared_ptr<TERARKDB_NAMESPACE::RateLimiter> rate_limiter_) {
   db_options_.create_if_missing = true;
   db_options_.create_missing_column_families = true;
 
@@ -53,22 +53,22 @@ void init_db_options(rocksdb::DBOptions& db_options_,  // NOLINT
   db_options_.delayed_write_rate = 200ULL << 20;
 
   // db_options_.avoid_unnecessary_blocking_io = true;
-  // rate_limiter_.reset(rocksdb::NewGenericRateLimiter(200ULL << 20, 1000));
+  // rate_limiter_.reset(TERARKDB_NAMESPACE::NewGenericRateLimiter(200ULL << 20, 1000));
   // db_options_.rate_limiter = rate_limiter_;
-  // sst_file_manager_.reset(rocksdb::NewSstFileManager(
-  //     rocksdb::Env::Default(), db_options_.info_log, std::string(),
+  // sst_file_manager_.reset(TERARKDB_NAMESPACE::NewSstFileManager(
+  //     TERARKDB_NAMESPACE::Env::Default(), db_options_.info_log, std::string(),
   //     200ULL << 20, true, nullptr, 1, 32 << 20));
   // db_options_.sst_file_manager = sst_file_manager_;
 
   // db_options_.max_wal_size = 512ULL << 20;
   // db_options_.max_total_wal_size = 1024ULL << 20;
 #ifdef WITH_TERARK_ZIP
-  rocksdb::TerarkZipDeleteTempFiles(work_dir_);  // call once
+  TERARKDB_NAMESPACE::TerarkZipDeleteTempFiles(work_dir_);  // call once
 #endif
-  assert(db_options_.env == rocksdb::Env::Default());
+  assert(db_options_.env == TERARKDB_NAMESPACE::Env::Default());
   std::once_flag ENV_INIT_FLAG;
   std::call_once(ENV_INIT_FLAG, [] {
-    auto env = rocksdb::Env::Default();
+    auto env = TERARKDB_NAMESPACE::Env::Default();
     int num_db_instance = 1;
     double reserve_factor = 0.3;
     // compaction线程配置
@@ -77,31 +77,31 @@ void init_db_options(rocksdb::DBOptions& db_options_,  // NOLINT
     // flush线程配置
     int num_high_pri =
         static_cast<int>((reserve_factor * num_db_instance + 1) * 6);
-    env->IncBackgroundThreadsIfNeeded(num_low_pri, rocksdb::Env::Priority::LOW);
+    env->IncBackgroundThreadsIfNeeded(num_low_pri, TERARKDB_NAMESPACE::Env::Priority::LOW);
     env->IncBackgroundThreadsIfNeeded(num_high_pri,
-                                      rocksdb::Env::Priority::HIGH);
+                                      TERARKDB_NAMESPACE::Env::Priority::HIGH);
   });
 }
 
 void init_cf_options(
-    std::vector<rocksdb::ColumnFamilyOptions>& cf_options,  // NOLINT
+    std::vector<TERARKDB_NAMESPACE::ColumnFamilyOptions>& cf_options,  // NOLINT
     const std::string& work_dir_) {
   cf_options.resize(1);
 
-  std::shared_ptr<rocksdb::TableFactory> table_factory;
+  std::shared_ptr<TERARKDB_NAMESPACE::TableFactory> table_factory;
 
-  rocksdb::BlockBasedTableOptions table_options;
-  table_options.block_cache = rocksdb::NewLRUCache(128ULL << 30, 8, false);
-  table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
+  TERARKDB_NAMESPACE::BlockBasedTableOptions table_options;
+  table_options.block_cache = TERARKDB_NAMESPACE::NewLRUCache(128ULL << 30, 8, false);
+  table_options.filter_policy.reset(TERARKDB_NAMESPACE::NewBloomFilterPolicy(10, false));
   table_options.block_size = 8ULL << 10;
   table_options.cache_index_and_filter_blocks = true;
   table_factory.reset(NewBlockBasedTableFactory(table_options));
 #ifdef WITH_TERARK_ZIP
-  rocksdb::TerarkZipTableOptions tzto{};
+  TERARKDB_NAMESPACE::TerarkZipTableOptions tzto{};
   tzto.localTempDir = work_dir_;
   tzto.indexNestLevel = 3;
   tzto.checksumLevel = 2;
-  tzto.entropyAlgo = rocksdb::TerarkZipTableOptions::kNoEntropy;
+  tzto.entropyAlgo = TERARKDB_NAMESPACE::TerarkZipTableOptions::kNoEntropy;
   tzto.terarkZipMinLevel = 0;
   tzto.debugLevel = 2;
   tzto.indexNestScale = 8;
@@ -129,20 +129,20 @@ void init_cf_options(
   tzto.optimizeCpuL3Cache = true;
   tzto.forceMetaInMemory = false;
 
-  table_factory.reset(rocksdb::NewTerarkZipTableFactory(tzto, table_factory));
+  table_factory.reset(TERARKDB_NAMESPACE::NewTerarkZipTableFactory(tzto, table_factory));
 #endif
-  auto page_cf_option = rocksdb::ColumnFamilyOptions();
+  auto page_cf_option = TERARKDB_NAMESPACE::ColumnFamilyOptions();
   page_cf_option.write_buffer_size = 256ULL << 20;
   page_cf_option.max_write_buffer_number = 100;
   page_cf_option.target_file_size_base = 128ULL << 20;
   page_cf_option.max_bytes_for_level_base =
       page_cf_option.target_file_size_base * 4;
   page_cf_option.table_factory = table_factory;
-  page_cf_option.compaction_style = rocksdb::kCompactionStyleLevel;
+  page_cf_option.compaction_style = TERARKDB_NAMESPACE::kCompactionStyleLevel;
   page_cf_option.num_levels = 6;
   page_cf_option.compaction_options_universal.allow_trivial_move = true;
   page_cf_option.level_compaction_dynamic_level_bytes = true;
-  page_cf_option.compression = rocksdb::CompressionType::kNoCompression;
+  page_cf_option.compression = TERARKDB_NAMESPACE::CompressionType::kNoCompression;
   page_cf_option.enable_lazy_compaction = true;
   page_cf_option.level0_file_num_compaction_trigger = 4;
   page_cf_option.level0_slowdown_writes_trigger = 1000;
@@ -157,21 +157,21 @@ void init_cf_options(
   cf_options[0] = page_cf_option;
 }
 
-void batch_write(rocksdb::DB* db, int record_bytes, int batch_size,
+void batch_write(TERARKDB_NAMESPACE::DB* db, int record_bytes, int batch_size,
                  size_t total_bytes) {
   int loops = total_bytes / (record_bytes * batch_size);
   printf("total write loops: %d, batch = %d * %d KB, total bytes(MB) : %zd\n",
          loops, batch_size, record_bytes >> 10, total_bytes >> 20);
 
-  SetPerfLevel(static_cast<rocksdb::PerfLevel>(FLAGS_perf_level));
-  rocksdb::get_perf_context()->EnablePerLevelPerfContext();
+  SetPerfLevel(static_cast<TERARKDB_NAMESPACE::PerfLevel>(FLAGS_perf_level));
+  TERARKDB_NAMESPACE::get_perf_context()->EnablePerLevelPerfContext();
 
   std::random_device device;
   std::mt19937 generator(device());
   std::uniform_int_distribution<int> dist(0, 25);
 
   for (int loop = 0; loop < loops; ++loop) {
-    rocksdb::WriteBatch batch;
+    TERARKDB_NAMESPACE::WriteBatch batch;
     for (size_t idx = 0; idx < batch_size; ++idx) {
       char key[16];
       char value[16 << 10];
@@ -182,24 +182,24 @@ void batch_write(rocksdb::DB* db, int record_bytes, int batch_size,
         value[i] = 'a' + dist(generator);
       }
 
-      batch.Put(rocksdb::Slice(key, 16),
-                rocksdb::Slice(value, FLAGS_value_size));
+      batch.Put(TERARKDB_NAMESPACE::Slice(key, 16),
+                TERARKDB_NAMESPACE::Slice(value, FLAGS_value_size));
     }
 
-    rocksdb::WriteOptions woptions = rocksdb::WriteOptions();
+    TERARKDB_NAMESPACE::WriteOptions woptions = TERARKDB_NAMESPACE::WriteOptions();
     woptions.sync = true;
 
-    rocksdb::get_perf_context()->Reset();
-    rocksdb::get_iostats_context()->Reset();
+    TERARKDB_NAMESPACE::get_perf_context()->Reset();
+    TERARKDB_NAMESPACE::get_iostats_context()->Reset();
     auto now = std::chrono::high_resolution_clock::now();
     auto s = db->Write(woptions, &batch);
     if (std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::high_resolution_clock::now() - now)
             .count() > 1000) {
       printf("PerfContext: %s\n",
-             rocksdb::get_perf_context()->ToString(true).c_str());
+             TERARKDB_NAMESPACE::get_perf_context()->ToString(true).c_str());
       printf("IOContext: %s\n",
-             rocksdb::get_iostats_context()->ToString(true).c_str());
+             TERARKDB_NAMESPACE::get_iostats_context()->ToString(true).c_str());
     }
     if (!s.ok()) {
       printf("write batch failed, code = %d, msg = %s\n", s.code(),
@@ -235,16 +235,16 @@ int main(int argc, char** argv) {
 
   std::string work_dir = FLAGS_db_path;
 
-  rocksdb::DB* db;
-  rocksdb::DBOptions db_options;
+  TERARKDB_NAMESPACE::DB* db;
+  TERARKDB_NAMESPACE::DBOptions db_options;
 
-  std::vector<rocksdb::ColumnFamilyOptions> cf_options;
-  std::vector<rocksdb::ColumnFamilyHandle*> cf_handles;
-  std::vector<rocksdb::ColumnFamilyDescriptor> column_families;
-  std::vector<std::string> cf_names = {rocksdb::kDefaultColumnFamilyName};
+  std::vector<TERARKDB_NAMESPACE::ColumnFamilyOptions> cf_options;
+  std::vector<TERARKDB_NAMESPACE::ColumnFamilyHandle*> cf_handles;
+  std::vector<TERARKDB_NAMESPACE::ColumnFamilyDescriptor> column_families;
+  std::vector<std::string> cf_names = {TERARKDB_NAMESPACE::kDefaultColumnFamilyName};
 
-  std::shared_ptr<rocksdb::SstFileManager> sst_file_manager;
-  std::shared_ptr<rocksdb::RateLimiter> rate_limiter;
+  std::shared_ptr<TERARKDB_NAMESPACE::SstFileManager> sst_file_manager;
+  std::shared_ptr<TERARKDB_NAMESPACE::RateLimiter> rate_limiter;
 
   init_db_options(db_options, work_dir, sst_file_manager, rate_limiter);
   init_cf_options(cf_options, work_dir);
@@ -252,11 +252,11 @@ int main(int argc, char** argv) {
   column_families.resize(1);
   for (auto i = 0; i < cf_options.size(); ++i) {
     column_families[i] =
-        rocksdb::ColumnFamilyDescriptor(cf_names[i], cf_options[i]);
+        TERARKDB_NAMESPACE::ColumnFamilyDescriptor(cf_names[i], cf_options[i]);
   }
 
   cf_handles.resize(1);
-  auto s = rocksdb::DB::Open(db_options, work_dir, column_families, &cf_handles,
+  auto s = TERARKDB_NAMESPACE::DB::Open(db_options, work_dir, column_families, &cf_handles,
                              &db);
   if (!s.ok()) {
     printf("Open db failed, code = %d, msg = %s\n", s.code(), s.getState());

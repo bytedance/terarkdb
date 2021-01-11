@@ -26,7 +26,7 @@
 #include "util/testharness.h"
 #include "utilities/persistent_cache/volatile_tier_impl.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 //
 // Unit tests for testing PersistentCacheTier
@@ -280,6 +280,6 @@ class PersistentCacheDBTest : public DBTestBase {
                const size_t max_keys, const size_t max_usecase);
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif

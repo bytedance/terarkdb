@@ -19,7 +19,7 @@
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 MetaIndexBuilder::MetaIndexBuilder()
     : meta_index_block_(new BlockBuilder(1 /* restart interval */)) {}
@@ -596,4 +596,4 @@ Status ReadMetaBlock(RandomAccessFileReader* file,
   return block_fetcher2.ReadBlockContents();
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -27,7 +27,7 @@
 #define TOSTRING(x) STRINGIFY(x)
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 enum TickersInternal : uint32_t {
   INTERNAL_TICKER_ENUM_START = TICKER_ENUM_MAX,

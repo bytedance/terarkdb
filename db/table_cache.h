@@ -26,7 +26,7 @@
 #include "table/table_reader.h"
 #include "util/iterator_cache.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Env;
 class Arena;
@@ -158,4 +158,4 @@ class TableCache {
   bool immortal_tables_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

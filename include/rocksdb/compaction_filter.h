@@ -17,7 +17,7 @@
 #include "rocksdb/status.h"
 #include "utilities/util/factory.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Slice;
 class SliceTransform;
@@ -229,4 +229,4 @@ class CompactionFilterFactory
   }
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -8,7 +8,7 @@
 #include <string>
 #include <map>
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class WriteBatch;
 
@@ -97,4 +97,4 @@ class WalFilter {
   virtual const char* Name() const = 0;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

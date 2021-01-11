@@ -9,7 +9,7 @@
 #include "rocksdb/slice.h"
 #include "util/dynamic_bloom.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 void BloomBlockBuilder::AddKeysHashes(const std::vector<uint32_t>& keys_hashes) {
   for (auto hash : keys_hashes) {
@@ -20,4 +20,4 @@ void BloomBlockBuilder::AddKeysHashes(const std::vector<uint32_t>& keys_hashes) 
 Slice BloomBlockBuilder::Finish() { return bloom_.GetRawData(); }
 
 const std::string BloomBlockBuilder::kBloomBlock = "kBloomBlock";
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

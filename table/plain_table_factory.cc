@@ -17,7 +17,7 @@
 #include "table/plain_table_reader.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 Status PlainTableFactory::NewTableReader(
     const TableReaderOptions& table_reader_options,
@@ -253,5 +253,5 @@ static TableFactory* PlainCreator(const std::string& options, Status* s) {
 
 TERARK_FACTORY_REGISTER_EX(PlainTableFactory, "PlainTable", &PlainCreator);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

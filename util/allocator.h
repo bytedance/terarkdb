@@ -15,7 +15,7 @@
 #include <cstddef>
 #include "rocksdb/write_buffer_manager.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Logger;
 
@@ -54,4 +54,4 @@ class AllocTracker {
   void operator=(const AllocTracker&);
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

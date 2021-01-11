@@ -23,7 +23,7 @@
 #include "rocksdb/status.h"
 #include "utilities/util/valvec.hpp"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE
 Status DBImpl::SuggestCompactRange(ColumnFamilyHandle* column_family,
@@ -154,4 +154,4 @@ Status DBImpl::PromoteL0(ColumnFamilyHandle* column_family, int target_level) {
 }
 #endif  // ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

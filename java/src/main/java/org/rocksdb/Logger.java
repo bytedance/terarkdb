@@ -110,7 +110,7 @@ public abstract class Logger extends RocksCallbackObject {
 
   /**
    * We override {@link RocksCallbackObject#disposeInternal()}
-   * as disposing of a rocksdb::LoggerJniCallback requires
+   * as disposing of a TERARKDB_NAMESPACE::LoggerJniCallback requires
    * a slightly different approach as it is a std::shared_ptr
    */
   @Override

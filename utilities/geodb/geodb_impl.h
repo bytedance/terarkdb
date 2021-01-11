@@ -19,7 +19,7 @@
 #include "rocksdb/env.h"
 #include "rocksdb/status.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // A specific implementation of GeoDB
 
@@ -180,6 +180,6 @@ class GeoDBImpl : public GeoDB {
   static std::string MakeQuadKeyPrefix(std::string quadkey);
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

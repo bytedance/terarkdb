@@ -9,7 +9,7 @@
 #include "utilities/cassandra/format.h"
 
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace cassandra {
 
 const char* CassandraCompactionFilter::Name() const {
@@ -50,4 +50,4 @@ CompactionFilter::Decision CassandraCompactionFilter::FilterV2(
 }
 
 }  // namespace cassandra
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -26,7 +26,7 @@
 #include "util/cast_util.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
                          const MutableDBOptions& mutable_db_options) {
@@ -1061,7 +1061,7 @@ Status ParseColumnFamilyOption(const std::string& name,
       }
       new_options->table_factory.reset(NewTerarkZipTableFactory(
           tzto,
-          std::shared_ptr<rocksdb::TableFactory>(NewBlockBasedTableFactory())));
+          std::shared_ptr<TERARKDB_NAMESPACE::TableFactory>(NewBlockBasedTableFactory())));
 #endif
     } else {
       auto iter = cf_options_type_info.find(name);
@@ -1393,7 +1393,7 @@ Status GetTableFactoryFromMap(
     }
     table_factory->reset(NewTerarkZipTableFactory(
         tzt_opt,
-        std::shared_ptr<rocksdb::TableFactory>(NewBlockBasedTableFactory())));
+        std::shared_ptr<TERARKDB_NAMESPACE::TableFactory>(NewBlockBasedTableFactory())));
     return Status::OK();
 #endif
   }
@@ -2114,4 +2114,4 @@ std::unordered_map<std::string, TerarkZipTableOptions::EntropyAlgo>
 
 #endif  // !ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

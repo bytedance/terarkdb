@@ -11,7 +11,7 @@
 
 #include <jni.h>
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
   class JniCallback {
    public:
     JniCallback(JNIEnv* env, jobject jcallback_obj);

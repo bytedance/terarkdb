@@ -11,7 +11,7 @@
 
 #include "env.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class EncryptionProvider;
 
@@ -195,6 +195,6 @@ class CTREncryptionProvider : public EncryptionProvider {
         std::unique_ptr<BlockAccessCipherStream>* result);
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // !defined(ROCKSDB_LITE)

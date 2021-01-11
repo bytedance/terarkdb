@@ -18,7 +18,7 @@
 #include "util/mutexlock.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace {
 
 using namespace stl_wrappers;
@@ -319,5 +319,5 @@ static MemTableRepFactory* NewVectorRepFactory(
 
 ROCKSDB_REGISTER_MEM_TABLE("vector", VectorRepFactory);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

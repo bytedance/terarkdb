@@ -81,7 +81,7 @@
 #define fdatasync fsync
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace port {
 
 // For use at db/file_indexer.h kLevelMaxIndex
@@ -208,4 +208,4 @@ extern void Crash(const std::string& srcfile, int srcline);
 extern int GetMaxOpenFiles();
 
 } // namespace port
-} // namespace rocksdb
+} // namespace TERARKDB_NAMESPACE

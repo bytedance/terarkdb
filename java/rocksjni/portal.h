@@ -40,7 +40,7 @@
 #undef DELETE
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Detect if jlong overflows size_t
 inline Status check_if_jlong_fits_size_t(const jlong& jvalue) {
@@ -160,7 +160,7 @@ template<class DERIVED> class JavaException : public JavaClass {
 };
 
 // The portal class for org.rocksdb.RocksDB
-class RocksDBJni : public RocksDBNativeClass<rocksdb::DB*, RocksDBJni> {
+class RocksDBJni : public RocksDBNativeClass<TERARKDB_NAMESPACE::DB*, RocksDBJni> {
  public:
   /**
    * Get the Java Class org.rocksdb.RocksDB
@@ -251,34 +251,34 @@ class SubCodeJni : public JavaClass {
     return mid;
   }
 
-  static rocksdb::Status::SubCode toCppSubCode(const jbyte jsub_code) {
+  static TERARKDB_NAMESPACE::Status::SubCode toCppSubCode(const jbyte jsub_code) {
     switch (jsub_code) {
       case 0x0:
-        return rocksdb::Status::SubCode::kNone;
+        return TERARKDB_NAMESPACE::Status::SubCode::kNone;
       case 0x1:
-        return rocksdb::Status::SubCode::kMutexTimeout;
+        return TERARKDB_NAMESPACE::Status::SubCode::kMutexTimeout;
       case 0x2:
-        return rocksdb::Status::SubCode::kLockTimeout;
+        return TERARKDB_NAMESPACE::Status::SubCode::kLockTimeout;
       case 0x3:
-        return rocksdb::Status::SubCode::kLockLimit;
+        return TERARKDB_NAMESPACE::Status::SubCode::kLockLimit;
       case 0x4:
-        return rocksdb::Status::SubCode::kNoSpace;
+        return TERARKDB_NAMESPACE::Status::SubCode::kNoSpace;
       case 0x5:
-        return rocksdb::Status::SubCode::kDeadlock;
+        return TERARKDB_NAMESPACE::Status::SubCode::kDeadlock;
       case 0x6:
-        return rocksdb::Status::SubCode::kStaleFile;
+        return TERARKDB_NAMESPACE::Status::SubCode::kStaleFile;
       case 0x7:
-        return rocksdb::Status::SubCode::kMemoryLimit;
+        return TERARKDB_NAMESPACE::Status::SubCode::kMemoryLimit;
 
       case 0x7F:
       default:
-        return rocksdb::Status::SubCode::kNone;
+        return TERARKDB_NAMESPACE::Status::SubCode::kNone;
     }
   }
 };
 
 // The portal class for org.rocksdb.Status
-class StatusJni : public RocksDBNativeClass<rocksdb::Status*, StatusJni> {
+class StatusJni : public RocksDBNativeClass<TERARKDB_NAMESPACE::Status*, StatusJni> {
  public:
   /**
    * Get the Java Class org.rocksdb.Status
@@ -358,10 +358,10 @@ class StatusJni : public RocksDBNativeClass<rocksdb::Status*, StatusJni> {
 
   /**
    * Create a new Java org.rocksdb.Status object with the same properties as
-   * the provided C++ rocksdb::Status object
+   * the provided C++ TERARKDB_NAMESPACE::Status object
    *
    * @param env A pointer to the Java environment
-   * @param status The rocksdb::Status object
+   * @param status The TERARKDB_NAMESPACE::Status object
    *
    * @return A reference to a Java org.rocksdb.Status object, or nullptr
    *     if an an exception occurs
@@ -412,36 +412,36 @@ class StatusJni : public RocksDBNativeClass<rocksdb::Status*, StatusJni> {
   }
 
   // Returns the equivalent org.rocksdb.Status.Code for the provided
-  // C++ rocksdb::Status::Code enum
-  static jbyte toJavaStatusCode(const rocksdb::Status::Code& code) {
+  // C++ TERARKDB_NAMESPACE::Status::Code enum
+  static jbyte toJavaStatusCode(const TERARKDB_NAMESPACE::Status::Code& code) {
     switch (code) {
-      case rocksdb::Status::Code::kOk:
+      case TERARKDB_NAMESPACE::Status::Code::kOk:
         return 0x0;
-      case rocksdb::Status::Code::kNotFound:
+      case TERARKDB_NAMESPACE::Status::Code::kNotFound:
         return 0x1;
-      case rocksdb::Status::Code::kCorruption:
+      case TERARKDB_NAMESPACE::Status::Code::kCorruption:
         return 0x2;
-      case rocksdb::Status::Code::kNotSupported:
+      case TERARKDB_NAMESPACE::Status::Code::kNotSupported:
         return 0x3;
-      case rocksdb::Status::Code::kInvalidArgument:
+      case TERARKDB_NAMESPACE::Status::Code::kInvalidArgument:
         return 0x4;
-      case rocksdb::Status::Code::kIOError:
+      case TERARKDB_NAMESPACE::Status::Code::kIOError:
         return 0x5;
-      case rocksdb::Status::Code::kMergeInProgress:
+      case TERARKDB_NAMESPACE::Status::Code::kMergeInProgress:
         return 0x6;
-      case rocksdb::Status::Code::kIncomplete:
+      case TERARKDB_NAMESPACE::Status::Code::kIncomplete:
         return 0x7;
-      case rocksdb::Status::Code::kShutdownInProgress:
+      case TERARKDB_NAMESPACE::Status::Code::kShutdownInProgress:
         return 0x8;
-      case rocksdb::Status::Code::kTimedOut:
+      case TERARKDB_NAMESPACE::Status::Code::kTimedOut:
         return 0x9;
-      case rocksdb::Status::Code::kAborted:
+      case TERARKDB_NAMESPACE::Status::Code::kAborted:
         return 0xA;
-      case rocksdb::Status::Code::kBusy:
+      case TERARKDB_NAMESPACE::Status::Code::kBusy:
         return 0xB;
-      case rocksdb::Status::Code::kExpired:
+      case TERARKDB_NAMESPACE::Status::Code::kExpired:
         return 0xC;
-      case rocksdb::Status::Code::kTryAgain:
+      case TERARKDB_NAMESPACE::Status::Code::kTryAgain:
         return 0xD;
       default:
         return 0x7F;  // undefined
@@ -449,32 +449,32 @@ class StatusJni : public RocksDBNativeClass<rocksdb::Status*, StatusJni> {
   }
 
   // Returns the equivalent org.rocksdb.Status.SubCode for the provided
-  // C++ rocksdb::Status::SubCode enum
-  static jbyte toJavaStatusSubCode(const rocksdb::Status::SubCode& subCode) {
+  // C++ TERARKDB_NAMESPACE::Status::SubCode enum
+  static jbyte toJavaStatusSubCode(const TERARKDB_NAMESPACE::Status::SubCode& subCode) {
     switch (subCode) {
-      case rocksdb::Status::SubCode::kNone:
+      case TERARKDB_NAMESPACE::Status::SubCode::kNone:
         return 0x0;
-      case rocksdb::Status::SubCode::kMutexTimeout:
+      case TERARKDB_NAMESPACE::Status::SubCode::kMutexTimeout:
         return 0x1;
-      case rocksdb::Status::SubCode::kLockTimeout:
+      case TERARKDB_NAMESPACE::Status::SubCode::kLockTimeout:
         return 0x2;
-      case rocksdb::Status::SubCode::kLockLimit:
+      case TERARKDB_NAMESPACE::Status::SubCode::kLockLimit:
         return 0x3;
-      case rocksdb::Status::SubCode::kNoSpace:
+      case TERARKDB_NAMESPACE::Status::SubCode::kNoSpace:
         return 0x4;
-      case rocksdb::Status::SubCode::kDeadlock:
+      case TERARKDB_NAMESPACE::Status::SubCode::kDeadlock:
         return 0x5;
-      case rocksdb::Status::SubCode::kStaleFile:
+      case TERARKDB_NAMESPACE::Status::SubCode::kStaleFile:
         return 0x6;
-      case rocksdb::Status::SubCode::kMemoryLimit:
+      case TERARKDB_NAMESPACE::Status::SubCode::kMemoryLimit:
         return 0x7;
       default:
         return 0x7F;  // undefined
     }
   }
 
-  // Returns the equivalent rocksdb::Status for the Java org.rocksdb.Status
-  static std::unique_ptr<rocksdb::Status> toCppStatus(JNIEnv* env, const jobject jstatus) {
+  // Returns the equivalent TERARKDB_NAMESPACE::Status for the Java org.rocksdb.Status
+  static std::unique_ptr<TERARKDB_NAMESPACE::Status> toCppStatus(JNIEnv* env, const jobject jstatus) {
     jmethodID mid_code = getCodeMethod(env);
     if (mid_code == nullptr) {
       // exception occurred
@@ -486,7 +486,7 @@ class StatusJni : public RocksDBNativeClass<rocksdb::Status*, StatusJni> {
       return nullptr;
     }
 
-    jmethodID mid_code_value = rocksdb::CodeJni::getValueMethod(env);
+    jmethodID mid_code_value = TERARKDB_NAMESPACE::CodeJni::getValueMethod(env);
     if (mid_code_value == nullptr) {
       // exception occurred
       return nullptr;
@@ -516,7 +516,7 @@ class StatusJni : public RocksDBNativeClass<rocksdb::Status*, StatusJni> {
 
     jbyte jsubCode_value = 0x0;  // None
     if (jsubCode != nullptr) {
-      jmethodID mid_subCode_value = rocksdb::SubCodeJni::getValueMethod(env);
+      jmethodID mid_subCode_value = TERARKDB_NAMESPACE::SubCodeJni::getValueMethod(env);
       if (mid_subCode_value == nullptr) {
         // exception occurred
         return nullptr;
@@ -548,63 +548,63 @@ class StatusJni : public RocksDBNativeClass<rocksdb::Status*, StatusJni> {
       return nullptr;
     }
 
-    std::unique_ptr<rocksdb::Status> status;
+    std::unique_ptr<TERARKDB_NAMESPACE::Status> status;
     switch (jcode_value) {
       case 0x0:
         //Ok
-        status = std::unique_ptr<rocksdb::Status>(new rocksdb::Status(rocksdb::Status::OK()));
+        status = std::unique_ptr<TERARKDB_NAMESPACE::Status>(new TERARKDB_NAMESPACE::Status(TERARKDB_NAMESPACE::Status::OK()));
         break;
       case 0x1:
         //NotFound
-        status = std::unique_ptr<rocksdb::Status>(new rocksdb::Status(rocksdb::Status::NotFound(rocksdb::SubCodeJni::toCppSubCode(jsubCode_value))));
+        status = std::unique_ptr<TERARKDB_NAMESPACE::Status>(new TERARKDB_NAMESPACE::Status(TERARKDB_NAMESPACE::Status::NotFound(TERARKDB_NAMESPACE::SubCodeJni::toCppSubCode(jsubCode_value))));
         break;
       case 0x2:
         //Corruption
-        status = std::unique_ptr<rocksdb::Status>(new rocksdb::Status(rocksdb::Status::Corruption(rocksdb::SubCodeJni::toCppSubCode(jsubCode_value))));
+        status = std::unique_ptr<TERARKDB_NAMESPACE::Status>(new TERARKDB_NAMESPACE::Status(TERARKDB_NAMESPACE::Status::Corruption(TERARKDB_NAMESPACE::SubCodeJni::toCppSubCode(jsubCode_value))));
         break;
       case 0x3:
         //NotSupported
-        status = std::unique_ptr<rocksdb::Status>(new rocksdb::Status(rocksdb::Status::NotSupported(rocksdb::SubCodeJni::toCppSubCode(jsubCode_value))));
+        status = std::unique_ptr<TERARKDB_NAMESPACE::Status>(new TERARKDB_NAMESPACE::Status(TERARKDB_NAMESPACE::Status::NotSupported(TERARKDB_NAMESPACE::SubCodeJni::toCppSubCode(jsubCode_value))));
         break;
       case 0x4:
         //InvalidArgument
-        status = std::unique_ptr<rocksdb::Status>(new rocksdb::Status(rocksdb::Status::InvalidArgument(rocksdb::SubCodeJni::toCppSubCode(jsubCode_value))));
+        status = std::unique_ptr<TERARKDB_NAMESPACE::Status>(new TERARKDB_NAMESPACE::Status(TERARKDB_NAMESPACE::Status::InvalidArgument(TERARKDB_NAMESPACE::SubCodeJni::toCppSubCode(jsubCode_value))));
         break;
       case 0x5:
         //IOError
-        status = std::unique_ptr<rocksdb::Status>(new rocksdb::Status(rocksdb::Status::IOError(rocksdb::SubCodeJni::toCppSubCode(jsubCode_value))));
+        status = std::unique_ptr<TERARKDB_NAMESPACE::Status>(new TERARKDB_NAMESPACE::Status(TERARKDB_NAMESPACE::Status::IOError(TERARKDB_NAMESPACE::SubCodeJni::toCppSubCode(jsubCode_value))));
         break;
       case 0x6:
         //MergeInProgress
-        status = std::unique_ptr<rocksdb::Status>(new rocksdb::Status(rocksdb::Status::MergeInProgress(rocksdb::SubCodeJni::toCppSubCode(jsubCode_value))));
+        status = std::unique_ptr<TERARKDB_NAMESPACE::Status>(new TERARKDB_NAMESPACE::Status(TERARKDB_NAMESPACE::Status::MergeInProgress(TERARKDB_NAMESPACE::SubCodeJni::toCppSubCode(jsubCode_value))));
         break;
       case 0x7:
         //Incomplete
-        status = std::unique_ptr<rocksdb::Status>(new rocksdb::Status(rocksdb::Status::Incomplete(rocksdb::SubCodeJni::toCppSubCode(jsubCode_value))));
+        status = std::unique_ptr<TERARKDB_NAMESPACE::Status>(new TERARKDB_NAMESPACE::Status(TERARKDB_NAMESPACE::Status::Incomplete(TERARKDB_NAMESPACE::SubCodeJni::toCppSubCode(jsubCode_value))));
         break;
       case 0x8:
         //ShutdownInProgress
-        status = std::unique_ptr<rocksdb::Status>(new rocksdb::Status(rocksdb::Status::ShutdownInProgress(rocksdb::SubCodeJni::toCppSubCode(jsubCode_value))));
+        status = std::unique_ptr<TERARKDB_NAMESPACE::Status>(new TERARKDB_NAMESPACE::Status(TERARKDB_NAMESPACE::Status::ShutdownInProgress(TERARKDB_NAMESPACE::SubCodeJni::toCppSubCode(jsubCode_value))));
         break;
       case 0x9:
         //TimedOut
-        status = std::unique_ptr<rocksdb::Status>(new rocksdb::Status(rocksdb::Status::TimedOut(rocksdb::SubCodeJni::toCppSubCode(jsubCode_value))));
+        status = std::unique_ptr<TERARKDB_NAMESPACE::Status>(new TERARKDB_NAMESPACE::Status(TERARKDB_NAMESPACE::Status::TimedOut(TERARKDB_NAMESPACE::SubCodeJni::toCppSubCode(jsubCode_value))));
         break;
       case 0xA:
         //Aborted
-        status = std::unique_ptr<rocksdb::Status>(new rocksdb::Status(rocksdb::Status::Aborted(rocksdb::SubCodeJni::toCppSubCode(jsubCode_value))));
+        status = std::unique_ptr<TERARKDB_NAMESPACE::Status>(new TERARKDB_NAMESPACE::Status(TERARKDB_NAMESPACE::Status::Aborted(TERARKDB_NAMESPACE::SubCodeJni::toCppSubCode(jsubCode_value))));
         break;
       case 0xB:
         //Busy
-        status = std::unique_ptr<rocksdb::Status>(new rocksdb::Status(rocksdb::Status::Busy(rocksdb::SubCodeJni::toCppSubCode(jsubCode_value))));
+        status = std::unique_ptr<TERARKDB_NAMESPACE::Status>(new TERARKDB_NAMESPACE::Status(TERARKDB_NAMESPACE::Status::Busy(TERARKDB_NAMESPACE::SubCodeJni::toCppSubCode(jsubCode_value))));
         break;
       case 0xC:
         //Expired
-        status = std::unique_ptr<rocksdb::Status>(new rocksdb::Status(rocksdb::Status::Expired(rocksdb::SubCodeJni::toCppSubCode(jsubCode_value))));
+        status = std::unique_ptr<TERARKDB_NAMESPACE::Status>(new TERARKDB_NAMESPACE::Status(TERARKDB_NAMESPACE::Status::Expired(TERARKDB_NAMESPACE::SubCodeJni::toCppSubCode(jsubCode_value))));
         break;
       case 0xD:
         //TryAgain
-        status = std::unique_ptr<rocksdb::Status>(new rocksdb::Status(rocksdb::Status::TryAgain(rocksdb::SubCodeJni::toCppSubCode(jsubCode_value))));
+        status = std::unique_ptr<TERARKDB_NAMESPACE::Status>(new TERARKDB_NAMESPACE::Status(TERARKDB_NAMESPACE::Status::TryAgain(TERARKDB_NAMESPACE::SubCodeJni::toCppSubCode(jsubCode_value))));
         break;
       case 0x7F:
       default:
@@ -666,7 +666,7 @@ class RocksDBExceptionJni :
    * @return true if an exception was thrown, false otherwise
    */
   static bool ThrowNew(JNIEnv* env, std::unique_ptr<Status>& s) {
-    return rocksdb::RocksDBExceptionJni::ThrowNew(env, *(s.get()));
+    return TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, *(s.get()));
   }
 
   /**
@@ -867,7 +867,7 @@ class RocksDBExceptionJni :
     return mid;
   }
 
-  static std::unique_ptr<rocksdb::Status> toCppStatus(
+  static std::unique_ptr<TERARKDB_NAMESPACE::Status> toCppStatus(
       JNIEnv* env, jthrowable jrocksdb_exception) {
     if(!env->IsInstanceOf(jrocksdb_exception, getJClass(env))) {
       // not an instance of RocksDBException
@@ -891,7 +891,7 @@ class RocksDBExceptionJni :
       return nullptr;   // no status available
     }
 
-    return rocksdb::StatusJni::toCppStatus(env, jstatus);
+    return TERARKDB_NAMESPACE::StatusJni::toCppStatus(env, jstatus);
   }
 };
 
@@ -943,7 +943,7 @@ class IllegalArgumentExceptionJni :
 
 // The portal class for org.rocksdb.Options
 class OptionsJni : public RocksDBNativeClass<
-    rocksdb::Options*, OptionsJni> {
+    TERARKDB_NAMESPACE::Options*, OptionsJni> {
  public:
   /**
    * Get the Java Class org.rocksdb.Options
@@ -961,7 +961,7 @@ class OptionsJni : public RocksDBNativeClass<
 
 // The portal class for org.rocksdb.DBOptions
 class DBOptionsJni : public RocksDBNativeClass<
-    rocksdb::DBOptions*, DBOptionsJni> {
+    TERARKDB_NAMESPACE::DBOptions*, DBOptionsJni> {
  public:
   /**
    * Get the Java Class org.rocksdb.DBOptions
@@ -979,7 +979,7 @@ class DBOptionsJni : public RocksDBNativeClass<
 
 // The portal class for org.rocksdb.ColumnFamilyOptions
 class ColumnFamilyOptionsJni
-    : public RocksDBNativeClass<rocksdb::ColumnFamilyOptions*,
+    : public RocksDBNativeClass<TERARKDB_NAMESPACE::ColumnFamilyOptions*,
                                 ColumnFamilyOptionsJni> {
  public:
   /**
@@ -998,16 +998,16 @@ class ColumnFamilyOptionsJni
 
   /**
    * Create a new Java org.rocksdb.ColumnFamilyOptions object with the same
-   * properties as the provided C++ rocksdb::ColumnFamilyOptions object
+   * properties as the provided C++ TERARKDB_NAMESPACE::ColumnFamilyOptions object
    *
    * @param env A pointer to the Java environment
-   * @param cfoptions A pointer to rocksdb::ColumnFamilyOptions object
+   * @param cfoptions A pointer to TERARKDB_NAMESPACE::ColumnFamilyOptions object
    *
    * @return A reference to a Java org.rocksdb.ColumnFamilyOptions object, or
    * nullptr if an an exception occurs
    */
   static jobject construct(JNIEnv* env, const ColumnFamilyOptions* cfoptions) {
-    auto* cfo = new rocksdb::ColumnFamilyOptions(*cfoptions);
+    auto* cfo = new TERARKDB_NAMESPACE::ColumnFamilyOptions(*cfoptions);
     jclass jclazz = getJClass(env);
     if(jclazz == nullptr) {
       // exception occurred accessing class
@@ -1031,7 +1031,7 @@ class ColumnFamilyOptionsJni
 
 // The portal class for org.rocksdb.WriteOptions
 class WriteOptionsJni : public RocksDBNativeClass<
-    rocksdb::WriteOptions*, WriteOptionsJni> {
+    TERARKDB_NAMESPACE::WriteOptions*, WriteOptionsJni> {
  public:
   /**
    * Get the Java Class org.rocksdb.WriteOptions
@@ -1049,7 +1049,7 @@ class WriteOptionsJni : public RocksDBNativeClass<
 
 // The portal class for org.rocksdb.ReadOptions
 class ReadOptionsJni : public RocksDBNativeClass<
-    rocksdb::ReadOptions*, ReadOptionsJni> {
+    TERARKDB_NAMESPACE::ReadOptions*, ReadOptionsJni> {
  public:
   /**
    * Get the Java Class org.rocksdb.ReadOptions
@@ -1067,7 +1067,7 @@ class ReadOptionsJni : public RocksDBNativeClass<
 
 // The portal class for org.rocksdb.WriteBatch
 class WriteBatchJni : public RocksDBNativeClass<
-    rocksdb::WriteBatch*, WriteBatchJni> {
+    TERARKDB_NAMESPACE::WriteBatch*, WriteBatchJni> {
  public:
   /**
    * Get the Java Class org.rocksdb.WriteBatch
@@ -1086,7 +1086,7 @@ class WriteBatchJni : public RocksDBNativeClass<
    * Create a new Java org.rocksdb.WriteBatch object
    *
    * @param env A pointer to the Java environment
-   * @param wb A pointer to rocksdb::WriteBatch object
+   * @param wb A pointer to TERARKDB_NAMESPACE::WriteBatch object
    *
    * @return A reference to a Java org.rocksdb.WriteBatch object, or
    * nullptr if an an exception occurs
@@ -1115,7 +1115,7 @@ class WriteBatchJni : public RocksDBNativeClass<
 
 // The portal class for org.rocksdb.WriteBatch.Handler
 class WriteBatchHandlerJni : public RocksDBNativeClass<
-    const rocksdb::WriteBatchHandlerJniCallback*,
+    const TERARKDB_NAMESPACE::WriteBatchHandlerJniCallback*,
     WriteBatchHandlerJni> {
  public:
   /**
@@ -1533,7 +1533,7 @@ class WriteBatchSavePointJni : public JavaClass {
    * Create a new Java org.rocksdb.WriteBatch.SavePoint object
    *
    * @param env A pointer to the Java environment
-   * @param savePoint A pointer to rocksdb::WriteBatch::SavePoint object
+   * @param savePoint A pointer to TERARKDB_NAMESPACE::WriteBatch::SavePoint object
    *
    * @return A reference to a Java org.rocksdb.WriteBatch.SavePoint object, or
    * nullptr if an an exception occurs
@@ -1565,7 +1565,7 @@ class WriteBatchSavePointJni : public JavaClass {
 
 // The portal class for org.rocksdb.WriteBatchWithIndex
 class WriteBatchWithIndexJni : public RocksDBNativeClass<
-    rocksdb::WriteBatchWithIndex*, WriteBatchWithIndexJni> {
+    TERARKDB_NAMESPACE::WriteBatchWithIndex*, WriteBatchWithIndexJni> {
  public:
   /**
    * Get the Java Class org.rocksdb.WriteBatchWithIndex
@@ -1621,7 +1621,7 @@ class HistogramDataJni : public JavaClass {
 
 // The portal class for org.rocksdb.BackupableDBOptions
 class BackupableDBOptionsJni : public RocksDBNativeClass<
-    rocksdb::BackupableDBOptions*, BackupableDBOptionsJni> {
+    TERARKDB_NAMESPACE::BackupableDBOptions*, BackupableDBOptionsJni> {
  public:
   /**
    * Get the Java Class org.rocksdb.BackupableDBOptions
@@ -1640,7 +1640,7 @@ class BackupableDBOptionsJni : public RocksDBNativeClass<
 
 // The portal class for org.rocksdb.BackupEngine
 class BackupEngineJni : public RocksDBNativeClass<
-    rocksdb::BackupEngine*, BackupEngineJni> {
+    TERARKDB_NAMESPACE::BackupEngine*, BackupEngineJni> {
  public:
   /**
    * Get the Java Class org.rocksdb.BackupableEngine
@@ -1658,7 +1658,7 @@ class BackupEngineJni : public RocksDBNativeClass<
 
 // The portal class for org.rocksdb.RocksIterator
 class IteratorJni : public RocksDBNativeClass<
-    rocksdb::Iterator*, IteratorJni> {
+    TERARKDB_NAMESPACE::Iterator*, IteratorJni> {
  public:
   /**
    * Get the Java Class org.rocksdb.RocksIterator
@@ -1676,7 +1676,7 @@ class IteratorJni : public RocksDBNativeClass<
 
 // The portal class for org.rocksdb.Filter
 class FilterJni : public RocksDBNativeClass<
-    std::shared_ptr<rocksdb::FilterPolicy>*, FilterJni> {
+    std::shared_ptr<TERARKDB_NAMESPACE::FilterPolicy>*, FilterJni> {
  public:
   /**
    * Get the Java Class org.rocksdb.Filter
@@ -1694,7 +1694,7 @@ class FilterJni : public RocksDBNativeClass<
 
 // The portal class for org.rocksdb.ColumnFamilyHandle
 class ColumnFamilyHandleJni : public RocksDBNativeClass<
-    rocksdb::ColumnFamilyHandle*, ColumnFamilyHandleJni> {
+    TERARKDB_NAMESPACE::ColumnFamilyHandle*, ColumnFamilyHandleJni> {
  public:
   /**
    * Get the Java Class org.rocksdb.ColumnFamilyHandle
@@ -1713,7 +1713,7 @@ class ColumnFamilyHandleJni : public RocksDBNativeClass<
 
 // The portal class for org.rocksdb.FlushOptions
 class FlushOptionsJni : public RocksDBNativeClass<
-    rocksdb::FlushOptions*, FlushOptionsJni> {
+    TERARKDB_NAMESPACE::FlushOptions*, FlushOptionsJni> {
  public:
   /**
    * Get the Java Class org.rocksdb.FlushOptions
@@ -1731,7 +1731,7 @@ class FlushOptionsJni : public RocksDBNativeClass<
 
 // The portal class for org.rocksdb.ComparatorOptions
 class ComparatorOptionsJni : public RocksDBNativeClass<
-    rocksdb::ComparatorJniCallbackOptions*, ComparatorOptionsJni> {
+    TERARKDB_NAMESPACE::ComparatorJniCallbackOptions*, ComparatorOptionsJni> {
  public:
   /**
    * Get the Java Class org.rocksdb.ComparatorOptions
@@ -1749,7 +1749,7 @@ class ComparatorOptionsJni : public RocksDBNativeClass<
 
 // The portal class for org.rocksdb.AbstractCompactionFilterFactory
 class AbstractCompactionFilterFactoryJni : public RocksDBNativeClass<
-    const rocksdb::CompactionFilterFactoryJniCallback*,
+    const TERARKDB_NAMESPACE::CompactionFilterFactoryJniCallback*,
     AbstractCompactionFilterFactoryJni> {
  public:
   /**
@@ -1812,7 +1812,7 @@ class AbstractCompactionFilterFactoryJni : public RocksDBNativeClass<
 
 // The portal class for org.rocksdb.AbstractTransactionNotifier
 class AbstractTransactionNotifierJni : public RocksDBNativeClass<
-    const rocksdb::TransactionNotifierJniCallback*,
+    const TERARKDB_NAMESPACE::TransactionNotifierJniCallback*,
     AbstractTransactionNotifierJni> {
  public:
   static jclass getJClass(JNIEnv* env) {
@@ -1837,7 +1837,7 @@ class AbstractTransactionNotifierJni : public RocksDBNativeClass<
 
 // The portal class for org.rocksdb.AbstractComparator
 class AbstractComparatorJni : public RocksDBNativeClass<
-    const rocksdb::BaseComparatorJniCallback*,
+    const TERARKDB_NAMESPACE::BaseComparatorJniCallback*,
     AbstractComparatorJni> {
  public:
   /**
@@ -1944,7 +1944,7 @@ class AbstractComparatorJni : public RocksDBNativeClass<
 
 // The portal class for org.rocksdb.AbstractSlice
 class AbstractSliceJni : public NativeRocksMutableObject<
-    const rocksdb::Slice*, AbstractSliceJni> {
+    const TERARKDB_NAMESPACE::Slice*, AbstractSliceJni> {
  public:
   /**
    * Get the Java Class org.rocksdb.AbstractSlice
@@ -1962,7 +1962,7 @@ class AbstractSliceJni : public NativeRocksMutableObject<
 
 // The portal class for org.rocksdb.Slice
 class SliceJni : public NativeRocksMutableObject<
-    const rocksdb::Slice*, AbstractSliceJni> {
+    const TERARKDB_NAMESPACE::Slice*, AbstractSliceJni> {
  public:
   /**
    * Get the Java Class org.rocksdb.Slice
@@ -2009,7 +2009,7 @@ class SliceJni : public NativeRocksMutableObject<
 
 // The portal class for org.rocksdb.DirectSlice
 class DirectSliceJni : public NativeRocksMutableObject<
-    const rocksdb::Slice*, AbstractSliceJni> {
+    const TERARKDB_NAMESPACE::Slice*, AbstractSliceJni> {
  public:
   /**
    * Get the Java Class org.rocksdb.DirectSlice
@@ -2454,19 +2454,19 @@ class BackupInfoListJni {
    */
   static jobject getBackupInfo(JNIEnv* env,
       std::vector<BackupInfo> backup_infos) {
-    jclass jarray_list_clazz = rocksdb::ListJni::getArrayListClass(env);
+    jclass jarray_list_clazz = TERARKDB_NAMESPACE::ListJni::getArrayListClass(env);
     if(jarray_list_clazz == nullptr) {
       // exception occurred accessing class
       return nullptr;
     }
 
-    jmethodID cstr_mid = rocksdb::ListJni::getArrayListConstructorMethodId(env);
+    jmethodID cstr_mid = TERARKDB_NAMESPACE::ListJni::getArrayListConstructorMethodId(env);
     if(cstr_mid == nullptr) {
       // exception occurred accessing method
       return nullptr;
     }
 
-    jmethodID add_mid = rocksdb::ListJni::getListAddMethodId(env);
+    jmethodID add_mid = TERARKDB_NAMESPACE::ListJni::getListAddMethodId(env);
     if(add_mid == nullptr) {
       // exception occurred accessing method
       return nullptr;
@@ -2485,7 +2485,7 @@ class BackupInfoListJni {
     for (auto it = backup_infos.begin(); it != end; ++it) {
       auto backup_info = *it;
 
-      jobject obj = rocksdb::BackupInfoJni::construct0(
+      jobject obj = TERARKDB_NAMESPACE::BackupInfoJni::construct0(
           env, backup_info.backup_id, backup_info.timestamp, backup_info.size,
           backup_info.number_files, backup_info.app_metadata);
       if(env->ExceptionCheck()) {
@@ -2631,22 +2631,22 @@ class WriteTypeJni : public JavaClass {
   }
 
   // Returns the equivalent org.rocksdb.WBWIRocksIterator.WriteType for the
-  // provided C++ rocksdb::WriteType enum
-  static jbyte toJavaWriteType(const rocksdb::WriteType& writeType) {
+  // provided C++ TERARKDB_NAMESPACE::WriteType enum
+  static jbyte toJavaWriteType(const TERARKDB_NAMESPACE::WriteType& writeType) {
     switch (writeType) {
-      case rocksdb::WriteType::kPutRecord:
+      case TERARKDB_NAMESPACE::WriteType::kPutRecord:
         return 0x0;
-      case rocksdb::WriteType::kMergeRecord:
+      case TERARKDB_NAMESPACE::WriteType::kMergeRecord:
         return 0x1;
-      case rocksdb::WriteType::kDeleteRecord:
+      case TERARKDB_NAMESPACE::WriteType::kDeleteRecord:
         return 0x2;
-      case rocksdb::WriteType::kSingleDeleteRecord:
+      case TERARKDB_NAMESPACE::WriteType::kSingleDeleteRecord:
         return 0x3;
-      case rocksdb::WriteType::kDeleteRangeRecord:
+      case TERARKDB_NAMESPACE::WriteType::kDeleteRangeRecord:
         return 0x4;
-      case rocksdb::WriteType::kLogDataRecord:
+      case TERARKDB_NAMESPACE::WriteType::kLogDataRecord:
         return 0x5;
-      case rocksdb::WriteType::kXIDRecord:
+      case TERARKDB_NAMESPACE::WriteType::kXIDRecord:
         return 0x6;
       default:
         return 0x7F;  // undefined
@@ -2838,7 +2838,7 @@ class InfoLogLevelJni : public JavaClass {
 
 // The portal class for org.rocksdb.Logger
 class LoggerJni : public RocksDBNativeClass<
-    std::shared_ptr<rocksdb::LoggerJniCallback>*, LoggerJni> {
+    std::shared_ptr<TERARKDB_NAMESPACE::LoggerJniCallback>*, LoggerJni> {
  public:
   /**
    * Get the Java Class org/rocksdb/Logger
@@ -2895,17 +2895,17 @@ class BatchResultJni : public JavaClass {
 
   /**
    * Create a new Java org.rocksdb.TransactionLogIterator.BatchResult object
-   * with the same properties as the provided C++ rocksdb::BatchResult object
+   * with the same properties as the provided C++ TERARKDB_NAMESPACE::BatchResult object
    *
    * @param env A pointer to the Java environment
-   * @param batch_result The rocksdb::BatchResult object
+   * @param batch_result The TERARKDB_NAMESPACE::BatchResult object
    *
    * @return A reference to a Java
    *     org.rocksdb.TransactionLogIterator.BatchResult object,
    *     or nullptr if an an exception occurs
    */
   static jobject construct(JNIEnv* env,
-      rocksdb::BatchResult& batch_result) {
+      TERARKDB_NAMESPACE::BatchResult& batch_result) {
     jclass jclazz = getJClass(env);
     if(jclazz == nullptr) {
       // exception occurred accessing class
@@ -2935,35 +2935,35 @@ class BatchResultJni : public JavaClass {
 class BottommostLevelCompactionJni {
  public:
   // Returns the equivalent org.rocksdb.BottommostLevelCompaction for the provided
-  // C++ rocksdb::BottommostLevelCompaction enum
+  // C++ TERARKDB_NAMESPACE::BottommostLevelCompaction enum
   static jint toJavaBottommostLevelCompaction(
-      const rocksdb::BottommostLevelCompaction& bottommost_level_compaction) {
+      const TERARKDB_NAMESPACE::BottommostLevelCompaction& bottommost_level_compaction) {
     switch(bottommost_level_compaction) {
-      case rocksdb::BottommostLevelCompaction::kSkip:
+      case TERARKDB_NAMESPACE::BottommostLevelCompaction::kSkip:
         return 0x0;
-      case rocksdb::BottommostLevelCompaction::kIfHaveCompactionFilter:
+      case TERARKDB_NAMESPACE::BottommostLevelCompaction::kIfHaveCompactionFilter:
         return 0x1;
-      case rocksdb::BottommostLevelCompaction::kForce:
+      case TERARKDB_NAMESPACE::BottommostLevelCompaction::kForce:
         return 0x2;
       default:
         return 0x7F;  // undefined
     }
   }
 
-  // Returns the equivalent C++ rocksdb::BottommostLevelCompaction enum for the
+  // Returns the equivalent C++ TERARKDB_NAMESPACE::BottommostLevelCompaction enum for the
   // provided Java org.rocksdb.BottommostLevelCompaction
-  static rocksdb::BottommostLevelCompaction toCppBottommostLevelCompaction(
+  static TERARKDB_NAMESPACE::BottommostLevelCompaction toCppBottommostLevelCompaction(
       jint bottommost_level_compaction) {
     switch(bottommost_level_compaction) {
       case 0x0:
-        return rocksdb::BottommostLevelCompaction::kSkip;
+        return TERARKDB_NAMESPACE::BottommostLevelCompaction::kSkip;
       case 0x1:
-        return rocksdb::BottommostLevelCompaction::kIfHaveCompactionFilter;
+        return TERARKDB_NAMESPACE::BottommostLevelCompaction::kIfHaveCompactionFilter;
       case 0x2:
-        return rocksdb::BottommostLevelCompaction::kForce;
+        return TERARKDB_NAMESPACE::BottommostLevelCompaction::kForce;
       default:
         // undefined/default
-        return rocksdb::BottommostLevelCompaction::kIfHaveCompactionFilter;
+        return TERARKDB_NAMESPACE::BottommostLevelCompaction::kIfHaveCompactionFilter;
     }
   }
 };
@@ -2972,31 +2972,31 @@ class BottommostLevelCompactionJni {
 class CompactionStopStyleJni {
  public:
   // Returns the equivalent org.rocksdb.CompactionStopStyle for the provided
-  // C++ rocksdb::CompactionStopStyle enum
+  // C++ TERARKDB_NAMESPACE::CompactionStopStyle enum
   static jbyte toJavaCompactionStopStyle(
-      const rocksdb::CompactionStopStyle& compaction_stop_style) {
+      const TERARKDB_NAMESPACE::CompactionStopStyle& compaction_stop_style) {
     switch(compaction_stop_style) {
-      case rocksdb::CompactionStopStyle::kCompactionStopStyleSimilarSize:
+      case TERARKDB_NAMESPACE::CompactionStopStyle::kCompactionStopStyleSimilarSize:
         return 0x0;
-      case rocksdb::CompactionStopStyle::kCompactionStopStyleTotalSize:
+      case TERARKDB_NAMESPACE::CompactionStopStyle::kCompactionStopStyleTotalSize:
         return 0x1;
       default:
         return 0x7F;  // undefined
     }
   }
 
-  // Returns the equivalent C++ rocksdb::CompactionStopStyle enum for the
+  // Returns the equivalent C++ TERARKDB_NAMESPACE::CompactionStopStyle enum for the
   // provided Java org.rocksdb.CompactionStopStyle
-  static rocksdb::CompactionStopStyle toCppCompactionStopStyle(
+  static TERARKDB_NAMESPACE::CompactionStopStyle toCppCompactionStopStyle(
       jbyte jcompaction_stop_style) {
     switch(jcompaction_stop_style) {
       case 0x0:
-        return rocksdb::CompactionStopStyle::kCompactionStopStyleSimilarSize;
+        return TERARKDB_NAMESPACE::CompactionStopStyle::kCompactionStopStyleSimilarSize;
       case 0x1:
-        return rocksdb::CompactionStopStyle::kCompactionStopStyleTotalSize;
+        return TERARKDB_NAMESPACE::CompactionStopStyle::kCompactionStopStyleTotalSize;
       default:
         // undefined/default
-        return rocksdb::CompactionStopStyle::kCompactionStopStyleSimilarSize;
+        return TERARKDB_NAMESPACE::CompactionStopStyle::kCompactionStopStyleSimilarSize;
     }
   }
 };
@@ -3005,56 +3005,56 @@ class CompactionStopStyleJni {
 class CompressionTypeJni {
  public:
   // Returns the equivalent org.rocksdb.CompressionType for the provided
-  // C++ rocksdb::CompressionType enum
+  // C++ TERARKDB_NAMESPACE::CompressionType enum
   static jbyte toJavaCompressionType(
-      const rocksdb::CompressionType& compression_type) {
+      const TERARKDB_NAMESPACE::CompressionType& compression_type) {
     switch(compression_type) {
-      case rocksdb::CompressionType::kNoCompression:
+      case TERARKDB_NAMESPACE::CompressionType::kNoCompression:
         return 0x0;
-      case rocksdb::CompressionType::kSnappyCompression:
+      case TERARKDB_NAMESPACE::CompressionType::kSnappyCompression:
         return 0x1;
-      case rocksdb::CompressionType::kZlibCompression:
+      case TERARKDB_NAMESPACE::CompressionType::kZlibCompression:
         return 0x2;
-      case rocksdb::CompressionType::kBZip2Compression:
+      case TERARKDB_NAMESPACE::CompressionType::kBZip2Compression:
         return 0x3;
-      case rocksdb::CompressionType::kLZ4Compression:
+      case TERARKDB_NAMESPACE::CompressionType::kLZ4Compression:
         return 0x4;
-      case rocksdb::CompressionType::kLZ4HCCompression:
+      case TERARKDB_NAMESPACE::CompressionType::kLZ4HCCompression:
         return 0x5;
-      case rocksdb::CompressionType::kXpressCompression:
+      case TERARKDB_NAMESPACE::CompressionType::kXpressCompression:
         return 0x6;
-      case rocksdb::CompressionType::kZSTD:
+      case TERARKDB_NAMESPACE::CompressionType::kZSTD:
         return 0x7;
-      case rocksdb::CompressionType::kDisableCompressionOption:
+      case TERARKDB_NAMESPACE::CompressionType::kDisableCompressionOption:
       default:
         return 0x7F;
     }
   }
 
-  // Returns the equivalent C++ rocksdb::CompressionType enum for the
+  // Returns the equivalent C++ TERARKDB_NAMESPACE::CompressionType enum for the
   // provided Java org.rocksdb.CompressionType
-  static rocksdb::CompressionType toCppCompressionType(
+  static TERARKDB_NAMESPACE::CompressionType toCppCompressionType(
       jbyte jcompression_type) {
     switch(jcompression_type) {
       case 0x0:
-        return rocksdb::CompressionType::kNoCompression;
+        return TERARKDB_NAMESPACE::CompressionType::kNoCompression;
       case 0x1:
-        return rocksdb::CompressionType::kSnappyCompression;
+        return TERARKDB_NAMESPACE::CompressionType::kSnappyCompression;
       case 0x2:
-        return rocksdb::CompressionType::kZlibCompression;
+        return TERARKDB_NAMESPACE::CompressionType::kZlibCompression;
       case 0x3:
-        return rocksdb::CompressionType::kBZip2Compression;
+        return TERARKDB_NAMESPACE::CompressionType::kBZip2Compression;
       case 0x4:
-        return rocksdb::CompressionType::kLZ4Compression;
+        return TERARKDB_NAMESPACE::CompressionType::kLZ4Compression;
       case 0x5:
-        return rocksdb::CompressionType::kLZ4HCCompression;
+        return TERARKDB_NAMESPACE::CompressionType::kLZ4HCCompression;
       case 0x6:
-        return rocksdb::CompressionType::kXpressCompression;
+        return TERARKDB_NAMESPACE::CompressionType::kXpressCompression;
       case 0x7:
-        return rocksdb::CompressionType::kZSTD;
+        return TERARKDB_NAMESPACE::CompressionType::kZSTD;
       case 0x7F:
       default:
-        return rocksdb::CompressionType::kDisableCompressionOption;
+        return TERARKDB_NAMESPACE::CompressionType::kDisableCompressionOption;
     }
   }
 };
@@ -3063,39 +3063,39 @@ class CompressionTypeJni {
 class CompactionPriorityJni {
  public:
   // Returns the equivalent org.rocksdb.CompactionPriority for the provided
-  // C++ rocksdb::CompactionPri enum
+  // C++ TERARKDB_NAMESPACE::CompactionPri enum
   static jbyte toJavaCompactionPriority(
-      const rocksdb::CompactionPri& compaction_priority) {
+      const TERARKDB_NAMESPACE::CompactionPri& compaction_priority) {
     switch(compaction_priority) {
-      case rocksdb::CompactionPri::kByCompensatedSize:
+      case TERARKDB_NAMESPACE::CompactionPri::kByCompensatedSize:
         return 0x0;
-      case rocksdb::CompactionPri::kOldestLargestSeqFirst:
+      case TERARKDB_NAMESPACE::CompactionPri::kOldestLargestSeqFirst:
         return 0x1;
-      case rocksdb::CompactionPri::kOldestSmallestSeqFirst:
+      case TERARKDB_NAMESPACE::CompactionPri::kOldestSmallestSeqFirst:
         return 0x2;
-      case rocksdb::CompactionPri::kMinOverlappingRatio:
+      case TERARKDB_NAMESPACE::CompactionPri::kMinOverlappingRatio:
         return 0x3;
       default:
         return 0x0;  // undefined
     }
   }
 
-  // Returns the equivalent C++ rocksdb::CompactionPri enum for the
+  // Returns the equivalent C++ TERARKDB_NAMESPACE::CompactionPri enum for the
   // provided Java org.rocksdb.CompactionPriority
-  static rocksdb::CompactionPri toCppCompactionPriority(
+  static TERARKDB_NAMESPACE::CompactionPri toCppCompactionPriority(
       jbyte jcompaction_priority) {
     switch(jcompaction_priority) {
       case 0x0:
-        return rocksdb::CompactionPri::kByCompensatedSize;
+        return TERARKDB_NAMESPACE::CompactionPri::kByCompensatedSize;
       case 0x1:
-        return rocksdb::CompactionPri::kOldestLargestSeqFirst;
+        return TERARKDB_NAMESPACE::CompactionPri::kOldestLargestSeqFirst;
       case 0x2:
-        return rocksdb::CompactionPri::kOldestSmallestSeqFirst;
+        return TERARKDB_NAMESPACE::CompactionPri::kOldestSmallestSeqFirst;
       case 0x3:
-        return rocksdb::CompactionPri::kMinOverlappingRatio;
+        return TERARKDB_NAMESPACE::CompactionPri::kMinOverlappingRatio;
       default:
         // undefined/default
-        return rocksdb::CompactionPri::kByCompensatedSize;
+        return TERARKDB_NAMESPACE::CompactionPri::kByCompensatedSize;
     }
   }
 };
@@ -3104,17 +3104,17 @@ class CompactionPriorityJni {
 class AccessHintJni {
  public:
   // Returns the equivalent org.rocksdb.AccessHint for the provided
-  // C++ rocksdb::DBOptions::AccessHint enum
+  // C++ TERARKDB_NAMESPACE::DBOptions::AccessHint enum
   static jbyte toJavaAccessHint(
-      const rocksdb::DBOptions::AccessHint& access_hint) {
+      const TERARKDB_NAMESPACE::DBOptions::AccessHint& access_hint) {
     switch(access_hint) {
-      case rocksdb::DBOptions::AccessHint::NONE:
+      case TERARKDB_NAMESPACE::DBOptions::AccessHint::NONE:
         return 0x0;
-      case rocksdb::DBOptions::AccessHint::NORMAL:
+      case TERARKDB_NAMESPACE::DBOptions::AccessHint::NORMAL:
         return 0x1;
-      case rocksdb::DBOptions::AccessHint::SEQUENTIAL:
+      case TERARKDB_NAMESPACE::DBOptions::AccessHint::SEQUENTIAL:
         return 0x2;
-      case rocksdb::DBOptions::AccessHint::WILLNEED:
+      case TERARKDB_NAMESPACE::DBOptions::AccessHint::WILLNEED:
         return 0x3;
       default:
         // undefined/default
@@ -3122,21 +3122,21 @@ class AccessHintJni {
     }
   }
 
-  // Returns the equivalent C++ rocksdb::DBOptions::AccessHint enum for the
+  // Returns the equivalent C++ TERARKDB_NAMESPACE::DBOptions::AccessHint enum for the
   // provided Java org.rocksdb.AccessHint
-  static rocksdb::DBOptions::AccessHint toCppAccessHint(jbyte jaccess_hint) {
+  static TERARKDB_NAMESPACE::DBOptions::AccessHint toCppAccessHint(jbyte jaccess_hint) {
     switch(jaccess_hint) {
       case 0x0:
-        return rocksdb::DBOptions::AccessHint::NONE;
+        return TERARKDB_NAMESPACE::DBOptions::AccessHint::NONE;
       case 0x1:
-        return rocksdb::DBOptions::AccessHint::NORMAL;
+        return TERARKDB_NAMESPACE::DBOptions::AccessHint::NORMAL;
       case 0x2:
-        return rocksdb::DBOptions::AccessHint::SEQUENTIAL;
+        return TERARKDB_NAMESPACE::DBOptions::AccessHint::SEQUENTIAL;
       case 0x3:
-        return rocksdb::DBOptions::AccessHint::WILLNEED;
+        return TERARKDB_NAMESPACE::DBOptions::AccessHint::WILLNEED;
       default:
         // undefined/default
-        return rocksdb::DBOptions::AccessHint::NORMAL;
+        return TERARKDB_NAMESPACE::DBOptions::AccessHint::NORMAL;
     }
   }
 };
@@ -3145,17 +3145,17 @@ class AccessHintJni {
 class WALRecoveryModeJni {
  public:
   // Returns the equivalent org.rocksdb.WALRecoveryMode for the provided
-  // C++ rocksdb::WALRecoveryMode enum
+  // C++ TERARKDB_NAMESPACE::WALRecoveryMode enum
   static jbyte toJavaWALRecoveryMode(
-      const rocksdb::WALRecoveryMode& wal_recovery_mode) {
+      const TERARKDB_NAMESPACE::WALRecoveryMode& wal_recovery_mode) {
     switch(wal_recovery_mode) {
-      case rocksdb::WALRecoveryMode::kTolerateCorruptedTailRecords:
+      case TERARKDB_NAMESPACE::WALRecoveryMode::kTolerateCorruptedTailRecords:
         return 0x0;
-      case rocksdb::WALRecoveryMode::kAbsoluteConsistency:
+      case TERARKDB_NAMESPACE::WALRecoveryMode::kAbsoluteConsistency:
         return 0x1;
-      case rocksdb::WALRecoveryMode::kPointInTimeRecovery:
+      case TERARKDB_NAMESPACE::WALRecoveryMode::kPointInTimeRecovery:
         return 0x2;
-      case rocksdb::WALRecoveryMode::kSkipAnyCorruptedRecords:
+      case TERARKDB_NAMESPACE::WALRecoveryMode::kSkipAnyCorruptedRecords:
         return 0x3;
       default:
         // undefined/default
@@ -3163,21 +3163,21 @@ class WALRecoveryModeJni {
     }
   }
 
-  // Returns the equivalent C++ rocksdb::WALRecoveryMode enum for the
+  // Returns the equivalent C++ TERARKDB_NAMESPACE::WALRecoveryMode enum for the
   // provided Java org.rocksdb.WALRecoveryMode
-  static rocksdb::WALRecoveryMode toCppWALRecoveryMode(jbyte jwal_recovery_mode) {
+  static TERARKDB_NAMESPACE::WALRecoveryMode toCppWALRecoveryMode(jbyte jwal_recovery_mode) {
     switch(jwal_recovery_mode) {
       case 0x0:
-        return rocksdb::WALRecoveryMode::kTolerateCorruptedTailRecords;
+        return TERARKDB_NAMESPACE::WALRecoveryMode::kTolerateCorruptedTailRecords;
       case 0x1:
-        return rocksdb::WALRecoveryMode::kAbsoluteConsistency;
+        return TERARKDB_NAMESPACE::WALRecoveryMode::kAbsoluteConsistency;
       case 0x2:
-        return rocksdb::WALRecoveryMode::kPointInTimeRecovery;
+        return TERARKDB_NAMESPACE::WALRecoveryMode::kPointInTimeRecovery;
       case 0x3:
-        return rocksdb::WALRecoveryMode::kSkipAnyCorruptedRecords;
+        return TERARKDB_NAMESPACE::WALRecoveryMode::kSkipAnyCorruptedRecords;
       default:
         // undefined/default
-        return rocksdb::WALRecoveryMode::kPointInTimeRecovery;
+        return TERARKDB_NAMESPACE::WALRecoveryMode::kPointInTimeRecovery;
     }
   }
 };
@@ -3186,205 +3186,205 @@ class WALRecoveryModeJni {
 class TickerTypeJni {
  public:
   // Returns the equivalent org.rocksdb.TickerType for the provided
-  // C++ rocksdb::Tickers enum
+  // C++ TERARKDB_NAMESPACE::Tickers enum
   static jbyte toJavaTickerType(
-      const rocksdb::Tickers& tickers) {
+      const TERARKDB_NAMESPACE::Tickers& tickers) {
     switch(tickers) {
-      case rocksdb::Tickers::BLOCK_CACHE_MISS:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_MISS:
         return 0x0;
-      case rocksdb::Tickers::BLOCK_CACHE_HIT:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_HIT:
         return 0x1;
-      case rocksdb::Tickers::BLOCK_CACHE_ADD:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_ADD:
         return 0x2;
-      case rocksdb::Tickers::BLOCK_CACHE_ADD_FAILURES:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_ADD_FAILURES:
         return 0x3;
-      case rocksdb::Tickers::BLOCK_CACHE_INDEX_MISS:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_INDEX_MISS:
         return 0x4;
-      case rocksdb::Tickers::BLOCK_CACHE_INDEX_HIT:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_INDEX_HIT:
         return 0x5;
-      case rocksdb::Tickers::BLOCK_CACHE_INDEX_ADD:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_INDEX_ADD:
         return 0x6;
-      case rocksdb::Tickers::BLOCK_CACHE_INDEX_BYTES_INSERT:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_INDEX_BYTES_INSERT:
         return 0x7;
-      case rocksdb::Tickers::BLOCK_CACHE_INDEX_BYTES_EVICT:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_INDEX_BYTES_EVICT:
         return 0x8;
-      case rocksdb::Tickers::BLOCK_CACHE_FILTER_MISS:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_FILTER_MISS:
         return 0x9;
-      case rocksdb::Tickers::BLOCK_CACHE_FILTER_HIT:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_FILTER_HIT:
         return 0xA;
-      case rocksdb::Tickers::BLOCK_CACHE_FILTER_ADD:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_FILTER_ADD:
         return 0xB;
-      case rocksdb::Tickers::BLOCK_CACHE_FILTER_BYTES_INSERT:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_FILTER_BYTES_INSERT:
         return 0xC;
-      case rocksdb::Tickers::BLOCK_CACHE_FILTER_BYTES_EVICT:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_FILTER_BYTES_EVICT:
         return 0xD;
-      case rocksdb::Tickers::BLOCK_CACHE_DATA_MISS:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_DATA_MISS:
         return 0xE;
-      case rocksdb::Tickers::BLOCK_CACHE_DATA_HIT:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_DATA_HIT:
         return 0xF;
-      case rocksdb::Tickers::BLOCK_CACHE_DATA_ADD:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_DATA_ADD:
         return 0x10;
-      case rocksdb::Tickers::BLOCK_CACHE_DATA_BYTES_INSERT:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_DATA_BYTES_INSERT:
         return 0x11;
-      case rocksdb::Tickers::BLOCK_CACHE_BYTES_READ:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_BYTES_READ:
         return 0x12;
-      case rocksdb::Tickers::BLOCK_CACHE_BYTES_WRITE:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_BYTES_WRITE:
         return 0x13;
-      case rocksdb::Tickers::BLOOM_FILTER_USEFUL:
+      case TERARKDB_NAMESPACE::Tickers::BLOOM_FILTER_USEFUL:
         return 0x14;
-      case rocksdb::Tickers::PERSISTENT_CACHE_HIT:
+      case TERARKDB_NAMESPACE::Tickers::PERSISTENT_CACHE_HIT:
         return 0x15;
-      case rocksdb::Tickers::PERSISTENT_CACHE_MISS:
+      case TERARKDB_NAMESPACE::Tickers::PERSISTENT_CACHE_MISS:
         return 0x16;
-      case rocksdb::Tickers::SIM_BLOCK_CACHE_HIT:
+      case TERARKDB_NAMESPACE::Tickers::SIM_BLOCK_CACHE_HIT:
         return 0x17;
-      case rocksdb::Tickers::SIM_BLOCK_CACHE_MISS:
+      case TERARKDB_NAMESPACE::Tickers::SIM_BLOCK_CACHE_MISS:
         return 0x18;
-      case rocksdb::Tickers::MEMTABLE_HIT:
+      case TERARKDB_NAMESPACE::Tickers::MEMTABLE_HIT:
         return 0x19;
-      case rocksdb::Tickers::MEMTABLE_MISS:
+      case TERARKDB_NAMESPACE::Tickers::MEMTABLE_MISS:
         return 0x1A;
-      case rocksdb::Tickers::GET_HIT_L0:
+      case TERARKDB_NAMESPACE::Tickers::GET_HIT_L0:
         return 0x1B;
-      case rocksdb::Tickers::GET_HIT_L1:
+      case TERARKDB_NAMESPACE::Tickers::GET_HIT_L1:
         return 0x1C;
-      case rocksdb::Tickers::GET_HIT_L2_AND_UP:
+      case TERARKDB_NAMESPACE::Tickers::GET_HIT_L2_AND_UP:
         return 0x1D;
-      case rocksdb::Tickers::COMPACTION_KEY_DROP_NEWER_ENTRY:
+      case TERARKDB_NAMESPACE::Tickers::COMPACTION_KEY_DROP_NEWER_ENTRY:
         return 0x1E;
-      case rocksdb::Tickers::COMPACTION_KEY_DROP_OBSOLETE:
+      case TERARKDB_NAMESPACE::Tickers::COMPACTION_KEY_DROP_OBSOLETE:
         return 0x1F;
-      case rocksdb::Tickers::COMPACTION_KEY_DROP_RANGE_DEL:
+      case TERARKDB_NAMESPACE::Tickers::COMPACTION_KEY_DROP_RANGE_DEL:
         return 0x20;
-      case rocksdb::Tickers::COMPACTION_KEY_DROP_USER:
+      case TERARKDB_NAMESPACE::Tickers::COMPACTION_KEY_DROP_USER:
         return 0x21;
-      case rocksdb::Tickers::COMPACTION_RANGE_DEL_DROP_OBSOLETE:
+      case TERARKDB_NAMESPACE::Tickers::COMPACTION_RANGE_DEL_DROP_OBSOLETE:
         return 0x22;
-      case rocksdb::Tickers::NUMBER_KEYS_WRITTEN:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_KEYS_WRITTEN:
         return 0x23;
-      case rocksdb::Tickers::NUMBER_KEYS_READ:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_KEYS_READ:
         return 0x24;
-      case rocksdb::Tickers::NUMBER_KEYS_UPDATED:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_KEYS_UPDATED:
         return 0x25;
-      case rocksdb::Tickers::BYTES_WRITTEN:
+      case TERARKDB_NAMESPACE::Tickers::BYTES_WRITTEN:
         return 0x26;
-      case rocksdb::Tickers::BYTES_READ:
+      case TERARKDB_NAMESPACE::Tickers::BYTES_READ:
         return 0x27;
-      case rocksdb::Tickers::NUMBER_DB_SEEK:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_DB_SEEK:
         return 0x28;
-      case rocksdb::Tickers::NUMBER_DB_NEXT:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_DB_NEXT:
         return 0x29;
-      case rocksdb::Tickers::NUMBER_DB_PREV:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_DB_PREV:
         return 0x2A;
-      case rocksdb::Tickers::NUMBER_DB_SEEK_FOUND:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_DB_SEEK_FOUND:
         return 0x2B;
-      case rocksdb::Tickers::NUMBER_DB_NEXT_FOUND:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_DB_NEXT_FOUND:
         return 0x2C;
-      case rocksdb::Tickers::NUMBER_DB_PREV_FOUND:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_DB_PREV_FOUND:
         return 0x2D;
-      case rocksdb::Tickers::ITER_BYTES_READ:
+      case TERARKDB_NAMESPACE::Tickers::ITER_BYTES_READ:
         return 0x2E;
-      case rocksdb::Tickers::NO_FILE_CLOSES:
+      case TERARKDB_NAMESPACE::Tickers::NO_FILE_CLOSES:
         return 0x2F;
-      case rocksdb::Tickers::NO_FILE_OPENS:
+      case TERARKDB_NAMESPACE::Tickers::NO_FILE_OPENS:
         return 0x30;
-      case rocksdb::Tickers::NO_FILE_ERRORS:
+      case TERARKDB_NAMESPACE::Tickers::NO_FILE_ERRORS:
         return 0x31;
-      case rocksdb::Tickers::STALL_L0_SLOWDOWN_MICROS:
+      case TERARKDB_NAMESPACE::Tickers::STALL_L0_SLOWDOWN_MICROS:
         return 0x32;
-      case rocksdb::Tickers::STALL_MEMTABLE_COMPACTION_MICROS:
+      case TERARKDB_NAMESPACE::Tickers::STALL_MEMTABLE_COMPACTION_MICROS:
         return 0x33;
-      case rocksdb::Tickers::STALL_L0_NUM_FILES_MICROS:
+      case TERARKDB_NAMESPACE::Tickers::STALL_L0_NUM_FILES_MICROS:
         return 0x34;
-      case rocksdb::Tickers::STALL_MICROS:
+      case TERARKDB_NAMESPACE::Tickers::STALL_MICROS:
         return 0x35;
-      case rocksdb::Tickers::DB_MUTEX_WAIT_MICROS:
+      case TERARKDB_NAMESPACE::Tickers::DB_MUTEX_WAIT_MICROS:
         return 0x36;
-      case rocksdb::Tickers::RATE_LIMIT_DELAY_MILLIS:
+      case TERARKDB_NAMESPACE::Tickers::RATE_LIMIT_DELAY_MILLIS:
         return 0x37;
-      case rocksdb::Tickers::NO_ITERATORS:
+      case TERARKDB_NAMESPACE::Tickers::NO_ITERATORS:
         return 0x38;
-      case rocksdb::Tickers::NUMBER_MULTIGET_CALLS:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_MULTIGET_CALLS:
         return 0x39;
-      case rocksdb::Tickers::NUMBER_MULTIGET_KEYS_READ:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_MULTIGET_KEYS_READ:
         return 0x3A;
-      case rocksdb::Tickers::NUMBER_MULTIGET_BYTES_READ:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_MULTIGET_BYTES_READ:
         return 0x3B;
-      case rocksdb::Tickers::NUMBER_FILTERED_DELETES:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_FILTERED_DELETES:
         return 0x3C;
-      case rocksdb::Tickers::NUMBER_MERGE_FAILURES:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_MERGE_FAILURES:
         return 0x3D;
-      case rocksdb::Tickers::BLOOM_FILTER_PREFIX_CHECKED:
+      case TERARKDB_NAMESPACE::Tickers::BLOOM_FILTER_PREFIX_CHECKED:
         return 0x3E;
-      case rocksdb::Tickers::BLOOM_FILTER_PREFIX_USEFUL:
+      case TERARKDB_NAMESPACE::Tickers::BLOOM_FILTER_PREFIX_USEFUL:
         return 0x3F;
-      case rocksdb::Tickers::NUMBER_OF_RESEEKS_IN_ITERATION:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_OF_RESEEKS_IN_ITERATION:
         return 0x40;
-      case rocksdb::Tickers::GET_UPDATES_SINCE_CALLS:
+      case TERARKDB_NAMESPACE::Tickers::GET_UPDATES_SINCE_CALLS:
         return 0x41;
-      case rocksdb::Tickers::BLOCK_CACHE_COMPRESSED_MISS:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_COMPRESSED_MISS:
         return 0x42;
-      case rocksdb::Tickers::BLOCK_CACHE_COMPRESSED_HIT:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_COMPRESSED_HIT:
         return 0x43;
-      case rocksdb::Tickers::BLOCK_CACHE_COMPRESSED_ADD:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_COMPRESSED_ADD:
         return 0x44;
-      case rocksdb::Tickers::BLOCK_CACHE_COMPRESSED_ADD_FAILURES:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_COMPRESSED_ADD_FAILURES:
         return 0x45;
-      case rocksdb::Tickers::WAL_FILE_SYNCED:
+      case TERARKDB_NAMESPACE::Tickers::WAL_FILE_SYNCED:
         return 0x46;
-      case rocksdb::Tickers::WAL_FILE_BYTES:
+      case TERARKDB_NAMESPACE::Tickers::WAL_FILE_BYTES:
         return 0x47;
-      case rocksdb::Tickers::WRITE_DONE_BY_SELF:
+      case TERARKDB_NAMESPACE::Tickers::WRITE_DONE_BY_SELF:
         return 0x48;
-      case rocksdb::Tickers::WRITE_DONE_BY_OTHER:
+      case TERARKDB_NAMESPACE::Tickers::WRITE_DONE_BY_OTHER:
         return 0x49;
-      case rocksdb::Tickers::WRITE_TIMEDOUT:
+      case TERARKDB_NAMESPACE::Tickers::WRITE_TIMEDOUT:
         return 0x4A;
-      case rocksdb::Tickers::WRITE_WITH_WAL:
+      case TERARKDB_NAMESPACE::Tickers::WRITE_WITH_WAL:
         return 0x4B;
-      case rocksdb::Tickers::COMPACT_READ_BYTES:
+      case TERARKDB_NAMESPACE::Tickers::COMPACT_READ_BYTES:
         return 0x4C;
-      case rocksdb::Tickers::COMPACT_WRITE_BYTES:
+      case TERARKDB_NAMESPACE::Tickers::COMPACT_WRITE_BYTES:
         return 0x4D;
-      case rocksdb::Tickers::FLUSH_WRITE_BYTES:
+      case TERARKDB_NAMESPACE::Tickers::FLUSH_WRITE_BYTES:
         return 0x4E;
-      case rocksdb::Tickers::NUMBER_DIRECT_LOAD_TABLE_PROPERTIES:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_DIRECT_LOAD_TABLE_PROPERTIES:
         return 0x4F;
-      case rocksdb::Tickers::NUMBER_SUPERVERSION_ACQUIRES:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_SUPERVERSION_ACQUIRES:
         return 0x50;
-      case rocksdb::Tickers::NUMBER_SUPERVERSION_RELEASES:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_SUPERVERSION_RELEASES:
         return 0x51;
-      case rocksdb::Tickers::NUMBER_SUPERVERSION_CLEANUPS:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_SUPERVERSION_CLEANUPS:
         return 0x52;
-      case rocksdb::Tickers::NUMBER_BLOCK_COMPRESSED:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_BLOCK_COMPRESSED:
         return 0x53;
-      case rocksdb::Tickers::NUMBER_BLOCK_DECOMPRESSED:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_BLOCK_DECOMPRESSED:
         return 0x54;
-      case rocksdb::Tickers::NUMBER_BLOCK_NOT_COMPRESSED:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_BLOCK_NOT_COMPRESSED:
         return 0x55;
-      case rocksdb::Tickers::MERGE_OPERATION_TOTAL_TIME:
+      case TERARKDB_NAMESPACE::Tickers::MERGE_OPERATION_TOTAL_TIME:
         return 0x56;
-      case rocksdb::Tickers::FILTER_OPERATION_TOTAL_TIME:
+      case TERARKDB_NAMESPACE::Tickers::FILTER_OPERATION_TOTAL_TIME:
         return 0x57;
-      case rocksdb::Tickers::ROW_CACHE_HIT:
+      case TERARKDB_NAMESPACE::Tickers::ROW_CACHE_HIT:
         return 0x58;
-      case rocksdb::Tickers::ROW_CACHE_MISS:
+      case TERARKDB_NAMESPACE::Tickers::ROW_CACHE_MISS:
         return 0x59;
-      case rocksdb::Tickers::READ_AMP_ESTIMATE_USEFUL_BYTES:
+      case TERARKDB_NAMESPACE::Tickers::READ_AMP_ESTIMATE_USEFUL_BYTES:
         return 0x5A;
-      case rocksdb::Tickers::READ_AMP_TOTAL_READ_BYTES:
+      case TERARKDB_NAMESPACE::Tickers::READ_AMP_TOTAL_READ_BYTES:
         return 0x5B;
-      case rocksdb::Tickers::NUMBER_RATE_LIMITER_DRAINS:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_RATE_LIMITER_DRAINS:
         return 0x5C;
-      case rocksdb::Tickers::NUMBER_ITER_SKIP:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_ITER_SKIP:
         return 0x5D;
-      case rocksdb::Tickers::NUMBER_MULTIGET_KEYS_FOUND:
+      case TERARKDB_NAMESPACE::Tickers::NUMBER_MULTIGET_KEYS_FOUND:
         return 0x5E;
-      case rocksdb::Tickers::NO_ITERATOR_CREATED:
+      case TERARKDB_NAMESPACE::Tickers::NO_ITERATOR_CREATED:
         return 0x5F;
-      case rocksdb::Tickers::NO_ITERATOR_DELETED:
+      case TERARKDB_NAMESPACE::Tickers::NO_ITERATOR_DELETED:
         return 0x60;
-      case rocksdb::Tickers::TICKER_ENUM_MAX:
+      case TERARKDB_NAMESPACE::Tickers::TICKER_ENUM_MAX:
         return 0x61;
 
       default:
@@ -3393,210 +3393,210 @@ class TickerTypeJni {
     }
   }
 
-  // Returns the equivalent C++ rocksdb::Tickers enum for the
+  // Returns the equivalent C++ TERARKDB_NAMESPACE::Tickers enum for the
   // provided Java org.rocksdb.TickerType
-  static rocksdb::Tickers toCppTickers(jbyte jticker_type) {
+  static TERARKDB_NAMESPACE::Tickers toCppTickers(jbyte jticker_type) {
     switch(jticker_type) {
       case 0x0:
-        return rocksdb::Tickers::BLOCK_CACHE_MISS;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_MISS;
       case 0x1:
-        return rocksdb::Tickers::BLOCK_CACHE_HIT;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_HIT;
       case 0x2:
-        return rocksdb::Tickers::BLOCK_CACHE_ADD;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_ADD;
       case 0x3:
-        return rocksdb::Tickers::BLOCK_CACHE_ADD_FAILURES;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_ADD_FAILURES;
       case 0x4:
-        return rocksdb::Tickers::BLOCK_CACHE_INDEX_MISS;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_INDEX_MISS;
       case 0x5:
-        return rocksdb::Tickers::BLOCK_CACHE_INDEX_HIT;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_INDEX_HIT;
       case 0x6:
-        return rocksdb::Tickers::BLOCK_CACHE_INDEX_ADD;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_INDEX_ADD;
       case 0x7:
-        return rocksdb::Tickers::BLOCK_CACHE_INDEX_BYTES_INSERT;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_INDEX_BYTES_INSERT;
       case 0x8:
-        return rocksdb::Tickers::BLOCK_CACHE_INDEX_BYTES_EVICT;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_INDEX_BYTES_EVICT;
       case 0x9:
-        return rocksdb::Tickers::BLOCK_CACHE_FILTER_MISS;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_FILTER_MISS;
       case 0xA:
-        return rocksdb::Tickers::BLOCK_CACHE_FILTER_HIT;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_FILTER_HIT;
       case 0xB:
-        return rocksdb::Tickers::BLOCK_CACHE_FILTER_ADD;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_FILTER_ADD;
       case 0xC:
-        return rocksdb::Tickers::BLOCK_CACHE_FILTER_BYTES_INSERT;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_FILTER_BYTES_INSERT;
       case 0xD:
-        return rocksdb::Tickers::BLOCK_CACHE_FILTER_BYTES_EVICT;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_FILTER_BYTES_EVICT;
       case 0xE:
-        return rocksdb::Tickers::BLOCK_CACHE_DATA_MISS;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_DATA_MISS;
       case 0xF:
-        return rocksdb::Tickers::BLOCK_CACHE_DATA_HIT;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_DATA_HIT;
       case 0x10:
-        return rocksdb::Tickers::BLOCK_CACHE_DATA_ADD;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_DATA_ADD;
       case 0x11:
-        return rocksdb::Tickers::BLOCK_CACHE_DATA_BYTES_INSERT;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_DATA_BYTES_INSERT;
       case 0x12:
-        return rocksdb::Tickers::BLOCK_CACHE_BYTES_READ;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_BYTES_READ;
       case 0x13:
-        return rocksdb::Tickers::BLOCK_CACHE_BYTES_WRITE;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_BYTES_WRITE;
       case 0x14:
-        return rocksdb::Tickers::BLOOM_FILTER_USEFUL;
+        return TERARKDB_NAMESPACE::Tickers::BLOOM_FILTER_USEFUL;
       case 0x15:
-        return rocksdb::Tickers::PERSISTENT_CACHE_HIT;
+        return TERARKDB_NAMESPACE::Tickers::PERSISTENT_CACHE_HIT;
       case 0x16:
-        return rocksdb::Tickers::PERSISTENT_CACHE_MISS;
+        return TERARKDB_NAMESPACE::Tickers::PERSISTENT_CACHE_MISS;
       case 0x17:
-        return rocksdb::Tickers::SIM_BLOCK_CACHE_HIT;
+        return TERARKDB_NAMESPACE::Tickers::SIM_BLOCK_CACHE_HIT;
       case 0x18:
-        return rocksdb::Tickers::SIM_BLOCK_CACHE_MISS;
+        return TERARKDB_NAMESPACE::Tickers::SIM_BLOCK_CACHE_MISS;
       case 0x19:
-        return rocksdb::Tickers::MEMTABLE_HIT;
+        return TERARKDB_NAMESPACE::Tickers::MEMTABLE_HIT;
       case 0x1A:
-        return rocksdb::Tickers::MEMTABLE_MISS;
+        return TERARKDB_NAMESPACE::Tickers::MEMTABLE_MISS;
       case 0x1B:
-        return rocksdb::Tickers::GET_HIT_L0;
+        return TERARKDB_NAMESPACE::Tickers::GET_HIT_L0;
       case 0x1C:
-        return rocksdb::Tickers::GET_HIT_L1;
+        return TERARKDB_NAMESPACE::Tickers::GET_HIT_L1;
       case 0x1D:
-        return rocksdb::Tickers::GET_HIT_L2_AND_UP;
+        return TERARKDB_NAMESPACE::Tickers::GET_HIT_L2_AND_UP;
       case 0x1E:
-        return rocksdb::Tickers::COMPACTION_KEY_DROP_NEWER_ENTRY;
+        return TERARKDB_NAMESPACE::Tickers::COMPACTION_KEY_DROP_NEWER_ENTRY;
       case 0x1F:
-        return rocksdb::Tickers::COMPACTION_KEY_DROP_OBSOLETE;
+        return TERARKDB_NAMESPACE::Tickers::COMPACTION_KEY_DROP_OBSOLETE;
       case 0x20:
-        return rocksdb::Tickers::COMPACTION_KEY_DROP_RANGE_DEL;
+        return TERARKDB_NAMESPACE::Tickers::COMPACTION_KEY_DROP_RANGE_DEL;
       case 0x21:
-        return rocksdb::Tickers::COMPACTION_KEY_DROP_USER;
+        return TERARKDB_NAMESPACE::Tickers::COMPACTION_KEY_DROP_USER;
       case 0x22:
-        return rocksdb::Tickers::COMPACTION_RANGE_DEL_DROP_OBSOLETE;
+        return TERARKDB_NAMESPACE::Tickers::COMPACTION_RANGE_DEL_DROP_OBSOLETE;
       case 0x23:
-        return rocksdb::Tickers::NUMBER_KEYS_WRITTEN;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_KEYS_WRITTEN;
       case 0x24:
-        return rocksdb::Tickers::NUMBER_KEYS_READ;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_KEYS_READ;
       case 0x25:
-        return rocksdb::Tickers::NUMBER_KEYS_UPDATED;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_KEYS_UPDATED;
       case 0x26:
-        return rocksdb::Tickers::BYTES_WRITTEN;
+        return TERARKDB_NAMESPACE::Tickers::BYTES_WRITTEN;
       case 0x27:
-        return rocksdb::Tickers::BYTES_READ;
+        return TERARKDB_NAMESPACE::Tickers::BYTES_READ;
       case 0x28:
-        return rocksdb::Tickers::NUMBER_DB_SEEK;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_DB_SEEK;
       case 0x29:
-        return rocksdb::Tickers::NUMBER_DB_NEXT;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_DB_NEXT;
       case 0x2A:
-        return rocksdb::Tickers::NUMBER_DB_PREV;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_DB_PREV;
       case 0x2B:
-        return rocksdb::Tickers::NUMBER_DB_SEEK_FOUND;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_DB_SEEK_FOUND;
       case 0x2C:
-        return rocksdb::Tickers::NUMBER_DB_NEXT_FOUND;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_DB_NEXT_FOUND;
       case 0x2D:
-        return rocksdb::Tickers::NUMBER_DB_PREV_FOUND;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_DB_PREV_FOUND;
       case 0x2E:
-        return rocksdb::Tickers::ITER_BYTES_READ;
+        return TERARKDB_NAMESPACE::Tickers::ITER_BYTES_READ;
       case 0x2F:
-        return rocksdb::Tickers::NO_FILE_CLOSES;
+        return TERARKDB_NAMESPACE::Tickers::NO_FILE_CLOSES;
       case 0x30:
-        return rocksdb::Tickers::NO_FILE_OPENS;
+        return TERARKDB_NAMESPACE::Tickers::NO_FILE_OPENS;
       case 0x31:
-        return rocksdb::Tickers::NO_FILE_ERRORS;
+        return TERARKDB_NAMESPACE::Tickers::NO_FILE_ERRORS;
       case 0x32:
-        return rocksdb::Tickers::STALL_L0_SLOWDOWN_MICROS;
+        return TERARKDB_NAMESPACE::Tickers::STALL_L0_SLOWDOWN_MICROS;
       case 0x33:
-        return rocksdb::Tickers::STALL_MEMTABLE_COMPACTION_MICROS;
+        return TERARKDB_NAMESPACE::Tickers::STALL_MEMTABLE_COMPACTION_MICROS;
       case 0x34:
-        return rocksdb::Tickers::STALL_L0_NUM_FILES_MICROS;
+        return TERARKDB_NAMESPACE::Tickers::STALL_L0_NUM_FILES_MICROS;
       case 0x35:
-        return rocksdb::Tickers::STALL_MICROS;
+        return TERARKDB_NAMESPACE::Tickers::STALL_MICROS;
       case 0x36:
-        return rocksdb::Tickers::DB_MUTEX_WAIT_MICROS;
+        return TERARKDB_NAMESPACE::Tickers::DB_MUTEX_WAIT_MICROS;
       case 0x37:
-        return rocksdb::Tickers::RATE_LIMIT_DELAY_MILLIS;
+        return TERARKDB_NAMESPACE::Tickers::RATE_LIMIT_DELAY_MILLIS;
       case 0x38:
-        return rocksdb::Tickers::NO_ITERATORS;
+        return TERARKDB_NAMESPACE::Tickers::NO_ITERATORS;
       case 0x39:
-        return rocksdb::Tickers::NUMBER_MULTIGET_CALLS;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_MULTIGET_CALLS;
       case 0x3A:
-        return rocksdb::Tickers::NUMBER_MULTIGET_KEYS_READ;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_MULTIGET_KEYS_READ;
       case 0x3B:
-        return rocksdb::Tickers::NUMBER_MULTIGET_BYTES_READ;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_MULTIGET_BYTES_READ;
       case 0x3C:
-        return rocksdb::Tickers::NUMBER_FILTERED_DELETES;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_FILTERED_DELETES;
       case 0x3D:
-        return rocksdb::Tickers::NUMBER_MERGE_FAILURES;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_MERGE_FAILURES;
       case 0x3E:
-        return rocksdb::Tickers::BLOOM_FILTER_PREFIX_CHECKED;
+        return TERARKDB_NAMESPACE::Tickers::BLOOM_FILTER_PREFIX_CHECKED;
       case 0x3F:
-        return rocksdb::Tickers::BLOOM_FILTER_PREFIX_USEFUL;
+        return TERARKDB_NAMESPACE::Tickers::BLOOM_FILTER_PREFIX_USEFUL;
       case 0x40:
-        return rocksdb::Tickers::NUMBER_OF_RESEEKS_IN_ITERATION;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_OF_RESEEKS_IN_ITERATION;
       case 0x41:
-        return rocksdb::Tickers::GET_UPDATES_SINCE_CALLS;
+        return TERARKDB_NAMESPACE::Tickers::GET_UPDATES_SINCE_CALLS;
       case 0x42:
-        return rocksdb::Tickers::BLOCK_CACHE_COMPRESSED_MISS;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_COMPRESSED_MISS;
       case 0x43:
-        return rocksdb::Tickers::BLOCK_CACHE_COMPRESSED_HIT;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_COMPRESSED_HIT;
       case 0x44:
-        return rocksdb::Tickers::BLOCK_CACHE_COMPRESSED_ADD;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_COMPRESSED_ADD;
       case 0x45:
-        return rocksdb::Tickers::BLOCK_CACHE_COMPRESSED_ADD_FAILURES;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_COMPRESSED_ADD_FAILURES;
       case 0x46:
-        return rocksdb::Tickers::WAL_FILE_SYNCED;
+        return TERARKDB_NAMESPACE::Tickers::WAL_FILE_SYNCED;
       case 0x47:
-        return rocksdb::Tickers::WAL_FILE_BYTES;
+        return TERARKDB_NAMESPACE::Tickers::WAL_FILE_BYTES;
       case 0x48:
-        return rocksdb::Tickers::WRITE_DONE_BY_SELF;
+        return TERARKDB_NAMESPACE::Tickers::WRITE_DONE_BY_SELF;
       case 0x49:
-        return rocksdb::Tickers::WRITE_DONE_BY_OTHER;
+        return TERARKDB_NAMESPACE::Tickers::WRITE_DONE_BY_OTHER;
       case 0x4A:
-        return rocksdb::Tickers::WRITE_TIMEDOUT;
+        return TERARKDB_NAMESPACE::Tickers::WRITE_TIMEDOUT;
       case 0x4B:
-        return rocksdb::Tickers::WRITE_WITH_WAL;
+        return TERARKDB_NAMESPACE::Tickers::WRITE_WITH_WAL;
       case 0x4C:
-        return rocksdb::Tickers::COMPACT_READ_BYTES;
+        return TERARKDB_NAMESPACE::Tickers::COMPACT_READ_BYTES;
       case 0x4D:
-        return rocksdb::Tickers::COMPACT_WRITE_BYTES;
+        return TERARKDB_NAMESPACE::Tickers::COMPACT_WRITE_BYTES;
       case 0x4E:
-        return rocksdb::Tickers::FLUSH_WRITE_BYTES;
+        return TERARKDB_NAMESPACE::Tickers::FLUSH_WRITE_BYTES;
       case 0x4F:
-        return rocksdb::Tickers::NUMBER_DIRECT_LOAD_TABLE_PROPERTIES;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_DIRECT_LOAD_TABLE_PROPERTIES;
       case 0x50:
-        return rocksdb::Tickers::NUMBER_SUPERVERSION_ACQUIRES;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_SUPERVERSION_ACQUIRES;
       case 0x51:
-        return rocksdb::Tickers::NUMBER_SUPERVERSION_RELEASES;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_SUPERVERSION_RELEASES;
       case 0x52:
-        return rocksdb::Tickers::NUMBER_SUPERVERSION_CLEANUPS;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_SUPERVERSION_CLEANUPS;
       case 0x53:
-        return rocksdb::Tickers::NUMBER_BLOCK_COMPRESSED;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_BLOCK_COMPRESSED;
       case 0x54:
-        return rocksdb::Tickers::NUMBER_BLOCK_DECOMPRESSED;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_BLOCK_DECOMPRESSED;
       case 0x55:
-        return rocksdb::Tickers::NUMBER_BLOCK_NOT_COMPRESSED;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_BLOCK_NOT_COMPRESSED;
       case 0x56:
-        return rocksdb::Tickers::MERGE_OPERATION_TOTAL_TIME;
+        return TERARKDB_NAMESPACE::Tickers::MERGE_OPERATION_TOTAL_TIME;
       case 0x57:
-        return rocksdb::Tickers::FILTER_OPERATION_TOTAL_TIME;
+        return TERARKDB_NAMESPACE::Tickers::FILTER_OPERATION_TOTAL_TIME;
       case 0x58:
-        return rocksdb::Tickers::ROW_CACHE_HIT;
+        return TERARKDB_NAMESPACE::Tickers::ROW_CACHE_HIT;
       case 0x59:
-        return rocksdb::Tickers::ROW_CACHE_MISS;
+        return TERARKDB_NAMESPACE::Tickers::ROW_CACHE_MISS;
       case 0x5A:
-        return rocksdb::Tickers::READ_AMP_ESTIMATE_USEFUL_BYTES;
+        return TERARKDB_NAMESPACE::Tickers::READ_AMP_ESTIMATE_USEFUL_BYTES;
       case 0x5B:
-        return rocksdb::Tickers::READ_AMP_TOTAL_READ_BYTES;
+        return TERARKDB_NAMESPACE::Tickers::READ_AMP_TOTAL_READ_BYTES;
       case 0x5C:
-        return rocksdb::Tickers::NUMBER_RATE_LIMITER_DRAINS;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_RATE_LIMITER_DRAINS;
       case 0x5D:
-        return rocksdb::Tickers::NUMBER_ITER_SKIP;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_ITER_SKIP;
       case 0x5E:
-        return rocksdb::Tickers::NUMBER_MULTIGET_KEYS_FOUND;
+        return TERARKDB_NAMESPACE::Tickers::NUMBER_MULTIGET_KEYS_FOUND;
       case 0x5F:
-        return rocksdb::Tickers::NO_ITERATOR_CREATED;
+        return TERARKDB_NAMESPACE::Tickers::NO_ITERATOR_CREATED;
       case 0x60:
-        return rocksdb::Tickers::NO_ITERATOR_DELETED;
+        return TERARKDB_NAMESPACE::Tickers::NO_ITERATOR_DELETED;
       case 0x61:
-        return rocksdb::Tickers::TICKER_ENUM_MAX;
+        return TERARKDB_NAMESPACE::Tickers::TICKER_ENUM_MAX;
 
       default:
         // undefined/default
-        return rocksdb::Tickers::BLOCK_CACHE_MISS;
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_MISS;
     }
   }
 };
@@ -3605,81 +3605,81 @@ class TickerTypeJni {
 class HistogramTypeJni {
  public:
   // Returns the equivalent org.rocksdb.HistogramType for the provided
-  // C++ rocksdb::Histograms enum
+  // C++ TERARKDB_NAMESPACE::Histograms enum
   static jbyte toJavaHistogramsType(
-      const rocksdb::Histograms& histograms) {
+      const TERARKDB_NAMESPACE::Histograms& histograms) {
     switch(histograms) {
-      case rocksdb::Histograms::DB_GET:
+      case TERARKDB_NAMESPACE::Histograms::DB_GET:
         return 0x0;
-      case rocksdb::Histograms::DB_WRITE:
+      case TERARKDB_NAMESPACE::Histograms::DB_WRITE:
         return 0x1;
-      case rocksdb::Histograms::COMPACTION_TIME:
+      case TERARKDB_NAMESPACE::Histograms::COMPACTION_TIME:
         return 0x2;
-      case rocksdb::Histograms::SUBCOMPACTION_SETUP_TIME:
+      case TERARKDB_NAMESPACE::Histograms::SUBCOMPACTION_SETUP_TIME:
         return 0x3;
-      case rocksdb::Histograms::TABLE_SYNC_MICROS:
+      case TERARKDB_NAMESPACE::Histograms::TABLE_SYNC_MICROS:
         return 0x4;
-      case rocksdb::Histograms::COMPACTION_OUTFILE_SYNC_MICROS:
+      case TERARKDB_NAMESPACE::Histograms::COMPACTION_OUTFILE_SYNC_MICROS:
         return 0x5;
-      case rocksdb::Histograms::WAL_FILE_SYNC_MICROS:
+      case TERARKDB_NAMESPACE::Histograms::WAL_FILE_SYNC_MICROS:
         return 0x6;
-      case rocksdb::Histograms::MANIFEST_FILE_SYNC_MICROS:
+      case TERARKDB_NAMESPACE::Histograms::MANIFEST_FILE_SYNC_MICROS:
         return 0x7;
-      case rocksdb::Histograms::TABLE_OPEN_IO_MICROS:
+      case TERARKDB_NAMESPACE::Histograms::TABLE_OPEN_IO_MICROS:
         return 0x8;
-      case rocksdb::Histograms::DB_MULTIGET:
+      case TERARKDB_NAMESPACE::Histograms::DB_MULTIGET:
         return 0x9;
-      case rocksdb::Histograms::READ_BLOCK_COMPACTION_MICROS:
+      case TERARKDB_NAMESPACE::Histograms::READ_BLOCK_COMPACTION_MICROS:
         return 0xA;
-      case rocksdb::Histograms::READ_BLOCK_GET_MICROS:
+      case TERARKDB_NAMESPACE::Histograms::READ_BLOCK_GET_MICROS:
         return 0xB;
-      case rocksdb::Histograms::WRITE_RAW_BLOCK_MICROS:
+      case TERARKDB_NAMESPACE::Histograms::WRITE_RAW_BLOCK_MICROS:
         return 0xC;
-      case rocksdb::Histograms::STALL_L0_SLOWDOWN_COUNT:
+      case TERARKDB_NAMESPACE::Histograms::STALL_L0_SLOWDOWN_COUNT:
         return 0xD;
-      case rocksdb::Histograms::STALL_MEMTABLE_COMPACTION_COUNT:
+      case TERARKDB_NAMESPACE::Histograms::STALL_MEMTABLE_COMPACTION_COUNT:
         return 0xE;
-      case rocksdb::Histograms::STALL_L0_NUM_FILES_COUNT:
+      case TERARKDB_NAMESPACE::Histograms::STALL_L0_NUM_FILES_COUNT:
         return 0xF;
-      case rocksdb::Histograms::HARD_RATE_LIMIT_DELAY_COUNT:
+      case TERARKDB_NAMESPACE::Histograms::HARD_RATE_LIMIT_DELAY_COUNT:
         return 0x10;
-      case rocksdb::Histograms::SOFT_RATE_LIMIT_DELAY_COUNT:
+      case TERARKDB_NAMESPACE::Histograms::SOFT_RATE_LIMIT_DELAY_COUNT:
         return 0x11;
-      case rocksdb::Histograms::NUM_FILES_IN_SINGLE_COMPACTION:
+      case TERARKDB_NAMESPACE::Histograms::NUM_FILES_IN_SINGLE_COMPACTION:
         return 0x12;
-      case rocksdb::Histograms::DB_SEEK:
+      case TERARKDB_NAMESPACE::Histograms::DB_SEEK:
         return 0x13;
-      case rocksdb::Histograms::WRITE_STALL:
+      case TERARKDB_NAMESPACE::Histograms::WRITE_STALL:
         return 0x14;
-      case rocksdb::Histograms::SST_READ_MICROS:
+      case TERARKDB_NAMESPACE::Histograms::SST_READ_MICROS:
         return 0x15;
-      case rocksdb::Histograms::NUM_SUBCOMPACTIONS_SCHEDULED:
+      case TERARKDB_NAMESPACE::Histograms::NUM_SUBCOMPACTIONS_SCHEDULED:
         return 0x16;
-      case rocksdb::Histograms::BYTES_PER_READ:
+      case TERARKDB_NAMESPACE::Histograms::BYTES_PER_READ:
         return 0x17;
-      case rocksdb::Histograms::BYTES_PER_WRITE:
+      case TERARKDB_NAMESPACE::Histograms::BYTES_PER_WRITE:
         return 0x18;
-      case rocksdb::Histograms::BYTES_PER_MULTIGET:
+      case TERARKDB_NAMESPACE::Histograms::BYTES_PER_MULTIGET:
         return 0x19;
-      case rocksdb::Histograms::BYTES_COMPRESSED:
+      case TERARKDB_NAMESPACE::Histograms::BYTES_COMPRESSED:
         return 0x1A;
-      case rocksdb::Histograms::BYTES_DECOMPRESSED:
+      case TERARKDB_NAMESPACE::Histograms::BYTES_DECOMPRESSED:
         return 0x1B;
-      case rocksdb::Histograms::COMPRESSION_TIMES_NANOS:
+      case TERARKDB_NAMESPACE::Histograms::COMPRESSION_TIMES_NANOS:
         return 0x1C;
-      case rocksdb::Histograms::DECOMPRESSION_TIMES_NANOS:
+      case TERARKDB_NAMESPACE::Histograms::DECOMPRESSION_TIMES_NANOS:
         return 0x1D;
-      case rocksdb::Histograms::READ_NUM_MERGE_OPERANDS:
+      case TERARKDB_NAMESPACE::Histograms::READ_NUM_MERGE_OPERANDS:
         return 0x1E;
-      case rocksdb::Histograms::FLUSH_TIME:
+      case TERARKDB_NAMESPACE::Histograms::FLUSH_TIME:
         return 0x1F;
-      case rocksdb::Histograms::PICK_COMPACTION_TIME:
+      case TERARKDB_NAMESPACE::Histograms::PICK_COMPACTION_TIME:
         return 0x20;
-      case rocksdb::Histograms::PICK_GARBAGE_COLLECTION_TIME:
+      case TERARKDB_NAMESPACE::Histograms::PICK_GARBAGE_COLLECTION_TIME:
         return 0x21;
-      case rocksdb::Histograms::INSTALL_SUPER_VERSION_TIME:
+      case TERARKDB_NAMESPACE::Histograms::INSTALL_SUPER_VERSION_TIME:
         return 0x22;
-      case rocksdb::Histograms::HISTOGRAM_ENUM_MAX:
+      case TERARKDB_NAMESPACE::Histograms::HISTOGRAM_ENUM_MAX:
         return 0x23;
 
       default:
@@ -3688,86 +3688,86 @@ class HistogramTypeJni {
     }
   }
 
-  // Returns the equivalent C++ rocksdb::Histograms enum for the
+  // Returns the equivalent C++ TERARKDB_NAMESPACE::Histograms enum for the
   // provided Java org.rocksdb.HistogramsType
-  static rocksdb::Histograms toCppHistograms(jbyte jhistograms_type) {
+  static TERARKDB_NAMESPACE::Histograms toCppHistograms(jbyte jhistograms_type) {
     switch(jhistograms_type) {
       case 0x0:
-        return rocksdb::Histograms::DB_GET;
+        return TERARKDB_NAMESPACE::Histograms::DB_GET;
       case 0x1:
-        return rocksdb::Histograms::DB_WRITE;
+        return TERARKDB_NAMESPACE::Histograms::DB_WRITE;
       case 0x2:
-        return rocksdb::Histograms::COMPACTION_TIME;
+        return TERARKDB_NAMESPACE::Histograms::COMPACTION_TIME;
       case 0x3:
-        return rocksdb::Histograms::SUBCOMPACTION_SETUP_TIME;
+        return TERARKDB_NAMESPACE::Histograms::SUBCOMPACTION_SETUP_TIME;
       case 0x4:
-        return rocksdb::Histograms::TABLE_SYNC_MICROS;
+        return TERARKDB_NAMESPACE::Histograms::TABLE_SYNC_MICROS;
       case 0x5:
-        return rocksdb::Histograms::COMPACTION_OUTFILE_SYNC_MICROS;
+        return TERARKDB_NAMESPACE::Histograms::COMPACTION_OUTFILE_SYNC_MICROS;
       case 0x6:
-        return rocksdb::Histograms::WAL_FILE_SYNC_MICROS;
+        return TERARKDB_NAMESPACE::Histograms::WAL_FILE_SYNC_MICROS;
       case 0x7:
-        return rocksdb::Histograms::MANIFEST_FILE_SYNC_MICROS;
+        return TERARKDB_NAMESPACE::Histograms::MANIFEST_FILE_SYNC_MICROS;
       case 0x8:
-        return rocksdb::Histograms::TABLE_OPEN_IO_MICROS;
+        return TERARKDB_NAMESPACE::Histograms::TABLE_OPEN_IO_MICROS;
       case 0x9:
-        return rocksdb::Histograms::DB_MULTIGET;
+        return TERARKDB_NAMESPACE::Histograms::DB_MULTIGET;
       case 0xA:
-        return rocksdb::Histograms::READ_BLOCK_COMPACTION_MICROS;
+        return TERARKDB_NAMESPACE::Histograms::READ_BLOCK_COMPACTION_MICROS;
       case 0xB:
-        return rocksdb::Histograms::READ_BLOCK_GET_MICROS;
+        return TERARKDB_NAMESPACE::Histograms::READ_BLOCK_GET_MICROS;
       case 0xC:
-        return rocksdb::Histograms::WRITE_RAW_BLOCK_MICROS;
+        return TERARKDB_NAMESPACE::Histograms::WRITE_RAW_BLOCK_MICROS;
       case 0xD:
-        return rocksdb::Histograms::STALL_L0_SLOWDOWN_COUNT;
+        return TERARKDB_NAMESPACE::Histograms::STALL_L0_SLOWDOWN_COUNT;
       case 0xE:
-        return rocksdb::Histograms::STALL_MEMTABLE_COMPACTION_COUNT;
+        return TERARKDB_NAMESPACE::Histograms::STALL_MEMTABLE_COMPACTION_COUNT;
       case 0xF:
-        return rocksdb::Histograms::STALL_L0_NUM_FILES_COUNT;
+        return TERARKDB_NAMESPACE::Histograms::STALL_L0_NUM_FILES_COUNT;
       case 0x10:
-        return rocksdb::Histograms::HARD_RATE_LIMIT_DELAY_COUNT;
+        return TERARKDB_NAMESPACE::Histograms::HARD_RATE_LIMIT_DELAY_COUNT;
       case 0x11:
-        return rocksdb::Histograms::SOFT_RATE_LIMIT_DELAY_COUNT;
+        return TERARKDB_NAMESPACE::Histograms::SOFT_RATE_LIMIT_DELAY_COUNT;
       case 0x12:
-        return rocksdb::Histograms::NUM_FILES_IN_SINGLE_COMPACTION;
+        return TERARKDB_NAMESPACE::Histograms::NUM_FILES_IN_SINGLE_COMPACTION;
       case 0x13:
-        return rocksdb::Histograms::DB_SEEK;
+        return TERARKDB_NAMESPACE::Histograms::DB_SEEK;
       case 0x14:
-        return rocksdb::Histograms::WRITE_STALL;
+        return TERARKDB_NAMESPACE::Histograms::WRITE_STALL;
       case 0x15:
-        return rocksdb::Histograms::SST_READ_MICROS;
+        return TERARKDB_NAMESPACE::Histograms::SST_READ_MICROS;
       case 0x16:
-        return rocksdb::Histograms::NUM_SUBCOMPACTIONS_SCHEDULED;
+        return TERARKDB_NAMESPACE::Histograms::NUM_SUBCOMPACTIONS_SCHEDULED;
       case 0x17:
-        return rocksdb::Histograms::BYTES_PER_READ;
+        return TERARKDB_NAMESPACE::Histograms::BYTES_PER_READ;
       case 0x18:
-        return rocksdb::Histograms::BYTES_PER_WRITE;
+        return TERARKDB_NAMESPACE::Histograms::BYTES_PER_WRITE;
       case 0x19:
-        return rocksdb::Histograms::BYTES_PER_MULTIGET;
+        return TERARKDB_NAMESPACE::Histograms::BYTES_PER_MULTIGET;
       case 0x1A:
-        return rocksdb::Histograms::BYTES_COMPRESSED;
+        return TERARKDB_NAMESPACE::Histograms::BYTES_COMPRESSED;
       case 0x1B:
-        return rocksdb::Histograms::BYTES_DECOMPRESSED;
+        return TERARKDB_NAMESPACE::Histograms::BYTES_DECOMPRESSED;
       case 0x1C:
-        return rocksdb::Histograms::COMPRESSION_TIMES_NANOS;
+        return TERARKDB_NAMESPACE::Histograms::COMPRESSION_TIMES_NANOS;
       case 0x1D:
-        return rocksdb::Histograms::DECOMPRESSION_TIMES_NANOS;
+        return TERARKDB_NAMESPACE::Histograms::DECOMPRESSION_TIMES_NANOS;
       case 0x1E:
-        return rocksdb::Histograms::READ_NUM_MERGE_OPERANDS;
+        return TERARKDB_NAMESPACE::Histograms::READ_NUM_MERGE_OPERANDS;
       case 0x1F:
-        return rocksdb::Histograms::FLUSH_TIME;
+        return TERARKDB_NAMESPACE::Histograms::FLUSH_TIME;
       case 0x20:
-        return rocksdb::Histograms::PICK_COMPACTION_TIME;
+        return TERARKDB_NAMESPACE::Histograms::PICK_COMPACTION_TIME;
       case 0x21:
-        return rocksdb::Histograms::PICK_GARBAGE_COLLECTION_TIME;
+        return TERARKDB_NAMESPACE::Histograms::PICK_GARBAGE_COLLECTION_TIME;
       case 0x22:
-        return rocksdb::Histograms::INSTALL_SUPER_VERSION_TIME;
+        return TERARKDB_NAMESPACE::Histograms::INSTALL_SUPER_VERSION_TIME;
       case 0x23:
-        return rocksdb::Histograms::HISTOGRAM_ENUM_MAX;
+        return TERARKDB_NAMESPACE::Histograms::HISTOGRAM_ENUM_MAX;
 
       default:
         // undefined/default
-        return rocksdb::Histograms::DB_GET;
+        return TERARKDB_NAMESPACE::Histograms::DB_GET;
     }
   }
 };
@@ -3776,15 +3776,15 @@ class HistogramTypeJni {
 class StatsLevelJni {
  public:
   // Returns the equivalent org.rocksdb.StatsLevel for the provided
-  // C++ rocksdb::StatsLevel enum
+  // C++ TERARKDB_NAMESPACE::StatsLevel enum
   static jbyte toJavaStatsLevel(
-      const rocksdb::StatsLevel& stats_level) {
+      const TERARKDB_NAMESPACE::StatsLevel& stats_level) {
     switch(stats_level) {
-      case rocksdb::StatsLevel::kExceptDetailedTimers:
+      case TERARKDB_NAMESPACE::StatsLevel::kExceptDetailedTimers:
         return 0x0;
-      case rocksdb::StatsLevel::kExceptTimeForMutex:
+      case TERARKDB_NAMESPACE::StatsLevel::kExceptTimeForMutex:
         return 0x1;
-      case rocksdb::StatsLevel::kAll:
+      case TERARKDB_NAMESPACE::StatsLevel::kAll:
         return 0x2;
 
       default:
@@ -3793,20 +3793,20 @@ class StatsLevelJni {
     }
   }
 
-  // Returns the equivalent C++ rocksdb::StatsLevel enum for the
+  // Returns the equivalent C++ TERARKDB_NAMESPACE::StatsLevel enum for the
   // provided Java org.rocksdb.StatsLevel
-  static rocksdb::StatsLevel toCppStatsLevel(jbyte jstats_level) {
+  static TERARKDB_NAMESPACE::StatsLevel toCppStatsLevel(jbyte jstats_level) {
     switch(jstats_level) {
       case 0x0:
-        return rocksdb::StatsLevel::kExceptDetailedTimers;
+        return TERARKDB_NAMESPACE::StatsLevel::kExceptDetailedTimers;
       case 0x1:
-        return rocksdb::StatsLevel::kExceptTimeForMutex;
+        return TERARKDB_NAMESPACE::StatsLevel::kExceptTimeForMutex;
       case 0x2:
-        return rocksdb::StatsLevel::kAll;
+        return TERARKDB_NAMESPACE::StatsLevel::kAll;
 
       default:
         // undefined/default
-        return rocksdb::StatsLevel::kExceptDetailedTimers;
+        return TERARKDB_NAMESPACE::StatsLevel::kExceptDetailedTimers;
     }
   }
 };
@@ -3815,15 +3815,15 @@ class StatsLevelJni {
 class RateLimiterModeJni {
  public:
   // Returns the equivalent org.rocksdb.RateLimiterMode for the provided
-  // C++ rocksdb::RateLimiter::Mode enum
+  // C++ TERARKDB_NAMESPACE::RateLimiter::Mode enum
   static jbyte toJavaRateLimiterMode(
-      const rocksdb::RateLimiter::Mode& rate_limiter_mode) {
+      const TERARKDB_NAMESPACE::RateLimiter::Mode& rate_limiter_mode) {
     switch(rate_limiter_mode) {
-      case rocksdb::RateLimiter::Mode::kReadsOnly:
+      case TERARKDB_NAMESPACE::RateLimiter::Mode::kReadsOnly:
         return 0x0;
-      case rocksdb::RateLimiter::Mode::kWritesOnly:
+      case TERARKDB_NAMESPACE::RateLimiter::Mode::kWritesOnly:
         return 0x1;
-      case rocksdb::RateLimiter::Mode::kAllIo:
+      case TERARKDB_NAMESPACE::RateLimiter::Mode::kAllIo:
         return 0x2;
 
       default:
@@ -3832,20 +3832,20 @@ class RateLimiterModeJni {
     }
   }
 
-  // Returns the equivalent C++ rocksdb::RateLimiter::Mode enum for the
+  // Returns the equivalent C++ TERARKDB_NAMESPACE::RateLimiter::Mode enum for the
   // provided Java org.rocksdb.RateLimiterMode
-  static rocksdb::RateLimiter::Mode toCppRateLimiterMode(jbyte jrate_limiter_mode) {
+  static TERARKDB_NAMESPACE::RateLimiter::Mode toCppRateLimiterMode(jbyte jrate_limiter_mode) {
     switch(jrate_limiter_mode) {
       case 0x0:
-        return rocksdb::RateLimiter::Mode::kReadsOnly;
+        return TERARKDB_NAMESPACE::RateLimiter::Mode::kReadsOnly;
       case 0x1:
-        return rocksdb::RateLimiter::Mode::kWritesOnly;
+        return TERARKDB_NAMESPACE::RateLimiter::Mode::kWritesOnly;
       case 0x2:
-        return rocksdb::RateLimiter::Mode::kAllIo;
+        return TERARKDB_NAMESPACE::RateLimiter::Mode::kAllIo;
 
       default:
         // undefined/default
-        return rocksdb::RateLimiter::Mode::kWritesOnly;
+        return TERARKDB_NAMESPACE::RateLimiter::Mode::kWritesOnly;
     }
   }
 };
@@ -3854,17 +3854,17 @@ class RateLimiterModeJni {
 class MemoryUsageTypeJni {
 public:
   // Returns the equivalent org.rocksdb.MemoryUsageType for the provided
-  // C++ rocksdb::MemoryUtil::UsageType enum
+  // C++ TERARKDB_NAMESPACE::MemoryUtil::UsageType enum
   static jbyte toJavaMemoryUsageType(
-      const rocksdb::MemoryUtil::UsageType& usage_type) {
+      const TERARKDB_NAMESPACE::MemoryUtil::UsageType& usage_type) {
     switch(usage_type) {
-      case rocksdb::MemoryUtil::UsageType::kMemTableTotal:
+      case TERARKDB_NAMESPACE::MemoryUtil::UsageType::kMemTableTotal:
         return 0x0;
-      case rocksdb::MemoryUtil::UsageType::kMemTableUnFlushed:
+      case TERARKDB_NAMESPACE::MemoryUtil::UsageType::kMemTableUnFlushed:
         return 0x1;
-      case rocksdb::MemoryUtil::UsageType::kTableReadersTotal:
+      case TERARKDB_NAMESPACE::MemoryUtil::UsageType::kTableReadersTotal:
         return 0x2;
-      case rocksdb::MemoryUtil::UsageType::kCacheTotal:
+      case TERARKDB_NAMESPACE::MemoryUtil::UsageType::kCacheTotal:
         return 0x3;
       default:
         // undefined: use kNumUsageTypes
@@ -3872,22 +3872,22 @@ public:
     }
   }
 
-  // Returns the equivalent C++ rocksdb::MemoryUtil::UsageType enum for the
+  // Returns the equivalent C++ TERARKDB_NAMESPACE::MemoryUtil::UsageType enum for the
   // provided Java org.rocksdb.MemoryUsageType
-  static rocksdb::MemoryUtil::UsageType toCppMemoryUsageType(
+  static TERARKDB_NAMESPACE::MemoryUtil::UsageType toCppMemoryUsageType(
       jbyte usage_type) {
     switch(usage_type) {
       case 0x0:
-        return rocksdb::MemoryUtil::UsageType::kMemTableTotal;
+        return TERARKDB_NAMESPACE::MemoryUtil::UsageType::kMemTableTotal;
       case 0x1:
-        return rocksdb::MemoryUtil::UsageType::kMemTableUnFlushed;
+        return TERARKDB_NAMESPACE::MemoryUtil::UsageType::kMemTableUnFlushed;
       case 0x2:
-        return rocksdb::MemoryUtil::UsageType::kTableReadersTotal;
+        return TERARKDB_NAMESPACE::MemoryUtil::UsageType::kTableReadersTotal;
       case 0x3:
-        return rocksdb::MemoryUtil::UsageType::kCacheTotal;
+        return TERARKDB_NAMESPACE::MemoryUtil::UsageType::kCacheTotal;
       default:
         // undefined/default: use kNumUsageTypes
-        return rocksdb::MemoryUtil::UsageType::kNumUsageTypes;
+        return TERARKDB_NAMESPACE::MemoryUtil::UsageType::kNumUsageTypes;
     }
   }
 };
@@ -4008,7 +4008,7 @@ class TransactionDBJni : public JavaClass {
    *     or nullptr if an an exception occurs
    */
   static jobject newDeadlockInfo(JNIEnv* env, jobject jtransaction_db,
-      const rocksdb::TransactionID transaction_id,
+      const TERARKDB_NAMESPACE::TransactionID transaction_id,
       const uint32_t column_family_id, const std::string &waiting_key,
       const bool exclusive) {
     jclass jclazz = getJClass(env);
@@ -4048,35 +4048,35 @@ class TransactionDBJni : public JavaClass {
 class TxnDBWritePolicyJni {
  public:
  // Returns the equivalent org.rocksdb.TxnDBWritePolicy for the provided
- // C++ rocksdb::TxnDBWritePolicy enum
+ // C++ TERARKDB_NAMESPACE::TxnDBWritePolicy enum
  static jbyte toJavaTxnDBWritePolicy(
-     const rocksdb::TxnDBWritePolicy& txndb_write_policy) {
+     const TERARKDB_NAMESPACE::TxnDBWritePolicy& txndb_write_policy) {
    switch(txndb_write_policy) {
-     case rocksdb::TxnDBWritePolicy::WRITE_COMMITTED:
+     case TERARKDB_NAMESPACE::TxnDBWritePolicy::WRITE_COMMITTED:
        return 0x0;
-     case rocksdb::TxnDBWritePolicy::WRITE_PREPARED:
+     case TERARKDB_NAMESPACE::TxnDBWritePolicy::WRITE_PREPARED:
        return 0x1;
-    case rocksdb::TxnDBWritePolicy::WRITE_UNPREPARED:
+    case TERARKDB_NAMESPACE::TxnDBWritePolicy::WRITE_UNPREPARED:
        return 0x2;
      default:
        return 0x7F;  // undefined
    }
  }
 
- // Returns the equivalent C++ rocksdb::TxnDBWritePolicy enum for the
+ // Returns the equivalent C++ TERARKDB_NAMESPACE::TxnDBWritePolicy enum for the
  // provided Java org.rocksdb.TxnDBWritePolicy
- static rocksdb::TxnDBWritePolicy toCppTxnDBWritePolicy(
+ static TERARKDB_NAMESPACE::TxnDBWritePolicy toCppTxnDBWritePolicy(
      jbyte jtxndb_write_policy) {
    switch(jtxndb_write_policy) {
      case 0x0:
-       return rocksdb::TxnDBWritePolicy::WRITE_COMMITTED;
+       return TERARKDB_NAMESPACE::TxnDBWritePolicy::WRITE_COMMITTED;
      case 0x1:
-       return rocksdb::TxnDBWritePolicy::WRITE_PREPARED;
+       return TERARKDB_NAMESPACE::TxnDBWritePolicy::WRITE_PREPARED;
      case 0x2:
-       return rocksdb::TxnDBWritePolicy::WRITE_UNPREPARED;
+       return TERARKDB_NAMESPACE::TxnDBWritePolicy::WRITE_UNPREPARED;
      default:
        // undefined/default
-       return rocksdb::TxnDBWritePolicy::WRITE_COMMITTED;
+       return TERARKDB_NAMESPACE::TxnDBWritePolicy::WRITE_COMMITTED;
    }
  }
 };
@@ -4100,17 +4100,17 @@ class KeyLockInfoJni : public JavaClass {
 
   /**
    * Create a new Java org.rocksdb.TransactionDB.KeyLockInfo object
-   * with the same properties as the provided C++ rocksdb::KeyLockInfo object
+   * with the same properties as the provided C++ TERARKDB_NAMESPACE::KeyLockInfo object
    *
    * @param env A pointer to the Java environment
-   * @param key_lock_info The rocksdb::KeyLockInfo object
+   * @param key_lock_info The TERARKDB_NAMESPACE::KeyLockInfo object
    *
    * @return A reference to a Java
    *     org.rocksdb.TransactionDB.KeyLockInfo object,
    *     or nullptr if an an exception occurs
    */
   static jobject construct(JNIEnv* env,
-      const rocksdb::KeyLockInfo& key_lock_info) {
+      const TERARKDB_NAMESPACE::KeyLockInfo& key_lock_info) {
     jclass jclazz = getJClass(env);
     if(jclazz == nullptr) {
       // exception occurred accessing class
@@ -4308,7 +4308,7 @@ class JniUtil {
      */
     static std::vector<std::string> copyStrings(JNIEnv* env,
         jobjectArray jss, jboolean* has_exception) {
-          return rocksdb::JniUtil::copyStrings(env, jss,
+          return TERARKDB_NAMESPACE::JniUtil::copyStrings(env, jss,
               env->GetArrayLength(jss), has_exception);
     }
 
@@ -4625,7 +4625,7 @@ class JniUtil {
       // OutOfMemoryError("Requested array size exceeds VM limit") coming from VM
       static const size_t MAX_JARRAY_SIZE = (static_cast<size_t>(1)) << 31;
       if(size > MAX_JARRAY_SIZE) {
-        rocksdb::RocksDBExceptionJni::ThrowNew(env, "Requested array size exceeds VM limit");
+        TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, "Requested array size exceeds VM limit");
         return nullptr;
       }
       
@@ -4648,7 +4648,7 @@ class JniUtil {
     }
 
     /**
-     * Copies bytes from a rocksdb::Slice to a jByteArray
+     * Copies bytes from a TERARKDB_NAMESPACE::Slice to a jByteArray
      *
      * @param env A pointer to the java environment
      * @param bytes The bytes to copy
@@ -4668,8 +4668,8 @@ class JniUtil {
      *
      * TODO(AR) could be used for RocksDB->Put etc.
      */
-    static std::unique_ptr<rocksdb::Status> kv_op(
-        std::function<rocksdb::Status(rocksdb::Slice, rocksdb::Slice)> op,
+    static std::unique_ptr<TERARKDB_NAMESPACE::Status> kv_op(
+        std::function<TERARKDB_NAMESPACE::Status(TERARKDB_NAMESPACE::Slice, TERARKDB_NAMESPACE::Slice)> op,
         JNIEnv* env, jobject /*jobj*/,
         jbyteArray jkey, jint jkey_len,
         jbyteArray jvalue, jint jvalue_len) {
@@ -4688,8 +4688,8 @@ class JniUtil {
         return nullptr;
       }
 
-      rocksdb::Slice key_slice(reinterpret_cast<char*>(key), jkey_len);
-      rocksdb::Slice value_slice(reinterpret_cast<char*>(value),
+      TERARKDB_NAMESPACE::Slice key_slice(reinterpret_cast<char*>(key), jkey_len);
+      TERARKDB_NAMESPACE::Slice value_slice(reinterpret_cast<char*>(value),
           jvalue_len);
 
       auto status = op(key_slice, value_slice);
@@ -4701,7 +4701,7 @@ class JniUtil {
         env->ReleaseByteArrayElements(jkey, key, JNI_ABORT);
       }
 
-      return std::unique_ptr<rocksdb::Status>(new rocksdb::Status(status));
+      return std::unique_ptr<TERARKDB_NAMESPACE::Status>(new TERARKDB_NAMESPACE::Status(status));
     }
 
     /*
@@ -4710,8 +4710,8 @@ class JniUtil {
      *
      * TODO(AR) could be used for RocksDB->Delete etc.
      */
-    static std::unique_ptr<rocksdb::Status> k_op(
-        std::function<rocksdb::Status(rocksdb::Slice)> op,
+    static std::unique_ptr<TERARKDB_NAMESPACE::Status> k_op(
+        std::function<TERARKDB_NAMESPACE::Status(TERARKDB_NAMESPACE::Slice)> op,
         JNIEnv* env, jobject /*jobj*/,
         jbyteArray jkey, jint jkey_len) {
       jbyte* key = env->GetByteArrayElements(jkey, nullptr);
@@ -4720,7 +4720,7 @@ class JniUtil {
         return nullptr;
       }
 
-      rocksdb::Slice key_slice(reinterpret_cast<char*>(key), jkey_len);
+      TERARKDB_NAMESPACE::Slice key_slice(reinterpret_cast<char*>(key), jkey_len);
 
       auto status = op(key_slice);
 
@@ -4728,7 +4728,7 @@ class JniUtil {
         env->ReleaseByteArrayElements(jkey, key, JNI_ABORT);
       }
 
-      return std::unique_ptr<rocksdb::Status>(new rocksdb::Status(status));
+      return std::unique_ptr<TERARKDB_NAMESPACE::Status>(new TERARKDB_NAMESPACE::Status(status));
     }
 
     /*
@@ -4736,7 +4736,7 @@ class JniUtil {
      * for example WriteBatchWithIndex->GetFromBatch
      */
     static jbyteArray v_op(
-        std::function<rocksdb::Status(rocksdb::Slice, std::string*)> op,
+        std::function<TERARKDB_NAMESPACE::Status(TERARKDB_NAMESPACE::Slice, std::string*)> op,
         JNIEnv* env, jbyteArray jkey, jint jkey_len) {
       jbyte* key = env->GetByteArrayElements(jkey, nullptr);
       if(env->ExceptionCheck()) {
@@ -4744,10 +4744,10 @@ class JniUtil {
         return nullptr;
       }
 
-      rocksdb::Slice key_slice(reinterpret_cast<char*>(key), jkey_len);
+      TERARKDB_NAMESPACE::Slice key_slice(reinterpret_cast<char*>(key), jkey_len);
 
       std::string value;
-      rocksdb::Status s = op(key_slice, &value);
+      TERARKDB_NAMESPACE::Status s = op(key_slice, &value);
 
       if(key != nullptr) {
         env->ReleaseByteArrayElements(jkey, key, JNI_ABORT);
@@ -4778,7 +4778,7 @@ class JniUtil {
         return jret_value;
       }
 
-      rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+      TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
       return nullptr;
     }
 };
@@ -4800,10 +4800,10 @@ class ColumnFamilyDescriptorJni : public JavaClass {
 
   /**
    * Create a new Java org.rocksdb.ColumnFamilyDescriptor object with the same
-   * properties as the provided C++ rocksdb::ColumnFamilyDescriptor object
+   * properties as the provided C++ TERARKDB_NAMESPACE::ColumnFamilyDescriptor object
    *
    * @param env A pointer to the Java environment
-   * @param cfd A pointer to rocksdb::ColumnFamilyDescriptor object
+   * @param cfd A pointer to TERARKDB_NAMESPACE::ColumnFamilyDescriptor object
    *
    * @return A reference to a Java org.rocksdb.ColumnFamilyDescriptor object, or
    * nullptr if an an exception occurs
@@ -4974,7 +4974,7 @@ class HashMapJni : public JavaClass {
    */
   template<class iterator_type, typename K, typename V>
   static bool putAll(JNIEnv* env, const jobject jhash_map, iterator_type iterator, iterator_type end, const FnMapKV<K, V> &fn_map_kv) {
-    const jmethodID jmid_put = rocksdb::MapJni::getMapPutMethodId(env);
+    const jmethodID jmid_put = TERARKDB_NAMESPACE::MapJni::getMapPutMethodId(env);
     if (jmid_put == nullptr) {
       return false;
     }
@@ -5041,5 +5041,5 @@ class LongJni : public JavaClass {
     return jlong_obj;
   }
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // JAVA_ROCKSJNI_PORTAL_H_

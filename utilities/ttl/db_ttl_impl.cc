@@ -13,7 +13,7 @@
 #include "util/coding.h"
 #include "util/filename.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 void DBWithTTLImpl::SanitizeOptions(int32_t ttl, ColumnFamilyOptions* options,
                                     Env* env) {
@@ -327,5 +327,5 @@ void DBWithTTLImpl::SetTtl(ColumnFamilyHandle *h, int32_t ttl) {
   filter->SetTtl(ttl);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

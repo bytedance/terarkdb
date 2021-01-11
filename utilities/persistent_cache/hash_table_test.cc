@@ -17,7 +17,7 @@
 
 #ifndef ROCKSDB_LITE
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct HashTableTest : public testing::Test {
   ~HashTableTest() { map_.Clear(&HashTableTest::ClearNode); }
@@ -149,7 +149,7 @@ TEST_F(EvictableHashTableTest, TestEvict) {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif
 
 int main(int argc, char** argv) {

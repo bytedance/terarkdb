@@ -7,7 +7,7 @@
 #include <stdint.h>
 #include "rocksdb/status.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Comparator;
 class Iterator;
@@ -65,4 +65,4 @@ class BlockPrefixIndex {
   uint32_t* block_array_buffer_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

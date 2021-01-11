@@ -7,7 +7,7 @@
 
 #include "db/range_del_aggregator.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 IteratorCache::IteratorCache(const DependenceMap& dependence_map,
                              void* callback_arg,
@@ -121,4 +121,4 @@ const FileMetaData* IteratorCache::GetFileMetaData(uint64_t file_number) {
   return nullptr;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

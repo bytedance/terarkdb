@@ -11,7 +11,7 @@
 #include <string>
 #include "rocksdb/status.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class DB;
 
@@ -39,5 +39,5 @@ class Checkpoint {
   virtual ~Checkpoint() {}
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // !ROCKSDB_LITE
