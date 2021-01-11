@@ -932,9 +932,9 @@ void DBImpl::ScheduleGCTTL() {
   auto should_marked_for_compacted = [&](uint64_t ratio_expire_time,
                                          uint64_t scan_gap_expire_time,
                                          uint64_t now) {
-    ROCKS_LOG_INFO(immutable_db_options_.info_log,
-                   "SST Table property info:%" PRIu64 ",%" PRIu64 ",%" PRIu64,
-                   ratio_expire_time, scan_gap_expire_time, now);
+    // ROCKS_LOG_INFO(immutable_db_options_.info_log,
+    //                "SST Table property info:%" PRIu64 ",%" PRIu64 ",%"
+    //                PRIu64, ratio_expire_time, scan_gap_expire_time, now);
     return (std::min(ratio_expire_time, scan_gap_expire_time) <= now);
   };
   ROCKS_LOG_INFO(immutable_db_options_.info_log, "Start ScheduleGCTTL");
@@ -945,25 +945,34 @@ void DBImpl::ScheduleGCTTL() {
       VersionStorageInfo* vsi = cfd->current()->storage_info();
       for (int l = 0; l < vsi->num_levels(); l++) {
         for (auto sst : vsi->LevelFiles(l)) {
-          if (sst->marked_for_compaction) marked_count++;
-          if (!sst->marked_for_compaction)
-            sst->marked_for_compaction = should_marked_for_compacted(
-                sst->prop.ratio_expire_time, sst->prop.scan_gap_expire_time,
-                nowSeconds);
+          if (sst->marked_for_compaction) {
+            marked_count++;
+          } else if (should_marked_for_compacted(sst->prop.ratio_expire_time,
+                                                 sst->prop.scan_gap_expire_time,
+                                                 nowSeconds)) {
+            sst->marked_for_compaction = true;
+          }
           if (sst->marked_for_compaction) {
             TEST_SYNC_POINT("DBImpl:ScheduleGCTTL-mark");
             mark_count++;
           }
         }
       }
+      if (mark_count > 0) {
+        vsi->ComputeCompactionScore(*cfd->ioptions(),
+                                    *cfd->GetLatestMutableCFOptions());
+        InstrumentedMutexLock l(&mutex_);
+        AddToCompactionQueue(cfd);
+        unscheduled_compactions_++;
+        MaybeScheduleFlushOrCompaction();
+      }
+      ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                     "[%s] marked for compact SST: %d, %d, %d",
+                     cfd->GetName().c_str(), marked_count, mark_count, cnt);
+      marked_count = 0;
+      mark_count = 0;
+      cnt = 0;
     }
-  }
-  ROCKS_LOG_INFO(immutable_db_options_.info_log,
-                 "marked for compact SST: %d,%d,%d", marked_count, mark_count,
-                 cnt);
-  if (mark_count > 0) {
-    InstrumentedMutexLock l(&mutex_);
-    MaybeScheduleFlushOrCompaction();
   }
 }
 void DBImpl::DumpStats() {

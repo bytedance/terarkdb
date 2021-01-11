@@ -71,7 +71,7 @@ int FindFileInRange(const InternalKeyComparator& icmp,
                     uint32_t left, uint32_t right) {
   return static_cast<int>(
       terark::lower_bound_ex_n(file_level.files, left, right, key,
-                                         TERARK_FIELD(largest_key), "" < icmp));
+                               TERARK_FIELD(largest_key), "" < icmp));
 }
 
 Status OverlapWithIterator(const Comparator* ucmp,
@@ -2117,8 +2117,7 @@ void VersionStorageInfo::GenerateLevel0NonOverlapping() {
       level_files_brief_[0].files,
       level_files_brief_[0].files + level_files_brief_[0].num_files);
   auto icmp = internal_comparator_;
-  terark::sort_a(level0_sorted_file,
-                           TERARK_FIELD(smallest_key) < *icmp);
+  terark::sort_a(level0_sorted_file, TERARK_FIELD(smallest_key) < *icmp);
 
   for (size_t i = 1; i < level0_sorted_file.size(); ++i) {
     FdWithKeyRange& f = level0_sorted_file[i];
@@ -2167,18 +2166,22 @@ void VersionStorageInfo::ComputeBottommostFilesMarkedForCompaction() {
   bottommost_files_marked_for_compaction_.clear();
   bottommost_files_mark_threshold_ = kMaxSequenceNumber;
   for (auto& level_and_file : bottommost_files_) {
-    if (!level_and_file.second->being_compacted &&
-        level_and_file.second->fd.largest_seqno != 0 &&
-        level_and_file.second->prop.num_deletions > 1) {
-      // largest_seqno might be nonzero due to containing the final key in an
-      // earlier compaction, whose seqnum we didn't zero out. Multiple deletions
-      // ensures the file really contains deleted or overwritten keys.
-      if (level_and_file.second->fd.largest_seqno < oldest_snapshot_seqnum_) {
+    if (!level_and_file.second->being_compacted) {
+      if (level_and_file.second->fd.largest_seqno != 0 &&
+          level_and_file.second->prop.num_deletions > 1) {
+        // largest_seqno might be nonzero due to containing the final key in an
+        // earlier compaction, whose seqnum we didn't zero out. Multiple
+        // deletions ensures the file really contains deleted or overwritten
+        // keys.
+        if (level_and_file.second->fd.largest_seqno < oldest_snapshot_seqnum_) {
+          bottommost_files_marked_for_compaction_.push_back(level_and_file);
+        } else {
+          bottommost_files_mark_threshold_ =
+              std::min(bottommost_files_mark_threshold_,
+                       level_and_file.second->fd.largest_seqno);
+        }
+      } else if (level_and_file.second->marked_for_compaction) {
         bottommost_files_marked_for_compaction_.push_back(level_and_file);
-      } else {
-        bottommost_files_mark_threshold_ =
-            std::min(bottommost_files_mark_threshold_,
-                     level_and_file.second->fd.largest_seqno);
       }
     }
   }
