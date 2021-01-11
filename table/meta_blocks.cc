@@ -10,6 +10,7 @@
 #include "db/table_properties_collector.h"
 #include "rocksdb/table.h"
 #include "rocksdb/table_properties.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block.h"
 #include "table/block_fetcher.h"
 #include "table/format.h"
@@ -19,7 +20,6 @@
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 MetaIndexBuilder::MetaIndexBuilder()
@@ -157,9 +157,11 @@ void PropertyBlockBuilder::AddTableProperty(const TableProperties& props) {
   if (!props.compression_name.empty()) {
     Add(TablePropertiesNames::kCompression, props.compression_name);
   }
-  if (true) {
+  if (props.ratio_expire_time < std::numeric_limits<uint64_t>::max()) {
     Add(TablePropertiesNames::kEarliestTimeBeginCompact,
         props.ratio_expire_time);
+  }
+  if (props.scan_gap_expire_time < std::numeric_limits<uint64_t>::max()) {
     Add(TablePropertiesNames::kLatestTimeEndCompact,
         props.scan_gap_expire_time);
   }
@@ -424,6 +426,20 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
       }
     } else if (key == TablePropertiesNames::kInheritanceChain) {
       GetUint64Vector(key, &raw_val, new_table_properties->inheritance_chain);
+    } else if (key == TablePropertiesNames::kRatioExpireTime) {
+      uint64_t u64_val;
+      if (!GetVarint64(&raw_val, &u64_val)) {
+        log_error();
+        continue;
+      }
+      new_table_properties->ratio_expire_time = u64_val;
+    } else if (key == TablePropertiesNames::kScanGapExpireTime) {
+      uint64_t u64_val;
+      if (!GetVarint64(&raw_val, &u64_val)) {
+        log_error();
+        continue;
+      }
+      new_table_properties->scan_gap_expire_time = u64_val;
     } else {
       // handle user-collected properties
       new_table_properties->user_collected_properties.insert(

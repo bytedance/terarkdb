@@ -842,9 +842,9 @@ void BlockBasedTableBuilder::WritePropertiesBlock(
       uint64_t max_uint64_t = std::numeric_limits<uint64_t>::max();
 
       double ratio = rep_->moptions.ttl_garbage_collection_percentage;
+      uint64_t percentile_ratio_ttl = max_uint64_t;
       if (ratio <= 100.0) {
         assert(ttl_histogram_ != nullptr);
-        uint64_t percentile_ratio_ttl = max_uint64_t;
 
         if (!ttl_histogram_->Empty() &&
             kv_size_has_row_ttl_ >=
@@ -870,9 +870,8 @@ void BlockBasedTableBuilder::WritePropertiesBlock(
       ROCKS_LOG_INFO(rep_->ioptions.info_log,
                      "[%s] ratio_row_ttl:%" PRIu64 ", scan_gap_row_ttl:%" PRIu64
                      ".",
-                     rep_->column_family_name.c_str(),
-                     rep_->props.ratio_expire_time - now_seconds,
-                     rep_->props.scan_gap_expire_time - now_seconds);
+                     rep_->column_family_name.c_str(), percentile_ratio_ttl,
+                     min_ttl_seconds_);
       min_ttl_seconds_ = std::numeric_limits<uint64_t>::max();
       ttl_histogram_.reset();
       ttl_extractor_.reset();
@@ -935,8 +934,8 @@ Status BlockBasedTableBuilder::Finish(
     r->props.read_amp = prop->read_amp;
     r->props.dependence = prop->dependence;
     r->props.inheritance_chain = prop->inheritance_chain;
-    r->props.ratio_expire_time = prop->ratio_expire_time;
-    r->props.scan_gap_expire_time = prop->scan_gap_expire_time;
+    // r->props.ratio_expire_time = prop->ratio_expire_time;
+    // r->props.scan_gap_expire_time = prop->scan_gap_expire_time;
   }
   if (snapshots != nullptr) {
     r->props.snapshots = *snapshots;

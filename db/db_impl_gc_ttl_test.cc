@@ -24,6 +24,7 @@ class DBImplGCTTL_Test : public DBTestBase {
     options.ttl_scan_gap = 10;
     options.ttl_extractor_factory.reset(new test::TestTtlExtractorFactory());
     options.level0_file_num_compaction_trigger = 8;
+    options.enable_lazy_compaction = false;
     options.table_factory.reset(
         new BlockBasedTableFactory(BlockBasedTableOptions()));
   }
@@ -50,9 +51,7 @@ class DBImplGCTTL_Test : public DBTestBase {
                                                      flag = true;
                                                    });
     rocksdb::SyncPoint::GetInstance()->SetCallBack(
-        "DBImpl:ScheduleGCTTL-mark", [&](void* /*arg*/) {
-          mark++;
-        });
+        "DBImpl:ScheduleGCTTL-mark", [&](void* /*arg*/) { mark++; });
   }
 };
 
@@ -81,7 +80,7 @@ TEST_F(DBImplGCTTL_Test, L0FileExpiredTest) {
   dbfull()->TEST_WaitForStatsDumpRun([&] { mock_env_->set_current_time(ttl); });
   ASSERT_TRUE(flag);
   ASSERT_EQ(L0FilesNums, mark);
-  dbfull()->CompactRange(CompactRangeOptions(),nullptr, nullptr);
+  dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr);
   dbfull()->TEST_WaitForCompact();
   dbfull()->ScheduleGCTTL();
 

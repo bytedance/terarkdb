@@ -891,6 +891,9 @@ Status CompactionJob::Run() {
           output.meta.prop.inheritance_chain = tp->inheritance_chain;
           output.meta.prop.ratio_expire_time = tp->ratio_expire_time;
           output.meta.prop.scan_gap_expire_time = tp->scan_gap_expire_time;
+          // ROCKS_LOG_INFO(db_options_.info_log,
+          //                "ratio:%" PRIu64 ", scan:%" PRIu64,
+          //                tp->ratio_expire_time, tp->scan_gap_expire_time);
           output.finished = true;
           c->AddOutputTableFileNumber(file_number);
         }
@@ -2117,6 +2120,11 @@ Status CompactionJob::FinishCompactionOutputFile(
         tp.num_range_deletions > 0 ? 0 : TablePropertyCache::kNoRangeDeletions;
     meta->prop.flags |=
         tp.snapshots.empty() ? 0 : TablePropertyCache::kHasSnapshots;
+
+    meta->prop.ratio_expire_time = tp.ratio_expire_time;
+    meta->prop.scan_gap_expire_time = tp.scan_gap_expire_time;
+    ROCKS_LOG_INFO(db_options_.info_log, "ratio:%" PRIu64 ", scan:%" PRIu64,
+                   tp.ratio_expire_time, tp.scan_gap_expire_time);
   }
 
   if (s.ok() && tp.num_entries == 0 && tp.num_range_deletions == 0) {
