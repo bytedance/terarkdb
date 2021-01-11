@@ -33,6 +33,7 @@
 
 #include "port/win/win_thread.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 
 #undef min
 #undef max
@@ -71,8 +72,6 @@ typedef SSIZE_T ssize_t;
 #ifndef PLATFORM_IS_LITTLE_ENDIAN
 #define PLATFORM_IS_LITTLE_ENDIAN (__BYTE_ORDER == __LITTLE_ENDIAN)
 #endif
-
-#include "rocksdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

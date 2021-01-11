@@ -9,10 +9,10 @@
 
 #include "port/port.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/allocator.h"
 #include "util/hash.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {
@@ -29,13 +29,12 @@ uint32_t GetTotalBitsForLocality(uint32_t total_bits) {
 
   return num_blocks * (CACHE_LINE_SIZE * 8);
 }
-}
+}  // namespace
 
 DynamicBloom::DynamicBloom(Allocator* allocator, uint32_t total_bits,
                            uint32_t locality, uint32_t num_probes,
                            uint32_t (*hash_func)(const Slice& key),
-                           size_t huge_page_tlb_size,
-                           Logger* logger)
+                           size_t huge_page_tlb_size, Logger* logger)
     : DynamicBloom(num_probes, hash_func) {
   SetTotalBits(allocator, total_bits, locality, huge_page_tlb_size, logger);
 }
@@ -55,9 +54,8 @@ void DynamicBloom::SetRawData(unsigned char* raw_data, uint32_t total_bits,
   kNumBlocks = num_blocks;
 }
 
-void DynamicBloom::SetTotalBits(Allocator* allocator,
-                                uint32_t total_bits, uint32_t locality,
-                                size_t huge_page_tlb_size,
+void DynamicBloom::SetTotalBits(Allocator* allocator, uint32_t total_bits,
+                                uint32_t locality, size_t huge_page_tlb_size,
                                 Logger* logger) {
   kTotalBits = (locality > 0) ? GetTotalBitsForLocality(total_bits)
                               : (total_bits + 7) / 8 * 8;
@@ -81,4 +79,4 @@ void DynamicBloom::SetTotalBits(Allocator* allocator,
   data_ = reinterpret_cast<std::atomic<uint8_t>*>(raw);
 }
 
-}  // rocksdb
+}  // namespace TERARKDB_NAMESPACE
