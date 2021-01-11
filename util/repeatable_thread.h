@@ -13,6 +13,7 @@
 #include "rocksdb/terark_namespace.h"
 #include "util/mock_time_env.h"
 #include "util/mutexlock.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class RepeatableThread {

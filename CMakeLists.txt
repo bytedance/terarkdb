@@ -49,6 +49,10 @@ if(WITH_TERARKDB_NAMESPACE)
 endif()
 
 #----------------------- Global Options
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin" OR CMAKE_BUILD_TYPE STREQUAL "Release" OR WITH_JEMALLOC)
+  set(WITH_ASAN OFF)
+endif()
+
 if (WITH_WINDOWS_UTF8_FILENAMES)
   add_definitions(-DROCKSDB_WINDOWS_UTF8_FILENAMES)
 endif()
