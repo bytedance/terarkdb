@@ -20,6 +20,7 @@
 #include "db/write_batch_internal.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/transaction_log.h"
 #include "util/filename.h"
 #include "util/string_util.h"
@@ -27,7 +28,6 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DeleteFileTest : public testing::Test {

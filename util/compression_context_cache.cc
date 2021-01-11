@@ -9,12 +9,12 @@
 
 #include "util/compression_context_cache.h"
 
-#include "util/compression.h"
-#include "util/core_local.h"
-
 #include <atomic>
 
 #include "rocksdb/terark_namespace.h"
+#include "util/compression.h"
+#include "util/core_local.h"
+
 namespace TERARKDB_NAMESPACE {
 namespace compression_cache {
 

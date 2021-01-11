@@ -9,9 +9,8 @@
 #define __STDC_FORMAT_MACROS
 #endif
 
-#include "utilities/transactions/transaction_test.h"
-
 #include <inttypes.h>
+
 #include <algorithm>
 #include <functional>
 #include <string>
@@ -19,8 +18,10 @@
 
 #include "db/db_impl.h"
 #include "db/dbformat.h"
+#include "port/port.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/types.h"
 #include "rocksdb/utilities/debug.h"
 #include "rocksdb/utilities/transaction.h"
@@ -36,13 +37,11 @@
 #include "utilities/merge_operators.h"
 #include "utilities/merge_operators/string_append/stringappend.h"
 #include "utilities/transactions/pessimistic_transaction_db.h"
+#include "utilities/transactions/transaction_test.h"
 #include "utilities/transactions/write_prepared_txn_db.h"
-
-#include "port/port.h"
 
 using std::string;
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 using CommitEntry = WritePreparedTxnDB::CommitEntry;
@@ -159,19 +158,20 @@ TEST(PreparedHeap, Concurrent) {
     for (size_t i = 0; i < t_cnt; i++) {
       // This is not recommended usage but we should be resilient against it.
       bool skip_push = rnd.OneIn(5);
-      t[i] = TERARKDB_NAMESPACE::port::Thread([&heap, &prepared_mutex, skip_push, i]() {
-        auto seq = i;
-        std::this_thread::yield();
-        if (!skip_push) {
-          WriteLock wl(&prepared_mutex);
-          heap.push(seq);
-        }
-        std::this_thread::yield();
-        {
-          WriteLock wl(&prepared_mutex);
-          heap.erase(seq);
-        }
-      });
+      t[i] = TERARKDB_NAMESPACE::port::Thread(
+          [&heap, &prepared_mutex, skip_push, i]() {
+            auto seq = i;
+            std::this_thread::yield();
+            if (!skip_push) {
+              WriteLock wl(&prepared_mutex);
+              heap.push(seq);
+            }
+            std::this_thread::yield();
+            {
+              WriteLock wl(&prepared_mutex);
+              heap.erase(seq);
+            }
+          });
     }
     for (size_t i = 0; i < t_cnt; i++) {
       t[i].join();
@@ -421,7 +421,8 @@ class WritePreparedTransactionTestBase : public TransactionTestBase {
       ASSERT_TRUE(wp_db->old_commit_map_empty_);
       TERARKDB_NAMESPACE::port::Thread t1(
           [&]() { wp_db->UpdateSnapshots(new_snapshots, version); });
-      TERARKDB_NAMESPACE::port::Thread t2([&]() { wp_db->CheckAgainstSnapshots(entry); });
+      TERARKDB_NAMESPACE::port::Thread t2(
+          [&]() { wp_db->CheckAgainstSnapshots(entry); });
       t1.join();
       t2.join();
       ASSERT_FALSE(wp_db->old_commit_map_empty_);
@@ -449,7 +450,8 @@ class WritePreparedTransactionTestBase : public TransactionTestBase {
       ASSERT_TRUE(wp_db->old_commit_map_empty_);
       TERARKDB_NAMESPACE::port::Thread t1(
           [&]() { wp_db->UpdateSnapshots(new_snapshots, version); });
-      TERARKDB_NAMESPACE::port::Thread t2([&]() { wp_db->CheckAgainstSnapshots(entry); });
+      TERARKDB_NAMESPACE::port::Thread t2(
+          [&]() { wp_db->CheckAgainstSnapshots(entry); });
       t1.join();
       t2.join();
       ASSERT_FALSE(wp_db->old_commit_map_empty_);
@@ -1498,7 +1500,7 @@ TEST_P(WritePreparedTransactionTest, IsInSnapshotTest) {
           seq++;
           cur_txn = seq;
           wp_db->AddPrepared(cur_txn);
-        } else {                                     // else commit it
+        } else {  // else commit it
           seq++;
           wp_db->AddCommitted(cur_txn, seq);
           wp_db->RemovePrepared(cur_txn);
@@ -2056,9 +2058,8 @@ TEST_P(WritePreparedTransactionTest, Iterate) {
     auto* txn = db->BeginTransaction(WriteOptions());
 
     for (int i = 0; i < 2; i++) {
-      Iterator* iter = (i == 0)
-          ? db->NewIterator(ReadOptions())
-          : txn->GetIterator(ReadOptions());
+      Iterator* iter = (i == 0) ? db->NewIterator(ReadOptions())
+                                : txn->GetIterator(ReadOptions());
       // Seek
       iter->Seek("foo");
       verify_state(iter, "foo", expected_val);

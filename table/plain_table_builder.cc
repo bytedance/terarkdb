@@ -10,7 +10,6 @@
 
 #include <limits>
 #include <map>
-#include <string>
 
 #include "db/dbformat.h"
 #include "db/version_edit.h"
@@ -19,18 +18,14 @@
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
-#include "table/block_builder.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/bloom_block.h"
 #include "table/format.h"
 #include "table/meta_blocks.h"
-#include "table/plain_table_factory.h"
 #include "table/plain_table_index.h"
 #include "util/coding.h"
-#include "util/crc32c.h"
 #include "util/file_reader_writer.h"
-#include "util/stop_watch.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {

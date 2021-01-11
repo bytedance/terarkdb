@@ -8,13 +8,14 @@
 #include <chrono>
 #include <sstream>
 #include <thread>
+
 #include "db/db_impl.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/write_batch.h"
 #include "util/coding.h"
 #include "util/string_util.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 const std::string kTraceMagic = "feedcafedeadbeef";

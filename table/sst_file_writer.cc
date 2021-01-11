@@ -6,14 +6,15 @@
 #include "rocksdb/sst_file_writer.h"
 
 #include <vector>
+
 #include "db/dbformat.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block_based_table_builder.h"
 #include "table/sst_file_writer_collectors.h"
 #include "util/file_reader_writer.h"
 #include "util/sync_point.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 const std::string ExternalSstFilePropertyNames::kVersion =
@@ -23,7 +24,7 @@ const std::string ExternalSstFilePropertyNames::kGlobalSeqno =
 
 #ifndef ROCKSDB_LITE
 
-const size_t kFadviseTrigger = 1024 * 1024; // 1MB
+const size_t kFadviseTrigger = 1024 * 1024;  // 1MB
 
 struct SstFileWriter::Rep {
   Rep(const EnvOptions& _env_options, const Options& options,
@@ -144,8 +145,7 @@ struct SstFileWriter::Rep {
       // Fadvise disabled
       return;
     }
-    uint64_t bytes_since_last_fadvise =
-      builder->FileSize() - last_fadvise_size;
+    uint64_t bytes_since_last_fadvise = builder->FileSize() - last_fadvise_size;
     if (bytes_since_last_fadvise > kFadviseTrigger || closing) {
       TEST_SYNC_POINT_CALLBACK("SstFileWriter::Rep::InvalidatePageCache",
                                &(bytes_since_last_fadvise));
@@ -154,7 +154,6 @@ struct SstFileWriter::Rep {
       last_fadvise_size = builder->FileSize();
     }
   }
-
 };
 
 SstFileWriter::SstFileWriter(const EnvOptions& env_options,
@@ -307,9 +306,7 @@ Status SstFileWriter::Finish(ExternalSstFileInfo* file_info) {
   return s;
 }
 
-uint64_t SstFileWriter::FileSize() {
-  return rep_->file_info.file_size;
-}
+uint64_t SstFileWriter::FileSize() { return rep_->file_info.file_size; }
 #endif  // !ROCKSDB_LITE
 
 }  // namespace TERARKDB_NAMESPACE

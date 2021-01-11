@@ -14,10 +14,10 @@
 #include "rocksdb/db.h"
 #include "rocksdb/iterator.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 #include "util/arena.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBImpl;

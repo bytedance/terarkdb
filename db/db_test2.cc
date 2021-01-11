@@ -15,9 +15,9 @@
 #include "port/port.h"
 #include "port/stack_trace.h"
 #include "rocksdb/persistent_cache.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/wal_filter.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBTest2 : public DBTestBase {
@@ -472,33 +472,33 @@ TEST_F(DBTest2, TestWriteBufferNoLimitWithCache) {
 }
 
 namespace {
-  void ValidateKeyExistence(DB* db, const std::vector<Slice>& keys_must_exist,
-    const std::vector<Slice>& keys_must_not_exist) {
-    // Ensure that expected keys exist
-    std::vector<std::string> values;
-    if (keys_must_exist.size() > 0) {
-      std::vector<Status> status_list =
+void ValidateKeyExistence(DB* db, const std::vector<Slice>& keys_must_exist,
+                          const std::vector<Slice>& keys_must_not_exist) {
+  // Ensure that expected keys exist
+  std::vector<std::string> values;
+  if (keys_must_exist.size() > 0) {
+    std::vector<Status> status_list =
         db->MultiGet(ReadOptions(), keys_must_exist, &values);
-      for (size_t i = 0; i < keys_must_exist.size(); i++) {
-        ASSERT_OK(status_list[i]);
-      }
-    }
-
-    // Ensure that given keys don't exist
-    if (keys_must_not_exist.size() > 0) {
-      std::vector<Status> status_list =
-        db->MultiGet(ReadOptions(), keys_must_not_exist, &values);
-      for (size_t i = 0; i < keys_must_not_exist.size(); i++) {
-        ASSERT_TRUE(status_list[i].IsNotFound());
-      }
+    for (size_t i = 0; i < keys_must_exist.size(); i++) {
+      ASSERT_OK(status_list[i]);
     }
   }
+
+  // Ensure that given keys don't exist
+  if (keys_must_not_exist.size() > 0) {
+    std::vector<Status> status_list =
+        db->MultiGet(ReadOptions(), keys_must_not_exist, &values);
+    for (size_t i = 0; i < keys_must_not_exist.size(); i++) {
+      ASSERT_TRUE(status_list[i].IsNotFound());
+    }
+  }
+}
 
 }  // namespace
 
 TEST_F(DBTest2, WalFilterTest) {
   class TestWalFilter : public WalFilter {
-  private:
+   private:
     // Processing option that is requested to be applied at the given index
     WalFilter::WalProcessingOption wal_processing_option_;
     // Index at which to apply wal_processing_option_
@@ -508,12 +508,12 @@ TEST_F(DBTest2, WalFilterTest) {
     // Current record index, incremented with each record encountered.
     size_t current_record_index_;
 
-  public:
+   public:
     TestWalFilter(WalFilter::WalProcessingOption wal_processing_option,
-      size_t apply_option_for_record_index)
-      : wal_processing_option_(wal_processing_option),
-      apply_option_at_record_index_(apply_option_for_record_index),
-      current_record_index_(0) {}
+                  size_t apply_option_for_record_index)
+        : wal_processing_option_(wal_processing_option),
+          apply_option_at_record_index_(apply_option_for_record_index),
+          current_record_index_(0) {}
 
     virtual WalProcessingOption LogRecord(
         const WriteBatch& /*batch*/, WriteBatch* /*new_batch*/,
@@ -522,8 +522,7 @@ TEST_F(DBTest2, WalFilterTest) {
 
       if (current_record_index_ == apply_option_at_record_index_) {
         option_to_return = wal_processing_option_;
-      }
-      else {
+      } else {
         option_to_return = WalProcessingOption::kContinueProcessing;
       }
 
@@ -550,12 +549,12 @@ TEST_F(DBTest2, WalFilterTest) {
 
   // Test with all WAL processing options
   for (int option = 0;
-    option < static_cast<int>(
-    WalFilter::WalProcessingOption::kWalProcessingOptionMax);
-  option++) {
+       option < static_cast<int>(
+                    WalFilter::WalProcessingOption::kWalProcessingOptionMax);
+       option++) {
     Options options = OptionsForLogIterTest();
     DestroyAndReopen(options);
-    CreateAndReopenWithCF({ "pikachu" }, options);
+    CreateAndReopenWithCF({"pikachu"}, options);
 
     // Write given keys in given batches
     for (size_t i = 0; i < batch_keys.size(); i++) {
@@ -567,28 +566,27 @@ TEST_F(DBTest2, WalFilterTest) {
     }
 
     WalFilter::WalProcessingOption wal_processing_option =
-      static_cast<WalFilter::WalProcessingOption>(option);
+        static_cast<WalFilter::WalProcessingOption>(option);
 
     // Create a test filter that would apply wal_processing_option at the first
     // record
     size_t apply_option_for_record_index = 1;
     TestWalFilter test_wal_filter(wal_processing_option,
-      apply_option_for_record_index);
+                                  apply_option_for_record_index);
 
     // Reopen database with option to use WAL filter
     options = OptionsForLogIterTest();
     options.wal_filter = &test_wal_filter;
     Status status =
-      TryReopenWithColumnFamilies({ "default", "pikachu" }, options);
+        TryReopenWithColumnFamilies({"default", "pikachu"}, options);
     if (wal_processing_option ==
-      WalFilter::WalProcessingOption::kCorruptedRecord) {
+        WalFilter::WalProcessingOption::kCorruptedRecord) {
       assert(!status.ok());
       // In case of corruption we can turn off paranoid_checks to reopen
       // databse
       options.paranoid_checks = false;
-      ReopenWithColumnFamilies({ "default", "pikachu" }, options);
-    }
-    else {
+      ReopenWithColumnFamilies({"default", "pikachu"}, options);
+    } else {
       assert(status.ok());
     }
 
@@ -597,56 +595,54 @@ TEST_F(DBTest2, WalFilterTest) {
     std::vector<Slice> keys_must_exist;
     std::vector<Slice> keys_must_not_exist;
     switch (wal_processing_option) {
-    case WalFilter::WalProcessingOption::kCorruptedRecord:
-    case WalFilter::WalProcessingOption::kContinueProcessing: {
-      fprintf(stderr, "Testing with complete WAL processing\n");
-      // we expect all records to be processed
-      for (size_t i = 0; i < batch_keys.size(); i++) {
-        for (size_t j = 0; j < batch_keys[i].size(); j++) {
-          keys_must_exist.push_back(Slice(batch_keys[i][j]));
-        }
-      }
-      break;
-    }
-    case WalFilter::WalProcessingOption::kIgnoreCurrentRecord: {
-      fprintf(stderr,
-        "Testing with ignoring record %" ROCKSDB_PRIszt " only\n",
-        apply_option_for_record_index);
-      // We expect the record with apply_option_for_record_index to be not
-      // found.
-      for (size_t i = 0; i < batch_keys.size(); i++) {
-        for (size_t j = 0; j < batch_keys[i].size(); j++) {
-          if (i == apply_option_for_record_index) {
-            keys_must_not_exist.push_back(Slice(batch_keys[i][j]));
-          }
-          else {
+      case WalFilter::WalProcessingOption::kCorruptedRecord:
+      case WalFilter::WalProcessingOption::kContinueProcessing: {
+        fprintf(stderr, "Testing with complete WAL processing\n");
+        // we expect all records to be processed
+        for (size_t i = 0; i < batch_keys.size(); i++) {
+          for (size_t j = 0; j < batch_keys[i].size(); j++) {
             keys_must_exist.push_back(Slice(batch_keys[i][j]));
           }
         }
+        break;
       }
-      break;
-    }
-    case WalFilter::WalProcessingOption::kStopReplay: {
-      fprintf(stderr,
-        "Testing with stopping replay from record %" ROCKSDB_PRIszt
-        "\n",
-        apply_option_for_record_index);
-      // We expect records beyond apply_option_for_record_index to be not
-      // found.
-      for (size_t i = 0; i < batch_keys.size(); i++) {
-        for (size_t j = 0; j < batch_keys[i].size(); j++) {
-          if (i >= apply_option_for_record_index) {
-            keys_must_not_exist.push_back(Slice(batch_keys[i][j]));
-          }
-          else {
-            keys_must_exist.push_back(Slice(batch_keys[i][j]));
+      case WalFilter::WalProcessingOption::kIgnoreCurrentRecord: {
+        fprintf(stderr,
+                "Testing with ignoring record %" ROCKSDB_PRIszt " only\n",
+                apply_option_for_record_index);
+        // We expect the record with apply_option_for_record_index to be not
+        // found.
+        for (size_t i = 0; i < batch_keys.size(); i++) {
+          for (size_t j = 0; j < batch_keys[i].size(); j++) {
+            if (i == apply_option_for_record_index) {
+              keys_must_not_exist.push_back(Slice(batch_keys[i][j]));
+            } else {
+              keys_must_exist.push_back(Slice(batch_keys[i][j]));
+            }
           }
         }
+        break;
       }
-      break;
-    }
-    default:
-      assert(false);  // unhandled case
+      case WalFilter::WalProcessingOption::kStopReplay: {
+        fprintf(stderr,
+                "Testing with stopping replay from record %" ROCKSDB_PRIszt
+                "\n",
+                apply_option_for_record_index);
+        // We expect records beyond apply_option_for_record_index to be not
+        // found.
+        for (size_t i = 0; i < batch_keys.size(); i++) {
+          for (size_t j = 0; j < batch_keys[i].size(); j++) {
+            if (i >= apply_option_for_record_index) {
+              keys_must_not_exist.push_back(Slice(batch_keys[i][j]));
+            } else {
+              keys_must_exist.push_back(Slice(batch_keys[i][j]));
+            }
+          }
+        }
+        break;
+      }
+      default:
+        assert(false);  // unhandled case
     }
 
     bool checked_after_reopen = false;
@@ -664,7 +660,7 @@ TEST_F(DBTest2, WalFilterTest) {
       //(even if they were skipped)
       // reopn database with option to use WAL filter
       options = OptionsForLogIterTest();
-      ReopenWithColumnFamilies({ "default", "pikachu" }, options);
+      ReopenWithColumnFamilies({"default", "pikachu"}, options);
 
       checked_after_reopen = true;
     }
@@ -673,7 +669,7 @@ TEST_F(DBTest2, WalFilterTest) {
 
 TEST_F(DBTest2, WalFilterTestWithChangeBatch) {
   class ChangeBatchHandler : public WriteBatch::Handler {
-  private:
+   private:
     // Batch to insert keys in
     WriteBatch* new_write_batch_;
     // Number of keys to add in the new batch
@@ -681,12 +677,12 @@ TEST_F(DBTest2, WalFilterTestWithChangeBatch) {
     // Number of keys added to new batch
     size_t num_keys_added_;
 
-  public:
+   public:
     ChangeBatchHandler(WriteBatch* new_write_batch,
-      size_t num_keys_to_add_in_new_batch)
-      : new_write_batch_(new_write_batch),
-      num_keys_to_add_in_new_batch_(num_keys_to_add_in_new_batch),
-      num_keys_added_(0) {}
+                       size_t num_keys_to_add_in_new_batch)
+        : new_write_batch_(new_write_batch),
+          num_keys_to_add_in_new_batch_(num_keys_to_add_in_new_batch),
+          num_keys_added_(0) {}
     virtual void Put(const Slice& key, const Slice& value) override {
       if (num_keys_added_ < num_keys_to_add_in_new_batch_) {
         new_write_batch_->Put(key, value);
@@ -696,7 +692,7 @@ TEST_F(DBTest2, WalFilterTestWithChangeBatch) {
   };
 
   class TestWalFilterWithChangeBatch : public WalFilter {
-  private:
+   private:
     // Index at which to start changing records
     size_t change_records_from_index_;
     // Number of keys to add in the new batch
@@ -704,16 +700,16 @@ TEST_F(DBTest2, WalFilterTestWithChangeBatch) {
     // Current record index, incremented with each record encountered.
     size_t current_record_index_;
 
-  public:
+   public:
     TestWalFilterWithChangeBatch(size_t change_records_from_index,
-      size_t num_keys_to_add_in_new_batch)
-      : change_records_from_index_(change_records_from_index),
-      num_keys_to_add_in_new_batch_(num_keys_to_add_in_new_batch),
-      current_record_index_(0) {}
+                                 size_t num_keys_to_add_in_new_batch)
+        : change_records_from_index_(change_records_from_index),
+          num_keys_to_add_in_new_batch_(num_keys_to_add_in_new_batch),
+          current_record_index_(0) {}
 
     virtual WalProcessingOption LogRecord(const WriteBatch& batch,
-      WriteBatch* new_batch,
-      bool* batch_changed) const override {
+                                          WriteBatch* new_batch,
+                                          bool* batch_changed) const override {
       if (current_record_index_ >= change_records_from_index_) {
         ChangeBatchHandler handler(new_batch, num_keys_to_add_in_new_batch_);
         batch.Iterate(&handler);
@@ -724,7 +720,7 @@ TEST_F(DBTest2, WalFilterTestWithChangeBatch) {
       // object, however we modify it for our own purpose here and hence
       // cast the constness away.
       (const_cast<TestWalFilterWithChangeBatch*>(this)
-        ->current_record_index_)++;
+           ->current_record_index_)++;
 
       return WalProcessingOption::kContinueProcessing;
     }
@@ -745,7 +741,7 @@ TEST_F(DBTest2, WalFilterTestWithChangeBatch) {
 
   Options options = OptionsForLogIterTest();
   DestroyAndReopen(options);
-  CreateAndReopenWithCF({ "pikachu" }, options);
+  CreateAndReopenWithCF({"pikachu"}, options);
 
   // Write given keys in given batches
   for (size_t i = 0; i < batch_keys.size(); i++) {
@@ -761,12 +757,12 @@ TEST_F(DBTest2, WalFilterTestWithChangeBatch) {
   size_t change_records_from_index = 1;
   size_t num_keys_to_add_in_new_batch = 1;
   TestWalFilterWithChangeBatch test_wal_filter_with_change_batch(
-    change_records_from_index, num_keys_to_add_in_new_batch);
+      change_records_from_index, num_keys_to_add_in_new_batch);
 
   // Reopen database with option to use WAL filter
   options = OptionsForLogIterTest();
   options.wal_filter = &test_wal_filter_with_change_batch;
-  ReopenWithColumnFamilies({ "default", "pikachu" }, options);
+  ReopenWithColumnFamilies({"default", "pikachu"}, options);
 
   // Ensure that all keys exist before change_records_from_index_
   // And after that index only single key exists
@@ -778,8 +774,7 @@ TEST_F(DBTest2, WalFilterTestWithChangeBatch) {
     for (size_t j = 0; j < batch_keys[i].size(); j++) {
       if (i >= change_records_from_index && j >= num_keys_to_add_in_new_batch) {
         keys_must_not_exist.push_back(Slice(batch_keys[i][j]));
-      }
-      else {
+      } else {
         keys_must_exist.push_back(Slice(batch_keys[i][j]));
       }
     }
@@ -800,7 +795,7 @@ TEST_F(DBTest2, WalFilterTestWithChangeBatch) {
     //(even if they were skipped)
     // reopn database with option to use WAL filter
     options = OptionsForLogIterTest();
-    ReopenWithColumnFamilies({ "default", "pikachu" }, options);
+    ReopenWithColumnFamilies({"default", "pikachu"}, options);
 
     checked_after_reopen = true;
   }
@@ -808,10 +803,10 @@ TEST_F(DBTest2, WalFilterTestWithChangeBatch) {
 
 TEST_F(DBTest2, WalFilterTestWithChangeBatchExtraKeys) {
   class TestWalFilterWithChangeBatchAddExtraKeys : public WalFilter {
-  public:
+   public:
     virtual WalProcessingOption LogRecord(const WriteBatch& batch,
-      WriteBatch* new_batch,
-      bool* batch_changed) const override {
+                                          WriteBatch* new_batch,
+                                          bool* batch_changed) const override {
       *new_batch = batch;
       new_batch->Put("key_extra", "value_extra");
       *batch_changed = true;
@@ -834,7 +829,7 @@ TEST_F(DBTest2, WalFilterTestWithChangeBatchExtraKeys) {
 
   Options options = OptionsForLogIterTest();
   DestroyAndReopen(options);
-  CreateAndReopenWithCF({ "pikachu" }, options);
+  CreateAndReopenWithCF({"pikachu"}, options);
 
   // Write given keys in given batches
   for (size_t i = 0; i < batch_keys.size(); i++) {
@@ -857,7 +852,7 @@ TEST_F(DBTest2, WalFilterTestWithChangeBatchExtraKeys) {
   // Reopen without filter, now reopen should succeed - previous
   // attempt to open must not have altered the db.
   options = OptionsForLogIterTest();
-  ReopenWithColumnFamilies({ "default", "pikachu" }, options);
+  ReopenWithColumnFamilies({"default", "pikachu"}, options);
 
   std::vector<Slice> keys_must_exist;
   std::vector<Slice> keys_must_not_exist;  // empty vector
@@ -873,7 +868,7 @@ TEST_F(DBTest2, WalFilterTestWithChangeBatchExtraKeys) {
 
 TEST_F(DBTest2, WalFilterTestWithColumnFamilies) {
   class TestWalFilterWithColumnFamilies : public WalFilter {
-  private:
+   private:
     // column_family_id -> log_number map (provided to WALFilter)
     std::map<uint32_t, uint64_t> cf_log_number_map_;
     // column_family_name -> column_family_id map (provided to WALFilter)
@@ -883,10 +878,11 @@ TEST_F(DBTest2, WalFilterTestWithColumnFamilies) {
     // during recovery (i.e. aren't already flushed to SST file(s))
     // for verification against the keys we expect.
     std::map<uint32_t, std::vector<std::string>> cf_wal_keys_;
-  public:
+
+   public:
     virtual void ColumnFamilyLogNumberMap(
-      const std::map<uint32_t, uint64_t>& cf_lognumber_map,
-      const std::map<std::string, uint32_t>& cf_name_id_map) override {
+        const std::map<uint32_t, uint64_t>& cf_lognumber_map,
+        const std::map<std::string, uint32_t>& cf_name_id_map) override {
       cf_log_number_map_ = cf_lognumber_map;
       cf_name_id_map_ = cf_name_id_map;
     }
@@ -896,20 +892,22 @@ TEST_F(DBTest2, WalFilterTestWithColumnFamilies) {
         const WriteBatch& batch, WriteBatch* /*new_batch*/,
         bool* /*batch_changed*/) override {
       class LogRecordBatchHandler : public WriteBatch::Handler {
-      private:
-        const std::map<uint32_t, uint64_t> & cf_log_number_map_;
-        std::map<uint32_t, std::vector<std::string>> & cf_wal_keys_;
+       private:
+        const std::map<uint32_t, uint64_t>& cf_log_number_map_;
+        std::map<uint32_t, std::vector<std::string>>& cf_wal_keys_;
         unsigned long long log_number_;
-      public:
-        LogRecordBatchHandler(unsigned long long current_log_number,
-          const std::map<uint32_t, uint64_t> & cf_log_number_map,
-          std::map<uint32_t, std::vector<std::string>> & cf_wal_keys) :
-          cf_log_number_map_(cf_log_number_map),
-          cf_wal_keys_(cf_wal_keys),
-          log_number_(current_log_number){}
+
+       public:
+        LogRecordBatchHandler(
+            unsigned long long current_log_number,
+            const std::map<uint32_t, uint64_t>& cf_log_number_map,
+            std::map<uint32_t, std::vector<std::string>>& cf_wal_keys)
+            : cf_log_number_map_(cf_log_number_map),
+              cf_wal_keys_(cf_wal_keys),
+              log_number_(current_log_number) {}
 
         virtual Status PutCF(uint32_t column_family_id, const Slice& key,
-          const Slice& /*value*/) override {
+                             const Slice& /*value*/) override {
           auto it = cf_log_number_map_.find(column_family_id);
           assert(it != cf_log_number_map_.end());
           unsigned long long log_number_for_cf = it->second;
@@ -917,8 +915,8 @@ TEST_F(DBTest2, WalFilterTestWithColumnFamilies) {
           // (i.e. isn't flushed to SST file(s) for column_family_id)
           // add it to the cf_wal_keys_ map for verification.
           if (log_number_ >= log_number_for_cf) {
-            cf_wal_keys_[column_family_id].push_back(std::string(key.data(),
-              key.size()));
+            cf_wal_keys_[column_family_id].push_back(
+                std::string(key.data(), key.size()));
           }
           return Status::OK();
         }
@@ -937,7 +935,7 @@ TEST_F(DBTest2, WalFilterTestWithColumnFamilies) {
       return cf_wal_keys_;
     }
 
-    const std::map<std::string, uint32_t> & GetColumnFamilyNameIdMap() {
+    const std::map<std::string, uint32_t>& GetColumnFamilyNameIdMap() {
       return cf_name_id_map_;
     }
   };
@@ -953,7 +951,7 @@ TEST_F(DBTest2, WalFilterTestWithColumnFamilies) {
 
   Options options = OptionsForLogIterTest();
   DestroyAndReopen(options);
-  CreateAndReopenWithCF({ "pikachu" }, options);
+  CreateAndReopenWithCF({"pikachu"}, options);
 
   // Write given keys in given batches
   for (size_t i = 0; i < batch_keys_pre_flush.size(); i++) {
@@ -965,7 +963,7 @@ TEST_F(DBTest2, WalFilterTestWithColumnFamilies) {
     dbfull()->Write(WriteOptions(), &batch);
   }
 
-  //Flush default column-family
+  // Flush default column-family
   db_->Flush(FlushOptions(), handles_[0]);
 
   // Do some more writes
@@ -997,8 +995,7 @@ TEST_F(DBTest2, WalFilterTestWithColumnFamilies) {
   // Reopen database with option to use WAL filter
   options = OptionsForLogIterTest();
   options.wal_filter = &test_wal_filter_column_families;
-  Status status =
-    TryReopenWithColumnFamilies({ "default", "pikachu" }, options);
+  Status status = TryReopenWithColumnFamilies({"default", "pikachu"}, options);
   ASSERT_TRUE(status.ok());
 
   // verify that handles_[0] only has post_flush keys
@@ -1007,7 +1004,7 @@ TEST_F(DBTest2, WalFilterTestWithColumnFamilies) {
   auto name_id_map = test_wal_filter_column_families.GetColumnFamilyNameIdMap();
   size_t index = 0;
   auto keys_cf = cf_wal_keys[name_id_map[kDefaultColumnFamilyName]];
-  //default column-family, only post_flush keys are expected
+  // default column-family, only post_flush keys are expected
   for (size_t i = 0; i < batch_keys_post_flush.size(); i++) {
     for (size_t j = 0; j < batch_keys_post_flush[i].size(); j++) {
       Slice key_from_the_log(keys_cf[index++]);
@@ -1019,7 +1016,7 @@ TEST_F(DBTest2, WalFilterTestWithColumnFamilies) {
 
   index = 0;
   keys_cf = cf_wal_keys[name_id_map["pikachu"]];
-  //pikachu column-family, all keys are expected
+  // pikachu column-family, all keys are expected
   for (size_t i = 0; i < batch_keys_pre_flush.size(); i++) {
     for (size_t j = 0; j < batch_keys_pre_flush[i].size(); j++) {
       Slice key_from_the_log(keys_cf[index++]);
@@ -1046,7 +1043,8 @@ TEST_F(DBTest2, PresetCompressionDict) {
   const int kZstdTrainFactor = 16;
 
   Options options;
-  options.env = CurrentOptions().env; // Make sure to use any custom env that the test is configured with.
+  options.env = CurrentOptions().env;  // Make sure to use any custom env that
+                                       // the test is configured with.
   options.allow_concurrent_memtable_write = false;
   options.arena_block_size = kBlockSizeBytes;
   options.compaction_style = kCompactionStyleUniversal;
@@ -1070,7 +1068,7 @@ TEST_F(DBTest2, PresetCompressionDict) {
 #if LZ4_VERSION_NUMBER >= 10400  // r124+
   compression_types.push_back(kLZ4Compression);
   compression_types.push_back(kLZ4HCCompression);
-#endif                          // LZ4_VERSION_NUMBER >= 10400
+#endif  // LZ4_VERSION_NUMBER >= 10400
   if (ZSTD_Supported()) {
     compression_types.push_back(kZSTD);
   }
@@ -1118,9 +1116,10 @@ TEST_F(DBTest2, PresetCompressionDict) {
       ASSERT_EQ(0, NumTableFilesAtLevel(0, 1));
       for (int j = 0; j < kNumL0Files; ++j) {
         for (size_t k = 0; k < kL0FileBytes / kBlockSizeBytes + 1; ++k) {
-          ASSERT_OK(Put(1, Key(static_cast<int>(
-                               j * (kL0FileBytes / kBlockSizeBytes) + k)),
-                        seq_data));
+          ASSERT_OK(Put(
+              1,
+              Key(static_cast<int>(j * (kL0FileBytes / kBlockSizeBytes) + k)),
+              seq_data));
         }
         dbfull()->TEST_WaitForFlushMemTable(handles_[1]);
         ASSERT_EQ(j + 1, NumTableFilesAtLevel(0, 1));
@@ -1247,7 +1246,8 @@ TEST_F(DBTest2, CompressionOptions) {
 
 class CompactionStallTestListener : public EventListener {
  public:
-  CompactionStallTestListener() : compacting_files_cnt_(0), compacted_files_cnt_(0) {}
+  CompactionStallTestListener()
+      : compacting_files_cnt_(0), compacted_files_cnt_(0) {}
 
   void OnCompactionBegin(DB* /*db*/, const CompactionJobInfo& ci) override {
     ASSERT_EQ(ci.cf_name, "default");
@@ -1326,7 +1326,8 @@ TEST_F(DBTest2, CompactionStall) {
             options.level0_file_num_compaction_trigger);
   ASSERT_GT(listener->compacted_files_cnt_.load(),
             10 - options.level0_file_num_compaction_trigger);
-  ASSERT_EQ(listener->compacting_files_cnt_.load(), listener->compacted_files_cnt_.load());
+  ASSERT_EQ(listener->compacting_files_cnt_.load(),
+            listener->compacted_files_cnt_.load());
 
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
 }
@@ -1649,7 +1650,7 @@ class MockPersistentCache : public PersistentCache {
   const size_t max_size_ = 10 * 1024;  // 10KiB
 };
 
-#ifndef OS_SOLARIS // GetUniqueIdFromFile is not implemented
+#ifndef OS_SOLARIS  // GetUniqueIdFromFile is not implemented
 TEST_F(DBTest2, PersistentCache) {
   int num_iter = 80;
 
@@ -1713,7 +1714,7 @@ TEST_F(DBTest2, PersistentCache) {
     }
   }
 }
-#endif // !OS_SOLARIS
+#endif  // !OS_SOLARIS
 
 namespace {
 void CountSyncPoint() {
@@ -1851,7 +1852,7 @@ TEST_F(DBTest2, ReadAmpBitmap) {
   }
 }
 
-#ifndef OS_SOLARIS // GetUniqueIdFromFile is not implemented
+#ifndef OS_SOLARIS  // GetUniqueIdFromFile is not implemented
 TEST_F(DBTest2, ReadAmpBitmapLiveInCacheAfterDBClose) {
   {
     const int kIdBufLen = 100;
@@ -1880,7 +1881,8 @@ TEST_F(DBTest2, ReadAmpBitmapLiveInCacheAfterDBClose) {
   uint32_t bytes_per_bit[2] = {1, 16};
   for (size_t k = 0; k < 2; k++) {
     std::shared_ptr<Cache> lru_cache = NewLRUCache(1024 * 1024 * 1024);
-    std::shared_ptr<Statistics> stats = TERARKDB_NAMESPACE::CreateDBStatistics();
+    std::shared_ptr<Statistics> stats =
+        TERARKDB_NAMESPACE::CreateDBStatistics();
 
     Options options = CurrentOptions();
     BlockBasedTableOptions bbto;
@@ -1927,7 +1929,8 @@ TEST_F(DBTest2, ReadAmpBitmapLiveInCacheAfterDBClose) {
         options.statistics->getTickerCount(READ_AMP_TOTAL_READ_BYTES);
 
     Close();
-    std::shared_ptr<Statistics> new_statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
+    std::shared_ptr<Statistics> new_statistics =
+        TERARKDB_NAMESPACE::CreateDBStatistics();
     // Destroy old statistics obj that the blocks in lru_cache are pointing to
     options.statistics.reset();
     // Use the statistics object that we just created
@@ -1953,7 +1956,6 @@ TEST_F(DBTest2, ReadAmpBitmapLiveInCacheAfterDBClose) {
     size_t total_loaded_bytes_iter2 =
         options.statistics->getTickerCount(READ_AMP_TOTAL_READ_BYTES);
 
-
     // Read amp is on average 100% since we read all what we loaded in memory
     if (k == 0) {
       ASSERT_EQ(total_useful_bytes_iter1 + total_useful_bytes_iter2,
@@ -1965,7 +1967,7 @@ TEST_F(DBTest2, ReadAmpBitmapLiveInCacheAfterDBClose) {
     }
   }
 }
-#endif // !OS_SOLARIS
+#endif  // !OS_SOLARIS
 
 #ifndef ROCKSDB_LITE
 TEST_F(DBTest2, AutomaticCompactionOverlapManualCompaction) {
@@ -2994,12 +2996,12 @@ TEST_F(DBTest2, TestBBTTailPrefetch) {
 TEST_F(DBTest2, TestGetColumnFamilyHandleUnlocked) {
   // Setup sync point dependency to reproduce the race condition of
   // DBImpl::GetColumnFamilyHandleUnlocked
-  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->LoadDependency(
-      { {"TestGetColumnFamilyHandleUnlocked::GetColumnFamilyHandleUnlocked1",
-         "TestGetColumnFamilyHandleUnlocked::PreGetColumnFamilyHandleUnlocked2"},
-        {"TestGetColumnFamilyHandleUnlocked::GetColumnFamilyHandleUnlocked2",
-         "TestGetColumnFamilyHandleUnlocked::ReadColumnFamilyHandle1"},
-      });
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->LoadDependency({
+      {"TestGetColumnFamilyHandleUnlocked::GetColumnFamilyHandleUnlocked1",
+       "TestGetColumnFamilyHandleUnlocked::PreGetColumnFamilyHandleUnlocked2"},
+      {"TestGetColumnFamilyHandleUnlocked::GetColumnFamilyHandleUnlocked2",
+       "TestGetColumnFamilyHandleUnlocked::ReadColumnFamilyHandle1"},
+  });
   SyncPoint::GetInstance()->EnableProcessing();
 
   CreateColumnFamilies({"test1", "test2"}, Options());
@@ -3009,16 +3011,20 @@ TEST_F(DBTest2, TestGetColumnFamilyHandleUnlocked) {
   port::Thread user_thread1([&]() {
     auto cfh = dbi->GetColumnFamilyHandleUnlocked(handles_[0]->GetID());
     ASSERT_EQ(cfh->GetID(), handles_[0]->GetID());
-    TEST_SYNC_POINT("TestGetColumnFamilyHandleUnlocked::GetColumnFamilyHandleUnlocked1");
-    TEST_SYNC_POINT("TestGetColumnFamilyHandleUnlocked::ReadColumnFamilyHandle1");
+    TEST_SYNC_POINT(
+        "TestGetColumnFamilyHandleUnlocked::GetColumnFamilyHandleUnlocked1");
+    TEST_SYNC_POINT(
+        "TestGetColumnFamilyHandleUnlocked::ReadColumnFamilyHandle1");
     ASSERT_EQ(cfh->GetID(), handles_[0]->GetID());
   });
 
   port::Thread user_thread2([&]() {
-    TEST_SYNC_POINT("TestGetColumnFamilyHandleUnlocked::PreGetColumnFamilyHandleUnlocked2");
+    TEST_SYNC_POINT(
+        "TestGetColumnFamilyHandleUnlocked::PreGetColumnFamilyHandleUnlocked2");
     auto cfh = dbi->GetColumnFamilyHandleUnlocked(handles_[1]->GetID());
     ASSERT_EQ(cfh->GetID(), handles_[1]->GetID());
-    TEST_SYNC_POINT("TestGetColumnFamilyHandleUnlocked::GetColumnFamilyHandleUnlocked2");
+    TEST_SYNC_POINT(
+        "TestGetColumnFamilyHandleUnlocked::GetColumnFamilyHandleUnlocked2");
     ASSERT_EQ(cfh->GetID(), handles_[1]->GetID());
   });
 
@@ -3046,7 +3052,8 @@ TEST_F(DBTest2, TestCompactFiles) {
   auto* handle = db_->DefaultColumnFamily();
   ASSERT_EQ(db_->NumberLevels(handle), 2);
 
-  TERARKDB_NAMESPACE::SstFileWriter sst_file_writer{TERARKDB_NAMESPACE::EnvOptions(), options};
+  TERARKDB_NAMESPACE::SstFileWriter sst_file_writer{
+      TERARKDB_NAMESPACE::EnvOptions(), options};
   std::string external_file1 = dbname_ + "/test_compact_files1.sst_t";
   std::string external_file2 = dbname_ + "/test_compact_files2.sst_t";
   std::string external_file3 = dbname_ + "/test_compact_files3.sst_t";

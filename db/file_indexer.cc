@@ -8,12 +8,14 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "db/file_indexer.h"
+
 #include <algorithm>
 #include <functional>
+
 #include "db/version_edit.h"
 #include "rocksdb/comparator.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 FileIndexer::FileIndexer(const Comparator* ucmp)
@@ -109,25 +111,25 @@ void FileIndexer::UpdateIndex(Arena* arena, const size_t num_levels,
 
     CalculateLB(
         upper_files, lower_files, &index_level,
-        [this](const FileMetaData * a, const FileMetaData * b)->int {
+        [this](const FileMetaData* a, const FileMetaData* b) -> int {
           return ucmp_->Compare(a->smallest.user_key(), b->largest.user_key());
         },
         [](IndexUnit* index, int32_t f_idx) { index->smallest_lb = f_idx; });
     CalculateLB(
         upper_files, lower_files, &index_level,
-        [this](const FileMetaData * a, const FileMetaData * b)->int {
+        [this](const FileMetaData* a, const FileMetaData* b) -> int {
           return ucmp_->Compare(a->largest.user_key(), b->largest.user_key());
         },
         [](IndexUnit* index, int32_t f_idx) { index->largest_lb = f_idx; });
     CalculateRB(
         upper_files, lower_files, &index_level,
-        [this](const FileMetaData * a, const FileMetaData * b)->int {
+        [this](const FileMetaData* a, const FileMetaData* b) -> int {
           return ucmp_->Compare(a->smallest.user_key(), b->smallest.user_key());
         },
         [](IndexUnit* index, int32_t f_idx) { index->smallest_rb = f_idx; });
     CalculateRB(
         upper_files, lower_files, &index_level,
-        [this](const FileMetaData * a, const FileMetaData * b)->int {
+        [this](const FileMetaData* a, const FileMetaData* b) -> int {
           return ucmp_->Compare(a->largest.user_key(), b->smallest.user_key());
         },
         [](IndexUnit* index, int32_t f_idx) { index->largest_rb = f_idx; });

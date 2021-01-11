@@ -10,13 +10,13 @@
 #include "table/block_based_filter_block.h"
 
 #include "rocksdb/filter_policy.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/hash.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // For testing: emit an array with one hash value per key
@@ -151,8 +151,8 @@ class BlockBasedFilterBlockTest : public testing::Test {
 };
 
 TEST_F(BlockBasedFilterBlockTest, BlockBasedEmptyBuilder) {
-  FilterBlockBuilder* builder = new BlockBasedFilterBlockBuilder(
-      nullptr, table_options_);
+  FilterBlockBuilder* builder =
+      new BlockBasedFilterBlockBuilder(nullptr, table_options_);
   BlockContents block(builder->Finish());
   ASSERT_EQ("\\x00\\x00\\x00\\x00\\x0b", EscapeString(block.data));
   FilterBlockReader* reader = new BlockBasedFilterBlockReader(
@@ -165,8 +165,8 @@ TEST_F(BlockBasedFilterBlockTest, BlockBasedEmptyBuilder) {
 }
 
 TEST_F(BlockBasedFilterBlockTest, BlockBasedSingleChunk) {
-  FilterBlockBuilder* builder = new BlockBasedFilterBlockBuilder(
-      nullptr, table_options_);
+  FilterBlockBuilder* builder =
+      new BlockBasedFilterBlockBuilder(nullptr, table_options_);
   builder->StartBlock(100);
   builder->Add("foo");
   builder->Add("bar");
@@ -191,8 +191,8 @@ TEST_F(BlockBasedFilterBlockTest, BlockBasedSingleChunk) {
 }
 
 TEST_F(BlockBasedFilterBlockTest, BlockBasedMultiChunk) {
-  FilterBlockBuilder* builder = new BlockBasedFilterBlockBuilder(
-      nullptr, table_options_);
+  FilterBlockBuilder* builder =
+      new BlockBasedFilterBlockBuilder(nullptr, table_options_);
 
   // First filter
   builder->StartBlock(0);

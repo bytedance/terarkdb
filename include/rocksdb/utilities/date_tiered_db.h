@@ -11,8 +11,8 @@
 #include <vector>
 
 #include "rocksdb/db.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 // Date tiered database is a wrapper of DB that implements

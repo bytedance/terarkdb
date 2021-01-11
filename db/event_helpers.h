@@ -12,9 +12,9 @@
 #include "db/version_edit.h"
 #include "rocksdb/listener.h"
 #include "rocksdb/table_properties.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/event_logger.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class EventHelpers {
@@ -38,9 +38,9 @@ class EventHelpers {
       const TableProperties& table_properties, TableFileCreationReason reason,
       const Status& s);
   static void LogAndNotifyTableFileDeletion(
-      EventLogger* event_logger, int job_id,
-      uint64_t file_number, const std::string& file_path,
-      const Status& status, const std::string& db_name,
+      EventLogger* event_logger, int job_id, uint64_t file_number,
+      const std::string& file_path, const Status& status,
+      const std::string& db_name,
       const std::vector<std::shared_ptr<EventListener>>& listeners);
   static void NotifyOnErrorRecoveryCompleted(
       const std::vector<std::shared_ptr<EventListener>>& listeners,

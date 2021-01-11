@@ -11,13 +11,12 @@
 #include <unordered_map>
 
 #include "db/read_callback.h"
-
 #include "rocksdb/db.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/types.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct TransactionKeyMapInfo {

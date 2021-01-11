@@ -48,7 +48,8 @@
 #include <terark/util/mmap.hpp>
 #include <terark/zbs/dict_zip_blob_store.hpp>
 #include <terark/zbs/zip_reorder_map.hpp>
-//#include "split_iterator.h"
+
+#include "rocksdb/terark_namespace.h"
 
 #define TEST_TERARK 1
 
@@ -58,7 +59,7 @@
 
 #include <terark/idx/terark_zip_index.hpp>
 #else
-#include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 struct TerarkZipTableOptions {};
 }  // namespace TERARKDB_NAMESPACE

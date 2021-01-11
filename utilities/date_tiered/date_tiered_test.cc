@@ -11,14 +11,14 @@
 #include <map>
 #include <memory>
 
-#include "rocksdb/compaction_filter.h"
-#include "rocksdb/utilities/date_tiered_db.h"
 #include "port/port.h"
+#include "rocksdb/compaction_filter.h"
+#include "rocksdb/terark_namespace.h"
+#include "rocksdb/utilities/date_tiered_db.h"
 #include "util/logging.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {

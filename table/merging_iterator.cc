@@ -17,6 +17,7 @@
 #include "rocksdb/comparator.h"
 #include "rocksdb/iterator.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 #include "table/iter_heap.h"
 #include "table/iterator_wrapper.h"
@@ -26,7 +27,6 @@
 #include "util/stop_watch.h"
 #include "util/sync_point.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 // Without anonymous namespace here, we fail the warning -Wmissing-prototypes
 namespace {

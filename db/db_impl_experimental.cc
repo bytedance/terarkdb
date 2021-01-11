@@ -21,9 +21,9 @@
 #include "db/job_context.h"
 #include "db/version_set.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "utilities/util/valvec.hpp"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE

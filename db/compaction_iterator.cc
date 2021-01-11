@@ -8,9 +8,9 @@
 #include "db/snapshot_checker.h"
 #include "port/likely.h"
 #include "rocksdb/listener.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class CompactionIteratorToInternalIterator : public InternalIterator {
@@ -37,7 +37,9 @@ class CompactionIteratorToInternalIterator : public InternalIterator {
     }
   }
   virtual void SeekToLast() override { assert(false); }
-  virtual void SeekForPrev(const TERARKDB_NAMESPACE::Slice&) override { assert(false); }
+  virtual void SeekForPrev(const TERARKDB_NAMESPACE::Slice&) override {
+    assert(false);
+  }
   virtual void Seek(const Slice& target) override;
   virtual void Next() override { c_iter_->Next(); }
   virtual void Prev() override { abort(); }  // do not support

@@ -32,12 +32,12 @@
 #include "db/table_cache.h"
 #include "db/version_set.h"
 #include "port/port.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/table_reader.h"
 #include "util/c_style_callback.h"
 
 #define ROCKS_VERSION_BUILDER_DEBUG 0
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 bool NewestFirstBySeqNo(FileMetaData* a, FileMetaData* b) {

@@ -13,10 +13,10 @@
 #include "db/db_impl.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/optimistic_transaction_db.h"
 #include "utilities/transactions/optimistic_transaction.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 Transaction* OptimisticTransactionDBImpl::BeginTransaction(

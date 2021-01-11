@@ -9,8 +9,8 @@
 
 #pragma once
 #ifndef ROCKSDB_LITE
-#include <string>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -18,16 +18,16 @@
 #include "options/cf_options.h"
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/table_reader.h"
 #include "util/file_reader_writer.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Arena;
 class TableReader;
 
-class CuckooTableReader: public TableReader {
+class CuckooTableReader : public TableReader {
  public:
   CuckooTableReader(const ImmutableCFOptions& ioptions,
                     std::unique_ptr<RandomAccessFileReader>&& file,
@@ -60,9 +60,7 @@ class CuckooTableReader: public TableReader {
   void SetupForCompaction() override {}
   // End of methods not implemented.
 
-  uint64_t FileNumber() const override {
-    return file_number_;
-  }
+  uint64_t FileNumber() const override { return file_number_; }
 
  private:
   friend class CuckooTableIterator;
@@ -88,7 +86,7 @@ class CuckooTableReader: public TableReader {
   const ImmutableCFOptions& ioptions_;
   const Comparator* ucomp_;
   uint64_t (*get_slice_hash_)(const Slice& s, uint32_t index,
-      uint64_t max_num_buckets);
+                              uint64_t max_num_buckets);
 };
 
 }  // namespace TERARKDB_NAMESPACE

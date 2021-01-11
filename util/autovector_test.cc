@@ -3,25 +3,26 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
+#include "util/autovector.h"
+
 #include <atomic>
 #include <iostream>
 #include <string>
 #include <utility>
 
 #include "rocksdb/env.h"
-#include "util/autovector.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-using std::cout;
-using std::endl;
-
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class AutoVectorTest : public testing::Test {};
 const unsigned long kSize = 8;
+
+using std::cout;
+using std::endl;
 
 namespace {
 template <class T>
@@ -29,8 +30,8 @@ void AssertAutoVectorOnlyInStack(autovector<T, kSize>* vec, bool result) {
 #ifndef ROCKSDB_LITE
   ASSERT_EQ(vec->only_in_stack(), result);
 #else
-  (void) vec;
-  (void) result;
+  (void)vec;
+  (void)result;
 #endif  // !ROCKSDB_LITE
 }
 }  // namespace
@@ -110,8 +111,8 @@ TEST_F(AutoVectorTest, Resize) {
 }
 
 namespace {
-void AssertEqual(
-    const autovector<size_t, kSize>& a, const autovector<size_t, kSize>& b) {
+void AssertEqual(const autovector<size_t, kSize>& a,
+                 const autovector<size_t, kSize>& b) {
   ASSERT_EQ(a.size(), b.size());
   ASSERT_EQ(a.empty(), b.empty());
 #ifndef ROCKSDB_LITE
@@ -125,7 +126,7 @@ void AssertEqual(
 
 TEST_F(AutoVectorTest, CopyAndAssignment) {
   // Test both heap-allocated and stack-allocated cases.
-  for (auto size : { kSize / 2, kSize * 1000 }) {
+  for (auto size : {kSize / 2, kSize * 1000}) {
     autovector<size_t, kSize> vec;
     for (size_t i = 0; i < size; ++i) {
       vec.push_back(i);
@@ -224,7 +225,7 @@ void BenchmarkVectorCreationAndInsertion(
   int index = 0;
   auto start_time = env->NowNanos();
   auto ops_remaining = ops;
-  while(ops_remaining--) {
+  while (ops_remaining--) {
     TVector v;
     for (size_t i = 0; i < item_size; ++i) {
       v.push_back(items[index++]);
@@ -284,7 +285,7 @@ TEST_F(AutoVectorTest, PerfBench) {
 
   // pre-generated unique keys
   auto string_keys = GetTestKeys(kOps * 2 * kSize);
-  for (auto insertions : { 0ul, 1ul, kSize / 2, kSize, 2 * kSize }) {
+  for (auto insertions : {0ul, 1ul, kSize / 2, kSize, 2 * kSize}) {
     BenchmarkVectorCreationAndInsertion<std::vector<std::string>>(
         "std::vector<std::string>", kOps, insertions, string_keys);
     BenchmarkVectorCreationAndInsertion<autovector<std::string, kSize>>(
@@ -301,12 +302,11 @@ TEST_F(AutoVectorTest, PerfBench) {
   for (size_t i = 0; i < kOps * 2 * kSize; ++i) {
     int_keys[i] = i;
   }
-  for (auto insertions : { 0ul, 1ul, kSize / 2, kSize, 2 * kSize }) {
+  for (auto insertions : {0ul, 1ul, kSize / 2, kSize, 2 * kSize}) {
     BenchmarkVectorCreationAndInsertion<std::vector<uint64_t>>(
         "std::vector<uint64_t>", kOps, insertions, int_keys);
     BenchmarkVectorCreationAndInsertion<autovector<uint64_t, kSize>>(
-      "autovector<uint64_t>", kOps, insertions, int_keys
-    );
+        "autovector<uint64_t>", kOps, insertions, int_keys);
     cout << "-----------------------------------" << endl;
   }
 
@@ -314,7 +314,7 @@ TEST_F(AutoVectorTest, PerfBench) {
   cout << "=====================================================" << endl;
   cout << "Sequence Access Test" << endl;
   cout << "=====================================================" << endl;
-  for (auto elem_size : { kSize / 2, kSize, 2 * kSize }) {
+  for (auto elem_size : {kSize / 2, kSize, 2 * kSize}) {
     BenchmarkSequenceAccess<std::vector<std::string>>("std::vector", kOps,
                                                       elem_size);
     BenchmarkSequenceAccess<autovector<std::string, kSize>>("autovector", kOps,

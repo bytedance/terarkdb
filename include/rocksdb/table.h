@@ -26,9 +26,9 @@
 #include "rocksdb/iterator.h"
 #include "rocksdb/options.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "utilities/util/factory.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // -- Block-based Table
@@ -435,8 +435,7 @@ class RandomAccessFileReader;
 
 // A base class for table factories.
 class TableFactory
-    : public terark::Factoryable<TableFactory*, const std::string&,
-                                           Status*> {
+    : public terark::Factoryable<TableFactory*, const std::string&, Status*> {
  public:
   virtual ~TableFactory() {}
 

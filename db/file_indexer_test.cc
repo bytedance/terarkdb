@@ -7,16 +7,18 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
-#include <string>
 #include "db/file_indexer.h"
+
+#include <string>
+
 #include "db/dbformat.h"
 #include "db/version_edit.h"
 #include "port/stack_trace.h"
 #include "rocksdb/comparator.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class IntComparator : public Comparator {
@@ -74,8 +76,8 @@ class FileIndexerTest : public testing::Test {
   }
 
   void GetNextLevelIndex(const uint32_t level, const uint32_t file_index,
-      const int cmp_smallest, const int cmp_largest, int32_t* left_index,
-      int32_t* right_index) {
+                         const int cmp_smallest, const int cmp_largest,
+                         int32_t* left_index, int32_t* right_index) {
     *left_index = 100;
     *right_index = 100;
     indexer->GetNextLevelIndex(level, file_index, cmp_smallest, cmp_largest,

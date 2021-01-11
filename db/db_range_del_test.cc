@@ -5,10 +5,10 @@
 
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/testutil.h"
 #include "utilities/merge_operators.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBRangeDelTest : public DBTestBase {
@@ -182,7 +182,8 @@ TEST_F(DBRangeDelTest, SentinelsOmittedFromOutputFile) {
   const Snapshot* snapshot = db_->GetSnapshot();
 
   // gaps between ranges creates sentinels in our internal representation
-  std::vector<std::pair<std::string, std::string>> range_dels = {{"a", "b"}, {"c", "d"}, {"e", "f"}};
+  std::vector<std::pair<std::string, std::string>> range_dels = {
+      {"a", "b"}, {"c", "d"}, {"e", "f"}};
   for (const auto& range_del : range_dels) {
     ASSERT_OK(db_->DeleteRange(WriteOptions(), db_->DefaultColumnFamily(),
                                range_del.first, range_del.second));
@@ -504,8 +505,8 @@ TEST_F(DBRangeDelTest, PutDeleteRangeMergeFlush) {
   std::string val;
   PutFixed64(&val, 1);
   ASSERT_OK(db_->Put(WriteOptions(), "key", val));
-  ASSERT_OK(db_->DeleteRange(WriteOptions(), db_->DefaultColumnFamily(),
-                             "key", "key_"));
+  ASSERT_OK(db_->DeleteRange(WriteOptions(), db_->DefaultColumnFamily(), "key",
+                             "key_"));
   ASSERT_OK(db_->Merge(WriteOptions(), "key", val));
   ASSERT_OK(db_->Flush(FlushOptions()));
 
@@ -919,7 +920,8 @@ TEST_F(DBRangeDelTest, MemtableBloomFilter) {
   Options options = CurrentOptions();
   options.memtable_prefix_bloom_size_ratio =
       static_cast<double>(kMemtablePrefixFilterSize) / kMemtableSize;
-  options.prefix_extractor.reset(TERARKDB_NAMESPACE::NewFixedPrefixTransform(kPrefixLen));
+  options.prefix_extractor.reset(
+      TERARKDB_NAMESPACE::NewFixedPrefixTransform(kPrefixLen));
   options.write_buffer_size = kMemtableSize;
   Reopen(options);
 
@@ -1033,8 +1035,8 @@ TEST_F(DBRangeDelTest, RangeTombstoneEndKeyAsSstableUpperBound) {
   // A snapshot protects the range tombstone from dropping due to
   // becoming obsolete.
   const Snapshot* snapshot = db_->GetSnapshot();
-  db_->DeleteRange(WriteOptions(), db_->DefaultColumnFamily(),
-                   Key(0), Key(2 * kNumFilesPerLevel));
+  db_->DeleteRange(WriteOptions(), db_->DefaultColumnFamily(), Key(0),
+                   Key(2 * kNumFilesPerLevel));
 
   // Create 2 additional sstables in L0. Note that the first sstable
   // contains the range tombstone.
@@ -1232,7 +1234,7 @@ TEST_F(DBRangeDelTest, UntruncatedTombstoneDoesNotDeleteNewerKey) {
   const int kFileBytes = 1 << 20;
   const int kValueBytes = 1 << 10;
   const int kNumFiles = 4;
-  const int kMaxKey = kNumFiles* kFileBytes / kValueBytes;
+  const int kMaxKey = kNumFiles * kFileBytes / kValueBytes;
   const int kKeysOverwritten = 10;
 
   Options options = CurrentOptions();
@@ -1504,7 +1506,8 @@ TEST_F(DBRangeDelTest, RangeTombstoneWrittenToMinimalSsts) {
     const auto& table_props = name_and_table_props.second;
     // The range tombstone should only be output to the second L1 SST.
     if (name.size() >= l1_metadata[1].name.size() &&
-        name.substr(name.size() - l1_metadata[1].name.size()).compare(l1_metadata[1].name) == 0) {
+        name.substr(name.size() - l1_metadata[1].name.size())
+                .compare(l1_metadata[1].name) == 0) {
       ASSERT_EQ(1, table_props->num_range_deletions);
       ++num_range_deletions;
     } else {

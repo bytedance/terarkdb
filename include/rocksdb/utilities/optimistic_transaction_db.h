@@ -11,10 +11,10 @@
 
 #include "rocksdb/comparator.h"
 #include "rocksdb/db.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/stackable_db.h"
 #include "rocksdb/utilities/write_batch_with_index.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Transaction;

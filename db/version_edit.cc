@@ -11,12 +11,12 @@
 
 #include "db/version_set.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/event_logger.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Tag numbers for serialized VersionEdit.  These numbers are written to

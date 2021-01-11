@@ -24,24 +24,21 @@
 #ifndef ROCKSDB_LITE
 #include "redis_lists.h"
 
+#include <cmath>
 #include <iostream>
 #include <memory>
-#include <cmath>
 
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 
-#include "rocksdb/terark_namespace.h"
-namespace TERARKDB_NAMESPACE
-{
+namespace TERARKDB_NAMESPACE {
 
 /// Constructors
 
-RedisLists::RedisLists(const std::string& db_path,
-                       Options options, bool destructive)
-    : put_option_(),
-      get_option_() {
-
+RedisLists::RedisLists(const std::string& db_path, Options options,
+                       bool destructive)
+    : put_option_(), get_option_() {
   // Store the name of the database
   db_name_ = db_path;
 
@@ -60,7 +57,6 @@ RedisLists::RedisLists(const std::string& db_path,
 
   db_ = std::unique_ptr<DB>(db);
 }
-
 
 /// Accessors
 
@@ -87,13 +83,13 @@ bool RedisLists::Index(const std::string& key, int32_t index,
 
   // Handle REDIS negative indices (from the end); fast iff Length() takes O(1)
   if (index < 0) {
-    index = Length(key) - (-index);  //replace (-i) with (N-i).
+    index = Length(key) - (-index);  // replace (-i) with (N-i).
   }
 
   // Iterate through the list until the desired index is found.
   int curIndex = 0;
   RedisListIterator it(data);
-  while(curIndex < index && !it.Done()) {
+  while (curIndex < index && !it.Done()) {
     ++curIndex;
     it.Skip();
   }
@@ -126,7 +122,7 @@ std::vector<std::string> RedisLists::Range(const std::string& key,
   // Handle negative bounds (-1 means last element, etc.)
   int listLen = Length(key);
   if (first < 0) {
-    first = listLen - (-first);           // Replace (-x) with (N-x)
+    first = listLen - (-first);  // Replace (-x) with (N-x)
   }
   if (last < 0) {
     last = listLen - (-last);
@@ -134,8 +130,8 @@ std::vector<std::string> RedisLists::Range(const std::string& key,
 
   // Verify bounds (and truncate the range so that it is valid)
   first = std::max(first, 0);
-  last = std::min(last, listLen-1);
-  int len = std::max(last-first+1, 0);
+  last = std::min(last, listLen - 1);
+  int len = std::max(last - first + 1, 0);
 
   // Initialize the resulting list
   std::vector<std::string> result(len);
@@ -143,10 +139,10 @@ std::vector<std::string> RedisLists::Range(const std::string& key,
   // Traverse the list and update the vector
   int curIdx = 0;
   Slice elem;
-  for (RedisListIterator it(data); !it.Done() && curIdx<=last; it.Skip()) {
+  for (RedisListIterator it(data); !it.Done() && curIdx <= last; it.Skip()) {
     if (first <= curIdx && curIdx <= last) {
       it.GetCurrent(&elem);
-      result[curIdx-first].assign(elem.data(),elem.size());
+      result[curIdx - first].assign(elem.data(), elem.size());
     }
 
     ++curIdx;
@@ -169,7 +165,7 @@ void RedisLists::Print(const std::string& key) {
     std::cout << "ITEM " << elem.ToString() << std::endl;
   }
 
-  //Now print the byte data
+  // Now print the byte data
   RedisListIterator it(data);
   std::cout << "==Printing data==" << std::endl;
   std::cout << data.size() << std::endl;
@@ -179,8 +175,9 @@ void RedisLists::Print(const std::string& key) {
   if (true) {
     std::cout << "size: " << result.size() << std::endl;
     const char* val = result.data();
-    for(int i=0; i<(int)result.size(); ++i) {
-      std::cout << (int)val[i] << " " << (val[i]>=32?val[i]:' ') << std::endl;
+    for (int i = 0; i < (int)result.size(); ++i) {
+      std::cout << (int)val[i] << " " << (val[i] >= 32 ? val[i] : ' ')
+                << std::endl;
     }
     std::cout << std::endl;
   }
@@ -229,7 +226,7 @@ int RedisLists::PushRight(const std::string& key, const std::string& value) {
   RedisListIterator it(data);
   it.Reserve(it.Size() + it.SizeOf(value));
   while (!it.Done()) {
-    it.Push();    // Write each element as we go
+    it.Push();  // Write each element as we go
   }
 
   // Insert the new element at the current position (the end)
@@ -257,7 +254,7 @@ bool RedisLists::Set(const std::string& key, int32_t index,
   int curIndex = 0;
   RedisListIterator it(data);
   it.Reserve(it.Size() + it.SizeOf(value));  // Over-estimate is fine
-  while(curIndex < index && !it.Done()) {
+  while (curIndex < index && !it.Done()) {
     it.Push();
     ++curIndex;
   }
@@ -301,13 +298,13 @@ bool RedisLists::Trim(const std::string& key, int32_t start, int32_t stop) {
 
   // Truncate bounds to only fit in the list
   start = std::max(start, 0);
-  stop = std::min(stop, listLen-1);
+  stop = std::min(stop, listLen - 1);
 
   // Construct an iterator for the list. Drop all undesired elements.
   int curIndex = 0;
   RedisListIterator it(data);
-  it.Reserve(it.Size());          // Over-estimate
-  while(!it.Done()) {
+  it.Reserve(it.Size());  // Over-estimate
+  while (!it.Done()) {
     // If not within the range, just skip the item (drop it).
     // Otherwise, continue as usual.
     if (start <= curIndex && curIndex <= stop) {
@@ -336,11 +333,11 @@ bool RedisLists::PopLeft(const std::string& key, std::string* result) {
 
   // Point to first element in the list (if it exists), and get its value/size
   RedisListIterator it(data);
-  if (it.Length() > 0) {            // Proceed only if list is non-empty
+  if (it.Length() > 0) {  // Proceed only if list is non-empty
     Slice elem;
-    it.GetCurrent(&elem);           // Store the value of the first element
+    it.GetCurrent(&elem);  // Store the value of the first element
     it.Reserve(it.Size() - it.SizeOf(elem));
-    it.Skip();                      // DROP the first item and move to next
+    it.Skip();  // DROP the first item and move to next
 
     // Update the db
     db_->Put(put_option_, key, it.WriteResult());
@@ -368,19 +365,19 @@ bool RedisLists::PopRight(const std::string& key, std::string* result) {
   it.Reserve(it.Size());
   int len = it.Length();
   int curIndex = 0;
-  while(curIndex < (len-1) && !it.Done()) {
+  while (curIndex < (len - 1) && !it.Done()) {
     it.Push();
     ++curIndex;
   }
 
   // Extract and drop/skip the last element
-  if (curIndex == len-1) {
-    assert(!it.Done());         // Sanity check. Should not have ended here.
+  if (curIndex == len - 1) {
+    assert(!it.Done());  // Sanity check. Should not have ended here.
 
     // Extract and pop the element
     Slice elem;
-    it.GetCurrent(&elem);       // Save value of element.
-    it.Skip();                  // Skip the element
+    it.GetCurrent(&elem);  // Save value of element.
+    it.Skip();             // Skip the element
 
     // Write the result to the database
     db_->Put(put_option_, key, it.WriteResult());
@@ -392,7 +389,7 @@ bool RedisLists::PopRight(const std::string& key, std::string* result) {
     return true;
   } else {
     // Must have been an empty list
-    assert(it.Done() && len==0 && curIndex == 0);
+    assert(it.Done() && len == 0 && curIndex == 0);
     return false;
   }
 }
@@ -423,7 +420,7 @@ int RedisLists::RemoveFirst(const std::string& key, int32_t num,
   db_->Get(get_option_, key, &data);
 
   // Traverse the list, appending all but the desired occurrences of value
-  int numSkipped = 0;         // Keep track of the number of times value is seen
+  int numSkipped = 0;  // Keep track of the number of times value is seen
   Slice elem;
   RedisListIterator it(data);
   it.Reserve(it.Size());
@@ -446,7 +443,6 @@ int RedisLists::RemoveFirst(const std::string& key, int32_t num,
   // Return the number of elements removed
   return numSkipped;
 }
-
 
 // Remove the last "num" occurrences of value in (list: key).
 // TODO: I traverse the list 2x. Make faster. Might require MergeOperator.
@@ -474,14 +470,14 @@ int RedisLists::RemoveLast(const std::string& key, int32_t num,
 
   // Construct an iterator to the data. Reserve enough space for the result.
   RedisListIterator it(data);
-  int bytesRemoved = std::min(num,totalOccs)*it.SizeOf(value);
+  int bytesRemoved = std::min(num, totalOccs) * it.SizeOf(value);
   it.Reserve(it.Size() - bytesRemoved);
 
   // Traverse the list, appending all but the desired occurrences of value.
   // Note: "Drop the last k occurrences" is equivalent to
   //  "keep only the first n-k occurrences", where n is total occurrences.
-  int numKept = 0;          // Keep track of the number of times value is kept
-  while(!it.Done()) {
+  int numKept = 0;  // Keep track of the number of times value is kept
+  while (!it.Done()) {
     it.GetCurrent(&elem);
 
     // If we are within the deletion range and equal to value, drop it.
@@ -524,20 +520,19 @@ int RedisLists::Insert(const std::string& key, const std::string& pivot,
   // Iterate through the list until we find the element we want
   Slice elem;
   bool found = false;
-  while(!it.Done() && !found) {
+  while (!it.Done() && !found) {
     it.GetCurrent(&elem);
 
     // When we find the element, insert the element and mark found
-    if (elem == pivot) {                // Found it!
+    if (elem == pivot) {  // Found it!
       found = true;
-      if (insert_after == true) {       // Skip one more, if inserting after it
+      if (insert_after == true) {  // Skip one more, if inserting after it
         it.Push();
       }
       it.InsertElement(value);
     } else {
       it.Push();
     }
-
   }
 
   // Put the data (string) into the database

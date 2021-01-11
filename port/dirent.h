@@ -17,6 +17,7 @@
 #elif defined(OS_WIN)
 
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 namespace port {
 
@@ -34,11 +35,11 @@ int closedir(DIR* dirp);
 
 }  // namespace port
 
-using port::dirent;
+using port::closedir;
 using port::DIR;
+using port::dirent;
 using port::opendir;
 using port::readdir;
-using port::closedir;
 
 }  // namespace TERARKDB_NAMESPACE
 

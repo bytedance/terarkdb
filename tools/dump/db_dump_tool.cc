@@ -9,15 +9,17 @@
 #define __STDC_FORMAT_MACROS
 #endif
 
+#include "rocksdb/db_dump_tool.h"
+
 #include <inttypes.h>
+
 #include <iostream>
 
 #include "rocksdb/db.h"
-#include "rocksdb/db_dump_tool.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 bool DbDumpTool::Run(const DumpOptions& dump_options,
@@ -37,7 +39,8 @@ bool DbDumpTool::Run(const DumpOptions& dump_options,
 
   // Open the database
   options.create_if_missing = false;
-  status = TERARKDB_NAMESPACE::DB::OpenForReadOnly(options, dump_options.db_path, &dbptr);
+  status = TERARKDB_NAMESPACE::DB::OpenForReadOnly(
+      options, dump_options.db_path, &dbptr);
   if (!status.ok()) {
     std::cerr << "Unable to open database '" << dump_options.db_path
               << "' for reading: " << status.ToString() << std::endl;
@@ -185,7 +188,8 @@ bool DbUndumpTool::Run(const UndumpOptions& undump_options,
   }
 
   options.create_if_missing = true;
-  status = TERARKDB_NAMESPACE::DB::Open(options, undump_options.db_path, &dbptr);
+  status =
+      TERARKDB_NAMESPACE::DB::Open(options, undump_options.db_path, &dbptr);
   if (!status.ok()) {
     std::cerr << "Unable to open database '" << undump_options.db_path
               << "' for writing: " << status.ToString() << std::endl;
@@ -249,7 +253,8 @@ bool DbUndumpTool::Run(const UndumpOptions& undump_options,
   }
 
   if (undump_options.compact_db) {
-    status = db->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(), nullptr, nullptr);
+    status = db->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(),
+                              nullptr, nullptr);
     if (!status.ok()) {
       fprintf(stderr,
               "Unable to compact the database after loading the dumped file\n");

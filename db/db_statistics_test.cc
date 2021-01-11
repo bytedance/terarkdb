@@ -9,8 +9,8 @@
 #include "monitoring/thread_status_util.h"
 #include "port/stack_trace.h"
 #include "rocksdb/statistics.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class DBStatisticsTest : public DBTestBase {
@@ -69,9 +69,9 @@ TEST_F(DBStatisticsTest, CompressionStatsTest) {
   options.compression = kNoCompression;
   DestroyAndReopen(options);
   uint64_t currentCompressions =
-            options.statistics->getTickerCount(NUMBER_BLOCK_COMPRESSED);
+      options.statistics->getTickerCount(NUMBER_BLOCK_COMPRESSED);
   uint64_t currentDecompressions =
-            options.statistics->getTickerCount(NUMBER_BLOCK_DECOMPRESSED);
+      options.statistics->getTickerCount(NUMBER_BLOCK_DECOMPRESSED);
 
   // Check that compressions do not occur when turned off
   for (int i = 0; i < kNumKeysWritten; ++i) {
@@ -79,14 +79,16 @@ TEST_F(DBStatisticsTest, CompressionStatsTest) {
     ASSERT_OK(Put(Key(i), RandomString(&rnd, 128) + std::string(128, 'a')));
   }
   ASSERT_OK(Flush());
-  ASSERT_EQ(options.statistics->getTickerCount(NUMBER_BLOCK_COMPRESSED)
-            - currentCompressions, 0);
+  ASSERT_EQ(options.statistics->getTickerCount(NUMBER_BLOCK_COMPRESSED) -
+                currentCompressions,
+            0);
 
   for (int i = 0; i < kNumKeysWritten; ++i) {
     auto r = Get(Key(i));
   }
-  ASSERT_EQ(options.statistics->getTickerCount(NUMBER_BLOCK_DECOMPRESSED)
-            - currentDecompressions, 0);
+  ASSERT_EQ(options.statistics->getTickerCount(NUMBER_BLOCK_DECOMPRESSED) -
+                currentDecompressions,
+            0);
 }
 
 TEST_F(DBStatisticsTest, MutexWaitStatsDisabledByDefault) {

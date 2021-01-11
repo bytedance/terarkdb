@@ -8,10 +8,12 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "rocksdb/write_buffer_manager.h"
+
 #include <mutex>
-#include "util/coding.h"
 
 #include "rocksdb/terark_namespace.h"
+#include "util/coding.h"
+
 namespace TERARKDB_NAMESPACE {
 #ifndef ROCKSDB_LITE
 namespace {

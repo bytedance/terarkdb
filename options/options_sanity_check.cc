@@ -8,6 +8,7 @@
 #include "options/options_sanity_check.h"
 
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 namespace {
@@ -17,7 +18,7 @@ OptionsSanityCheckLevel SanityCheckLevelHelper(
   auto iter = smap.find(name);
   return iter != smap.end() ? iter->second : kSanityLevelExactMatch;
 }
-}
+}  // namespace
 
 OptionsSanityCheckLevel DBOptionSanityCheckLevel(
     const std::string& option_name) {

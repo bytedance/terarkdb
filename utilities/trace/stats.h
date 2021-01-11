@@ -8,7 +8,9 @@
 #include <vector>
 
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
+
 template <size_t MAX_LATENCY_US_FAST = 10 * 1000>  // 10ms
 class HistStats {
  public:

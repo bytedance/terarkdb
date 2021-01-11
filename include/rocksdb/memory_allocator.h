@@ -5,11 +5,11 @@
 
 #pragma once
 
-#include "rocksdb/status.h"
-
 #include <memory>
 
+#include "rocksdb/status.h"
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 // MemoryAllocator is an interface that a client can implement to supply custom

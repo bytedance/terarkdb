@@ -8,6 +8,7 @@
 #include "db/db_impl.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/cuckoo_table_factory.h"
 #include "table/cuckoo_table_reader.h"
 #include "table/meta_blocks.h"
@@ -15,7 +16,6 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class CuckooTableDBTest : public testing::Test {
@@ -47,9 +47,7 @@ class CuckooTableDBTest : public testing::Test {
     return options;
   }
 
-  DBImpl* dbfull() {
-    return reinterpret_cast<DBImpl*>(db_);
-  }
+  DBImpl* dbfull() { return reinterpret_cast<DBImpl*>(db_); }
 
   // The following util methods are copied from plain_table_db_test.
   void Reopen(Options* options = nullptr) {
@@ -69,9 +67,7 @@ class CuckooTableDBTest : public testing::Test {
     return db_->Put(WriteOptions(), k, v);
   }
 
-  Status Delete(const std::string& k) {
-    return db_->Delete(WriteOptions(), k);
-  }
+  Status Delete(const std::string& k) { return db_->Delete(WriteOptions(), k); }
 
   std::string Get(const std::string& k) {
     ReadOptions options;
@@ -328,8 +324,7 @@ int main(int argc, char** argv) {
   if (TERARKDB_NAMESPACE::port::kLittleEndian) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
-  }
-  else {
+  } else {
     fprintf(stderr, "SKIPPED as Cuckoo table doesn't support Big Endian\n");
     return 0;
   }

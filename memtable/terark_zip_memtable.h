@@ -16,6 +16,7 @@
 #include "port/port.h"
 #include "rocksdb/convenience.h"
 #include "rocksdb/memtablerep.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/terark_zip_internal.h"
 #include "terark/fsa/cspptrie.inl"
 #include "terark/heap_ext.hpp"
@@ -23,7 +24,6 @@
 #include "terark/thread/instance_tls_owner.hpp"
 #include "util/arena.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Write token pairing with MainPatricia
@@ -130,8 +130,7 @@ class PatriciaTrieRep : public MemTableRep {
 // Heap iterator for traversing multi tries simultaneously.
 // Create a heap to merge iterators from all tries.
 template <bool heap_mode>
-class PatriciaRepIterator : public MemTableRep::Iterator,
-                            boost::noncopyable {
+class PatriciaRepIterator : public MemTableRep::Iterator, boost::noncopyable {
   typedef terark::Patricia::ReaderToken token_t;
 
   // Inner iterator abstructiong for polymorphism

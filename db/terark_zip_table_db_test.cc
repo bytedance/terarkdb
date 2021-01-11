@@ -10,12 +10,12 @@
 #include "db/db_impl.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/meta_blocks.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class TerarkZipTableDBTest : public testing::Test {
@@ -603,19 +603,24 @@ TEST_F(TerarkZipTableDBTest, EmptyTable) {
   Random rnd(301);
   int len = 32;
 
-  dbfull()->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(), nullptr, nullptr);
+  dbfull()->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(), nullptr,
+                         nullptr);
   dbfull()->Flush(TERARKDB_NAMESPACE::FlushOptions());
 
-  dbfull()->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(), nullptr, nullptr);
+  dbfull()->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(), nullptr,
+                         nullptr);
   dbfull()->Flush(TERARKDB_NAMESPACE::FlushOptions());
-  dbfull()->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(), nullptr, nullptr);
+  dbfull()->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(), nullptr,
+                         nullptr);
   ASSERT_OK(Put(RandomString(&rnd, len), Key(0)));
   ASSERT_OK(Delete(RandomString(&rnd, len)));
-  dbfull()->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(), nullptr, nullptr);
+  dbfull()->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(), nullptr,
+                         nullptr);
   ASSERT_OK(Put(RandomString(&rnd, len), Key(0)));
   ASSERT_OK(Delete(RandomString(&rnd, len)));
   dbfull()->Flush(TERARKDB_NAMESPACE::FlushOptions());
-  dbfull()->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(), nullptr, nullptr);
+  dbfull()->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(), nullptr,
+                         nullptr);
 }
 
 TEST_F(TerarkZipTableDBTest, FirstKVHuge) {

@@ -7,18 +7,18 @@
 
 #include "rocksdb/utilities/document_db.h"
 
+#include "port/port.h"
 #include "rocksdb/cache.h"
-#include "rocksdb/table.h"
-#include "rocksdb/filter_policy.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/db.h"
+#include "rocksdb/filter_policy.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/json_document.h"
 #include "util/coding.h"
 #include "util/mutexlock.h"
-#include "port/port.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // IMPORTANT NOTE: Secondary index column families should be very small and
@@ -78,8 +78,7 @@ class Filter {
         : upper_bound(ub),
           lower_bound(lb),
           upper_inclusive(ui),
-          lower_inclusive(li) {
-    }
+          lower_inclusive(li) {}
 
     void UpdateUpperBound(const JSONDocument& ub, bool inclusive);
     void UpdateLowerBound(const JSONDocument& lb, bool inclusive);
@@ -167,8 +166,7 @@ Filter* Filter::ParseFilter(const JSONDocument& filter) {
     } else {
       // equality
       f->intervals_.insert(
-          {items.first, Interval(items.second,
-                                 items.second, true, true)});
+          {items.first, Interval(items.second, items.second, true, true)});
     }
   }
 
@@ -388,8 +386,8 @@ class SimpleSortedIndex : public Index {
 
   virtual const char* Name() const override { return name_.c_str(); }
 
-  virtual void GetIndexKey(const JSONDocument& document, std::string* key) const
-      override {
+  virtual void GetIndexKey(const JSONDocument& document,
+                           std::string* key) const override {
     if (!document.Contains(field_)) {
       if (!EncodeJSONPrimitive(JSONDocument(JSONDocument::kNull), key)) {
         assert(false);
@@ -434,7 +432,7 @@ class SimpleSortedIndex : public Index {
   // REQUIRES: UsefulIndex(filter) == true
 #if defined(_MSC_VER)
 #pragma warning(push)
-#pragma warning(disable : 4702) // Unreachable code
+#pragma warning(disable : 4702)  // Unreachable code
 #endif
   virtual bool ShouldContinueLooking(
       const Filter& filter, const Slice& secondary_key,
@@ -817,8 +815,7 @@ class DocumentDBImpl : public DocumentDB {
     auto primary_key = document[kPrimaryKey];
     if (primary_key.IsNull() ||
         (!primary_key.IsString() && !primary_key.IsInt64())) {
-      return Status::InvalidArgument(
-          "Primary key format error");
+      return Status::InvalidArgument("Primary key format error");
     }
     std::string encoded_document;
     document.Serialize(&encoded_document);
@@ -910,7 +907,7 @@ class DocumentDBImpl : public DocumentDB {
         ConstructFilterCursor(read_options, nullptr, filter));
 
     if (!updates.IsObject()) {
-        return Status::Corruption("Bad update document format");
+      return Status::Corruption("Bad update document format");
     }
     WriteBatch batch;
     for (; cursor->status().ok() && cursor->Valid(); cursor->Next()) {
@@ -940,8 +937,8 @@ class DocumentDBImpl : public DocumentDB {
           assert(res);
           for (const auto& itr : new_document.Items()) {
             if (update_document.Contains(itr.first)) {
-              res = builder.WriteKeyValue(itr.first,
-                                          update_document[itr.first]);
+              res =
+                  builder.WriteKeyValue(itr.first, update_document[itr.first]);
             } else {
               res = builder.WriteKeyValue(itr.first, new_document[itr.first]);
             }
@@ -1070,7 +1067,7 @@ class DocumentDBImpl : public DocumentDB {
  private:
 #if defined(_MSC_VER)
 #pragma warning(push)
-#pragma warning(disable : 4702) // unreachable code
+#pragma warning(disable : 4702)  // unreachable code
 #endif
   Cursor* ConstructFilterCursor(ReadOptions read_options, Cursor* cursor,
                                 const JSONDocument& query) {
@@ -1142,7 +1139,6 @@ class DocumentDBImpl : public DocumentDB {
     ColumnFamilyHandle* column_family;
   };
 
-
   // name_to_index_ protected:
   // 1) when writing -- 1. lock write_mutex_, 2. lock name_to_index_mutex_
   // 2) when reading -- lock name_to_index_mutex_ OR write_mutex_
@@ -1158,10 +1154,12 @@ Options GetRocksDBOptionsFromOptions(const DocumentDBOptions& options) {
   rocksdb_options.max_background_garbage_collections =
       options.background_threads - 1;
   rocksdb_options.max_background_flushes = 1;
-  rocksdb_options.write_buffer_size = static_cast<size_t>(options.memtable_size);
+  rocksdb_options.write_buffer_size =
+      static_cast<size_t>(options.memtable_size);
   rocksdb_options.max_write_buffer_number = 6;
   BlockBasedTableOptions table_options;
-  table_options.block_cache = NewLRUCache(static_cast<size_t>(options.cache_size));
+  table_options.block_cache =
+      NewLRUCache(static_cast<size_t>(options.cache_size));
   rocksdb_options.table_factory.reset(NewBlockBasedTableFactory(table_options));
   return rocksdb_options;
 }

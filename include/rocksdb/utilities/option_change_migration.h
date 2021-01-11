@@ -6,10 +6,11 @@
 #pragma once
 
 #include <string>
+
 #include "rocksdb/options.h"
 #include "rocksdb/status.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 // Try to migrate DB created with old_opts to be use new_opts.
 // Multiple column families is not supported.

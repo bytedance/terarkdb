@@ -6,14 +6,15 @@
 // This file implements the callback "bridge" between Java and C++ for
 // TERARKDB_NAMESPACE::Logger.
 
-#include "include/org_rocksdb_Logger.h"
+#include "rocksjni/loggerjnicallback.h"
 
 #include <cstdarg>
 #include <cstdio>
-#include "rocksjni/loggerjnicallback.h"
+
+#include "include/org_rocksdb_Logger.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksjni/portal.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 LoggerJniCallback::LoggerJniCallback(JNIEnv* env, jobject jlogger)
@@ -229,8 +230,9 @@ LoggerJniCallback::~LoggerJniCallback() {
  */
 jlong Java_org_rocksdb_Logger_createNewLoggerOptions(JNIEnv* env, jobject jobj,
                                                      jlong joptions) {
-  auto* sptr_logger = new std::shared_ptr<TERARKDB_NAMESPACE::LoggerJniCallback>(
-      new TERARKDB_NAMESPACE::LoggerJniCallback(env, jobj));
+  auto* sptr_logger =
+      new std::shared_ptr<TERARKDB_NAMESPACE::LoggerJniCallback>(
+          new TERARKDB_NAMESPACE::LoggerJniCallback(env, jobj));
 
   // set log level
   auto* options = reinterpret_cast<TERARKDB_NAMESPACE::Options*>(joptions);
@@ -247,11 +249,13 @@ jlong Java_org_rocksdb_Logger_createNewLoggerOptions(JNIEnv* env, jobject jobj,
 jlong Java_org_rocksdb_Logger_createNewLoggerDbOptions(JNIEnv* env,
                                                        jobject jobj,
                                                        jlong jdb_options) {
-  auto* sptr_logger = new std::shared_ptr<TERARKDB_NAMESPACE::LoggerJniCallback>(
-      new TERARKDB_NAMESPACE::LoggerJniCallback(env, jobj));
+  auto* sptr_logger =
+      new std::shared_ptr<TERARKDB_NAMESPACE::LoggerJniCallback>(
+          new TERARKDB_NAMESPACE::LoggerJniCallback(env, jobj));
 
   // set log level
-  auto* db_options = reinterpret_cast<TERARKDB_NAMESPACE::DBOptions*>(jdb_options);
+  auto* db_options =
+      reinterpret_cast<TERARKDB_NAMESPACE::DBOptions*>(jdb_options);
   sptr_logger->get()->SetInfoLogLevel(db_options->info_log_level);
 
   return reinterpret_cast<jlong>(sptr_logger);
@@ -265,7 +269,8 @@ jlong Java_org_rocksdb_Logger_createNewLoggerDbOptions(JNIEnv* env,
 void Java_org_rocksdb_Logger_setInfoLogLevel(JNIEnv* /*env*/, jobject /*jobj*/,
                                              jlong jhandle, jbyte jlog_level) {
   auto* handle =
-      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::LoggerJniCallback>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::LoggerJniCallback>*>(
+          jhandle);
   handle->get()->SetInfoLogLevel(
       static_cast<TERARKDB_NAMESPACE::InfoLogLevel>(jlog_level));
 }
@@ -278,7 +283,8 @@ void Java_org_rocksdb_Logger_setInfoLogLevel(JNIEnv* /*env*/, jobject /*jobj*/,
 jbyte Java_org_rocksdb_Logger_infoLogLevel(JNIEnv* /*env*/, jobject /*jobj*/,
                                            jlong jhandle) {
   auto* handle =
-      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::LoggerJniCallback>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::LoggerJniCallback>*>(
+          jhandle);
   return static_cast<jbyte>(handle->get()->GetInfoLogLevel());
 }
 
@@ -290,6 +296,7 @@ jbyte Java_org_rocksdb_Logger_infoLogLevel(JNIEnv* /*env*/, jobject /*jobj*/,
 void Java_org_rocksdb_Logger_disposeInternal(JNIEnv* /*env*/, jobject /*jobj*/,
                                              jlong jhandle) {
   auto* handle =
-      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::LoggerJniCallback>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::LoggerJniCallback>*>(
+          jhandle);
   delete handle;  // delete std::shared_ptr
 }

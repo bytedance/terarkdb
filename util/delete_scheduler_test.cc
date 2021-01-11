@@ -7,14 +7,13 @@
 #define __STDC_FORMAT_MACROS
 #endif
 
-#include <inttypes.h>
+#include "util/delete_scheduler.h"
+
 #include <atomic>
-#include <thread>
 #include <vector>
 
 #include "rocksdb/env.h"
-#include "rocksdb/options.h"
-#include "util/delete_scheduler.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/sst_file_manager_impl.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
@@ -23,7 +22,6 @@
 
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DeleteSchedulerTest : public testing::Test {
@@ -136,7 +134,7 @@ TEST_F(DeleteSchedulerTest, BasicRateLimiting) {
         EXPECT_EQ(dummy_files_dirs_[0], *dir);
       });
 
-  int num_files = 100;  // 100 files
+  int num_files = 100;        // 100 files
   uint64_t file_size = 1024;  // every file is 1 kb
   std::vector<uint64_t> delete_kbs_per_sec = {512, 200, 100, 50, 25};
 
@@ -244,7 +242,7 @@ TEST_F(DeleteSchedulerTest, RateLimitingMultiThreaded) {
       [&](void* arg) { penalties.push_back(*(static_cast<uint64_t*>(arg))); });
 
   int thread_cnt = 10;
-  int num_files = 10;  // 10 files per thread
+  int num_files = 10;         // 10 files per thread
   uint64_t file_size = 1024;  // every file is 1 kb
 
   std::vector<uint64_t> delete_kbs_per_sec = {512, 200, 100, 50, 25};
@@ -551,8 +549,7 @@ TEST_F(DeleteSchedulerTest, DISABLED_DynamicRateLimiting1) {
       "DeleteScheduler::DeleteTrashFile:DeleteFile",
       [&](void* /*arg*/) { bg_delete_file++; });
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
-      "DeleteScheduler::DeleteFile",
-      [&](void* /*arg*/) { fg_delete_file++; });
+      "DeleteScheduler::DeleteFile", [&](void* /*arg*/) { fg_delete_file++; });
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "DeleteScheduler::BackgroundEmptyTrash:Wait",
       [&](void* arg) { penalties.push_back(*(static_cast<int*>(arg))); });
@@ -566,8 +563,7 @@ TEST_F(DeleteSchedulerTest, DISABLED_DynamicRateLimiting1) {
   rate_bytes_per_sec_ = 0;  // Disable rate limiting initially
   NewDeleteScheduler();
 
-
-  int num_files = 10;  // 10 files
+  int num_files = 10;         // 10 files
   uint64_t file_size = 1024;  // every file is 1 kb
 
   std::vector<int64_t> delete_kbs_per_sec = {512, 200, 0, 100, 50, -2, 25};
@@ -637,9 +633,9 @@ TEST_F(DeleteSchedulerTest, ImmediateDeleteOn25PercDBSize) {
 
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
 
-  int num_files = 100;  // 100 files
-  uint64_t file_size = 1024 * 10; // 100 KB as a file size
-  rate_bytes_per_sec_ = 1;  // 1 byte per sec (very slow trash delete)
+  int num_files = 100;             // 100 files
+  uint64_t file_size = 1024 * 10;  // 100 KB as a file size
+  rate_bytes_per_sec_ = 1;         // 1 byte per sec (very slow trash delete)
 
   NewDeleteScheduler();
   delete_scheduler_->SetMaxTrashDBRatio(0.25);

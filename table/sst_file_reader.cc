@@ -9,12 +9,12 @@
 
 #include "db/db_iter.h"
 #include "options/cf_options.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/get_context.h"
 #include "table/table_builder.h"
 #include "table/table_reader.h"
 #include "util/file_reader_writer.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct SstFileReader::Rep {

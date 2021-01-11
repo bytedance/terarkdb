@@ -21,12 +21,12 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/types.h"
 #include "util/arena.h"
 #include "util/coding.h"
 #include "util/logging.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class InternalKey;

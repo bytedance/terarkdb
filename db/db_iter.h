@@ -18,10 +18,10 @@
 #include "options/cf_options.h"
 #include "rocksdb/db.h"
 #include "rocksdb/iterator.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/arena.h"
 #include "util/autovector.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Arena;

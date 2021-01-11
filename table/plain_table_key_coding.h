@@ -7,11 +7,12 @@
 #ifndef ROCKSDB_LITE
 
 #include <array>
-#include "rocksdb/slice.h"
+
 #include "db/dbformat.h"
+#include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/plain_table_reader.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class WritableFile;

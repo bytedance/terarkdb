@@ -8,13 +8,14 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "util/rate_limiter.h"
+
 #include "monitoring/statistics.h"
 #include "port/port.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/aligned_buffer.h"
 #include "util/sync_point.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 size_t RateLimiter::RequestToken(size_t bytes, size_t alignment,
@@ -145,9 +146,8 @@ void GenericRateLimiter::Request(int64_t bytes, const Env::IOPriority pri,
     //     previous leader
     if (leader_ == nullptr &&
         ((!queue_[Env::IO_HIGH].empty() &&
-            &r == queue_[Env::IO_HIGH].front()) ||
-         (!queue_[Env::IO_LOW].empty() &&
-            &r == queue_[Env::IO_LOW].front()))) {
+          &r == queue_[Env::IO_HIGH].front()) ||
+         (!queue_[Env::IO_LOW].empty() && &r == queue_[Env::IO_LOW].front()))) {
       leader_ = &r;
       int64_t delta = next_refill_us_ - NowMicrosMonotonic(env_);
       delta = delta > 0 ? delta : 0;
@@ -172,11 +172,10 @@ void GenericRateLimiter::Request(int64_t bytes, const Env::IOPriority pri,
     }
 
     // Make sure the waken up request is always the header of its queue
-    assert(r.granted ||
-           (!queue_[Env::IO_HIGH].empty() &&
-            &r == queue_[Env::IO_HIGH].front()) ||
-           (!queue_[Env::IO_LOW].empty() &&
-            &r == queue_[Env::IO_LOW].front()));
+    assert(
+        r.granted ||
+        (!queue_[Env::IO_HIGH].empty() && &r == queue_[Env::IO_HIGH].front()) ||
+        (!queue_[Env::IO_LOW].empty() && &r == queue_[Env::IO_LOW].front()));
     assert(leader_ == nullptr ||
            (!queue_[Env::IO_HIGH].empty() &&
             leader_ == queue_[Env::IO_HIGH].front()) ||
@@ -198,9 +197,9 @@ void GenericRateLimiter::Request(int64_t bytes, const Env::IOPriority pri,
           // Current leader already got granted with quota. Notify header
           // of waiting queue to participate next round of election.
           assert((queue_[Env::IO_HIGH].empty() ||
-                    &r != queue_[Env::IO_HIGH].front()) &&
+                  &r != queue_[Env::IO_HIGH].front()) &&
                  (queue_[Env::IO_LOW].empty() ||
-                    &r != queue_[Env::IO_LOW].front()));
+                  &r != queue_[Env::IO_LOW].front()));
           if (!queue_[Env::IO_HIGH].empty()) {
             queue_[Env::IO_HIGH].front()->cv.Signal();
           } else if (!queue_[Env::IO_LOW].empty()) {

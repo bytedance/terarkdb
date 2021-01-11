@@ -3,51 +3,45 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
+#include "rocksdb/terark_namespace.h"
 #include "util/testharness.h"
 #include "utilities/cassandra/serialize.h"
 
 using namespace TERARKDB_NAMESPACE::cassandra;
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace cassandra {
 
 TEST(SerializeTest, SerializeI64) {
   std::string dest;
   Serialize<int64_t>(0, &dest);
-  EXPECT_EQ(
-      std::string(
-          {'\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00'}),
-      dest);
+  EXPECT_EQ(std::string({'\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00',
+                         '\x00'}),
+            dest);
 
   dest.clear();
   Serialize<int64_t>(1, &dest);
-  EXPECT_EQ(
-      std::string(
-          {'\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x01'}),
-      dest);
-
+  EXPECT_EQ(std::string({'\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00',
+                         '\x01'}),
+            dest);
 
   dest.clear();
   Serialize<int64_t>(-1, &dest);
-  EXPECT_EQ(
-      std::string(
-          {'\xff', '\xff', '\xff', '\xff', '\xff', '\xff', '\xff', '\xff'}),
-      dest);
+  EXPECT_EQ(std::string({'\xff', '\xff', '\xff', '\xff', '\xff', '\xff', '\xff',
+                         '\xff'}),
+            dest);
 
   dest.clear();
   Serialize<int64_t>(9223372036854775807, &dest);
-  EXPECT_EQ(
-      std::string(
-          {'\x7f', '\xff', '\xff', '\xff', '\xff', '\xff', '\xff', '\xff'}),
-      dest);
+  EXPECT_EQ(std::string({'\x7f', '\xff', '\xff', '\xff', '\xff', '\xff', '\xff',
+                         '\xff'}),
+            dest);
 
   dest.clear();
   Serialize<int64_t>(-9223372036854775807, &dest);
-  EXPECT_EQ(
-      std::string(
-          {'\x80', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x01'}),
-      dest);
+  EXPECT_EQ(std::string({'\x80', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00',
+                         '\x01'}),
+            dest);
 }
 
 TEST(SerializeTest, DeserializeI64) {
@@ -76,39 +70,23 @@ TEST(SerializeTest, DeserializeI64) {
 TEST(SerializeTest, SerializeI32) {
   std::string dest;
   Serialize<int32_t>(0, &dest);
-  EXPECT_EQ(
-      std::string(
-          {'\x00', '\x00', '\x00', '\x00'}),
-      dest);
+  EXPECT_EQ(std::string({'\x00', '\x00', '\x00', '\x00'}), dest);
 
   dest.clear();
   Serialize<int32_t>(1, &dest);
-  EXPECT_EQ(
-      std::string(
-          {'\x00', '\x00', '\x00', '\x01'}),
-      dest);
-
+  EXPECT_EQ(std::string({'\x00', '\x00', '\x00', '\x01'}), dest);
 
   dest.clear();
   Serialize<int32_t>(-1, &dest);
-  EXPECT_EQ(
-      std::string(
-          {'\xff', '\xff', '\xff', '\xff'}),
-      dest);
+  EXPECT_EQ(std::string({'\xff', '\xff', '\xff', '\xff'}), dest);
 
   dest.clear();
   Serialize<int32_t>(2147483647, &dest);
-  EXPECT_EQ(
-      std::string(
-          {'\x7f', '\xff', '\xff', '\xff'}),
-      dest);
+  EXPECT_EQ(std::string({'\x7f', '\xff', '\xff', '\xff'}), dest);
 
   dest.clear();
   Serialize<int32_t>(-2147483648LL, &dest);
-  EXPECT_EQ(
-      std::string(
-          {'\x80', '\x00', '\x00', '\x00'}),
-      dest);
+  EXPECT_EQ(std::string({'\x80', '\x00', '\x00', '\x00'}), dest);
 }
 
 TEST(SerializeTest, DeserializeI32) {
@@ -142,7 +120,6 @@ TEST(SerializeTest, SerializeI8) {
   dest.clear();
   Serialize<int8_t>(1, &dest);
   EXPECT_EQ(std::string({'\x01'}), dest);
-
 
   dest.clear();
   Serialize<int8_t>(-1, &dest);
@@ -180,8 +157,8 @@ TEST(SerializeTest, DeserializeI8) {
   EXPECT_EQ(-128, Deserialize<int8_t>(dest.c_str(), offset));
 }
 
-} // namespace cassandra
-} // namespace TERARKDB_NAMESPACE
+}  // namespace cassandra
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

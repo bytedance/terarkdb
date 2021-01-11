@@ -12,23 +12,24 @@
 #pragma once
 
 #include <string>
-#include "rocksdb/db.h"
-#include "redis_list_iterator.h"
-#include "redis_list_exception.h"
 
+#include "redis_list_exception.h"
+#include "redis_list_iterator.h"
+#include "rocksdb/db.h"
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 /// The Redis functionality (see http://redis.io/commands#list)
 /// All functions may THROW a RedisListException
 class RedisLists {
- public: // Constructors / Destructors
+ public:  // Constructors / Destructors
   /// Construct a new RedisLists database, with name/path of db.
   /// Will clear the database on open iff destructive is true (default false).
   /// Otherwise, it will restore saved changes.
   /// May throw RedisListException
-  RedisLists(const std::string& db_path,
-             Options options, bool destructive = false);
+  RedisLists(const std::string& db_path, Options options,
+             bool destructive = false);
 
  public:  // Accessors
   /// The number of items in (list: key)
@@ -40,18 +41,17 @@ class RedisLists {
   /// If (index < -length OR index>=length), then index is out of range:
   ///   return false (and *result is left unchanged)
   /// May throw RedisListException
-  bool Index(const std::string& key, int32_t index,
-             std::string* result);
+  bool Index(const std::string& key, int32_t index, std::string* result);
 
   /// Return (list: key)[first..last] (inclusive)
   /// May throw RedisListException
-  std::vector<std::string> Range(const std::string& key,
-                                 int32_t first, int32_t last);
+  std::vector<std::string> Range(const std::string& key, int32_t first,
+                                 int32_t last);
 
   /// Prints the entire (list: key), for debugging.
   void Print(const std::string& key);
 
- public: // Insert/Update
+ public:  // Insert/Update
   /// Insert value before/after pivot in (list: key). Return the length.
   /// May throw RedisListException
   int InsertBefore(const std::string& key, const std::string& pivot,
@@ -68,7 +68,7 @@ class RedisLists {
   /// May throw RedisListException
   bool Set(const std::string& key, int32_t index, const std::string& value);
 
- public: // Delete / Remove / Pop / Trim
+ public:  // Delete / Remove / Pop / Trim
   /// Trim (list: key) so that it will only contain the indices from start..stop
   /// Returns true on success
   /// May throw RedisListException
@@ -76,25 +76,24 @@ class RedisLists {
 
   /// If list is empty, return false and leave *result unchanged.
   /// Else, remove the first/last elem, store it in *result, and return true
-  bool PopLeft(const std::string& key, std::string* result);  // First
-  bool PopRight(const std::string& key, std::string* result); // Last
+  bool PopLeft(const std::string& key, std::string* result);   // First
+  bool PopRight(const std::string& key, std::string* result);  // Last
 
   /// Remove the first (or last) num occurrences of value from the list (key)
   /// Return the number of elements removed.
   /// May throw RedisListException
-  int Remove(const std::string& key, int32_t num,
-             const std::string& value);
+  int Remove(const std::string& key, int32_t num, const std::string& value);
   int RemoveFirst(const std::string& key, int32_t num,
                   const std::string& value);
-  int RemoveLast(const std::string& key, int32_t num,
-                 const std::string& value);
+  int RemoveLast(const std::string& key, int32_t num, const std::string& value);
 
- private: // Private Functions
+ private:  // Private Functions
   /// Calls InsertBefore or InsertAfter
   int Insert(const std::string& key, const std::string& pivot,
              const std::string& value, bool insert_after);
+
  private:
-  std::string db_name_;       // The actual database name/path
+  std::string db_name_;  // The actual database name/path
   WriteOptions put_option_;
   ReadOptions get_option_;
 
@@ -105,5 +104,5 @@ class RedisLists {
   std::unique_ptr<DB> db_;
 };
 
-} // namespace TERARKDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

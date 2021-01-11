@@ -67,6 +67,7 @@
 #include "rocksdb/statistics.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block.h"
 #include "table/block_based_table_factory.h"
 #include "table/get_context.h"
@@ -89,7 +90,6 @@
 #include "utilities/util/function.hpp"
 #include "utilities/util/valvec.hpp"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 const char* GetCompactionReasonString(CompactionReason compaction_reason) {
@@ -859,9 +859,9 @@ Status CompactionJob::Run() {
           if (!s.ok()) {
             break;
           }
-          std::unique_ptr<TERARKDB_NAMESPACE::RandomAccessFileReader> file_reader(
-              new TERARKDB_NAMESPACE::RandomAccessFileReader(std::move(file), fname,
-                                                  env_));
+          std::unique_ptr<TERARKDB_NAMESPACE::RandomAccessFileReader>
+              file_reader(new TERARKDB_NAMESPACE::RandomAccessFileReader(
+                  std::move(file), fname, env_));
           std::unique_ptr<TERARKDB_NAMESPACE::TableReader> reader;
           TableReaderOptions table_reader_options(
               *c->immutable_cf_options(),

@@ -12,10 +12,12 @@
 // file data (or entire files) not protected by a "sync".
 
 #include "util/fault_injection_test_env.h"
+
 #include <functional>
 #include <utility>
 
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 // Assume a filename, and not a directory name like "/foo/bar/"

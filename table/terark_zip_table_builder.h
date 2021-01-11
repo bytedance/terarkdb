@@ -10,22 +10,8 @@
 #ifndef TERARK_ZIP_TABLE_BUILDER_H_
 #define TERARK_ZIP_TABLE_BUILDER_H_
 
-// project headers
-#include "terark_zip_common.h"
-#include "terark_zip_internal.h"
-#include "terark_zip_table.h"
-// std headers
 #include <future>
 #include <random>
-// rocksdb headers
-#include <options/options_helper.h>
-#include <options/options_parser.h>
-#include <table/block_builder.h>
-#include <table/format.h>
-#include <table/internal_iterator.h>
-#include <table/table_builder.h>
-#include <util/arena.h>
-// terark headers
 #include <terark/bitfield_array.hpp>
 #include <terark/bitmap.hpp>
 #include <terark/entropy/entropy_base.hpp>
@@ -40,7 +26,18 @@
 #include <terark/zbs/dict_zip_blob_store.hpp>
 #include <terark/zbs/zip_reorder_map.hpp>
 
+#include "options/options_helper.h"
+#include "options/options_parser.h"
 #include "rocksdb/terark_namespace.h"
+#include "table/block_builder.h"
+#include "table/format.h"
+#include "table/internal_iterator.h"
+#include "table/table_builder.h"
+#include "table/terark_zip_common.h"
+#include "table/terark_zip_internal.h"
+#include "table/terark_zip_table.h"
+#include "util/arena.h"
+
 namespace TERARKDB_NAMESPACE {
 
 template <typename T>
@@ -55,9 +52,9 @@ using terark::FilePair;
 using terark::freq_hist_o1;
 using terark::fstring;
 using terark::fstrvec;
-using terark::TerarkIndexOptions;
 using terark::TempFileDeleteOnClose;
 using terark::TerarkIndex;
+using terark::TerarkIndexOptions;
 using terark::Uint64Histogram;
 using terark::UintVecMin0;
 using terark::valvec;

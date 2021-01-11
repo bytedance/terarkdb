@@ -7,10 +7,10 @@
 #include <string>
 
 #include "monitoring/statistics.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/format.h"
 #include "table/persistent_cache_options.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct BlockContents;

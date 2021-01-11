@@ -11,10 +11,10 @@
 
 #include <jni.h>
 
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/transaction.h"
 #include "rocksjni/jnicallback.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 /**
@@ -29,8 +29,8 @@ namespace TERARKDB_NAMESPACE {
  * presented to the callback. This could be revisited in future
  * if performance is lacking.
  */
-class TransactionNotifierJniCallback: public JniCallback,
-    public TransactionNotifier {
+class TransactionNotifierJniCallback : public JniCallback,
+                                       public TransactionNotifier {
  public:
   TransactionNotifierJniCallback(JNIEnv* env, jobject jtransaction_notifier);
   virtual void SnapshotCreated(const Snapshot* newSnapshot);

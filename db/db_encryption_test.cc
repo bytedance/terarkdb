@@ -3,16 +3,15 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 //
+#include <string>
+
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
-#include "rocksdb/perf_context.h"
+#include "rocksdb/terark_namespace.h"
 #if !defined(ROCKSDB_LITE)
 #include "util/sync_point.h"
 #endif
-#include <iostream>
-#include <string>
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBEncryptionTest : public DBTestBase {
@@ -36,7 +35,7 @@ TEST_F(DBEncryptionTest, CheckEncrypted) {
 
   auto defaultEnv = Env::Default();
   int hits = 0;
-  for (auto it = fileNames.begin() ; it != fileNames.end(); ++it) {
+  for (auto it = fileNames.begin(); it != fileNames.end(); ++it) {
     if ((*it == "..") || (*it == ".") || (*it == "CONSOLE")) {
       continue;
     }
@@ -57,24 +56,24 @@ TEST_F(DBEncryptionTest, CheckEncrypted) {
     ASSERT_OK(status);
 
     if (data.ToString().find("foo567") != std::string::npos) {
-      hits++; 
-      //std::cout << "Hit in " << filePath << "\n";
+      hits++;
+      // std::cout << "Hit in " << filePath << "\n";
     }
     if (data.ToString().find("v1.fetdq") != std::string::npos) {
-      hits++; 
-      //std::cout << "Hit in " << filePath << "\n";
+      hits++;
+      // std::cout << "Hit in " << filePath << "\n";
     }
     if (data.ToString().find("bar123") != std::string::npos) {
-      hits++; 
-      //std::cout << "Hit in " << filePath << "\n";
+      hits++;
+      // std::cout << "Hit in " << filePath << "\n";
     }
     if (data.ToString().find("v2.dfgkjdfghsd") != std::string::npos) {
-      hits++; 
-      //std::cout << "Hit in " << filePath << "\n";
+      hits++;
+      // std::cout << "Hit in " << filePath << "\n";
     }
     if (data.ToString().find("dfgk") != std::string::npos) {
-      hits++; 
-      //std::cout << "Hit in " << filePath << "\n";
+      hits++;
+      // std::cout << "Hit in " << filePath << "\n";
     }
   }
   if (encrypted_env_) {
@@ -84,7 +83,7 @@ TEST_F(DBEncryptionTest, CheckEncrypted) {
   }
 }
 
-#endif // ROCKSDB_LITE
+#endif  // ROCKSDB_LITE
 
 }  // namespace TERARKDB_NAMESPACE
 

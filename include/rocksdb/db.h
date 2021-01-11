@@ -17,14 +17,13 @@
 #include <unordered_map>
 #include <vector>
 
-//#include <terark/thread/fiber_future.hpp>
-//#include <boost/fiber/future.hpp>
 #include "rocksdb/iterator.h"
 #include "rocksdb/listener.h"
 #include "rocksdb/metadata.h"
 #include "rocksdb/options.h"
 #include "rocksdb/snapshot.h"
 #include "rocksdb/sst_file_writer.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/thread_status.h"
 #include "rocksdb/transaction_log.h"
 #include "rocksdb/types.h"
@@ -49,7 +48,6 @@ class future;  // forward declaration
 }  // namespace boost
 #endif
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 using std::future;
@@ -1283,9 +1281,9 @@ class DB {
   // Needed for StackableDB
   virtual DB* GetRootDB() { return this; }
 
-  // Given a window [start_time, end_time), setup a StatsHistoryIterator
-  // to access stats history. Note the start_time and end_time are epoch
-  // time measured in seconds, and end_time is an exclusive bound.
+  // Given a window [start_time, end_time), setup a StatsHistoryIterator to
+  // access stats history. Note the start_time and end_time are epoch time
+  // measured in seconds, and end_time is an exclusive bound.
   virtual Status GetStatsHistory(
       uint64_t /*start_time*/, uint64_t /*end_time*/,
       std::unique_ptr<StatsHistoryIterator>* /*stats_iterator*/) {

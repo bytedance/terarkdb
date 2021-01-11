@@ -16,23 +16,23 @@
 #include "db/builder.h"
 #include "db/error_handler.h"
 #include "db/map_builder.h"
-
 #include "monitoring/persistent_stats_history.h"
 #include "options/options_helper.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/wal_filter.h"
 #include "table/block_based_table_factory.h"
 #include "util/c_style_callback.h"
 #include "util/rate_limiter.h"
 #include "util/sst_file_manager_impl.h"
-#include "util/sync_point.h"
 #include "util/string_util.h"
+#include "util/sync_point.h"
 #if !defined(_MSC_VER) && !defined(__APPLE__)
 #include <sys/unistd.h>
 #include <table/terark_zip_table.h>
 #endif
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
+
 Options SanitizeOptions(const std::string& dbname, const Options& src) {
   auto db_options = SanitizeOptions(dbname, DBOptions(src));
   ImmutableDBOptions immutable_db_options(db_options);

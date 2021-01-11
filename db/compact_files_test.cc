@@ -14,11 +14,11 @@
 #include "port/port.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
 #include "util/testharness.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class CompactFilesTest : public testing::Test {
@@ -109,8 +109,8 @@ TEST_F(CompactFilesTest, L0ConflictsFiles) {
       // The background compaction then notices that there is an L0 compaction
       // already in progress and doesn't do an L0 compaction
       // Once the background compaction finishes, the compact files finishes
-      ASSERT_OK(
-          db->CompactFiles(TERARKDB_NAMESPACE::CompactionOptions(), {file1, file2}, 0));
+      ASSERT_OK(db->CompactFiles(TERARKDB_NAMESPACE::CompactionOptions(),
+                                 {file1, file2}, 0));
       break;
     }
   }
@@ -271,16 +271,13 @@ TEST_F(CompactFilesTest, CompactionFilterWithGetSv) {
       return true;
     }
 
-    void SetDB(DB* db) {
-      db_ = db;
-    }
+    void SetDB(DB* db) { db_ = db; }
 
     virtual const char* Name() const override { return "FilterWithGet"; }
 
    private:
     DB* db_;
   };
-
 
   std::shared_ptr<FilterWithGet> cf(new FilterWithGet());
 
@@ -308,7 +305,6 @@ TEST_F(CompactFilesTest, CompactionFilterWithGetSv) {
         db->CompactFiles(TERARKDB_NAMESPACE::CompactionOptions(), {fname}, 0));
   }
 
-
   delete db;
 }
 
@@ -323,10 +319,9 @@ TEST_F(CompactFilesTest, SentinelCompressionType) {
   }
   // Check that passing `CompressionType::kDisableCompressionOption` to
   // `CompactFiles` causes it to use the column family compression options.
-  for (auto compaction_style :
-       {CompactionStyle::kCompactionStyleLevel,
-        CompactionStyle::kCompactionStyleUniversal,
-        CompactionStyle::kCompactionStyleNone}) {
+  for (auto compaction_style : {CompactionStyle::kCompactionStyleLevel,
+                                CompactionStyle::kCompactionStyleUniversal,
+                                CompactionStyle::kCompactionStyleNone}) {
     DestroyDB(db_name_, Options());
     Options options;
     options.compaction_style = compaction_style;

@@ -9,11 +9,11 @@
 
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
+#include "rocksdb/terark_namespace.h"
 #if !defined(ROCKSDB_LITE)
 #include "rocksdb/utilities/table_properties_collectors.h"
 #include "util/sync_point.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 static std::string CompressibleString(Random* rnd, int len) {
@@ -26,8 +26,8 @@ class DBTestUniversalCompactionBase
     : public DBTestBase,
       public ::testing::WithParamInterface<std::tuple<int, bool>> {
  public:
-  explicit DBTestUniversalCompactionBase(
-      const std::string& path) : DBTestBase(path) {}
+  explicit DBTestUniversalCompactionBase(const std::string& path)
+      : DBTestBase(path) {}
   virtual void SetUp() override {
     num_levels_ = std::get<0>(GetParam());
     exclusive_manual_compaction_ = std::get<1>(GetParam());
@@ -39,7 +39,7 @@ class DBTestUniversalCompactionBase
     opt.blob_size = -1;
     return opt;
   }
-  Options CurrentOptionsRep(Options& default_options){
+  Options CurrentOptionsRep(Options& default_options) {
     auto opt = DBTestBase::CurrentOptions(default_options);
     opt.enable_lazy_compaction = false;
     opt.prepare_log_writer_num = 0;
@@ -52,8 +52,8 @@ class DBTestUniversalCompactionBase
 
 class DBTestUniversalCompaction : public DBTestUniversalCompactionBase {
  public:
-  DBTestUniversalCompaction() :
-      DBTestUniversalCompactionBase("/db_universal_compaction_test") {}
+  DBTestUniversalCompaction()
+      : DBTestUniversalCompactionBase("/db_universal_compaction_test") {}
 };
 
 class DBTestUniversalDeleteTrigCompaction : public DBTestBase {
@@ -607,8 +607,7 @@ TEST_P(DBTestUniversalCompaction, CompactFilesOnUniversalCompaction) {
   }
 
   if (compaction_input_file_names.size() == 0) {
-    compaction_input_file_names.push_back(
-        cf_meta.levels[0].files[0].name);
+    compaction_input_file_names.push_back(cf_meta.levels[0].files[0].name);
   }
 
   // expect fail since universal compaction only allow L0 output
@@ -618,28 +617,23 @@ TEST_P(DBTestUniversalCompaction, CompactFilesOnUniversalCompaction) {
                    .ok());
 
   // expect ok and verify the compacted files no longer exist.
-  ASSERT_OK(dbfull()->CompactFiles(
-      CompactionOptions(), handles_[1],
-      compaction_input_file_names, 0));
+  ASSERT_OK(dbfull()->CompactFiles(CompactionOptions(), handles_[1],
+                                   compaction_input_file_names, 0));
 
   dbfull()->GetColumnFamilyMetaData(handles_[1], &cf_meta);
   VerifyCompactionResult(
-      cf_meta,
-      std::set<std::string>(compaction_input_file_names.begin(),
-          compaction_input_file_names.end()));
+      cf_meta, std::set<std::string>(compaction_input_file_names.begin(),
+                                     compaction_input_file_names.end()));
 
   compaction_input_file_names.clear();
 
   // Pick the first and the last file, expect everything is
   // compacted into one single file.
+  compaction_input_file_names.push_back(cf_meta.levels[0].files[0].name);
   compaction_input_file_names.push_back(
-      cf_meta.levels[0].files[0].name);
-  compaction_input_file_names.push_back(
-      cf_meta.levels[0].files[
-          cf_meta.levels[0].files.size() - 1].name);
-  ASSERT_OK(dbfull()->CompactFiles(
-      CompactionOptions(), handles_[1],
-      compaction_input_file_names, 0));
+      cf_meta.levels[0].files[cf_meta.levels[0].files.size() - 1].name);
+  ASSERT_OK(dbfull()->CompactFiles(CompactionOptions(), handles_[1],
+                                   compaction_input_file_names, 0));
 
   dbfull()->GetColumnFamilyMetaData(handles_[1], &cf_meta);
   ASSERT_EQ(cf_meta.levels[0].files.size(), 1U);
@@ -648,7 +642,7 @@ TEST_P(DBTestUniversalCompaction, CompactFilesOnUniversalCompaction) {
 TEST_P(DBTestUniversalCompaction, UniversalCompactionTargetLevel) {
   Options options = CurrentOptionsRep();
   options.compaction_style = kCompactionStyleUniversal;
-  options.write_buffer_size = 100 << 10;     // 100KB
+  options.write_buffer_size = 100 << 10;  // 100KB
   options.num_levels = 7;
   options.disable_auto_compactions = true;
   DestroyAndReopen(options);
@@ -684,9 +678,9 @@ TEST_P(DBTestUniversalCompaction, UniversalCompactionTargetLevel) {
 class DBTestUniversalCompactionMultiLevels
     : public DBTestUniversalCompactionBase {
  public:
-  DBTestUniversalCompactionMultiLevels() :
-      DBTestUniversalCompactionBase(
-          "/db_universal_compaction_multi_levels_test") {}
+  DBTestUniversalCompactionMultiLevels()
+      : DBTestUniversalCompactionBase(
+            "/db_universal_compaction_multi_levels_test") {}
 };
 
 TEST_P(DBTestUniversalCompactionMultiLevels, UniversalCompactionMultiLevels) {
@@ -770,12 +764,11 @@ INSTANTIATE_TEST_CASE_P(DBTestUniversalCompactionMultiLevels,
                         ::testing::Combine(::testing::Values(3, 20),
                                            ::testing::Bool()));
 
-class DBTestUniversalCompactionParallel :
-    public DBTestUniversalCompactionBase {
+class DBTestUniversalCompactionParallel : public DBTestUniversalCompactionBase {
  public:
-  DBTestUniversalCompactionParallel() :
-      DBTestUniversalCompactionBase(
-          "/db_universal_compaction_prallel_test") {}
+  DBTestUniversalCompactionParallel()
+      : DBTestUniversalCompactionBase("/db_universal_compaction_prallel_test") {
+  }
 };
 
 TEST_P(DBTestUniversalCompactionParallel, UniversalCompactionParallel) {
@@ -794,20 +787,20 @@ TEST_P(DBTestUniversalCompactionParallel, UniversalCompactionParallel) {
   // Delay every compaction so multiple compactions will happen.
   std::atomic<int> num_compactions_running(0);
   std::atomic<bool> has_parallel(false);
-  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack("CompactionJob::Run():Start",
-                                                 [&](void* /*arg*/) {
-    if (num_compactions_running.fetch_add(1) > 0) {
-      has_parallel.store(true);
-      return;
-    }
-    for (int nwait = 0; nwait < 20000; nwait++) {
-      if (has_parallel.load() || num_compactions_running.load() > 1) {
-        has_parallel.store(true);
-        break;
-      }
-      env_->SleepForMicroseconds(1000);
-    }
-  });
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
+      "CompactionJob::Run():Start", [&](void* /*arg*/) {
+        if (num_compactions_running.fetch_add(1) > 0) {
+          has_parallel.store(true);
+          return;
+        }
+        for (int nwait = 0; nwait < 20000; nwait++) {
+          if (has_parallel.load() || num_compactions_running.load() > 1) {
+            has_parallel.store(true);
+            break;
+          }
+          env_->SleepForMicroseconds(1000);
+        }
+      });
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "CompactionJob::Run():End",
       [&](void* /*arg*/) { num_compactions_running.fetch_add(-1); });
@@ -964,8 +957,8 @@ INSTANTIATE_TEST_CASE_P(DBTestUniversalCompactionParallel,
 TEST_P(DBTestUniversalCompaction, UniversalCompactionOptions) {
   Options options = CurrentOptionsRep();
   options.compaction_style = kCompactionStyleUniversal;
-  options.write_buffer_size = 105 << 10;    // 105KB
-  options.arena_block_size = 4 << 10;       // 4KB
+  options.write_buffer_size = 105 << 10;     // 105KB
+  options.arena_block_size = 4 << 10;        // 4KB
   options.target_file_size_base = 32 << 10;  // 32KB
   options.level0_file_num_compaction_trigger = 4;
   options.num_levels = num_levels_;
@@ -996,8 +989,8 @@ TEST_P(DBTestUniversalCompaction, UniversalCompactionOptions) {
 TEST_P(DBTestUniversalCompaction, UniversalCompactionStopStyleSimilarSize) {
   Options options = CurrentOptionsRep();
   options.compaction_style = kCompactionStyleUniversal;
-  options.write_buffer_size = 105 << 10;    // 105KB
-  options.arena_block_size = 4 << 10;       // 4KB
+  options.write_buffer_size = 105 << 10;     // 105KB
+  options.arena_block_size = 4 << 10;        // 4KB
   options.target_file_size_base = 32 << 10;  // 32KB
   // trigger compaction if there are >= 4 files
   options.level0_file_num_compaction_trigger = 4;
@@ -1396,7 +1389,7 @@ TEST_P(DBTestUniversalCompaction, UniversalCompactionCFPathUse) {
   cf_opt1.cf_paths.emplace_back(dbname_ + "cf1_3", 500 * 1024);
   cf_opt1.cf_paths.emplace_back(dbname_ + "cf1_4", 1024 * 1024 * 1024);
   option_vector.emplace_back(DBOptions(options), cf_opt1);
-  CreateColumnFamilies({"one"},option_vector[1]);
+  CreateColumnFamilies({"one"}, option_vector[1]);
 
   // Configura CF2 specific paths.
   cf_opt2.cf_paths.emplace_back(dbname_ + "cf2", 300 * 1024);
@@ -1404,7 +1397,7 @@ TEST_P(DBTestUniversalCompaction, UniversalCompactionCFPathUse) {
   cf_opt2.cf_paths.emplace_back(dbname_ + "cf2_3", 500 * 1024);
   cf_opt2.cf_paths.emplace_back(dbname_ + "cf2_4", 1024 * 1024 * 1024);
   option_vector.emplace_back(DBOptions(options), cf_opt2);
-  CreateColumnFamilies({"two"},option_vector[2]);
+  CreateColumnFamilies({"two"}, option_vector[2]);
 
   ReopenWithColumnFamilies({"default", "one", "two"}, option_vector);
 
@@ -1608,7 +1601,6 @@ TEST_P(DBTestUniversalCompaction, IncreaseUniversalCompactionNumLevels) {
   verify_func(max_key3);
 }
 
-
 TEST_P(DBTestUniversalCompaction, UniversalCompactionSecondPathRatio) {
   if (!Snappy_Supported()) {
     return;
@@ -1781,9 +1773,8 @@ TEST_P(DBTestUniversalCompaction, RecalculateScoreAfterPicking) {
 
   std::atomic<int> num_compactions_attempted(0);
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
-      "DBImpl::BackgroundCompaction:Start", [&](void* /*arg*/) {
-        ++num_compactions_attempted;
-      });
+      "DBImpl::BackgroundCompaction:Start",
+      [&](void* /*arg*/) { ++num_compactions_attempted; });
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
 
   Random rnd(301);
@@ -1863,9 +1854,9 @@ INSTANTIATE_TEST_CASE_P(UniversalCompactionNumLevels, DBTestUniversalCompaction,
 class DBTestUniversalManualCompactionOutputPathId
     : public DBTestUniversalCompactionBase {
  public:
-  DBTestUniversalManualCompactionOutputPathId() :
-      DBTestUniversalCompactionBase(
-          "/db_universal_compaction_manual_pid_test") {}
+  DBTestUniversalManualCompactionOutputPathId()
+      : DBTestUniversalCompactionBase(
+            "/db_universal_compaction_manual_pid_test") {}
 };
 
 TEST_P(DBTestUniversalManualCompactionOutputPathId,
@@ -2176,8 +2167,8 @@ int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 #else
-  (void) argc;
-  (void) argv;
+  (void)argc;
+  (void)argv;
   return 0;
 #endif
 }

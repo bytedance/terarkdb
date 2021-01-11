@@ -12,6 +12,7 @@
 #include "utilities/transactions/pessimistic_transaction_db.h"
 
 #include <inttypes.h>
+
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -19,6 +20,7 @@
 #include "db/db_impl.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/transaction_db.h"
 #include "util/cast_util.h"
 #include "util/mutexlock.h"
@@ -28,7 +30,6 @@
 #include "utilities/transactions/write_prepared_txn_db.h"
 #include "utilities/transactions/write_unprepared_txn_db.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 PessimisticTransactionDB::PessimisticTransactionDB(

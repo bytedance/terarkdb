@@ -13,10 +13,10 @@
 
 #include "db/dbformat.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 #include "util/arena.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct FragmentedRangeTombstoneList {

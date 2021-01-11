@@ -22,10 +22,10 @@
 #include "port/port.h"
 #include "rocksdb/env.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/transaction_log.h"
 #include "rocksdb/types.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE

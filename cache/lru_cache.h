@@ -11,11 +11,10 @@
 #include <string>
 
 #include "cache/sharded_cache.h"
-
 #include "port/port.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/autovector.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // LRU cache implementation
@@ -52,8 +51,8 @@ struct LRUHandle {
   LRUHandle* prev;
   size_t charge;  // TODO(opt): Only allow uint32_t?
   size_t key_length;
-  uint32_t refs;     // a number of refs to this entry
-                     // cache itself is counted as 1
+  uint32_t refs;  // a number of refs to this entry
+                  // cache itself is counted as 1
 
   // Include the following flags:
   //   in_cache:    whether this entry is referenced by the hash table.
@@ -61,7 +60,7 @@ struct LRUHandle {
   //   in_high_pri_pool: whether this entry is in high-pri pool.
   char flags;
 
-  uint32_t hash;     // Hash of key(); used for fast sharding and comparisons
+  uint32_t hash;  // Hash of key(); used for fast sharding and comparisons
 
   char key_data[1];  // Beginning of key
 

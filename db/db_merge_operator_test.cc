@@ -9,10 +9,10 @@
 #include "db/forward_iterator.h"
 #include "port/stack_trace.h"
 #include "rocksdb/merge_operator.h"
+#include "rocksdb/terark_namespace.h"
 #include "utilities/merge_operators.h"
 #include "utilities/merge_operators/string_append/stringappend2.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class TestReadCallback : public ReadCallback {
@@ -75,8 +75,7 @@ TEST_F(DBMergeOperatorTest, LimitMergeOperands) {
   Options options;
   options.create_if_missing = true;
   // Use only the latest two merge operands.
-  options.merge_operator =
-      std::make_shared<LimitedStringAppendMergeOp>(2, ',');
+  options.merge_operator = std::make_shared<LimitedStringAppendMergeOp>(2, ',');
   options.env = env_;
   Reopen(options);
   // All K1 values are in memtable.
@@ -193,7 +192,6 @@ TEST_F(DBMergeOperatorTest, MergeErrorOnIteration) {
   delete iter;
   VerifyDBInternal({{"k1", "v1"}, {"k2", "corrupted"}, {"k2", "v2"}});
 }
-
 
 class MergeOperatorPinningTest : public DBMergeOperatorTest,
                                  public testing::WithParamInterface<bool> {
@@ -504,7 +502,7 @@ TEST_F(DBMergeOperatorTest, TailingIteratorMemtableUnrefedBySomeoneElse) {
   //    reproduces it.
 
   db_->Merge(WriteOptions(), "key", "sst");
-  db_->Flush(FlushOptions()); // Switch to SuperVersion A
+  db_->Flush(FlushOptions());  // Switch to SuperVersion A
   db_->Merge(WriteOptions(), "key", "memtable");
 
   // Pin SuperVersion A
@@ -516,13 +514,13 @@ TEST_F(DBMergeOperatorTest, TailingIteratorMemtableUnrefedBySomeoneElse) {
       "DBIter::MergeValuesNewToOld:PushedFirstOperand", [&](void*) {
         EXPECT_FALSE(pushed_first_operand);
         pushed_first_operand = true;
-        db_->Flush(FlushOptions()); // Switch to SuperVersion B
+        db_->Flush(FlushOptions());  // Switch to SuperVersion B
       });
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "DBIter::MergeValuesNewToOld:SteppedToNextOperand", [&](void*) {
         EXPECT_FALSE(stepped_to_next_operand);
         stepped_to_next_operand = true;
-        someone_else.reset(); // Unpin SuperVersion A
+        someone_else.reset();  // Unpin SuperVersion A
       });
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
 

@@ -4,12 +4,13 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include "utilities/cassandra/cassandra_compaction_filter.h"
+
 #include <string>
+
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "utilities/cassandra/format.h"
 
-
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace cassandra {
 
@@ -27,8 +28,8 @@ CompactionFilter::Decision CassandraCompactionFilter::FilterV2(
     new_value->reset(std::move(s));
     return Decision::kChangeValue;
   }
-  RowValue row_value = RowValue::Deserialize(
-      existing_value.data(), existing_value.size());
+  RowValue row_value =
+      RowValue::Deserialize(existing_value.data(), existing_value.size());
   RowValue compacted =
       purge_ttl_on_expiration_
           ? row_value.RemoveExpiredColumns(&value_changed)
@@ -38,7 +39,7 @@ CompactionFilter::Decision CassandraCompactionFilter::FilterV2(
     compacted = compacted.RemoveTombstones(gc_grace_period_in_seconds_);
   }
 
-  if(compacted.Empty()) {
+  if (compacted.Empty()) {
     return Decision::kRemove;
   }
 

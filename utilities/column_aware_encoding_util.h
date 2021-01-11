@@ -7,15 +7,16 @@
 
 #include <string>
 #include <vector>
+
 #include "db/dbformat.h"
 #include "include/rocksdb/env.h"
 #include "include/rocksdb/listener.h"
 #include "include/rocksdb/options.h"
 #include "include/rocksdb/status.h"
 #include "options/cf_options.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block_based_table_reader.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct ColDeclaration;

@@ -12,6 +12,7 @@
 
 #include "rocksdb/comparator.h"
 #include "rocksdb/db.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/stackable_db.h"
 #include "rocksdb/utilities/transaction.h"
 #include "rocksdb/utilities/write_batch_with_index.h"
@@ -20,7 +21,6 @@
 //
 // See transaction.h and examples/transaction_example.cc
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class TransactionDBMutexFactory;
@@ -118,7 +118,6 @@ struct TransactionOptions {
   // two non-equal keys to be equivalent.  Ie, cmp->Compare(a,b) should only
   // return 0 if
   // a.compare(b) returns 0.
-
 
   // If positive, specifies the wait timeout in milliseconds when
   // a transaction attempts to lock a key.

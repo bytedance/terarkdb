@@ -5,16 +5,14 @@
 
 #pragma once
 
-#include <string>
-
-#include "rocksdb/slice.h"
-
-#include "port/port.h"
-
 #include <atomic>
 #include <memory>
+#include <string>
 
+#include "port/port.h"
+#include "rocksdb/slice.h"
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class Slice;
@@ -33,9 +31,8 @@ class DynamicBloom {
   //                      it to be allocated, like:
   //                         sysctl -w vm.nr_hugepages=20
   //                     See linux doc Documentation/vm/hugetlbpage.txt
-  explicit DynamicBloom(Allocator* allocator,
-                        uint32_t total_bits, uint32_t locality = 0,
-                        uint32_t num_probes = 6,
+  explicit DynamicBloom(Allocator* allocator, uint32_t total_bits,
+                        uint32_t locality = 0, uint32_t num_probes = 6,
                         uint32_t (*hash_func)(const Slice& key) = nullptr,
                         size_t huge_page_tlb_size = 0,
                         Logger* logger = nullptr);
@@ -129,7 +126,7 @@ inline bool DynamicBloom::MayContain(const Slice& key) const {
 #if defined(_MSC_VER)
 #pragma warning(push)
 // local variable is initialized but not referenced
-#pragma warning(disable : 4189) 
+#pragma warning(disable : 4189)
 #endif
 inline void DynamicBloom::Prefetch(uint32_t h) {
   if (kNumBlocks != 0) {
@@ -197,4 +194,4 @@ inline void DynamicBloom::AddHash(uint32_t h, const OrFunc& or_func) {
   }
 }
 
-}  // rocksdb
+}  // namespace TERARKDB_NAMESPACE

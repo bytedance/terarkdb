@@ -13,9 +13,9 @@
 #include <string>
 
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "utilities/util/terark_boost.hpp"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 // using boost::noncopyable;
 struct CompactionWorkerContext;

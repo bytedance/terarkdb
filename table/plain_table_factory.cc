@@ -13,11 +13,11 @@
 #include "options/options_helper.h"
 #include "port/port.h"
 #include "rocksdb/convenience.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/plain_table_builder.h"
 #include "table/plain_table_reader.h"
 #include "util/string_util.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 Status PlainTableFactory::NewTableReader(

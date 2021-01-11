@@ -10,18 +10,18 @@
 #include "db/log_reader.h"
 
 #include <stdio.h>
+
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/crc32c.h"
 #include "util/file_reader_writer.h"
 #include "util/util.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace log {
 
-Reader::Reporter::~Reporter() {
-}
+Reader::Reporter::~Reporter() {}
 
 Reader::Reader(std::shared_ptr<Logger> info_log,
                std::unique_ptr<SequentialFileReader>&& _file,
@@ -42,9 +42,7 @@ Reader::Reader(std::shared_ptr<Logger> info_log,
       recycled_(false),
       retry_after_eof_(retry_after_eof) {}
 
-Reader::~Reader() {
-  delete[] backing_store_;
-}
+Reader::~Reader() { delete[] backing_store_; }
 
 // For kAbsoluteConsistency, on clean shutdown we don't expect any error
 // in the log files.  For other modes, we can ignore only incomplete records
@@ -167,9 +165,8 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch,
 
       case kBadRecordLen:
       case kBadRecordChecksum:
-        if (recycled_ &&
-            wal_recovery_mode ==
-                WALRecoveryMode::kTolerateCorruptedTailRecords) {
+        if (recycled_ && wal_recovery_mode ==
+                             WALRecoveryMode::kTolerateCorruptedTailRecords) {
           scratch->clear();
           return false;
         }
@@ -200,9 +197,7 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch,
   return false;
 }
 
-uint64_t Reader::LastRecordOffset() {
-  return last_record_offset_;
-}
+uint64_t Reader::LastRecordOffset() { return last_record_offset_; }
 
 void Reader::UnmarkEOF() {
   if (read_error_) {
@@ -236,8 +231,8 @@ void Reader::UnmarkEOF() {
   }
 
   Slice read_buffer;
-  Status status = file_->Read(remaining, &read_buffer,
-    backing_store_ + eof_offset_);
+  Status status =
+      file_->Read(remaining, &read_buffer, backing_store_ + eof_offset_);
 
   size_t added = read_buffer.size();
   end_of_buffer_offset_ += added;
@@ -254,11 +249,11 @@ void Reader::UnmarkEOF() {
   if (read_buffer.data() != backing_store_ + eof_offset_) {
     // Read did not write to backing_store_
     memmove(backing_store_ + eof_offset_, read_buffer.data(),
-      read_buffer.size());
+            read_buffer.size());
   }
 
   buffer_ = Slice(backing_store_ + consumed_bytes,
-    eof_offset_ + added - consumed_bytes);
+                  eof_offset_ + added - consumed_bytes);
 
   if (added < remaining) {
     eof_ = true;
@@ -278,7 +273,7 @@ void Reader::ReportDrop(size_t bytes, const Status& reason) {
   }
 }
 
-bool Reader::ReadMore(size_t* drop_size, int *error) {
+bool Reader::ReadMore(size_t* drop_size, int* error) {
   if (!eof_ && !read_error_) {
     // Last read was a full read, so this is a trailer to skip
     buffer_.clear();

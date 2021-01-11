@@ -5,35 +5,36 @@
 //
 
 #pragma once
-#include <algorithm>
 #include <stdio.h>
 #include <time.h>
+
+#include <algorithm>
 #include <iostream>
+
 #include "port/sys_time.h"
 #include "rocksdb/env.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 
 #ifdef USE_HDFS
 #include <hdfs.h>
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Thrown during execution when there is an issue with the supplied
 // arguments.
-class HdfsUsageException : public std::exception { };
+class HdfsUsageException : public std::exception {};
 
 // A simple exception that indicates something went wrong that is not
 // recoverable.  The intention is for the message to be printed (with
 // nothing else) and the process terminate.
 class HdfsFatalException : public std::exception {
-public:
-  explicit HdfsFatalException(const std::string& s) : what_(s) { }
-  virtual ~HdfsFatalException() throw() { }
-  virtual const char* what() const throw() {
-    return what_.c_str();
-  }
-private:
+ public:
+  explicit HdfsFatalException(const std::string& s) : what_(s) {}
+  virtual ~HdfsFatalException() throw() {}
+  virtual const char* what() const throw() { return what_.c_str(); }
+
+ private:
   const std::string what_;
 };
 
@@ -43,7 +44,6 @@ private:
 // default posix environment.
 //
 class HdfsEnv : public Env {
-
  public:
   explicit HdfsEnv(const std::string& fsname) : fsname_(fsname) {
     posixEnv = Env::Default();
@@ -91,7 +91,7 @@ class HdfsEnv : public Env {
   virtual Status RenameFile(const std::string& src, const std::string& target);
 
   virtual Status LinkFile(const std::string& src, const std::string& target) {
-    return Status::NotSupported(); // not supported
+    return Status::NotSupported();  // not supported
   }
 
   virtual Status LockFile(const std::string& fname, FileLock** lock);
@@ -102,7 +102,8 @@ class HdfsEnv : public Env {
                            std::shared_ptr<Logger>* result);
 
   virtual void Schedule(void (*function)(void* arg), void* arg,
-                        Priority pri = LOW, void* tag = nullptr, void (*unschedFunction)(void* arg) = 0) {
+                        Priority pri = LOW, void* tag = nullptr,
+                        void (*unschedFunction)(void* arg) = 0) {
     posixEnv->Schedule(function, arg, pri, tag, unschedFunction);
   }
 
@@ -116,8 +117,8 @@ class HdfsEnv : public Env {
 
   virtual void WaitForJoin() { posixEnv->WaitForJoin(); }
 
-  virtual unsigned int GetThreadPoolQueueLen(Priority pri = LOW) const
-      override {
+  virtual unsigned int GetThreadPoolQueueLen(
+      Priority pri = LOW) const override {
     return posixEnv->GetThreadPoolQueueLen(pri);
   }
 
@@ -125,9 +126,7 @@ class HdfsEnv : public Env {
     return posixEnv->GetTestDirectory(path);
   }
 
-  virtual uint64_t NowMicros() {
-    return posixEnv->NowMicros();
-  }
+  virtual uint64_t NowMicros() { return posixEnv->NowMicros(); }
 
   virtual void SleepForMicroseconds(int micros) {
     posixEnv->SleepForMicroseconds(micros);
@@ -142,7 +141,7 @@ class HdfsEnv : public Env {
   }
 
   virtual Status GetAbsolutePath(const std::string& db_path,
-      std::string* output_path) {
+                                 std::string* output_path) {
     return posixEnv->GetAbsolutePath(db_path, output_path);
   }
 
@@ -167,14 +166,12 @@ class HdfsEnv : public Env {
     return (uint64_t)pthread_self();
   }
 
-  virtual uint64_t GetThreadID() const override {
-    return HdfsEnv::gettid();
-  }
+  virtual uint64_t GetThreadID() const override { return HdfsEnv::gettid(); }
 
  private:
   std::string fsname_;  // string of the form "hdfs://hostname:port/"
   hdfsFS fileSys_;      //  a single FileSystem object for all files
-  Env*  posixEnv;       // This object is derived from Env, but not from
+  Env* posixEnv;        // This object is derived from Env, but not from
                         // posixEnv. We have posixnv as an encapsulated
                         // object here so that we can use posix timers,
                         // posix threads, etc.
@@ -198,7 +195,7 @@ class HdfsEnv : public Env {
     }
     const std::string hostport = uri.substr(kProto.length());
 
-    std::vector <std::string> parts;
+    std::vector<std::string> parts;
     split(hostport, ':', parts);
     if (parts.size() != 2) {
       throw HdfsFatalException("Bad uri for hdfs " + uri);
@@ -208,8 +205,7 @@ class HdfsEnv : public Env {
     std::string remaining(parts[1]);
 
     int rem = remaining.find(pathsep);
-    std::string portStr = (rem == 0 ? remaining :
-                           remaining.substr(0, rem));
+    std::string portStr = (rem == 0 ? remaining : remaining.substr(0, rem));
 
     tPort port;
     port = atoi(portStr.c_str());
@@ -220,8 +216,8 @@ class HdfsEnv : public Env {
     return fs;
   }
 
-  void split(const std::string &s, char delim,
-             std::vector<std::string> &elems) {
+  void split(const std::string& s, char delim,
+             std::vector<std::string>& elems) {
     elems.clear();
     size_t prev = 0;
     size_t pos = s.find(delim);
@@ -236,16 +232,13 @@ class HdfsEnv : public Env {
 
 }  // namespace TERARKDB_NAMESPACE
 
-#else // USE_HDFS
+#else  // USE_HDFS
 
-
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 static const Status notsup;
 
 class HdfsEnv : public Env {
-
  public:
   explicit HdfsEnv(const std::string& /*fsname*/) {
     fprintf(stderr, "You have not build rocksdb with HDFS support\n");
@@ -253,8 +246,7 @@ class HdfsEnv : public Env {
     abort();
   }
 
-  virtual ~HdfsEnv() {
-  }
+  virtual ~HdfsEnv() {}
 
   virtual Status NewSequentialFile(const std::string& fname,
                                    std::unique_ptr<SequentialFile>* result,
@@ -335,13 +327,13 @@ class HdfsEnv : public Env {
     return notsup;
   }
 
-  virtual void Schedule(void (* /*function*/)(void* arg), void* /*arg*/,
+  virtual void Schedule(void (*/*function*/)(void* arg), void* /*arg*/,
                         Priority /*pri*/ = LOW, void* /*tag*/ = nullptr,
-                        void (* /*unschedFunction*/)(void* arg) = 0) override {}
+                        void (*/*unschedFunction*/)(void* arg) = 0) override {}
 
   virtual int UnSchedule(void* /*tag*/, Priority /*pri*/) override { return 0; }
 
-  virtual void StartThread(void (* /*function*/)(void* arg),
+  virtual void StartThread(void (*/*function*/)(void* arg),
                            void* /*arg*/) override {}
 
   virtual void WaitForJoin() override {}
@@ -381,10 +373,8 @@ class HdfsEnv : public Env {
                                             Priority /*pri*/) override {}
   virtual std::string TimeToString(uint64_t /*number*/) override { return ""; }
 
-  virtual uint64_t GetThreadID() const override {
-    return 0;
-  }
+  virtual uint64_t GetThreadID() const override { return 0; }
 };
-}
+}  // namespace TERARKDB_NAMESPACE
 
-#endif // USE_HDFS
+#endif  // USE_HDFS

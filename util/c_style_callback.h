@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 template <class Lambda>

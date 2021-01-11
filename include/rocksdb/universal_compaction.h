@@ -6,10 +6,12 @@
 #pragma once
 
 #include <stdint.h>
+
 #include <climits>
 #include <vector>
 
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 //
@@ -17,13 +19,12 @@ namespace TERARKDB_NAMESPACE {
 // into a single compaction run
 //
 enum CompactionStopStyle {
-  kCompactionStopStyleSimilarSize, // pick files of similar size
-  kCompactionStopStyleTotalSize    // total size of picked files > next file
+  kCompactionStopStyleSimilarSize,  // pick files of similar size
+  kCompactionStopStyleTotalSize     // total size of picked files > next file
 };
 
 class CompactionOptionsUniversal {
  public:
-
   // Percentage flexibility while comparing file size. If the candidate file(s)
   // size is 1% smaller than the next file's size, then include next file into
   // this candidate set. // Default: 1

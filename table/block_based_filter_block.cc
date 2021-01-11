@@ -8,15 +8,16 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "table/block_based_filter_block.h"
+
 #include <algorithm>
 
 #include "db/dbformat.h"
 #include "monitoring/perf_context_imp.h"
 #include "rocksdb/filter_policy.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/string_util.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {
@@ -53,7 +54,6 @@ void AppendItem(std::string* props, const TKey& key, const std::string& value) {
   AppendItem(props, key_str, value);
 }
 }  // namespace
-
 
 // See doc/table_format.txt for an explanation of the filter block format.
 
@@ -246,7 +246,8 @@ std::string BlockBasedFilterBlockReader::ToString() const {
     uint32_t limit = DecodeFixed32(offset_ + index * 4 + 4);
 
     if (start != limit) {
-      result.append(" filter block # " + TERARKDB_NAMESPACE::ToString(index + 1) + "\n");
+      result.append(" filter block # " +
+                    TERARKDB_NAMESPACE::ToString(index + 1) + "\n");
       Slice filter = Slice(data_ + start, limit - start);
       AppendItem(&result, start, filter.ToString(true));
     }

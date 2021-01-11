@@ -9,9 +9,9 @@
 #include "options/db_options.h"
 #include "rocksdb/env.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/types.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 // use_fsync maps to options.use_fsync, which determines the way that
 // the file is synced after copying.
@@ -27,15 +27,11 @@ extern Status DeleteSSTFile(const ImmutableDBOptions* db_options,
                             const std::string& path_to_sync);
 
 extern Status DeleteDBFile(const ImmutableDBOptions* db_options,
-                            const std::string& fname,
-                            const std::string& path_to_sync,
-                            const bool force_bg);
+                           const std::string& fname,
+                           const std::string& path_to_sync,
+                           const bool force_bg);
 
-enum SchedClass {
-  kSchedOther = 0,
-  kSchedBatch = 1,
-  kSchedIdle = 2
-};
+enum SchedClass { kSchedOther = 0, kSchedBatch = 1, kSchedIdle = 2 };
 
 extern int SetThreadSched(SchedClass sched_class, int nice = 0);
 

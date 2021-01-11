@@ -7,12 +7,12 @@
 
 #include "db/version_edit.h"
 #include "db/version_set.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/logging.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class VersionBuilderTest : public testing::Test {
@@ -157,7 +157,8 @@ TEST_F(VersionBuilderTest, ApplyAndSaveTo) {
 
   ASSERT_EQ(400U, new_vstorage.NumLevelBytes(2));
   ASSERT_EQ(300U, new_vstorage.NumLevelBytes(3));
-  ASSERT_TRUE(VerifyDependFiles(&new_vstorage, {1U, 66U, 88U, 6U, 7U, 8U, 26U, 27U, 28U, 29U, 666}));
+  ASSERT_TRUE(VerifyDependFiles(
+      &new_vstorage, {1U, 66U, 88U, 6U, 7U, 8U, 26U, 27U, 28U, 29U, 666}));
 
   UnrefFilesInVersion(&new_vstorage);
 }
@@ -196,7 +197,8 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic) {
   ASSERT_EQ(100U, new_vstorage.NumLevelBytes(3));
   ASSERT_EQ(300U, new_vstorage.NumLevelBytes(4));
   ASSERT_EQ(200U, new_vstorage.NumLevelBytes(5));
-  ASSERT_TRUE(VerifyDependFiles(&new_vstorage, {1U, 6U, 7U, 8U, 26U, 27U, 666}));
+  ASSERT_TRUE(
+      VerifyDependFiles(&new_vstorage, {1U, 6U, 7U, 8U, 26U, 27U, 666}));
 
   UnrefFilesInVersion(&new_vstorage);
 }
@@ -404,10 +406,10 @@ TEST_F(VersionBuilderTest, EstimatedActiveKeys) {
     Add(static_cast<int>(i / kFilesPerLevel), i + 1,
         ToString((i + 100) * 1000).c_str(),
         ToString((i + 100) * 1000 + 999).c_str(), 100U, 0, 100, 100,
-        kEntriesPerFile, kDeletionsPerFile, kNumFiles-i, kNumFiles-i);
+        kEntriesPerFile, kDeletionsPerFile, kNumFiles - i, kNumFiles - i);
   }
   UpdateVersionStorageInfo();
-  
+
   // minus 2X for the number of deletion entries because:
   // 1x for deletion entry does not count as a data entry.
   // 1x for each deletion entry will actually remove one data entry.

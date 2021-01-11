@@ -4,11 +4,12 @@
 //  (found in the LICENSE.Apache file in the root directory).
 #pragma once
 
-#include <vector>
 #include <string>
-#include "util/dynamic_bloom.h"
+#include <vector>
 
 #include "rocksdb/terark_namespace.h"
+#include "util/dynamic_bloom.h"
+
 namespace TERARKDB_NAMESPACE {
 class Logger;
 

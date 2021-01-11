@@ -15,9 +15,10 @@
 #include "db/db_test_util.h"
 #include "port/port.h"
 #include "port/stack_trace.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
+
 class DBTestDynamicLevel : public DBTestBase {
  public:
   DBTestDynamicLevel() : DBTestBase("/db_dynamic_level_test") {}
@@ -508,8 +509,8 @@ int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 #else
-  (void) argc;
-  (void) argv;
+  (void)argc;
+  (void)argv;
   return 0;
 #endif
 }

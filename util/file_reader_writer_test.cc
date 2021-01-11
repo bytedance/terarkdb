@@ -4,13 +4,15 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 #include "util/file_reader_writer.h"
+
 #include <algorithm>
 #include <vector>
+
+#include "rocksdb/terark_namespace.h"
 #include "util/random.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class WritableFileWriterTest : public testing::Test {};

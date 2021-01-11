@@ -8,6 +8,7 @@
 #pragma once
 
 #include <stdint.h>
+
 #include <memory>
 #include <string>
 
@@ -15,8 +16,8 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/status.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 // PersistentCache

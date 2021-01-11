@@ -11,29 +11,30 @@
 #define __STDC_FORMAT_MACROS
 #endif
 
+#include <inttypes.h>
+
 #include <algorithm>
 #include <condition_variable>
-#include <inttypes.h>
-#include <string>
-#include <vector>
 #include <mutex>
-#include <thread>
 #include <set>
+#include <string>
+#include <thread>
 #include <unordered_set>
+#include <vector>
 
+#include "port/port.h"
 #include "rocksdb/cache.h"
-#include "rocksdb/options.h"
+#include "rocksdb/db.h"
 #include "rocksdb/memtablerep.h"
+#include "rocksdb/options.h"
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/table.h"
-#include "rocksdb/db.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/stackable_db.h"
 #include "util/coding.h"
 #include "utilities/spatialdb/utils.h"
-#include "port/port.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace spatial {
 
@@ -355,8 +356,9 @@ class SpatialIndexCursor : public Cursor {
       : value_getter_(value_getter), valid_(true) {
     // calculate quad keys we'll need to query
     std::vector<uint64_t> quad_keys;
-    quad_keys.reserve(static_cast<size_t>((tile_bbox.max_x - tile_bbox.min_x + 1) *
-                      (tile_bbox.max_y - tile_bbox.min_y + 1)));
+    quad_keys.reserve(
+        static_cast<size_t>((tile_bbox.max_x - tile_bbox.min_x + 1) *
+                            (tile_bbox.max_y - tile_bbox.min_y + 1)));
     for (uint64_t x = tile_bbox.min_x; x <= tile_bbox.max_x; ++x) {
       for (uint64_t y = tile_bbox.min_y; y <= tile_bbox.max_y; ++y) {
         quad_keys.push_back(GetQuadKeyFromTile(x, y, tile_bits));
@@ -471,7 +473,6 @@ class SpatialIndexCursor : public Cursor {
         valid_ = false;
       }
     }
-
   }
 
   std::unique_ptr<ValueGetter> value_getter_;
@@ -609,25 +610,25 @@ class SpatialDBImpl : public SpatialDB {
 
     for (auto cfh : column_families) {
       threads.emplace_back([&, cfh] {
-          {
-            std::unique_lock<std::mutex> lk(state_mutex);
-            cv.wait(lk, [&] { return threads_running < num_threads; });
-            threads_running++;
-          }
+        {
+          std::unique_lock<std::mutex> lk(state_mutex);
+          cv.wait(lk, [&] { return threads_running < num_threads; });
+          threads_running++;
+        }
 
-          Status t = Flush(FlushOptions(), cfh);
-          if (t.ok()) {
-            t = CompactRange(CompactRangeOptions(), cfh, nullptr, nullptr);
-          }
+        Status t = Flush(FlushOptions(), cfh);
+        if (t.ok()) {
+          t = CompactRange(CompactRangeOptions(), cfh, nullptr, nullptr);
+        }
 
-          {
-            std::unique_lock<std::mutex> lk(state_mutex);
-            threads_running--;
-            if (s.ok() && !t.ok()) {
-              s = t;
-            }
-            cv.notify_one();
+        {
+          std::unique_lock<std::mutex> lk(state_mutex);
+          threads_running--;
+          if (s.ok() && !t.ok()) {
+            s = t;
           }
+          cv.notify_one();
+        }
       });
     }
 
@@ -696,7 +697,8 @@ DBOptions GetDBOptionsFromSpatialDBOptions(const SpatialDBOptions& options) {
       db_options.max_background_garbage_collections;
   db_options.env->SetBackgroundThreads(
       db_options.max_background_compactions +
-      db_options.max_background_garbage_collections, Env::LOW);
+          db_options.max_background_garbage_collections,
+      Env::LOW);
   db_options.env->SetBackgroundThreads(db_options.max_background_flushes,
                                        Env::HIGH);
   db_options.statistics = CreateDBStatistics();

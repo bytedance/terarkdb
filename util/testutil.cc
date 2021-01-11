@@ -14,9 +14,9 @@
 
 #include "db/memtable_list.h"
 #include "port/port.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/file_reader_writer.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace test {
 

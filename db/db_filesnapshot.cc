@@ -22,12 +22,12 @@
 #include "port/port.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/file_util.h"
 #include "util/filename.h"
 #include "util/mutexlock.h"
 #include "util/sync_point.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 Status DBImpl::DisableFileDeletions() {

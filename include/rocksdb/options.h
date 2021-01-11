@@ -23,6 +23,7 @@
 #include "rocksdb/env.h"
 #include "rocksdb/listener.h"
 #include "rocksdb/metrics_reporter.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/ttl_extractor.h"
 #include "rocksdb/universal_compaction.h"
 #include "rocksdb/value_extractor.h"
@@ -33,7 +34,6 @@
 #undef max
 #endif
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Cache;

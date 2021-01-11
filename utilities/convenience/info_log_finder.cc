@@ -8,10 +8,11 @@
 // found in the LICENSE file.
 
 #include "rocksdb/utilities/info_log_finder.h"
+
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/filename.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 Status GetInfoLogList(DB* db, std::vector<std::string>* info_log_list) {

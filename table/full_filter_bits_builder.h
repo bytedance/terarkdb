@@ -13,8 +13,8 @@
 #include <vector>
 
 #include "rocksdb/filter_policy.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class Slice;

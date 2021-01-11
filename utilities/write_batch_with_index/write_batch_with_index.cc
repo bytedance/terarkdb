@@ -18,12 +18,12 @@
 #include "port/likely.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/iterator.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/arena.h"
 #include "util/cast_util.h"
 #include "util/string_util.h"
 #include "utilities/write_batch_with_index/write_batch_with_index_internal.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // when direction == forward

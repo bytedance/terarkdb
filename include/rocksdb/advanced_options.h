@@ -11,9 +11,9 @@
 #include <memory>
 
 #include "rocksdb/memtablerep.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/universal_compaction.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Slice;
@@ -156,12 +156,11 @@ struct CompressionOptions {
         enabled(_enabled) {}
 };
 
-enum UpdateStatus {    // Return status For inplace update callback
-  UPDATE_FAILED   = 0, // Nothing to update
-  UPDATED_INPLACE = 1, // Value updated inplace
-  UPDATED         = 2, // No inplace update. Merged value set
+enum UpdateStatus {     // Return status For inplace update callback
+  UPDATE_FAILED = 0,    // Nothing to update
+  UPDATED_INPLACE = 1,  // Value updated inplace
+  UPDATED = 2,          // No inplace update. Merged value set
 };
-
 
 struct AdvancedColumnFamilyOptions {
   // The maximum number of write buffers that are built up in memory.

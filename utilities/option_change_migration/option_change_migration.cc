@@ -5,10 +5,11 @@
 
 #include "rocksdb/utilities/option_change_migration.h"
 
+#include "rocksdb/terark_namespace.h"
+
 #ifndef ROCKSDB_LITE
 #include "rocksdb/db.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace {
 // Return a version of Options `opts` that allow us to open/write into a DB
@@ -157,7 +158,6 @@ Status OptionChangeMigration(std::string dbname, const Options& old_opts,
 }
 }  // namespace TERARKDB_NAMESPACE
 #else
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 Status OptionChangeMigration(std::string /*dbname*/,
                              const Options& /*old_opts*/,

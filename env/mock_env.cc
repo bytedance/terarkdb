@@ -13,13 +13,13 @@
 #include <chrono>
 
 #include "port/sys_time.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/cast_util.h"
 #include "util/filename.h"
 #include "util/murmurhash.h"
 #include "util/random.h"
 #include "util/rate_limiter.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class MemFile {

@@ -11,20 +11,20 @@
 // where enough posix functionality is available.
 
 #include "port/win/win_logger.h"
-#include "port/win/io_win.h"
 
-#include <algorithm>
+#include <fcntl.h>
 #include <stdio.h>
 #include <time.h>
-#include <fcntl.h>
-#include <atomic>
 
-#include "rocksdb/env.h"
+#include <algorithm>
+#include <atomic>
 
 #include "monitoring/iostats_context_imp.h"
 #include "port/sys_time.h"
-
+#include "port/win/io_win.h"
+#include "rocksdb/env.h"
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 namespace port {
@@ -52,13 +52,9 @@ void WinLogger::DebugWriter(const char* str, int len) {
   }
 }
 
-WinLogger::~WinLogger() { 
-  CloseInternal();
-}
+WinLogger::~WinLogger() { CloseInternal(); }
 
-Status WinLogger::CloseImpl() {
-  return CloseInternal();
-}
+Status WinLogger::CloseImpl() { return CloseInternal(); }
 
 Status WinLogger::CloseInternal() {
   Status s;
@@ -66,15 +62,13 @@ Status WinLogger::CloseInternal() {
     BOOL ret = FlushFileBuffers(file_);
     if (ret == 0) {
       auto lastError = GetLastError();
-      s = IOErrorFromWindowsError("Failed to flush LOG on Close() ", 
-        lastError);
+      s = IOErrorFromWindowsError("Failed to flush LOG on Close() ", lastError);
     }
     ret = CloseHandle(file_);
     // On error the return value is zero
     if (ret == 0 && s.ok()) {
       auto lastError = GetLastError();
-      s = IOErrorFromWindowsError("Failed to flush LOG on Close() ", 
-        lastError);
+      s = IOErrorFromWindowsError("Failed to flush LOG on Close() ", lastError);
     }
     file_ = INVALID_HANDLE_VALUE;
     closed_ = true;
@@ -161,7 +155,7 @@ void WinLogger::Logv(const char* format, va_list ap) {
 
     DWORD bytesWritten = 0;
     BOOL ret = WriteFile(file_, base, static_cast<DWORD>(write_size),
-      &bytesWritten, NULL);
+                         &bytesWritten, NULL);
     if (ret == FALSE) {
       std::string errSz = GetWindowsErrSz(GetLastError());
       fprintf(stderr, errSz.c_str());
@@ -188,6 +182,6 @@ void WinLogger::Logv(const char* format, va_list ap) {
 
 size_t WinLogger::GetLogFileSize() const { return log_size_; }
 
-}
+}  // namespace port
 
 }  // namespace TERARKDB_NAMESPACE

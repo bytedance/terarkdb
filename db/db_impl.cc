@@ -132,7 +132,6 @@
 #include <iostream>
 
 namespace TERARKDB_NAMESPACE {
-
 const std::string kDefaultColumnFamilyName("default");
 const uint64_t kDumpStatsWaitMicroseconds = 10000;
 const std::string kPersistentStatsColumnFamilyName(
@@ -822,51 +821,12 @@ void DBImpl::PersistStats() {
   size_t stats_history_size_limit = 0;
   {
     InstrumentedMutexLock l(&mutex_);
-    stats_history_size_limit = mutable_db_options_.stats_history_buffer_size;
-  }
-
-  std::map<std::string, uint64_t> stats_map;
-  if (!statistics->getTickerMap(&stats_map)) {
-    return;
-  }
-
-  if (immutable_db_options_.persist_stats_to_disk) {
-    WriteBatch batch;
-    if (stats_slice_initialized_) {
-      for (const auto& stat : stats_map) {
-        char key[100];
-        int length =
-            EncodePersistentStatsKey(now_seconds, stat.first, 100, key);
-        // calculate the delta from last time
-        if (stats_slice_.find(stat.first) != stats_slice_.end()) {
-          uint64_t delta = stat.second - stats_slice_[stat.first];
-          batch.Put(persist_stats_cf_handle_, Slice(key, std::min(100, length)),
-                    ToString(delta));
-        }
-      }
-    }
-    stats_slice_initialized_ = true;
-    std::swap(stats_slice_, stats_map);
-    WriteOptions wo;
-    wo.low_pri = true;
-    wo.no_slowdown = true;
-    wo.sync = false;
-    Status s = Write(wo, &batch);
-    if (!s.ok()) {
-      ROCKS_LOG_INFO(immutable_db_options_.info_log,
-                     "Writing to persistent stats CF failed -- %s\n",
-                     s.ToString().c_str());
-    }
-    // TODO(Zhongyi): add purging for persisted data
-  } else {
-    InstrumentedMutexLock l(&stats_history_mutex_);
-    // calculate the delta from last time
-    if (stats_slice_initialized_) {
-      std::map<std::string, uint64_t> stats_delta;
-      for (const auto& stat : stats_map) {
-        if (stats_slice_.find(stat.first) != stats_slice_.end()) {
-          stats_delta[stat.first] = stat.second - stats_slice_[stat.first];
-        }
+    stats_dump_period_sec = mutable_db_options_.stats_dump_period_sec;
+    if (stats_dump_period_sec > 0) {
+      if (!thread_dump_stats_) {
+        thread_dump_stats_.reset(new TERARKDB_NAMESPACE::RepeatableThread(
+            [this]() { DBImpl::DumpStats(); }, "dump_st", env_,
+            stats_dump_period_sec * 1000000));
       }
       stats_history_[now_seconds] = stats_delta;
     }
@@ -1188,15 +1148,19 @@ Status DBImpl::SetDBOptions(
         MaybeScheduleFlushOrCompaction();
       }
       if (new_options.stats_dump_period_sec !=
-              mutable_db_options_.stats_dump_period_sec ||
-          new_options.stats_persist_period_sec !=
-              mutable_db_options_.stats_persist_period_sec) {
-        mutex_.Unlock();
-        periodic_work_scheduler_->Unregister(this);
-        periodic_work_scheduler_->Register(
-            this, new_options.stats_dump_period_sec,
-            new_options.stats_persist_period_sec);
-        mutex_.Lock();
+          mutable_db_options_.stats_dump_period_sec) {
+        if (thread_dump_stats_) {
+          mutex_.Unlock();
+          thread_dump_stats_->cancel();
+          mutex_.Lock();
+        }
+        if (new_options.stats_dump_period_sec > 0) {
+          thread_dump_stats_.reset(new TERARKDB_NAMESPACE::RepeatableThread(
+              [this]() { DBImpl::DumpStats(); }, "dump_st", env_,
+              new_options.stats_dump_period_sec * 1000000));
+        } else {
+          thread_dump_stats_.reset();
+        }
       }
       write_controller_.set_max_delayed_write_rate(
           new_options.delayed_write_rate);

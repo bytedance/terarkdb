@@ -16,9 +16,9 @@
 #include "rocksdb/iterator.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/write_batch_with_index.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class MergeContext;
@@ -87,8 +87,7 @@ class WriteBatchWithIndexInternal {
 class WriteBatchKeyExtractor {
  public:
   WriteBatchKeyExtractor(const ReadableWriteBatch* write_batch)
-      : write_batch_(write_batch) {
-  }
+      : write_batch_(write_batch) {}
 
   Slice operator()(const WriteBatchIndexEntry* entry) const;
 

@@ -5,19 +5,20 @@
 
 #pragma once
 
-#include "rocksdb/status.h"
-#include "rocksdb/types.h"
-#include "rocksdb/write_batch.h"
 #include <memory>
 #include <vector>
 
+#include "rocksdb/status.h"
 #include "rocksdb/terark_namespace.h"
+#include "rocksdb/types.h"
+#include "rocksdb/write_batch.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class LogFile;
 typedef std::vector<std::unique_ptr<LogFile>> VectorLogPtr;
 
-enum  WalFileType {
+enum WalFileType {
   /* Indicates that WAL file is in archive directory. WAL files are moved from
    * the main db directory to archive directory once they are not live and stay
    * there until cleaned up. Files are cleaned depending on archive size
@@ -28,7 +29,7 @@ enum  WalFileType {
 
   /* Indicates that WAL file is live and resides in the main db directory */
   kAliveLogFile = 1
-} ;
+};
 
 class LogFile {
  public:
@@ -39,7 +40,6 @@ class LogFile {
   // Eg. For a live-log-file = /000003.log
   //     For an archived-log-file = /archive/000003.log
   virtual std::string PathName() const = 0;
-
 
   // Primary identifier for log file.
   // This is directly proportional to creation time of the log file
@@ -120,4 +120,4 @@ class TransactionLogIterator {
         : verify_checksums_(verify_checksums) {}
   };
 };
-} //  namespace TERARKDB_NAMESPACE
+}  //  namespace TERARKDB_NAMESPACE

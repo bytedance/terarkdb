@@ -3,12 +3,13 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
+#include "util/event_logger.h"
+
 #include <string>
 
-#include "util/event_logger.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/testharness.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class EventLoggerTest : public testing::Test {};

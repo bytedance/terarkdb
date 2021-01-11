@@ -15,8 +15,8 @@
 #include "db/db_test_util.h"
 #include "db/forward_iterator.h"
 #include "port/stack_trace.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class DBTestTailingIterator : public DBTestBase {
@@ -290,7 +290,8 @@ TEST_F(DBTestTailingIterator, TailingIteratorDeletes) {
 
   // make sure we can read all new records using the existing iterator
   int count = 0;
-  for (; iter->Valid(); iter->Next(), ++count) ;
+  for (; iter->Valid(); iter->Next(), ++count)
+    ;
 
   ASSERT_EQ(count, num_records);
 }
@@ -362,7 +363,7 @@ TEST_F(DBTestTailingIterator, TailingIteratorSeekToSame) {
   // Write rows with keys 00000, 00002, 00004 etc.
   for (int i = 0; i < NROWS; ++i) {
     char buf[100];
-    snprintf(buf, sizeof(buf), "%05d", 2*i);
+    snprintf(buf, sizeof(buf), "%05d", 2 * i);
     std::string key(buf);
     std::string value("value");
     ASSERT_OK(db_->Put(WriteOptions(), key, value));
@@ -486,7 +487,6 @@ TEST_F(DBTestTailingIterator, SeekWithUpperBoundBug) {
   const Slice upper_bound("cc", 3);
   read_options.iterate_upper_bound = &upper_bound;
 
-
   // 1st L0 file
   ASSERT_OK(db_->Put(WriteOptions(), "aa", "SEEN"));
   ASSERT_OK(Flush());
@@ -507,7 +507,6 @@ TEST_F(DBTestTailingIterator, SeekToFirstWithUpperBoundBug) {
   read_options.tailing = true;
   const Slice upper_bound("cc", 3);
   read_options.iterate_upper_bound = &upper_bound;
-
 
   // 1st L0 file
   ASSERT_OK(db_->Put(WriteOptions(), "aa", "SEEN"));
@@ -541,8 +540,8 @@ int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 #else
-  (void) argc;
-  (void) argv;
+  (void)argc;
+  (void)argv;
   return 0;
 #endif
 }

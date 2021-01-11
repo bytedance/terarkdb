@@ -8,23 +8,23 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "db/version_edit.h"
+
+#include "rocksdb/terark_namespace.h"
 #include "util/sync_point.h"
 #include "util/testharness.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {
-  TablePropertyCache GetPropCache(
+TablePropertyCache GetPropCache(
     uint8_t purpose, std::initializer_list<uint64_t> dependence = {},
     std::initializer_list<uint64_t> inheritance_chain = {}) {
-    std::vector<Dependence> dep;
-    for (auto& d : dependence) dep.emplace_back(Dependence{d, 1});
-    return TablePropertyCache{
-        0, 0, 1, 1, 0, purpose, 0, 0, dep, inheritance_chain
-    };
-  }
+  std::vector<Dependence> dep;
+  for (auto& d : dependence) dep.emplace_back(Dependence{d, 1});
+  return TablePropertyCache{0,       0, 1, 1,   0,
+                            purpose, 0, 0, dep, inheritance_chain};
 }
+}  // namespace
 
 static void TestEncodeDecode(const VersionEdit& edit) {
   std::string encoded, encoded2;
@@ -48,7 +48,8 @@ TEST_F(VersionEditTest, EncodeDecode) {
     edit.AddFile(3, kBig + 300 + i, kBig32Bit + 400 + i, 0,
                  InternalKey("foo", kBig + 500 + i, kTypeValue),
                  InternalKey("zoo", kBig + 600 + i, kTypeDeletion),
-                 kBig + 500 + i, kBig + 600 + i, false, GetPropCache(1, {2U, 3U}, {}));
+                 kBig + 500 + i, kBig + 600 + i, false,
+                 GetPropCache(1, {2U, 3U}, {}));
     edit.DeleteFile(4, kBig + 700 + i);
   }
 
@@ -183,7 +184,8 @@ TEST_F(VersionEditTest, NewFile4NotSupportedField) {
 
 TEST_F(VersionEditTest, EncodeEmptyFile) {
   VersionEdit edit;
-  edit.AddFile(0, 0, 0, 0, InternalKey(), InternalKey(), 0, 0, false, GetPropCache(0, {}, {}));
+  edit.AddFile(0, 0, 0, 0, InternalKey(), InternalKey(), 0, 0, false,
+               GetPropCache(0, {}, {}));
   std::string buffer;
   ASSERT_TRUE(!edit.EncodeTo(&buffer));
 }

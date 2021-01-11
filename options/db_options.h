@@ -8,10 +8,10 @@
 #include <string>
 #include <vector>
 
-#include "rocksdb/options.h"
 #include "rocksdb/listener.h"
-
+#include "rocksdb/options.h"
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 struct ImmutableDBOptions {

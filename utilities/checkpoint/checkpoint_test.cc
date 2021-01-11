@@ -16,18 +16,19 @@
 #include <iostream>
 #include <thread>
 #include <utility>
+
 #include "db/db_impl.h"
 #include "port/port.h"
 #include "port/stack_trace.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/checkpoint.h"
 #include "rocksdb/utilities/transaction_db.h"
 #include "util/fault_injection_test_env.h"
 #include "util/sync_point.h"
 #include "util/testharness.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 class CheckpointTest : public testing::Test {
  protected:
@@ -117,9 +118,8 @@ class CheckpointTest : public testing::Test {
     ASSERT_OK(TryReopenWithColumnFamilies(cfs, options));
   }
 
-  Status TryReopenWithColumnFamilies(
-      const std::vector<std::string>& cfs,
-      const std::vector<Options>& options) {
+  Status TryReopenWithColumnFamilies(const std::vector<std::string>& cfs,
+                                     const std::vector<Options>& options) {
     Close();
     EXPECT_EQ(cfs.size(), options.size());
     std::vector<ColumnFamilyDescriptor> column_families;
@@ -137,9 +137,7 @@ class CheckpointTest : public testing::Test {
     return TryReopenWithColumnFamilies(cfs, v_opts);
   }
 
-  void Reopen(const Options& options) {
-    ASSERT_OK(TryReopen(options));
-  }
+  void Reopen(const Options& options) { ASSERT_OK(TryReopen(options)); }
 
   void Close() {
     for (auto h : handles_) {
@@ -198,9 +196,7 @@ class CheckpointTest : public testing::Test {
     return db_->Put(wo, handles_[cf], k, v);
   }
 
-  Status Delete(const std::string& k) {
-    return db_->Delete(WriteOptions(), k);
-  }
+  Status Delete(const std::string& k) { return db_->Delete(WriteOptions(), k); }
 
   Status Delete(int cf, const std::string& k) {
     return db_->Delete(WriteOptions(), handles_[cf], k);
@@ -339,20 +335,20 @@ TEST_F(CheckpointTest, CheckpointCF) {
   // Open snapshot and verify contents while DB is running
   options.create_if_missing = false;
   std::vector<std::string> cfs;
-  cfs=  {kDefaultColumnFamilyName, "one", "two", "three", "four", "five"};
+  cfs = {kDefaultColumnFamilyName, "one", "two", "three", "four", "five"};
   std::vector<ColumnFamilyDescriptor> column_families;
-    for (size_t i = 0; i < cfs.size(); ++i) {
-      column_families.push_back(ColumnFamilyDescriptor(cfs[i], options));
-    }
-  ASSERT_OK(DB::Open(options, snapshot_name_,
-        column_families, &cphandles, &snapshotDB));
+  for (size_t i = 0; i < cfs.size(); ++i) {
+    column_families.push_back(ColumnFamilyDescriptor(cfs[i], options));
+  }
+  ASSERT_OK(DB::Open(options, snapshot_name_, column_families, &cphandles,
+                     &snapshotDB));
   ASSERT_OK(snapshotDB->Get(roptions, cphandles[0], "Default", &result));
   ASSERT_EQ("Default1", result);
   ASSERT_OK(snapshotDB->Get(roptions, cphandles[1], "one", &result));
   ASSERT_EQ("eleven", result);
   ASSERT_OK(snapshotDB->Get(roptions, cphandles[2], "two", &result));
   for (auto h : cphandles) {
-      delete h;
+    delete h;
   }
   cphandles.clear();
   delete snapshotDB;

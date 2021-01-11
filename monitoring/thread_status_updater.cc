@@ -4,12 +4,14 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include "monitoring/thread_status_updater.h"
+
 #include <memory>
+
 #include "port/likely.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/mutexlock.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #ifdef ROCKSDB_USING_THREAD_STATUS

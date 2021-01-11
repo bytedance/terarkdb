@@ -9,8 +9,8 @@
 #include <memory>
 
 #include "rocksdb/status.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 // TransactionDBMutex and TransactionDBCondVar APIs allows applications to

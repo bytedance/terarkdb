@@ -11,6 +11,7 @@
 #include <functional>
 
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 /*
@@ -48,7 +49,6 @@ class ThreadPool {
   virtual void SubmitJob(const std::function<void()>&) = 0;
   // This moves the function in for efficiency
   virtual void SubmitJob(std::function<void()>&&) = 0;
-
 };
 
 // NewThreadPool() is a function that could be used to create a ThreadPool

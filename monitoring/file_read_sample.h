@@ -5,9 +5,9 @@
 //
 #pragma once
 #include "db/version_edit.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/random.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 static const uint32_t kFileReadSampleRate = 1024;
 extern bool should_sample_file_read();
@@ -21,4 +21,4 @@ inline void sample_file_read_inc(FileMetaData* meta) {
   meta->stats.num_reads_sampled.fetch_add(kFileReadSampleRate,
                                           std::memory_order_relaxed);
 }
-}
+}  // namespace TERARKDB_NAMESPACE

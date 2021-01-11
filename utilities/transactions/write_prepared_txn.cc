@@ -12,6 +12,7 @@
 #endif
 
 #include <inttypes.h>
+
 #include <map>
 #include <set>
 
@@ -19,12 +20,12 @@
 #include "db/db_impl.h"
 #include "rocksdb/db.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/transaction_db.h"
 #include "util/cast_util.h"
 #include "utilities/transactions/pessimistic_transaction.h"
 #include "utilities/transactions/write_prepared_txn_db.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 struct WriteOptions;

@@ -27,8 +27,8 @@
 #include "port/port.h"
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/write_batch.h"
-#include "utilities/util/valvec.hpp"
 #include "util/cast_util.h"
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
@@ -37,8 +37,8 @@
 #include "util/mutexlock.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
+#include "utilities/util/valvec.hpp"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE

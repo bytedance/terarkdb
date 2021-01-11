@@ -9,11 +9,11 @@
 #include "rocksdb/convenience.h"
 #include "rocksdb/env.h"
 #include "rocksdb/iterator.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/db_ttl.h"
 #include "util/coding.h"
 #include "util/filename.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 void DBWithTTLImpl::SanitizeOptions(int32_t ttl, ColumnFamilyOptions* options,
@@ -56,7 +56,6 @@ Status UtilityDB::OpenTtlDB(const Options& options, const std::string& dbname,
 
 Status DBWithTTL::Open(const Options& options, const std::string& dbname,
                        DBWithTTL** dbptr, int32_t ttl, bool read_only) {
-
   DBOptions db_options(options);
   ColumnFamilyOptions cf_options(options);
   std::vector<ColumnFamilyDescriptor> column_families;
@@ -79,7 +78,6 @@ Status DBWithTTL::Open(
     const std::vector<ColumnFamilyDescriptor>& column_families,
     std::vector<ColumnFamilyHandle*>* handles, DBWithTTL** dbptr,
     std::vector<int32_t> ttls, bool read_only) {
-
   if (ttls.size() != column_families.size()) {
     return Status::InvalidArgument(
         "ttls size has to be the same as number of column families");
@@ -317,14 +315,13 @@ Iterator* DBWithTTLImpl::NewIterator(const ReadOptions& opts,
   return new TtlIterator(db_->NewIterator(opts, column_family));
 }
 
-void DBWithTTLImpl::SetTtl(ColumnFamilyHandle *h, int32_t ttl) {
+void DBWithTTLImpl::SetTtl(ColumnFamilyHandle* h, int32_t ttl) {
   std::shared_ptr<TtlCompactionFilterFactory> filter;
   Options opts;
   opts = GetOptions(h);
   filter = std::static_pointer_cast<TtlCompactionFilterFactory>(
-                                       opts.compaction_filter_factory);
-  if (!filter)
-    return;
+      opts.compaction_filter_factory);
+  if (!filter) return;
   filter->SetTtl(ttl);
 }
 

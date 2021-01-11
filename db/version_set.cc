@@ -40,6 +40,7 @@
 #include "monitoring/persistent_stats_history.h"
 #include "rocksdb/env.h"
 #include "rocksdb/merge_operator.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/write_buffer_manager.h"
 #include "table/format.h"
 #include "table/get_context.h"
@@ -59,7 +60,6 @@
 #include "util/sync_point.h"
 #include "utilities/util/valvec.hpp"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {

@@ -3,19 +3,20 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
-#include <thread>
+#include "util/thread_local.h"
+
 #include <atomic>
 #include <string>
+#include <thread>
 
-#include "rocksdb/env.h"
 #include "port/port.h"
+#include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/autovector.h"
 #include "util/sync_point.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
-#include "util/thread_local.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class ThreadLocalTest : public testing::Test {
@@ -52,10 +53,8 @@ struct Params {
 };
 
 class IDChecker : public ThreadLocalPtr {
-public:
-  static uint32_t PeekId() {
-    return TEST_PeekId();
-  }
+ public:
+  static uint32_t PeekId() { return TEST_PeekId(); }
 };
 
 }  // anonymous namespace

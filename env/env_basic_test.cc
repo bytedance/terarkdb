@@ -2,17 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
-#include <algorithm>
 
 #include "env/mock_env.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/object_registry.h"
 #include "util/testharness.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Normalizes trivial differences across Envs such that these test cases can
@@ -61,9 +61,7 @@ class EnvBasicTestWithParam : public testing::Test,
     test_dir_ = test::PerThreadDBPath(env_, "env_basic_test");
   }
 
-  void SetUp() {
-    env_->CreateDirIfMissing(test_dir_);
-  }
+  void SetUp() { env_->CreateDirIfMissing(test_dir_); }
 
   void TearDown() {
     std::vector<std::string> files;
@@ -288,7 +286,7 @@ TEST_P(EnvBasicTestWithParam, LargeWrite) {
     read += result.size();
   }
   ASSERT_TRUE(write_data == read_data);
-  delete [] scratch;
+  delete[] scratch;
 }
 
 TEST_P(EnvMoreTestWithParam, GetModTime) {

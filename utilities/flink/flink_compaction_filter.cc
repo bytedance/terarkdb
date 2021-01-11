@@ -4,10 +4,12 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include "utilities/flink/flink_compaction_filter.h"
+
 #include <algorithm>
 #include <iostream>
 
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 namespace flink {
 

@@ -14,10 +14,10 @@
 #include <vector>
 
 #include "port/port.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/crc32c.h"
 #include "util/logging.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 //
@@ -63,8 +63,7 @@ Status BlockCacheFile::Delete(uint64_t* size) {
 // <-- 4 --><-- 4  --><-- 4   --><-- 4     --><-- key size  --><-- v-size -->
 //
 struct CacheRecordHeader {
-  CacheRecordHeader()
-    : magic_(0), crc_(0), key_size_(0), val_size_(0) {}
+  CacheRecordHeader() : magic_(0), crc_(0), key_size_(0), val_size_(0) {}
   CacheRecordHeader(const uint32_t magic, const uint32_t key_size,
                     const uint32_t val_size)
       : magic_(magic), crc_(0), key_size_(key_size), val_size_(val_size) {}

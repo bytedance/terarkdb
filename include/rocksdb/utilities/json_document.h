@@ -14,20 +14,20 @@
 #include <vector>
 
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 
 // We use JSONDocument for DocumentDB API
 // Implementation inspired by folly::dynamic, rapidjson and fbson
 
 namespace fbson {
-  class FbsonValue;
-  class ObjectVal;
-  template <typename T>
-  class FbsonWriterT;
-  class FbsonOutStream;
-  typedef FbsonWriterT<FbsonOutStream> FbsonWriter;
+class FbsonValue;
+class ObjectVal;
+template <typename T>
+class FbsonWriterT;
+class FbsonOutStream;
+typedef FbsonWriterT<FbsonOutStream> FbsonWriter;
 }  // namespace fbson
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // NOTE: none of this is thread-safe
@@ -129,6 +129,7 @@ class JSONDocument {
   class const_item_iterator {
    private:
     class Impl;
+
    public:
     typedef std::pair<std::string, JSONDocument> value_type;
     explicit const_item_iterator(Impl* impl);
@@ -137,6 +138,7 @@ class JSONDocument {
     bool operator!=(const const_item_iterator& other);
     value_type operator*();
     ~const_item_iterator();
+
    private:
     friend class ItemsIteratorGenerator;
     std::unique_ptr<Impl> it_;

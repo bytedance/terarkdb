@@ -12,10 +12,10 @@
 #include "port/port.h"
 #include "port/stack_trace.h"
 #include "rocksdb/sst_file_writer.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/filename.h"
 #include "util/testutil.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class ExternalSSTFileTest : public DBTestBase,
@@ -211,7 +211,8 @@ TEST_F(ExternalSSTFileTest, Basic) {
 
     SstFileWriter sst_file_writer(EnvOptions(), options);
 
-    // Current file size should be 0 after sst_file_writer init and before open a file.
+    // Current file size should be 0 after sst_file_writer init and before open
+    // a file.
     ASSERT_EQ(sst_file_writer.FileSize(), 0);
 
     // file1.sst (0 => 99)
@@ -1023,16 +1024,16 @@ TEST_F(ExternalSSTFileTest, OverlappingRanges) {
   Random rnd(301);
   SequenceNumber assigned_seqno = 0;
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
-    "ExternalSstFileIngestionJob::Run", [&assigned_seqno](void* arg) {
-      ASSERT_TRUE(arg != nullptr);
-      assigned_seqno = *(static_cast<SequenceNumber*>(arg));
-    });
+      "ExternalSstFileIngestionJob::Run", [&assigned_seqno](void* arg) {
+        ASSERT_TRUE(arg != nullptr);
+        assigned_seqno = *(static_cast<SequenceNumber*>(arg));
+      });
   bool need_flush = false;
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
-    "DBImpl::IngestExternalFile:NeedFlush", [&need_flush](void* arg) {
-      ASSERT_TRUE(arg != nullptr);
-      need_flush = *(static_cast<bool*>(arg));
-    });
+      "DBImpl::IngestExternalFile:NeedFlush", [&need_flush](void* arg) {
+        ASSERT_TRUE(arg != nullptr);
+        need_flush = *(static_cast<bool*>(arg));
+      });
   bool overlap_with_db = false;
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "ExternalSstFileIngestionJob::AssignLevelAndSeqnoForIngestedFile",
@@ -2132,9 +2133,8 @@ TEST_P(ExternalSSTFileTest, IngestBehind) {
   ifo.write_global_seqno = GetParam();
 
   // Can't ingest behind since allow_ingest_behind isn't set to true
-  ASSERT_NOK(GenerateAndAddExternalFileIngestBehind(options, ifo,
-                                                   file_data, -1, false,
-                                                   &true_data));
+  ASSERT_NOK(GenerateAndAddExternalFileIngestBehind(options, ifo, file_data, -1,
+                                                    false, &true_data));
 
   options.allow_ingest_behind = true;
   // check that we still can open the DB, as num_levels should be
@@ -2152,14 +2152,12 @@ TEST_P(ExternalSSTFileTest, IngestBehind) {
   db_->CompactRange(CompactRangeOptions(), nullptr, nullptr);
   // Universal picker should go at second from the bottom level
   ASSERT_EQ("0,1", FilesPerLevel());
-  ASSERT_OK(GenerateAndAddExternalFileIngestBehind(options, ifo,
-                                                   file_data, -1, false,
-                                                   &true_data));
+  ASSERT_OK(GenerateAndAddExternalFileIngestBehind(options, ifo, file_data, -1,
+                                                   false, &true_data));
   ASSERT_EQ("0,1,1", FilesPerLevel());
   // this time ingest should fail as the file doesn't fit to the bottom level
-  ASSERT_NOK(GenerateAndAddExternalFileIngestBehind(options, ifo,
-                                                   file_data, -1, false,
-                                                   &true_data));
+  ASSERT_NOK(GenerateAndAddExternalFileIngestBehind(options, ifo, file_data, -1,
+                                                    false, &true_data));
   ASSERT_EQ("0,1,1", FilesPerLevel());
   db_->CompactRange(CompactRangeOptions(), nullptr, nullptr);
   // bottom level should be empty
@@ -2176,7 +2174,6 @@ TEST_F(ExternalSSTFileTest, SkipBloomFilter) {
   table_options.filter_policy.reset(NewBloomFilterPolicy(10));
   table_options.cache_index_and_filter_blocks = true;
   options.table_factory.reset(NewBlockBasedTableFactory(table_options));
-
 
   // Create external SST file and include bloom filters
   options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();

@@ -8,11 +8,11 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include <assert.h>
-#include "rocksdb/write_buffer_manager.h"
-#include "util/allocator.h"
-#include "util/arena.h"
 
 #include "rocksdb/terark_namespace.h"
+#include "rocksdb/write_buffer_manager.h"
+#include "util/allocator.h"
+
 namespace TERARKDB_NAMESPACE {
 
 AllocTracker::AllocTracker(WriteBufferManager* write_buffer_manager)

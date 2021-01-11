@@ -14,9 +14,9 @@
 #include "port/stack_trace.h"
 #include "rocksdb/iostats_context.h"
 #include "rocksdb/perf_context.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/terark_zip_table.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {
@@ -188,8 +188,8 @@ class TerarkZipReaderTest : public DBTestBase {
       }
       ASSERT_OK(db->Flush(fo));
     }
-    ASSERT_OK(
-        db->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(), nullptr, nullptr));
+    ASSERT_OK(db->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(),
+                               nullptr, nullptr));
     mt.seed(seed);
     for (size_t sst = 0; sst < 8; ++sst) {
       for (size_t i = sst, e = i + 8 * count; i < e; i += 8) {
@@ -760,9 +760,9 @@ TEST_F(TerarkZipReaderTest, SingleRecordTest) {
       "0000AAAAXXXX",
   };
   IterTest(data_list, {}, false, 0, 0, 1024);
-  IterTest(data_list, {}, true , 0, 0, 1024);
+  IterTest(data_list, {}, true, 0, 0, 1024);
   IterTest(data_list, {}, false, 4, 0, 1024);
-  IterTest(data_list, {}, true , 4, 0, 1024);
+  IterTest(data_list, {}, true, 4, 0, 1024);
 }
 
 TEST_F(TerarkZipReaderTest, UIntIteratorTest) {
@@ -796,15 +796,15 @@ TEST_F(TerarkZipReaderTest, UIntIteratorTest) {
       "11111",
   };
   IterTest(data_list, test_list, false, 0, 0, 1024);
-  IterTest(data_list, test_list, true , 0, 0, 1024);
+  IterTest(data_list, test_list, true, 0, 0, 1024);
   IterTest(data_list, test_list, false, 1, 0, 1024);
-  IterTest(data_list, test_list, true , 1, 0, 1024);
+  IterTest(data_list, test_list, true, 1, 0, 1024);
   IterTest(data_list, test_list, false, 2, 0, 1024);
-  IterTest(data_list, test_list, true , 2, 0, 1024);
+  IterTest(data_list, test_list, true, 2, 0, 1024);
   IterTest(data_list, test_list, false, 3, 0, 1024);
-  IterTest(data_list, test_list, true , 3, 0, 1024);
+  IterTest(data_list, test_list, true, 3, 0, 1024);
   IterTest(data_list, test_list, false, 4, 0, 1024);
-  IterTest(data_list, test_list, true , 4, 0, 1024);
+  IterTest(data_list, test_list, true, 4, 0, 1024);
 }
 
 TEST_F(TerarkZipReaderTest, PrefixTest) {
@@ -838,38 +838,28 @@ TEST_F(TerarkZipReaderTest, PrefixTest) {
       "11111",
   };
   IterTest(data_list, test_list, false, 0, 0, 1024);
-  IterTest(data_list, test_list, true , 0, 0, 1024);
+  IterTest(data_list, test_list, true, 0, 0, 1024);
   IterTest(data_list, test_list, false, 1, 0, 1024);
-  IterTest(data_list, test_list, true , 1, 0, 1024);
+  IterTest(data_list, test_list, true, 1, 0, 1024);
   IterTest(data_list, test_list, false, 2, 0, 1024);
-  IterTest(data_list, test_list, true , 2, 0, 1024);
+  IterTest(data_list, test_list, true, 2, 0, 1024);
   IterTest(data_list, test_list, false, 3, 0, 1024);
-  IterTest(data_list, test_list, true , 3, 0, 1024);
+  IterTest(data_list, test_list, true, 3, 0, 1024);
   IterTest(data_list, test_list, false, 4, 0, 1024);
-  IterTest(data_list, test_list, true , 4, 0, 1024);
+  IterTest(data_list, test_list, true, 4, 0, 1024);
   IterTest(data_list, test_list, false, 7, 0, 1024);
-  IterTest(data_list, test_list, true , 7, 0, 1024);
+  IterTest(data_list, test_list, true, 7, 0, 1024);
   IterTest(data_list, test_list, false, 8, 0, 1024);
-  IterTest(data_list, test_list, true , 8, 0, 1024);
+  IterTest(data_list, test_list, true, 8, 0, 1024);
   IterTest(data_list, test_list, false, 9, 0, 1024);
-  IterTest(data_list, test_list, true , 9, 0, 1024);
+  IterTest(data_list, test_list, true, 9, 0, 1024);
 }
 
 TEST_F(TerarkZipReaderTest, PrefixMoreTest) {
   auto data_list = {
-      "####0000",
-      "####0001",
-      "####0002",
-      "####0009",
-      "0000AAAAXXXX",
-      "0000AAAAYYYY",
-      "0000AAAAZZZZ",
-      "1111AAAA",
-      "1111BBBB",
-      "1111CCCC",
-      "AAAA",
-      "BBBB",
-      "CCCC",
+      "####0000",     "####0001",     "####0002", "####0009", "0000AAAAXXXX",
+      "0000AAAAYYYY", "0000AAAAZZZZ", "1111AAAA", "1111BBBB", "1111CCCC",
+      "AAAA",         "BBBB",         "CCCC",
   };
   auto test_list = {
       "",
@@ -960,57 +950,50 @@ TEST_F(TerarkZipReaderTest, StoreBuildTest) {
       "0",
       "2222",
   };
-  IterTest(data_list, test_list, false, 0,  0,    0);
-  IterTest(data_list, test_list, true , 0,  0,    0);
-  IterTest(data_list, test_list, false, 0, 64,    0);
-  IterTest(data_list, test_list, true , 0, 64,    0);
-  IterTest(data_list, test_list, false, 0,  0, 1024);
-  IterTest(data_list, test_list, true , 0,  0, 1024);
+  IterTest(data_list, test_list, false, 0, 0, 0);
+  IterTest(data_list, test_list, true, 0, 0, 0);
+  IterTest(data_list, test_list, false, 0, 64, 0);
+  IterTest(data_list, test_list, true, 0, 64, 0);
+  IterTest(data_list, test_list, false, 0, 0, 1024);
+  IterTest(data_list, test_list, true, 0, 0, 1024);
   IterTest(data_list, test_list, false, 0, 64, 1024);
-  IterTest(data_list, test_list, true , 0, 64, 1024);
-  IterTest(data_list, test_list, false, 4,  0,    0);
-  IterTest(data_list, test_list, true , 4,  0,    0);
-  IterTest(data_list, test_list, false, 4, 64,    0);
-  IterTest(data_list, test_list, true , 4, 64,    0);
-  IterTest(data_list, test_list, false, 4,  0, 1024);
-  IterTest(data_list, test_list, true , 4,  0, 1024);
+  IterTest(data_list, test_list, true, 0, 64, 1024);
+  IterTest(data_list, test_list, false, 4, 0, 0);
+  IterTest(data_list, test_list, true, 4, 0, 0);
+  IterTest(data_list, test_list, false, 4, 64, 0);
+  IterTest(data_list, test_list, true, 4, 64, 0);
+  IterTest(data_list, test_list, false, 4, 0, 1024);
+  IterTest(data_list, test_list, true, 4, 0, 1024);
   IterTest(data_list, test_list, false, 4, 64, 1024);
   IterTest(data_list, test_list, true, 4, 64, 1024);
 }
 
 TEST_F(TerarkZipReaderTest, IndexBuildTest) {
   auto data_list = {
-      "0000AAAAWWWW",
-      "0000AAAAXXX",
-      "0000AAAAYY",
-      "0000AAAAZ",
-      "1111BBBB",
-      "1111CCC",
-      "1111DD",
-      "1111E",
-      "2222",
+      "0000AAAAWWWW", "0000AAAAXXX", "0000AAAAYY", "0000AAAAZ", "1111BBBB",
+      "1111CCC",      "1111DD",      "1111E",      "2222",
   };
   auto test_list = {
       "",
       "3",
       "0000AAAAZZZZ",
   };
-  IterTest(data_list, test_list, false, 0,  0, 1024);
-  IterTest(data_list, test_list, true , 0,  0, 1024);
+  IterTest(data_list, test_list, false, 0, 0, 1024);
+  IterTest(data_list, test_list, true, 0, 0, 1024);
   IterTest(data_list, test_list, false, 0, 64, 1024);
-  IterTest(data_list, test_list, true , 0, 64, 1024);
-  IterTest(data_list, test_list, false, 4,  0, 1024);
-  IterTest(data_list, test_list, true , 4,  0, 1024);
+  IterTest(data_list, test_list, true, 0, 64, 1024);
+  IterTest(data_list, test_list, false, 4, 0, 1024);
+  IterTest(data_list, test_list, true, 4, 0, 1024);
   IterTest(data_list, test_list, false, 4, 64, 1024);
-  IterTest(data_list, test_list, true , 4, 64, 1024);
-  IterTest(data_list, test_list, false, 0,  0, 1024, 1);
-  IterTest(data_list, test_list, true , 0,  0, 1024, 1);
+  IterTest(data_list, test_list, true, 4, 64, 1024);
+  IterTest(data_list, test_list, false, 0, 0, 1024, 1);
+  IterTest(data_list, test_list, true, 0, 0, 1024, 1);
   IterTest(data_list, test_list, false, 0, 64, 1024, 1);
-  IterTest(data_list, test_list, true , 0, 64, 1024, 1);
-  IterTest(data_list, test_list, false, 4,  0, 1024, 1);
-  IterTest(data_list, test_list, true , 4,  0, 1024, 1);
+  IterTest(data_list, test_list, true, 0, 64, 1024, 1);
+  IterTest(data_list, test_list, false, 4, 0, 1024, 1);
+  IterTest(data_list, test_list, true, 4, 0, 1024, 1);
   IterTest(data_list, test_list, false, 4, 64, 1024, 1);
-  IterTest(data_list, test_list, true , 4, 64, 1024, 1);
+  IterTest(data_list, test_list, true, 4, 64, 1024, 1);
 }
 
 }  // namespace TERARKDB_NAMESPACE

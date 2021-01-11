@@ -1,5 +1,7 @@
 #include "sst_scan.hpp"
 
+#include "rocksdb/terark_namespace.h"
+
 #ifdef BOOSTLIB
 #include <boost/filesystem.hpp>
 // #else
@@ -14,7 +16,6 @@
 
 using namespace TERARKDB_NAMESPACE;
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 extern const uint64_t kPlainTableMagicNumber;
 extern const uint64_t kLegacyPlainTableMagicNumber;

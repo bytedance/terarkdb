@@ -4,14 +4,15 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include "rocksdb/flush_block_policy.h"
-#include "rocksdb/options.h"
-#include "rocksdb/slice.h"
-#include "table/block_builder.h"
-#include "table/format.h"
 
 #include <cassert>
 
+#include "rocksdb/options.h"
+#include "rocksdb/slice.h"
 #include "rocksdb/terark_namespace.h"
+#include "table/block_builder.h"
+#include "table/format.h"
+
 namespace TERARKDB_NAMESPACE {
 
 // Flush block by size
@@ -22,8 +23,7 @@ class FlushBlockBySizePolicy : public FlushBlockPolicy {
   // @params block_size_deviation: This is used to close a block before it
   //                               reaches the configured
   FlushBlockBySizePolicy(const uint64_t block_size,
-                         const uint64_t block_size_deviation,
-                         const bool align,
+                         const uint64_t block_size_deviation, const bool align,
                          const BlockBuilder& data_block_builder)
       : block_size_(block_size),
         block_size_deviation_limit_(
@@ -31,8 +31,7 @@ class FlushBlockBySizePolicy : public FlushBlockPolicy {
         align_(align),
         data_block_builder_(data_block_builder) {}
 
-  virtual bool Update(const Slice& key,
-                      const Slice& value) override {
+  virtual bool Update(const Slice& key, const Slice& value) override {
     // it makes no sense to flush when the data block is empty
     if (data_block_builder_.empty()) {
       return false;

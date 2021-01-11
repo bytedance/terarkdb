@@ -7,16 +7,17 @@
 #include <memory>
 #include <thread>
 #include <vector>
+
 #include "db/db_test_util.h"
 #include "db/write_batch_internal.h"
 #include "db/write_thread.h"
 #include "port/port.h"
 #include "port/stack_trace.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/fault_injection_test_env.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Test variations of WriteImpl.

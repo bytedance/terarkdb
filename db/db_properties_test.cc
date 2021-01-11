@@ -19,10 +19,10 @@
 #include "rocksdb/perf_context.h"
 #include "rocksdb/perf_level.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/random.h"
 #include "util/string_util.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBPropertiesTest : public DBTestBase {
@@ -258,7 +258,8 @@ void GetExpectedTableProperties(
   expected_tp->num_merge_operands = kMergeCount;
   expected_tp->num_range_deletions = kRangeDeletionCount;
   expected_tp->num_data_blocks =
-      kTableCount * (kKeysPerTable * (kKeySize - kEncodingSavePerKey + kValueSize)) /
+      kTableCount *
+      (kKeysPerTable * (kKeySize - kEncodingSavePerKey + kValueSize)) /
       kBlockSize;
   expected_tp->data_size =
       kTableCount * (kKeysPerTable * (kKeySize + 8 + kValueSize));
@@ -362,7 +363,8 @@ TEST_F(DBPropertiesTest, AggregatedTableProperties) {
         std::string start = RandomString(&rnd, kKeySize);
         std::string end = start;
         end.resize(kValueSize);
-        db_->DeleteRange(WriteOptions(), db_->DefaultColumnFamily(), start, end);
+        db_->DeleteRange(WriteOptions(), db_->DefaultColumnFamily(), start,
+                         end);
       }
       db_->Flush(FlushOptions());
     }
@@ -1075,7 +1077,8 @@ class CountingUserTblPropCollector : public TablePropertiesCollector {
     std::string encoded;
     PutVarint32(&encoded, count_);
     *properties = UserCollectedProperties{
-        {"CountingUserTblPropCollector", message_}, {"Count", encoded},
+        {"CountingUserTblPropCollector", message_},
+        {"Count", encoded},
     };
     return Status::OK();
   }

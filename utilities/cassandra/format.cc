@@ -9,10 +9,10 @@
 #include <map>
 #include <memory>
 
+#include "rocksdb/terark_namespace.h"
 #include "utilities/cassandra/serialize.h"
 #include "utilities/util/valvec.hpp"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace cassandra {
 namespace {
@@ -71,11 +71,14 @@ std::shared_ptr<Column> Column::Deserialize(const char* src,
                                             std::size_t offset) {
   int8_t mask = TERARKDB_NAMESPACE::cassandra::Deserialize<int8_t>(src, offset);
   offset += sizeof(mask);
-  int8_t index = TERARKDB_NAMESPACE::cassandra::Deserialize<int8_t>(src, offset);
+  int8_t index =
+      TERARKDB_NAMESPACE::cassandra::Deserialize<int8_t>(src, offset);
   offset += sizeof(index);
-  int64_t timestamp = TERARKDB_NAMESPACE::cassandra::Deserialize<int64_t>(src, offset);
+  int64_t timestamp =
+      TERARKDB_NAMESPACE::cassandra::Deserialize<int64_t>(src, offset);
   offset += sizeof(timestamp);
-  int32_t value_size = TERARKDB_NAMESPACE::cassandra::Deserialize<int32_t>(src, offset);
+  int32_t value_size =
+      TERARKDB_NAMESPACE::cassandra::Deserialize<int32_t>(src, offset);
   offset += sizeof(value_size);
   return std::make_shared<Column>(mask, index, timestamp, value_size,
                                   src + offset);
@@ -124,15 +127,19 @@ std::shared_ptr<ExpiringColumn> ExpiringColumn::Deserialize(
     const char* src, std::size_t offset) {
   int8_t mask = TERARKDB_NAMESPACE::cassandra::Deserialize<int8_t>(src, offset);
   offset += sizeof(mask);
-  int8_t index = TERARKDB_NAMESPACE::cassandra::Deserialize<int8_t>(src, offset);
+  int8_t index =
+      TERARKDB_NAMESPACE::cassandra::Deserialize<int8_t>(src, offset);
   offset += sizeof(index);
-  int64_t timestamp = TERARKDB_NAMESPACE::cassandra::Deserialize<int64_t>(src, offset);
+  int64_t timestamp =
+      TERARKDB_NAMESPACE::cassandra::Deserialize<int64_t>(src, offset);
   offset += sizeof(timestamp);
-  int32_t value_size = TERARKDB_NAMESPACE::cassandra::Deserialize<int32_t>(src, offset);
+  int32_t value_size =
+      TERARKDB_NAMESPACE::cassandra::Deserialize<int32_t>(src, offset);
   offset += sizeof(value_size);
   const char* value = src + offset;
   offset += value_size;
-  int32_t ttl = TERARKDB_NAMESPACE::cassandra::Deserialize<int32_t>(src, offset);
+  int32_t ttl =
+      TERARKDB_NAMESPACE::cassandra::Deserialize<int32_t>(src, offset);
   return std::make_shared<ExpiringColumn>(mask, index, timestamp, value_size,
                                           value, ttl);
 }
@@ -153,7 +160,8 @@ std::size_t Tombstone::Size() const {
 void Tombstone::Serialize(std::string* dest) const {
   ColumnBase::Serialize(dest);
   TERARKDB_NAMESPACE::cassandra::Serialize<int32_t>(local_deletion_time_, dest);
-  TERARKDB_NAMESPACE::cassandra::Serialize<int64_t>(marked_for_delete_at_, dest);
+  TERARKDB_NAMESPACE::cassandra::Serialize<int64_t>(marked_for_delete_at_,
+                                                    dest);
 }
 
 bool Tombstone::Collectable(int32_t gc_grace_period_in_seconds) const {
@@ -167,7 +175,8 @@ std::shared_ptr<Tombstone> Tombstone::Deserialize(const char* src,
                                                   std::size_t offset) {
   int8_t mask = TERARKDB_NAMESPACE::cassandra::Deserialize<int8_t>(src, offset);
   offset += sizeof(mask);
-  int8_t index = TERARKDB_NAMESPACE::cassandra::Deserialize<int8_t>(src, offset);
+  int8_t index =
+      TERARKDB_NAMESPACE::cassandra::Deserialize<int8_t>(src, offset);
   offset += sizeof(index);
   int32_t local_deletion_time =
       TERARKDB_NAMESPACE::cassandra::Deserialize<int32_t>(src, offset);
@@ -213,7 +222,8 @@ bool RowValue::IsTombstone() const {
 
 void RowValue::Serialize(std::string* dest) const {
   TERARKDB_NAMESPACE::cassandra::Serialize<int32_t>(local_deletion_time_, dest);
-  TERARKDB_NAMESPACE::cassandra::Serialize<int64_t>(marked_for_delete_at_, dest);
+  TERARKDB_NAMESPACE::cassandra::Serialize<int64_t>(marked_for_delete_at_,
+                                                    dest);
   for (const auto& column : columns_) {
     column->Serialize(dest);
   }

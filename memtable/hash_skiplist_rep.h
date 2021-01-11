@@ -8,21 +8,19 @@
 
 #pragma once
 #ifndef ROCKSDB_LITE
-#include "rocksdb/slice_transform.h"
 #include "rocksdb/memtablerep.h"
-
+#include "rocksdb/slice_transform.h"
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class HashSkipListRepFactory : public MemTableRepFactory {
  public:
-  explicit HashSkipListRepFactory(
-    size_t bucket_count,
-    int32_t skiplist_height,
-    int32_t skiplist_branching_factor)
+  explicit HashSkipListRepFactory(size_t bucket_count, int32_t skiplist_height,
+                                  int32_t skiplist_branching_factor)
       : bucket_count_(bucket_count),
         skiplist_height_(skiplist_height),
-        skiplist_branching_factor_(skiplist_branching_factor) { }
+        skiplist_branching_factor_(skiplist_branching_factor) {}
 
   virtual ~HashSkipListRepFactory() {}
 
@@ -32,9 +30,7 @@ class HashSkipListRepFactory : public MemTableRepFactory {
       Allocator* allocator, const SliceTransform* transform,
       Logger* logger) override;
 
-  virtual const char* Name() const override {
-    return "HashSkipListRepFactory";
-  }
+  virtual const char* Name() const override { return "HashSkipListRepFactory"; }
 
  private:
   const size_t bucket_count_;
@@ -42,5 +38,5 @@ class HashSkipListRepFactory : public MemTableRepFactory {
   const int32_t skiplist_branching_factor_;
 };
 
-}
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

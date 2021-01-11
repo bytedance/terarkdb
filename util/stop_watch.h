@@ -6,8 +6,8 @@
 #pragma once
 #include "monitoring/statistics.h"
 #include "rocksdb/env.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 // Auto-scoped.
 // Records the measure time into the corresponding histogram if statistics
@@ -43,8 +43,9 @@ class StopWatch {
     }
     if (stats_enabled_) {
       statistics_->measureTime(hist_type_,
-          (elapsed_ != nullptr) ? *elapsed_ :
-                                  (env_->NowMicros() - start_time_));
+                               (elapsed_ != nullptr)
+                                   ? *elapsed_
+                                   : (env_->NowMicros() - start_time_));
     }
   }
 
@@ -112,4 +113,4 @@ class StopWatchNano {
   uint64_t start_;
 };
 
-} // namespace TERARKDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE

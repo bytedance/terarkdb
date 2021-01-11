@@ -8,6 +8,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "rocksdb/db_bench_tool.h"
+
 #include "options/options_parser.h"
 #include "rocksdb/utilities/options_util.h"
 #include "util/random.h"
@@ -15,9 +16,9 @@
 #include "util/testutil.h"
 
 #ifdef GFLAGS
+#include "rocksdb/terark_namespace.h"
 #include "util/gflags_compat.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace {
 static const int kMaxArgCount = 100;

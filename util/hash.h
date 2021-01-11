@@ -14,8 +14,8 @@
 #include <stdint.h>
 
 #include "rocksdb/slice.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 extern uint32_t Hash(const char* data, size_t n, uint32_t seed);

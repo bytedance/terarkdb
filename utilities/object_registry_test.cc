@@ -6,9 +6,10 @@
 #ifndef ROCKSDB_LITE
 
 #include "rocksdb/utilities/object_registry.h"
-#include "util/testharness.h"
 
 #include "rocksdb/terark_namespace.h"
+#include "util/testharness.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class EnvRegistryTest : public testing::Test {

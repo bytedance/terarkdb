@@ -5,15 +5,16 @@
 #pragma once
 
 #ifndef ROCKSDB_LITE
+#include <stdint.h>
+
 #include <memory>
 #include <string>
-#include <stdint.h>
 
 #include "options/options_helper.h"
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 struct EnvOptions;

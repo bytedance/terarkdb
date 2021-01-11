@@ -38,6 +38,7 @@
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/types.h"
 #include "table/merging_iterator.h"
 #include "table/table_reader.h"
@@ -76,7 +77,7 @@ struct json_impl<TERARKDB_NAMESPACE::Status, void> {
     AJsonStatus s;
     json_impl<AJsonStatus>::read(rd, s);
     v = TERARKDB_NAMESPACE::Status(s.code, s.subcode, s.sev,
-                        s.state.empty() ? nullptr : s.state.c_str());
+                                   s.state.empty() ? nullptr : s.state.c_str());
   }
   template <typename write_ty>
   static inline void write(write_ty& wt, TERARKDB_NAMESPACE::Status const& v) {
@@ -87,9 +88,11 @@ struct json_impl<TERARKDB_NAMESPACE::Status, void> {
 };
 
 template <>
-struct json_impl<TERARKDB_NAMESPACE::CompactionWorkerContext::EncodedString, void> {
-  static inline void read(reader& rd,
-                          TERARKDB_NAMESPACE::CompactionWorkerContext::EncodedString& v) {
+struct json_impl<TERARKDB_NAMESPACE::CompactionWorkerContext::EncodedString,
+                 void> {
+  static inline void read(
+      reader& rd,
+      TERARKDB_NAMESPACE::CompactionWorkerContext::EncodedString& v) {
     std::string s;
     json_impl<std::string>::read(rd, s);
     v.data.resize(s.size() / 2);
@@ -100,7 +103,8 @@ struct json_impl<TERARKDB_NAMESPACE::CompactionWorkerContext::EncodedString, voi
   }
   template <typename write_ty>
   static inline void write(
-      write_ty& wt, TERARKDB_NAMESPACE::CompactionWorkerContext::EncodedString const& v) {
+      write_ty& wt,
+      TERARKDB_NAMESPACE::CompactionWorkerContext::EncodedString const& v) {
     json_impl<std::string>::template write<write_ty>(
         wt, TERARKDB_NAMESPACE::Slice(v.data).ToString(true));
   }
@@ -110,11 +114,13 @@ template <>
 struct json_impl<TERARKDB_NAMESPACE::InternalKey, void> {
   static inline void read(reader& rd, TERARKDB_NAMESPACE::InternalKey& v) {
     TERARKDB_NAMESPACE::CompactionWorkerContext::EncodedString s;
-    json_impl<TERARKDB_NAMESPACE::CompactionWorkerContext::EncodedString>::read(rd, s);
+    json_impl<TERARKDB_NAMESPACE::CompactionWorkerContext::EncodedString>::read(
+        rd, s);
     *v.rep() = std::move(s.data);
   }
   template <typename write_ty>
-  static inline void write(write_ty& wt, TERARKDB_NAMESPACE::InternalKey const& v) {
+  static inline void write(write_ty& wt,
+                           TERARKDB_NAMESPACE::InternalKey const& v) {
     TERARKDB_NAMESPACE::Slice s(*v.rep());
     json_impl<std::string>::template write<write_ty>(wt, s.ToString(true));
   }
@@ -156,7 +162,6 @@ void save_to(string_stream& ss, const T& x) {
 #ifdef USE_AJSON
 using namespace TERARKDB_NAMESPACE;
 #else
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 template <class DataIO>
@@ -164,7 +169,7 @@ void DataIO_loadObject(DataIO& dio, TERARKDB_NAMESPACE::Status& x) {
   AJsonStatus s;
   dio >> s;
   x = TERARKDB_NAMESPACE::Status(s.code, s.subcode, s.sev,
-                      s.state.empty() ? nullptr : s.state.c_str());
+                                 s.state.empty() ? nullptr : s.state.c_str());
 }
 
 template <class DataIO>
@@ -247,7 +252,6 @@ AJSON(CompactionWorkerContext, user_comparator, merge_operator,
 }  // namespace TERARKDB_NAMESPACE
 #endif
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 template <class T>

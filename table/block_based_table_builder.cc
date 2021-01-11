@@ -29,6 +29,7 @@
 #include "rocksdb/flush_block_policy.h"
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block.h"
 #include "table/block_based_filter_block.h"
 #include "table/block_based_table_factory.h"
@@ -48,7 +49,6 @@
 #include "util/string_util.h"
 #include "util/xxhash.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 extern const std::string kHashIndexPrefixesBlock;
@@ -837,46 +837,6 @@ void BlockBasedTableBuilder::WritePropertiesBlock(
     rep_->props.creation_time = rep_->creation_time;
     rep_->props.oldest_key_time = rep_->oldest_key_time;
 
-    if (is_row_ttl_enable()) {
-      uint64_t now_seconds = rep_->ioptions.env->NowMicros() / 1000000ul;
-      uint64_t max_uint64_t = std::numeric_limits<uint64_t>::max();
-
-      double ratio = rep_->moptions.ttl_garbage_collection_percentage;
-      uint64_t percentile_ratio_ttl = max_uint64_t;
-      if (ratio <= 100.0) {
-        assert(ttl_histogram_ != nullptr);
-
-        if (!ttl_histogram_->Empty() &&
-            kv_size_has_row_ttl_ >=
-                ratio / 100.0 *
-                    (rep_->props.raw_key_size + rep_->props.raw_value_size)) {
-          percentile_ratio_ttl =
-              static_cast<uint64_t>(ttl_histogram_->Percentile(ratio));
-        }
-
-        if (max_uint64_t - percentile_ratio_ttl > now_seconds) {
-          rep_->props.ratio_expire_time = now_seconds + percentile_ratio_ttl;
-          // } else {
-          //   rep_->props.ratio_expire_time = max_uint64_t;
-        }
-      }
-      if (slice_length_ < std::numeric_limits<int>::max()) {
-        if (max_uint64_t - min_ttl_seconds_ > now_seconds) {
-          rep_->props.scan_gap_expire_time = now_seconds + min_ttl_seconds_;
-          // } else {
-          //   rep_->props.scan_gap_expire_time = max_uint64_t;
-        }
-      }
-      ROCKS_LOG_INFO(rep_->ioptions.info_log,
-                     "[%s] ratio_row_ttl:%" PRIu64 ", scan_gap_row_ttl:%" PRIu64
-                     ".",
-                     rep_->column_family_name.c_str(), percentile_ratio_ttl,
-                     min_ttl_seconds_);
-      min_ttl_seconds_ = std::numeric_limits<uint64_t>::max();
-      ttl_histogram_.reset();
-      ttl_extractor_.reset();
-    }
-
     // Add basic properties
     property_block_builder.AddTableProperty(rep_->props);
 
@@ -971,9 +931,9 @@ Status BlockBasedTableBuilder::Finish(
   // Write footer
   if (ok()) {
     // No need to write out new footer if we're using default checksum.
-    // We're writing legacy magic number because we want old versions of
-    // RocksDB be able to read files generated with new release (just in case
-    // if somebody wants to roll back after an upgrade)
+    // We're writing legacy magic number because we want old versions of RocksDB
+    // be able to read files generated with new release (just in case if
+    // somebody wants to roll back after an upgrade)
     // TODO(icanadi) at some point in the future, when we're absolutely sure
     // nobody will roll back to RocksDB 2.x versions, retire the legacy magic
     // number and always write new table files with new magic number

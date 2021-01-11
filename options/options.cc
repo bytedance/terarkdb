@@ -24,18 +24,16 @@
 #include "rocksdb/compaction_filter.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/env.h"
-#include "rocksdb/memtablerep.h"
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/sst_file_manager.h"
 #include "rocksdb/table.h"
-#include "rocksdb/table_properties.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/wal_filter.h"
 #include "table/block_based_table_factory.h"
 #include "util/compression.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 AdvancedColumnFamilyOptions::AdvancedColumnFamilyOptions() {

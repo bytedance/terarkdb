@@ -2,13 +2,13 @@
 #include <fstream>
 #include <map>
 #include <string>
-#include <vector>
-
+#include <terark/idx/terark_zip_index.hpp>
 #include <terark/io/FileStream.hpp>
 #include <terark/rank_select.hpp>
-#include <terark/idx/terark_zip_index.hpp>
+#include <vector>
 
-#include "../terark_zip_common.h"
+#include "rocksdb/terark_namespace.h"
+#include "table/terark_zip_common.h"
 
 using namespace std;
 
@@ -23,36 +23,35 @@ using terark::valvec_reserve;
 
 using terark::FileStream;
 using terark::InputBuffer;
-using terark::OutputBuffer;
 using terark::LittleEndianDataInput;
 using terark::LittleEndianDataOutput;
+using terark::OutputBuffer;
 
 using TERARKDB_NAMESPACE::TerarkIndex;
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
-  struct TerarkZipTableOptions {};
+struct TerarkZipTableOptions {};
 
-  class FileWriter {
-  public:
-    std::string path;
-    FileStream  fp;
-    NativeDataOutput<OutputBuffer> writer;
-    ~FileWriter() {}
-    void open() {
-      fp.open(path.c_str(), "wb+");
-      fp.disbuf();
-      writer.attach(&fp);
-    }
-    void close() {
-      writer.flush_buffer();
-      fp.close();
-    }
-  };
-}
+class FileWriter {
+ public:
+  std::string path;
+  FileStream fp;
+  NativeDataOutput<OutputBuffer> writer;
+  ~FileWriter() {}
+  void open() {
+    fp.open(path.c_str(), "wb+");
+    fp.disbuf();
+    writer.attach(&fp);
+  }
+  void close() {
+    writer.flush_buffer();
+    fp.close();
+  }
+};
+}  // namespace TERARKDB_NAMESPACE
 
-//typedef map<string, int> IndexDict;
-//IndexDict dict;
+// typedef map<string, int> IndexDict;
+// IndexDict dict;
 vector<string> keys;
 string key_path;
 string index_path;
@@ -69,7 +68,7 @@ void init_data_ascend() {
   fwriter.path = key_path;
   fwriter.open();
   keys.resize(110);
-  char carr[8] = { 0 };
+  char carr[8] = {0};
   for (int i = 0; i < 110; i++) {
     carr[7] = i;
     // keep the last 5 elem for 'Find Fail Test'
@@ -96,7 +95,7 @@ void init_data_descend() {
   fwriter.path = key_path;
   fwriter.open();
   keys.resize(110);
-  char carr[8] = { 0 };
+  char carr[8] = {0};
   for (int i = 109; i >= 0; i--) {
     carr[7] = i;
     // keep the last 10 elem for 'Find Fail Test'
@@ -118,11 +117,12 @@ void init_data_descend() {
   stat.sumKeyLen = 8 * 100;
 }
 
-TerarkIndex* save_reload(TerarkIndex* index, const TerarkIndex::Factory* factory) {
+TerarkIndex* save_reload(TerarkIndex* index,
+                         const TerarkIndex::Factory* factory) {
   FileStream writer(index_path, "wb");
   index->SaveMmap([&writer](const void* data, size_t size) {
-      writer.ensureWrite(data, size);
-    });
+    writer.ensureWrite(data, size);
+  });
   writer.flush();
   writer.close();
 
@@ -143,7 +143,8 @@ void test_simple(bool ascend) {
   // build index
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
-  auto factory = TERARKDB_NAMESPACE::TerarkIndex::GetFactory("UintIndex_AllOne");
+  auto factory =
+      TERARKDB_NAMESPACE::TerarkIndex::GetFactory("UintIndex_AllOne");
   TERARKDB_NAMESPACE::TerarkZipTableOptions tableOpt;
   TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
   printf("\tbuild done\n");
@@ -165,26 +166,25 @@ void test_simple(bool ascend) {
   auto iter = index->NewIterator();
   {
     // seek to 1st, next()
-    char arr[8] = { 0 };
+    char arr[8] = {0};
     assert(iter->SeekToFirst());
     assert(iter->DictRank() == 0);
     assert(fstring(arr, 8) == iter->key());
     for (int i = 0; i < 100; i++) {
       arr[7] = i;
-      if (i == 0)
-        continue;
+      if (i == 0) continue;
       assert(iter->Next());
       assert(iter->DictRank() == i);
-      //fstring expected = fstring(arr, 8);
-      //fstring res = iter->key();
-      //assert(expected == res);
+      // fstring expected = fstring(arr, 8);
+      // fstring res = iter->key();
+      // assert(expected == res);
       assert(fstring(arr, 8) == iter->key());
     }
     assert(iter->Next() == false);
   }
   {
     // seek to last, prev()
-    char arr[8] = { 0 };
+    char arr[8] = {0};
     assert(iter->SeekToLast());
     assert(iter->DictRank() == 99);
     for (int i = 99; i >= 0; i--) {
@@ -201,7 +201,7 @@ void test_simple(bool ascend) {
   }
   {
     // seek matches
-    char arr[8] = { 0 };
+    char arr[8] = {0};
     for (int i = 0; i < 100; i++) {
       arr[7] = i;
       int idx = i;
@@ -212,16 +212,17 @@ void test_simple(bool ascend) {
   }
   {
     // seek larger than larger @apple
-    char arr[8] = { 0 };
+    char arr[8] = {0};
     arr[7] = 101;
     assert(iter->Seek(fstring(arr, 8)) == false);
     // smaller than smaller
-    char sarr[4] = { 0 };
+    char sarr[4] = {0};
     assert(iter->Seek(fstring(sarr, 4)));
     assert(iter->DictRank() == 0);
     // longer -> lower_bound
-    char marr[12] = { 0 };
-    marr[7] = 4; marr[11] = 1;
+    char marr[12] = {0};
+    marr[7] = 4;
+    marr[11] = 1;
     assert(iter->Seek(fstring(marr, 12)));
     assert(iter->DictRank() == 5);
     arr[7] = 5;
@@ -229,10 +230,11 @@ void test_simple(bool ascend) {
   }
   {
     // lower_bound
-    char arr[8] = { 0 };
-    char marr[12] = { 0 };
+    char arr[8] = {0};
+    char marr[12] = {0};
     for (int i = 0; i < 99; i++) {
-      marr[7] = i; marr[11] = 1;
+      marr[7] = i;
+      marr[11] = 1;
       int idx = i + 1;
       arr[7] = idx;
       assert(iter->Seek(fstring(marr, 12)));
@@ -253,7 +255,7 @@ void test_select() {
     stat.numKeys = 100;
     stat.minKeyLen = stat.maxKeyLen = 8;
     stat.commonPrefixLen = 0;
-    char arr[8] = { 0 };
+    char arr[8] = {0};
     arr[7] = 0;
     stat.minKey.assign(arr, arr + 8);
     arr[7] = 101;
@@ -288,7 +290,7 @@ void test_select() {
     stat.numKeys = 100;
     stat.commonPrefixLen = 0;
     stat.minKeyLen = stat.maxKeyLen = 8;
-    char arr[8] = { 0 };
+    char arr[8] = {0};
     arr[7] = 1;
     stat.minKey.assign(arr, arr + 8);
     arr[6] = 1;
@@ -298,10 +300,9 @@ void test_select() {
   }
 }
 
-
 int main(int argc, char** argv) {
   printf("EXAGGERATE\n");
-  test_simple(true/*ascend*/);
+  test_simple(true /*ascend*/);
   test_simple(false);
   test_select();
   return 0;

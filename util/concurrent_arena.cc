@@ -8,11 +8,11 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "util/concurrent_arena.h"
+
 #include <thread>
-#include "port/port.h"
-#include "util/random.h"
 
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 #ifdef ROCKSDB_SUPPORT_THREAD_LOCAL

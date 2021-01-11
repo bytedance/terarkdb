@@ -17,6 +17,7 @@
 #include "port/port.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 #include "table/table_builder.h"
 #include "table/table_reader.h"
@@ -25,7 +26,6 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace mock {
 

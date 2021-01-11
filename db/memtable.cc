@@ -25,7 +25,7 @@
 #include "rocksdb/env.h"
 #include "rocksdb/iterator.h"
 #include "rocksdb/merge_operator.h"
-#include "rocksdb/slice_transform.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/write_buffer_manager.h"
 #include "table/internal_iterator.h"
 #include "table/iterator_wrapper.h"
@@ -38,7 +38,6 @@
 #include "util/mutexlock.h"
 #include "util/util.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 ImmutableMemTableOptions::ImmutableMemTableOptions(
@@ -136,10 +135,10 @@ MemTable::~MemTable() {
 }
 
 size_t MemTable::ApproximateMemoryUsage() {
-  autovector<size_t> usages = {arena_.ApproximateMemoryUsage(),
-                               table_->ApproximateMemoryUsage(),
-                               range_del_table_->ApproximateMemoryUsage(),
-                               TERARKDB_NAMESPACE::ApproximateMemoryUsage(insert_hints_)};
+  autovector<size_t> usages = {
+      arena_.ApproximateMemoryUsage(), table_->ApproximateMemoryUsage(),
+      range_del_table_->ApproximateMemoryUsage(),
+      TERARKDB_NAMESPACE::ApproximateMemoryUsage(insert_hints_)};
   size_t total_usage = 0;
   for (size_t usage : usages) {
     // If usage + total_usage >= kMaxSizet, return kMaxSizet.

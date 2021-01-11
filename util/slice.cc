@@ -14,11 +14,11 @@
 #include <algorithm>
 
 #include "rocksdb/slice_transform.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/format.h"
 #include "util/string_util.h"
 #include "utilities/util/factory.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {
@@ -246,6 +246,6 @@ TERARK_FACTORY_REGISTER_EX(NoopTransform, "rocksdb.Noop", &S_NewNoopTransform);
 }  // namespace TERARKDB_NAMESPACE
 
 TERARK_FACTORY_INSTANTIATE_GNS(TERARKDB_NAMESPACE::SliceTransform*,
-                                         const std::string&);
+                               const std::string&);
 TERARK_FACTORY_INSTANTIATE_GNS(TERARKDB_NAMESPACE::ValueExtractorFactory*,
-                                         TERARKDB_NAMESPACE::Slice);
+                               TERARKDB_NAMESPACE::Slice);

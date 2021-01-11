@@ -9,9 +9,10 @@
 #pragma once
 
 #include <algorithm>
-#include "port/port.h"
 
+#include "port/port.h"
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 inline size_t TruncateToPageBoundary(size_t page_size, size_t s) {
@@ -20,9 +21,7 @@ inline size_t TruncateToPageBoundary(size_t page_size, size_t s) {
   return s;
 }
 
-inline size_t Roundup(size_t x, size_t y) {
-  return ((x + y - 1) / y) * y;
-}
+inline size_t Roundup(size_t x, size_t y) { return ((x + y - 1) / y) * y; }
 
 inline size_t Rounddown(size_t x, size_t y) { return (x / y) * y; }
 
@@ -36,17 +35,11 @@ class AlignedBuffer {
   size_t cursize_;
   char* bufstart_;
 
-public:
+ public:
   AlignedBuffer()
-    : alignment_(),
-      capacity_(0),
-      cursize_(0),
-      bufstart_(nullptr) {
-  }
+      : alignment_(), capacity_(0), cursize_(0), bufstart_(nullptr) {}
 
-  AlignedBuffer(AlignedBuffer&& o) ROCKSDB_NOEXCEPT {
-    *this = std::move(o);
-  }
+  AlignedBuffer(AlignedBuffer&& o) ROCKSDB_NOEXCEPT { *this = std::move(o); }
 
   AlignedBuffer& operator=(AlignedBuffer&& o) ROCKSDB_NOEXCEPT {
     alignment_ = std::move(o.alignment_);
@@ -69,27 +62,17 @@ public:
     return n % alignment == 0;
   }
 
-  size_t Alignment() const {
-    return alignment_;
-  }
+  size_t Alignment() const { return alignment_; }
 
-  size_t Capacity() const {
-    return capacity_;
-  }
+  size_t Capacity() const { return capacity_; }
 
-  size_t CurrentSize() const {
-    return cursize_;
-  }
+  size_t CurrentSize() const { return cursize_; }
 
-  const char* BufferStart() const {
-    return bufstart_;
-  }
+  const char* BufferStart() const { return bufstart_; }
 
   char* BufferStart() { return bufstart_; }
 
-  void Clear() {
-    cursize_ = 0;
-  }
+  void Clear() { cursize_ = 0; }
 
   void Alignment(size_t alignment) {
     assert(alignment > 0);
@@ -150,7 +133,7 @@ public:
     assert(offset < cursize_);
 
     size_t to_read = 0;
-    if(offset < cursize_) {
+    if (offset < cursize_) {
       to_read = std::min(cursize_ - offset, read_size);
     }
     if (to_read > 0) {
@@ -186,12 +169,8 @@ public:
   }
 
   // Returns place to start writing
-  char* Destination() {
-    return bufstart_ + cursize_;
-  }
+  char* Destination() { return bufstart_ + cursize_; }
 
-  void Size(size_t cursize) {
-    cursize_ = cursize;
-  }
+  void Size(size_t cursize) { cursize_ = cursize; }
 };
-}
+}  // namespace TERARKDB_NAMESPACE

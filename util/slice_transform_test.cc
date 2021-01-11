@@ -14,9 +14,9 @@
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/testharness.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class SliceTransformTest : public testing::Test {};

@@ -7,11 +7,11 @@
 #include <sstream>
 
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/thread_status.h"
 #include "util/string_util.h"
 #include "util/thread_operation.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #ifdef ROCKSDB_USING_THREAD_STATUS

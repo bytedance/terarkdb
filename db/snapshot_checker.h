@@ -4,9 +4,9 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #pragma once
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/types.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Callback class that control GC of duplicate keys in flush/compaction

@@ -12,12 +12,12 @@
 #include "port/stack_trace.h"
 #include "rocksdb/memtablerep.h"
 #include "rocksdb/slice_transform.h"
+#include "rocksdb/terark_namespace.h"
 
 #ifdef WITH_TERARK_ZIP
 #include "memtable/terark_zip_memtable.h"
 #endif
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBMemTableTest : public DBTestBase {

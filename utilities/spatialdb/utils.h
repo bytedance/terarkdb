@@ -4,12 +4,12 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #pragma once
-#include <string>
 #include <algorithm>
-
-#include "rocksdb/utilities/spatial_db.h"
+#include <string>
 
 #include "rocksdb/terark_namespace.h"
+#include "rocksdb/utilities/spatial_db.h"
+
 namespace TERARKDB_NAMESPACE {
 namespace spatial {
 

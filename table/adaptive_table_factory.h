@@ -7,10 +7,11 @@
 #ifndef ROCKSDB_LITE
 
 #include <string>
+
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
-
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 struct EnvOptions;

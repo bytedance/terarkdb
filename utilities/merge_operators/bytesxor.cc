@@ -9,6 +9,7 @@
 #include <string>
 
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 std::shared_ptr<MergeOperator> MergeOperators::CreateBytesXOROperator() {

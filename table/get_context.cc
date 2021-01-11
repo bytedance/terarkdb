@@ -13,9 +13,9 @@
 #include "rocksdb/env.h"
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/statistics.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/util.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE

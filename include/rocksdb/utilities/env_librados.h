@@ -6,15 +6,15 @@
 #pragma once
 
 #include <memory>
+#include <rados/librados.hpp>
 #include <string>
 
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/env_mirror.h"
 
-#include <rados/librados.hpp>
-
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
+
 class LibradosWritableFile;
 
 class EnvLibrados : public EnvWrapper {
@@ -173,4 +173,4 @@ class EnvLibrados : public EnvWrapper {
   librados::IoCtx* _GetIoctx(const std::string& prefix);
   friend class LibradosWritableFile;
 };
-}
+}  // namespace TERARKDB_NAMESPACE

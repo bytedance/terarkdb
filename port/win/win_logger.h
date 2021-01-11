@@ -12,14 +12,14 @@
 
 #pragma once
 
-#include <atomic>
-
-#include "rocksdb/env.h"
-
 #include <stdint.h>
 #include <windows.h>
 
+#include <atomic>
+
+#include "rocksdb/env.h"
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class Env;
@@ -46,9 +46,8 @@ class WinLogger : public TERARKDB_NAMESPACE::Logger {
 
   void DebugWriter(const char* str, int len);
 
-protected:
-
-    Status CloseImpl() override;
+ protected:
+  Status CloseImpl() override;
 
  private:
   HANDLE file_;
@@ -63,6 +62,6 @@ protected:
   const static uint64_t flush_every_seconds_ = 5;
 };
 
-}
+}  // namespace port
 
 }  // namespace TERARKDB_NAMESPACE

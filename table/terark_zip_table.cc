@@ -5,23 +5,8 @@
  *      Author: leipeng
  */
 
-// project headers
-#include "terark_zip_table.h"
+#include "table/terark_zip_table.h"
 
-#include <terark/idx/terark_zip_index.hpp>
-
-#include "terark_zip_common.h"
-#include "terark_zip_internal.h"
-#include "terark_zip_table_reader.h"
-
-// std headers
-#include <util/arena.h>  // for #include <sys/mman.h>
-
-#include <cstdint>
-#include <cstdlib>
-#include <fstream>
-#include <future>
-#include <random>
 #ifdef _MSC_VER
 #include <io.h>
 #else
@@ -29,19 +14,26 @@
 #include <sys/types.h>
 #endif
 
-// boost headers
 #include <boost/predef/other/endian.h>
 
 #include <boost/archive/iterators/binary_from_base64.hpp>
 #include <boost/archive/iterators/transform_width.hpp>
-
-// rocksdb headers
-#include <table/meta_blocks.h>
-
-// terark headers
+#include <cstdint>
+#include <cstdlib>
+#include <fstream>
+#include <future>
+#include <random>
+#include <terark/idx/terark_zip_index.hpp>
 #include <terark/lcast.hpp>
 #include <terark/util/tmpfile.hpp>
 #include <terark/zbs/xxhash_helper.hpp>
+
+#include "rocksdb/terark_namespace.h"
+#include "table/meta_blocks.h"
+#include "table/terark_zip_common.h"
+#include "table/terark_zip_internal.h"
+#include "table/terark_zip_table_reader.h"
+#include "util/arena.h"  // for #include <sys/mman.h>
 
 static std::once_flag PrintVersionHashInfoFlag;
 
@@ -63,7 +55,6 @@ void PrintVersionHashInfo(TERARKDB_NAMESPACE::Logger* info_log) {
   });
 }
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 terark::profiling g_pf;

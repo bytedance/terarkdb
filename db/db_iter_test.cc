@@ -16,6 +16,7 @@
 #include "rocksdb/perf_context.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/statistics.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/iterator_wrapper.h"
 #include "table/merging_iterator.h"
 #include "util/string_util.h"
@@ -23,7 +24,6 @@
 #include "util/testharness.h"
 #include "utilities/merge_operators.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 static uint64_t TestGetTickerCount(const Options& options,

@@ -6,9 +6,9 @@
 #pragma once
 #include "monitoring/perf_level_imp.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/stop_watch.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class PerfStepTimer {
@@ -26,9 +26,7 @@ class PerfStepTimer {
         statistics_(statistics),
         ticker_type_(ticker_type) {}
 
-  ~PerfStepTimer() {
-    Stop();
-  }
+  ~PerfStepTimer() { Stop(); }
 
   void Start() {
     if (perf_counter_enabled_ || statistics_ != nullptr) {

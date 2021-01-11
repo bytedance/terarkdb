@@ -15,6 +15,7 @@
 #include "monitoring/histogram.h"
 #include "monitoring/iostats_context_imp.h"
 #include "port/port.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/random.h"
 #include "util/rate_limiter.h"
 #include "util/string_util.h"
@@ -23,7 +24,6 @@
 
 #undef min
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 #ifndef NDEBUG

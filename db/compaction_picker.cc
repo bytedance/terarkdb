@@ -16,14 +16,13 @@
 #include <inttypes.h>
 
 #include <limits>
-#include <queue>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "db/column_family.h"
 #include "db/map_builder.h"
-#include "monitoring/statistics.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/c_style_callback.h"
 #include "util/filename.h"
 #include "util/log_buffer.h"
@@ -32,7 +31,6 @@
 #include "util/sync_point.h"
 #include "utilities/util/function.hpp"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 namespace {
@@ -365,8 +363,8 @@ bool CompactionPicker::FixInputRange(std::vector<SelectedRange>& input_range,
                         TERARK_FIELD(limit) < *uc));
   assert(std::find_if(input_range.begin(), input_range.end(),
                       [uc](const RangeStorage& r) {
-           return uc->Compare(r.start, r.limit) > 0;
-         }) == input_range.end());
+                        return uc->Compare(r.start, r.limit) > 0;
+                      }) == input_range.end());
   return !input_range.empty();
 }
 

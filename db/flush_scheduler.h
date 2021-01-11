@@ -6,11 +6,13 @@
 #pragma once
 
 #include <stdint.h>
+
 #include <atomic>
 #include <mutex>
 #include <set>
 
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class ColumnFamilyData;

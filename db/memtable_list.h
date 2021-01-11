@@ -20,12 +20,12 @@
 #include "rocksdb/db.h"
 #include "rocksdb/iterator.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/types.h"
 #include "util/autovector.h"
 #include "util/filename.h"
 #include "util/log_buffer.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class ColumnFamilyData;

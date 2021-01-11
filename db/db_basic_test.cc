@@ -9,12 +9,12 @@
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
 #include "rocksdb/perf_context.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/fault_injection_test_env.h"
 #if !defined(ROCKSDB_LITE)
 #include "util/sync_point.h"
 #endif
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DBBasicTest : public DBTestBase {
@@ -420,7 +420,7 @@ TEST_F(DBBasicTest, FLUSH) {
     get_perf_context()->Reset();
     Get(1, "foo");
     ASSERT_TRUE((int)get_perf_context()->get_from_output_files_time > 0);
-    //ASSERT_EQ(2, (int)get_perf_context()->get_read_bytes);
+    // ASSERT_EQ(2, (int)get_perf_context()->get_read_bytes);
 
     ReopenWithColumnFamilies({"default", "pikachu"}, CurrentOptions());
     ASSERT_EQ("v1", Get(1, "foo"));
@@ -908,45 +908,44 @@ TEST_F(DBBasicTest, MmapAndBufferOptions) {
 #endif
 
 class TestEnv : public EnvWrapper {
-  public:
-    explicit TestEnv() : EnvWrapper(Env::Default()),
-                close_count(0) { }
+ public:
+  explicit TestEnv() : EnvWrapper(Env::Default()), close_count(0) {}
 
-    class TestLogger : public Logger {
-      public:
-        using Logger::Logv;
-        TestLogger(TestEnv *env_ptr) : Logger() { env = env_ptr; }
-        ~TestLogger() {
-          if (!closed_) {
-            CloseHelper();
-          }
-        }
-        virtual void Logv(const char* /*format*/, va_list /*ap*/) override{};
-
-       protected:
-        virtual Status CloseImpl() override {
-          return CloseHelper();
-        }
-      private:
-        Status CloseHelper() {
-          env->CloseCountInc();;
-          return Status::IOError();
-        }
-        TestEnv *env;
-    };
-
-    void CloseCountInc() { close_count++; }
-
-    int GetCloseCount() { return close_count; }
-
-    virtual Status NewLogger(const std::string& /*fname*/,
-                             std::shared_ptr<Logger>* result) {
-      result->reset(new TestLogger(this));
-      return Status::OK();
+  class TestLogger : public Logger {
+   public:
+    using Logger::Logv;
+    TestLogger(TestEnv* env_ptr) : Logger() { env = env_ptr; }
+    ~TestLogger() {
+      if (!closed_) {
+        CloseHelper();
+      }
     }
+    virtual void Logv(const char* /*format*/, va_list /*ap*/) override{};
+
+   protected:
+    virtual Status CloseImpl() override { return CloseHelper(); }
 
    private:
-    int close_count;
+    Status CloseHelper() {
+      env->CloseCountInc();
+      ;
+      return Status::IOError();
+    }
+    TestEnv* env;
+  };
+
+  void CloseCountInc() { close_count++; }
+
+  int GetCloseCount() { return close_count; }
+
+  virtual Status NewLogger(const std::string& /*fname*/,
+                           std::shared_ptr<Logger>* result) {
+    result->reset(new TestLogger(this));
+    return Status::OK();
+  }
+
+ private:
+  int close_count;
 };
 
 TEST_F(DBBasicTest, DBClose) {
@@ -999,7 +998,7 @@ TEST_F(DBBasicTest, DBCloseFlushError) {
   Options options = GetDefaultOptions();
   options.create_if_missing = true;
   options.manual_wal_flush = true;
-  options.write_buffer_size=100;
+  options.write_buffer_size = 100;
   options.env = fault_injection_env.get();
 
   Reopen(options);

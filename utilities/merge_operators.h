@@ -4,14 +4,14 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 #pragma once
-#include "rocksdb/merge_operator.h"
-
 #include <stdio.h>
 
 #include <memory>
 #include <string>
 
+#include "rocksdb/merge_operator.h"
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class MergeOperators {
@@ -20,9 +20,11 @@ class MergeOperators {
   static std::shared_ptr<MergeOperator> CreateDeprecatedPutOperator();
   static std::shared_ptr<MergeOperator> CreateUInt64AddOperator();
   static std::shared_ptr<MergeOperator> CreateStringAppendOperator();
-  static std::shared_ptr<MergeOperator> CreateStringAppendOperator(char delim_char);
+  static std::shared_ptr<MergeOperator> CreateStringAppendOperator(
+      char delim_char);
   static std::shared_ptr<MergeOperator> CreateStringAppendTESTOperator();
-  static std::shared_ptr<MergeOperator> CreateStringAppendTESTOperator(std::string delim);
+  static std::shared_ptr<MergeOperator> CreateStringAppendTESTOperator(
+      std::string delim);
   static std::shared_ptr<MergeOperator> CreateMaxOperator();
   static std::shared_ptr<MergeOperator> CreateBytesXOROperator();
 
@@ -34,7 +36,7 @@ class MergeOperators {
       return CreatePutOperator();
     } else if (name == "put_v1") {
       return CreateDeprecatedPutOperator();
-    } else if ( name == "uint64add") {
+    } else if (name == "uint64add") {
       return CreateUInt64AddOperator();
     } else if (name == "stringappend") {
       return CreateStringAppendOperator();

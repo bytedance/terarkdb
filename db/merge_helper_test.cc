@@ -3,19 +3,20 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
+#include "db/merge_helper.h"
+
 #include <algorithm>
 #include <string>
 #include <vector>
 
-#include "db/merge_helper.h"
 #include "rocksdb/comparator.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/iterator_wrapper.h"
 #include "util/coding.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 #include "utilities/merge_operators.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class MergeHelperTest : public testing::Test {
@@ -33,9 +34,8 @@ class MergeHelperTest : public testing::Test {
                                         false, latest_snapshot));
     user_key_ = ExtractUserKey(iter_->key()).ToString();
     CombinedInternalIterator iter(iter_.get(), nullptr);
-    auto merge_result = merge_helper_->MergeUntil(user_key_, &iter,
-                                                  nullptr /* range_del_agg */,
-                                                  stop_before, at_bottom);
+    auto merge_result = merge_helper_->MergeUntil(
+        user_key_, &iter, nullptr /* range_del_agg */, stop_before, at_bottom);
     if (merge_result.ok() || merge_result.IsMergeInProgress()) {
       for (auto& v : merge_helper_->values()) {
         auto s = v.fetch();

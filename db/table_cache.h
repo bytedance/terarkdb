@@ -23,10 +23,10 @@
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/table_reader.h"
 #include "util/iterator_cache.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class Env;

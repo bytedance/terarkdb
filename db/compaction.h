@@ -14,10 +14,10 @@
 #include "options/cf_options.h"
 #include "rocksdb/compaction_filter.h"
 #include "rocksdb/listener.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/arena.h"
 #include "util/autovector.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 // Utility for comparing sstable boundary keys. Returns -1 if either a or b is

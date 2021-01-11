@@ -20,11 +20,11 @@
 #include "rocksdb/listener.h"
 #include "rocksdb/options.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/meta_blocks.h"
 #include "table/table_builder.h"
 #include "util/compression.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class BlockBuilder;

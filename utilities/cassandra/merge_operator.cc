@@ -5,15 +5,16 @@
 
 #include "merge_operator.h"
 
-#include <memory>
 #include <assert.h>
 
-#include "rocksdb/slice.h"
-#include "rocksdb/merge_operator.h"
-#include "utilities/merge_operators.h"
-#include "utilities/cassandra/format.h"
+#include <memory>
 
+#include "rocksdb/merge_operator.h"
+#include "rocksdb/slice.h"
 #include "rocksdb/terark_namespace.h"
+#include "utilities/cassandra/format.h"
+#include "utilities/merge_operators.h"
+
 namespace TERARKDB_NAMESPACE {
 namespace cassandra {
 
@@ -28,17 +29,15 @@ bool CassandraValueMergeOperator::FullMergeV2(
     if (!Fetch(*merge_in.existing_value, &merge_out->new_value)) {
       return true;
     }
-    row_values.push_back(
-        RowValue::Deserialize(merge_in.existing_value->data(),
-                              merge_in.existing_value->size()));
+    row_values.push_back(RowValue::Deserialize(
+        merge_in.existing_value->data(), merge_in.existing_value->size()));
   }
 
   for (auto& operand : merge_in.operand_list) {
     if (!Fetch(operand, &merge_out->new_value)) {
       return true;
     }
-    row_values.push_back(RowValue::Deserialize(operand.data(),
-                                               operand.size()));
+    row_values.push_back(RowValue::Deserialize(operand.data(), operand.size()));
   }
 
   RowValue merged = RowValue::Merge(std::move(row_values));
@@ -63,8 +62,7 @@ bool CassandraValueMergeOperator::PartialMergeMulti(
     if (!Fetch(operand, new_value)) {
       return true;
     }
-    row_values.push_back(RowValue::Deserialize(operand.data(),
-                                               operand.size()));
+    row_values.push_back(RowValue::Deserialize(operand.data(), operand.size()));
   }
   RowValue merged = RowValue::Merge(std::move(row_values));
 
@@ -74,10 +72,10 @@ bool CassandraValueMergeOperator::PartialMergeMulti(
   return true;
 }
 
-const char* CassandraValueMergeOperator::Name() const  {
+const char* CassandraValueMergeOperator::Name() const {
   return "CassandraValueMergeOperator";
 }
 
-} // namespace cassandra
+}  // namespace cassandra
 
-} // namespace TERARKDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE

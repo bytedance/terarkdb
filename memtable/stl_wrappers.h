@@ -10,10 +10,10 @@
 #include "rocksdb/comparator.h"
 #include "rocksdb/memtablerep.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/murmurhash.h"
 
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 namespace stl_wrappers {
 
@@ -31,5 +31,5 @@ struct Compare : private Base {
   }
 };
 
-}
-}
+}  // namespace stl_wrappers
+}  // namespace TERARKDB_NAMESPACE

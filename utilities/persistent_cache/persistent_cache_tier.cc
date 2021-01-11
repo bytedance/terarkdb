@@ -11,12 +11,13 @@
 
 #include "utilities/persistent_cache/persistent_cache_tier.h"
 
-#include "inttypes.h"
+#include <inttypes.h>
 
-#include <string>
 #include <sstream>
+#include <string>
 
 #include "rocksdb/terark_namespace.h"
+
 namespace TERARKDB_NAMESPACE {
 
 std::string PersistentCacheConfig::ToString() const {
