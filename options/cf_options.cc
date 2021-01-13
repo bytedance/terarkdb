@@ -188,7 +188,7 @@ void MutableCFOptions::Dump(Logger* log) const {
                  ttl);
   ROCKS_LOG_INFO(log, "        ttl_garbage_collection_percentage: %f",
                  ttl_garbage_collection_percentage);
-  ROCKS_LOG_INFO(log, "                             ttl_scan_gap: %f",
+  ROCKS_LOG_INFO(log, "                             ttl_scan_gap: %zd",
                  ttl_scan_gap);
   std::string result;
   char buf[10];
