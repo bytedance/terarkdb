@@ -247,9 +247,9 @@ const std::string TablePropertiesNames::kDependenceEntryCount =
     "rocksdb.sst.dependence.entry-count";
 const std::string TablePropertiesNames::kInheritanceChain =
     "rocksdb.sst.inheritance-chain";
-const std::string TablePropertiesNames::kRatioExpireTime =
+const std::string TablePropertiesNames::kEarliestTimeBeginCompact =
     "rocksdb.ratio_expire_time";
-const std::string TablePropertiesNames::kScanGapExpireTime =
+const std::string TablePropertiesNames::kLatestTimeEndCompact =
     "rocksdb.scan_gap_expire_time";
 
 extern const std::string kPropertiesBlock = "rocksdb.properties";

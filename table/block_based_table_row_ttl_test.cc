@@ -9,12 +9,13 @@
 namespace rocksdb {
 
 struct params {
-  params(double ratio = 128.0, int scan = std::numeric_limits<int>::max()) {
+  params(double ratio = 2.000,
+         size_t scan = std::numeric_limits<size_t>::max()) {
     ttl_ratio = ratio;
     ttl_scan = scan;
   }
   double ttl_ratio;
-  int ttl_scan;
+  size_t ttl_scan;
 };
 class TestEnv : public EnvWrapper {
  public:
@@ -59,12 +60,12 @@ class TestEnv : public EnvWrapper {
 
 class BlockBasedTableBuilderTest : public ::testing::TestWithParam<params> {};
 
-params ttl_param[] = {{50.0, 2},
-                      {128.0, 5},
-                      {80.0, std::numeric_limits<int>::max()},
-                      {128.0, std::numeric_limits<int>::max()},
-                      {100.0, 1000},
-                      {0.0, 1},
+params ttl_param[] = {{0.50, 2},
+                      {1.280, 5},
+                      {0.800, std::numeric_limits<size_t>::max()},
+                      {1.280, std::numeric_limits<size_t>::max()},
+                      {1.000, 1000},
+                      {0.000, 1},
                       {-10, -3}};
 // INSTANTIATE_TEST_CASE_P(TrueReturn, BlockBasedTableBuilderTest,
 //                         testing::Values(ttl_param[0], ttl_param[1],
@@ -226,7 +227,7 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
   ASSERT_EQ(26ul, props->num_entries);
   ASSERT_EQ(1ul, props->num_data_blocks);
 
-  if (n.ttl_ratio > 100.0) {
+  if (n.ttl_ratio > 1.000) {
     ASSERT_EQ(std::numeric_limits<uint64_t>::max(), props->ratio_expire_time);
   } else if (n.ttl_ratio <= 0.0) {
     EXPECT_EQ(nowseconds + min_ttl, props->ratio_expire_time);
@@ -234,7 +235,7 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
     std::cout << "[==========]  ratio_ttl:";
     std::cout << props->ratio_expire_time - nowseconds << "s" << std::endl;
   }
-  if (n.ttl_scan == std::numeric_limits<int>::max()) {
+  if (n.ttl_scan == std::numeric_limits<size_t>::max()) {
     ASSERT_EQ(std::numeric_limits<uint64_t>::max(),
               props->scan_gap_expire_time);
   } else if (n.ttl_scan <= 1) {

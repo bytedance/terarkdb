@@ -68,8 +68,8 @@ struct TablePropertiesNames {
   static const std::string kDependence;
   static const std::string kDependenceEntryCount;
   static const std::string kInheritanceChain;
-  static const std::string kRatioExpireTime;
-  static const std::string kScanGapExpireTime;
+  static const std::string kEarliestTimeBeginCompact;
+  static const std::string kLatestTimeEndCompact;
 };
 
 extern const std::string kPropertiesBlock;

@@ -158,8 +158,10 @@ void PropertyBlockBuilder::AddTableProperty(const TableProperties& props) {
     Add(TablePropertiesNames::kCompression, props.compression_name);
   }
   if (true) {
-    Add(TablePropertiesNames::kRatioExpireTime, props.ratio_expire_time);
-    Add(TablePropertiesNames::kScanGapExpireTime, props.scan_gap_expire_time);
+    Add(TablePropertiesNames::kEarliestTimeBeginCompact,
+        props.ratio_expire_time);
+    Add(TablePropertiesNames::kLatestTimeEndCompact,
+        props.scan_gap_expire_time);
   }
 }
 

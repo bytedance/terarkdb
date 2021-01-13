@@ -86,7 +86,8 @@ class TtlIntTblPropCollector : public IntTblPropCollector {
         slice_window_ttl_index_.pop_front();
       }
       while (!slice_window_ttl_index_.empty() &&
-             ttl >= ttl_seconds_slice_window_[slice_window_ttl_index_.back()]) {
+             ttl >= ttl_seconds_slice_window_[slice_window_ttl_index_.back() %
+                                              ttl_max_scan_cap_]) {
         slice_window_ttl_index_.pop_back();
       }
       ttl_seconds_slice_window_[slice_index_ % ttl_max_scan_cap_] = ttl;
@@ -96,7 +97,8 @@ class TtlIntTblPropCollector : public IntTblPropCollector {
     if (slice_index_ >= ttl_max_scan_cap_) {
       min_scan_cap_ttl_seconds_ =
           std::min(min_scan_cap_ttl_seconds_,
-                   ttl_seconds_slice_window_[slice_window_ttl_index_.front()]);
+                   ttl_seconds_slice_window_[slice_window_ttl_index_.front() %
+                                             ttl_max_scan_cap_]);
     }
   }
 
@@ -109,12 +111,19 @@ class TtlIntTblPropCollector : public IntTblPropCollector {
         name_(_name) {}
   ~TtlIntTblPropCollector() { delete ttl_extractor_; }
   Status Finish(UserCollectedProperties* properties) override {
-    uint64_t max_uint64_t = std::numeric_limits<uint64_t>::max();
+    // uint64_t max_uint64_t = std::numeric_limits<uint64_t>::max();
     if (!histogram_.Empty() &&
-        ttl_key_value_size_ >= ttl_gc_ratio_ / 100 * raw_key_value_size_) {
+        ttl_key_value_size_ >= ttl_gc_ratio_ * raw_key_value_size_) {
       min_gc_ratio_ttl_seconds_ =
-          static_cast<uint64_t>(histogram_.Percentile(ttl_gc_ratio_));
+          static_cast<uint64_t>(histogram_.Percentile(ttl_gc_ratio_ * 100.0));
     }
+    std::string temp_ttl_str[2];
+    PutFixed64(&temp_ttl_str[0], min_gc_ratio_ttl_seconds_);
+    PutFixed64(&temp_ttl_str[1], min_gc_ratio_ttl_seconds_);
+    properties->insert(
+        {TablePropertiesNames::kEarliestTimeBeginCompact, temp_ttl_str[0]});
+    properties->insert(
+        {TablePropertiesNames::kLatestTimeEndCompact, temp_ttl_str[1]});
   }
 
   const char* Name() const override { return name_.c_str(); }
@@ -130,14 +139,14 @@ class TtlIntTblPropCollector : public IntTblPropCollector {
       bool has_ttl = false;
       std::chrono::seconds ttl(0);
       assert(ttl_extractor_ != nullptr);
-      Status s;
+
       Slice user_key = ExtractUserKey(key);
       Slice value_or_meta = value;
       if (entry_type == kEntryMergeIndex || entry_type == kEntryValueIndex) {
         value_or_meta = SeparateHelper::DecodeValueMeta(value);
       }
-      s = ttl_extractor_->Extract(entry_type, user_key, value_or_meta, &has_ttl,
-                                  &ttl);
+      Status s = ttl_extractor_->Extract(entry_type, user_key, value_or_meta,
+                                         &has_ttl, &ttl);
       if (!s.ok()) {
         return s;
       }
@@ -154,7 +163,8 @@ class TtlIntTblPropCollector : public IntTblPropCollector {
         slice_index_ = 0;
       }
     } else if (entry_type < kEntryOther) {
-      AddTtlToSliceWindow(0);
+      // Delete Key is always not found for scan operation.
+      AddTtlToSliceWindow(0ul);
     }
     return Status::OK();
   }
@@ -201,7 +211,7 @@ class TtlIntTblPropCollectorFactory : public IntTblPropCollectorFactory {
 IntTblPropCollectorFactory* NewTtlIntTblPropCollectorFactory(
     TtlExtractorFactory* ttl_extractor_factory,
     const TtlExtractorContext& context, double ttl_gc_ratio,
-    size_t ttl_max_scan_cap);
+    size_t ttl_max_scan_cap) {}
 
 uint64_t GetDeletedKeys(const UserCollectedProperties& props) {
   bool property_present_ignored;

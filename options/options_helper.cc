@@ -2076,7 +2076,7 @@ std::unordered_map<std::string, OptionTypeInfo>
           offsetof(struct MutableCFOptions,
                    ttl_garbage_collection_percentage)}},
         {"ttl_scan_gap",
-         {offset_of(&ColumnFamilyOptions::ttl_scan_gap), OptionType::kInt,
+         {offset_of(&ColumnFamilyOptions::ttl_scan_gap), OptionType::kSizeT,
           OptionVerificationType::kNormal, true,
           offsetof(struct MutableCFOptions, ttl_scan_gap)}}};
 
