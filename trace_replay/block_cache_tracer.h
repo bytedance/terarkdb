@@ -10,10 +10,11 @@
 #include "monitoring/instrumented_mutex.h"
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/trace_reader_writer.h"
 #include "util/trace_replay.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 extern const uint64_t kMicrosInSecond;
 
@@ -37,8 +38,8 @@ extern const uint64_t kMicrosInSecond;
 // 6. BlockBasedTable::ApproximateOffsetOf. (kCompaction or
 // kUserApproximateSize).
 struct BlockCacheLookupContext {
-BlockCacheLookupContext(const TableReaderCaller& _caller) : caller(_caller) {}
-const TableReaderCaller caller;
+  BlockCacheLookupContext(const TableReaderCaller& _caller) : caller(_caller) {}
+  const TableReaderCaller caller;
   // These are populated when we perform lookup/insert on block cache. The block
   // cache tracer uses these inforation when logging the block access at
   // BlockBasedTable::GET and BlockBasedTable::MultiGet.
@@ -213,4 +214,4 @@ class BlockCacheTracer {
   std::atomic<BlockCacheTraceWriter*> writer_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

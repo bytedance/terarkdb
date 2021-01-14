@@ -6,8 +6,9 @@
 #include "util/timer.h"
 
 #include "db/db_test_util.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class TimerTest : public testing::Test {
  public:
@@ -342,7 +343,7 @@ TEST_F(TimerTest, RepeatIntervalWithFuncRunningTime) {
 
   ASSERT_TRUE(timer.Shutdown());
 }
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

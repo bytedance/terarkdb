@@ -582,7 +582,7 @@ int main(int argc, char** argv) {
     factory.reset(new TERARKDB_NAMESPACE::SkipListFactory);
 #ifndef ROCKSDB_LITE
   } else if (FLAGS_memtablerep == "patricia_trie") {
-    factory.reset(rocksdb::NewPatriciaTrieRepFactory());
+    factory.reset(TERARKDB_NAMESPACE::NewPatriciaTrieRepFactory());
   } else if (FLAGS_memtablerep == "vector") {
     factory.reset(new TERARKDB_NAMESPACE::VectorRepFactory);
   } else if (FLAGS_memtablerep == "hashskiplist") {

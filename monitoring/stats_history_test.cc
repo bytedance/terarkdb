@@ -22,11 +22,12 @@
 #include "rocksdb/cache.h"
 #include "rocksdb/convenience.h"
 #include "rocksdb/rate_limiter.h"
+#include "rocksdb/terark_namespace.h"
+#include "util/random.h"
 #include "util/sync_point.h"
 #include "util/testutil.h"
-#include "util/random.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE
 class StatsHistoryTest : public DBTestBase {
@@ -642,7 +643,7 @@ TEST_F(StatsHistoryTest, ForceManualFlushStatsCF) {
 }
 
 #endif  // !ROCKSDB_LITE
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ROCKSDB_NAMESPACE::port::InstallStackTraceHandler();

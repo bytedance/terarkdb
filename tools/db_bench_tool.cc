@@ -1083,12 +1083,13 @@ DEFINE_uint64(stats_dump_period_sec,
               TERARKDB_NAMESPACE::Options().stats_dump_period_sec,
               "Gap between printing stats to log in seconds");
 DEFINE_uint64(stats_persist_period_sec,
-              rocksdb::Options().stats_persist_period_sec,
+              TERARKDB_NAMESPACE::Options().stats_persist_period_sec,
               "Gap between persisting stats in seconds");
-DEFINE_bool(persist_stats_to_disk, rocksdb::Options().persist_stats_to_disk,
+DEFINE_bool(persist_stats_to_disk,
+            TERARKDB_NAMESPACE::Options().persist_stats_to_disk,
             "whether to persist stats to disk");
 DEFINE_uint64(stats_history_buffer_size,
-              rocksdb::Options().stats_history_buffer_size,
+              TERARKDB_NAMESPACE::Options().stats_history_buffer_size,
               "Max number of stats snapshots to keep in memory");
 
 enum RepFactory {
