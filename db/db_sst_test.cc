@@ -371,7 +371,7 @@ TEST_F(DBSSTTest, RateLimitedDelete) {
   options.stats_persist_period_sec = 0;
   options.env = env_;
 
-  int64_t rate_bytes_per_sec = 1024 * 100;  // 10 Kbs / Sec
+  int64_t rate_bytes_per_sec = 1024 * 10;  // 10 Kbs / Sec
   Status s;
   options.sst_file_manager.reset(
       NewSstFileManager(env_, nullptr, "", 0, false, &s, 0));

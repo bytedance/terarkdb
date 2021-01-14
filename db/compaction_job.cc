@@ -32,11 +32,8 @@
 #pragma GCC diagnostic pop
 #endif
 
-#include <deque>
 #include <functional>
-#include <list>
 #include <memory>
-#include <random>
 #include <set>
 #include <thread>
 #include <utility>
@@ -48,11 +45,8 @@
 #include "db/dbformat.h"
 #include "db/error_handler.h"
 #include "db/event_helpers.h"
-#include "db/log_reader.h"
-#include "db/log_writer.h"
 #include "db/map_builder.h"
 #include "db/memtable.h"
-#include "db/memtable_list.h"
 #include "db/merge_context.h"
 #include "db/merge_helper.h"
 #include "db/range_del_aggregator.h"
@@ -68,7 +62,6 @@
 #include "rocksdb/status.h"
 #include "rocksdb/table.h"
 #include "rocksdb/terark_namespace.h"
-#include "table/block.h"
 #include "table/block_based_table_factory.h"
 #include "table/get_context.h"
 #include "table/merging_iterator.h"
@@ -81,13 +74,11 @@
 #include "util/filename.h"
 #include "util/log_buffer.h"
 #include "util/logging.h"
-#include "util/mutexlock.h"
 #include "util/random.h"
 #include "util/sst_file_manager_impl.h"
 #include "util/stop_watch.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
-#include "utilities/util/function.hpp"
 #include "utilities/util/valvec.hpp"
 
 namespace TERARKDB_NAMESPACE {
@@ -2121,10 +2112,20 @@ Status CompactionJob::FinishCompactionOutputFile(
     meta->prop.flags |=
         tp.snapshots.empty() ? 0 : TablePropertyCache::kHasSnapshots;
 
-    meta->prop.ratio_expire_time = tp.ratio_expire_time;
-    meta->prop.scan_gap_expire_time = tp.scan_gap_expire_time;
-    ROCKS_LOG_INFO(db_options_.info_log, "ratio:%" PRIu64 ", scan:%" PRIu64,
-                   tp.ratio_expire_time, tp.scan_gap_expire_time);
+    if (compact_->compaction->immutable_cf_options()->ttl_extractor_factory !=
+        nullptr) {
+      meta->prop.ratio_expire_time = DecodeFixed64(
+          tp.user_collected_properties
+              .find(TablePropertiesNames::kEarliestTimeBeginCompact)
+              ->second.c_str());
+      meta->prop.scan_gap_expire_time =
+          DecodeFixed64(tp.user_collected_properties
+                            .find(TablePropertiesNames::kLatestTimeEndCompact)
+                            ->second.c_str());
+      ROCKS_LOG_INFO(db_options_.info_log, "ratio:%" PRIu64 ", scan:%" PRIu64,
+                     meta->prop.ratio_expire_time,
+                     meta->prop.scan_gap_expire_time);
+    }
   }
 
   if (s.ok() && tp.num_entries == 0 && tp.num_range_deletions == 0) {
