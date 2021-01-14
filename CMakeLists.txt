@@ -928,6 +928,7 @@ IF(WITH_TESTS OR WITH_TOOLS)
   target_link_libraries(testharness gtest)
 ENDIF()
 if(WITH_TESTS)
+  add_definitions(-DDBGCMESSAGE=1)
   set(TESTS
         cache/cache_test.cc
         cache/lru_cache_test.cc
