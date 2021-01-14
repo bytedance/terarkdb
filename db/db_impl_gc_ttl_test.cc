@@ -15,7 +15,9 @@ class DBImplGCTTL_Test : public DBTestBase {
   DBImplGCTTL_Test()
       : DBTestBase("./db_GC_ttl_test"),
         mock_env_(new MockTimeEnv(Env::Default())) {}
-
+  ~DBImplGCTTL_Test(){
+    Close();
+  }
   void init() {
     dbname = test::PerThreadDBPath("ttl_gc_test");
     DestroyDB(dbname, options);
@@ -27,6 +29,32 @@ class DBImplGCTTL_Test : public DBTestBase {
     options.enable_lazy_compaction = false;
     options.table_factory.reset(
         new BlockBasedTableFactory(BlockBasedTableOptions()));
+  }
+
+  void run(){
+    int L0FilesNums = 4;
+    uint64_t ttl = 200;
+    options.env = mock_env_.get();
+    SetUp();
+    Reopen(options);
+    char ts_string[8];
+    EncodeFixed64(ts_string, ttl);
+    int KeyEntrys = 800;
+    for (int i = 0; i < L0FilesNums; i++) {
+      for (int j = 0; j < KeyEntrys; j++) {
+        std::string key = "key";
+        std::string value = "value";
+        AppendNumberTo(&key, j);
+        AppendNumberTo(&value, j);
+        value.append(ts_string, 8);
+        dbfull()->Put(WriteOptions(), key, value);
+      }
+      dbfull()->Flush(FlushOptions());
+    }
+    //  dbfull()->StartPeriodicWorkScheduler();
+    dbfull()->TEST_WaitForStatsDumpRun([&] { mock_env_->set_current_time(ttl); });
+    ASSERT_TRUE(flag);
+    ASSERT_EQ(L0FilesNums, mark);
   }
 
  protected:
@@ -55,37 +83,21 @@ class DBImplGCTTL_Test : public DBTestBase {
   }
 };
 
-TEST_F(DBImplGCTTL_Test, L0FileExpiredTest) {
+TEST_F(DBImplGCTTL_Test, BlockBasedTableTest) {
   init();
-  int L0FilesNums = 4;
-  uint64_t ttl = 200;
-  options.env = mock_env_.get();
-  SetUp();
-  Reopen(options);
-  char ts_string[8];
-  EncodeFixed64(ts_string, ttl);
-  int KeyEntrys = 800;
-  for (int i = 0; i < L0FilesNums; i++) {
-    for (int j = 0; j < KeyEntrys; j++) {
-      std::string key = "key";
-      std::string value = "value";
-      AppendNumberTo(&key, j);
-      AppendNumberTo(&value, j);
-      value.append(ts_string, 8);
-      dbfull()->Put(WriteOptions(), key, value);
-    }
-    dbfull()->Flush(FlushOptions());
-  }
-  //  dbfull()->StartPeriodicWorkScheduler();
-  dbfull()->TEST_WaitForStatsDumpRun([&] { mock_env_->set_current_time(ttl); });
-  ASSERT_TRUE(flag);
-  ASSERT_EQ(L0FilesNums, mark);
+  run();
   dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr);
   dbfull()->TEST_WaitForCompact();
   dbfull()->ScheduleGCTTL();
-
-  Close();
 }
+TEST_F(DBImplGCTTL_Test, TerarkTableTest) {
+  init();
+  TerarkZipTableOptions terarkziptableoptions;
+  options.table_factory.reset(TERARKDB_NAMESPACE::NewTerarkZipTableFactory(
+    terarkziptableoptions, options.table_factory));
+  run();
+}
+
 
 }  // namespace rocksdb
 int main(int argc, char** argv) {
