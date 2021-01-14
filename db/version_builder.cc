@@ -20,8 +20,6 @@
 #include <functional>
 #include <map>
 #include <queue>
-#include <set>
-#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -33,7 +31,6 @@
 #include "db/version_set.h"
 #include "port/port.h"
 #include "rocksdb/terark_namespace.h"
-#include "table/table_reader.h"
 #include "util/c_style_callback.h"
 
 #define ROCKS_VERSION_BUILDER_DEBUG 0
@@ -777,9 +774,17 @@ class VersionBuilder::Rep {
           file_meta->prop.num_deletions = properties->num_deletions;
           file_meta->prop.raw_key_size = properties->raw_key_size;
           file_meta->prop.raw_value_size = properties->raw_value_size;
-          file_meta->prop.ratio_expire_time = properties->ratio_expire_time;
-          file_meta->prop.scan_gap_expire_time =
-              properties->scan_gap_expire_time;
+          auto its = properties->user_collected_properties.find(
+              TablePropertiesNames::kEarliestTimeBeginCompact);
+          // It's difficult to get ioption
+          if (its != properties->user_collected_properties.end()) {
+            file_meta->prop.ratio_expire_time =
+                DecodeFixed64(its->second.c_str());
+            file_meta->prop.scan_gap_expire_time = DecodeFixed64(
+                properties->user_collected_properties
+                    .find(TablePropertiesNames::kLatestTimeEndCompact)
+                    ->second.c_str());
+          }
         }
       }
     });

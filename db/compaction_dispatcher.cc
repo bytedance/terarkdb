@@ -504,6 +504,14 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
         new UserKeyTablePropertiesCollectorFactory(
             user_fac->shared_from_this()));
   }
+  if (immutable_cf_options.ttl_extractor_factory != nullptr) {
+    // What this extractor will do is still unknown
+    int_tbl_prop_collector_factories.data.emplace_back(
+        NewTtlIntTblPropCollectorFactory(
+            immutable_cf_options.ttl_extractor_factory, rep_->env,
+            mutable_cf_options.ttl_garbage_collection_percentage,
+            mutable_cf_options.ttl_scan_gap));
+  }
   const Slice* start = nullptr;
   const Slice* end = nullptr;
   Slice start_slice, end_slice;

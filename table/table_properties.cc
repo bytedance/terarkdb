@@ -252,9 +252,9 @@ const std::string TablePropertiesNames::kDependenceEntryCount =
 const std::string TablePropertiesNames::kInheritanceChain =
     "rocksdb.sst.inheritance-chain";
 const std::string TablePropertiesNames::kEarliestTimeBeginCompact =
-    "rocksdb.ratio_expire_time";
+    "rocksdb.earliesttime.begincompact";
 const std::string TablePropertiesNames::kLatestTimeEndCompact =
-    "rocksdb.scan_gap_expire_time";
+    "rocksdb.latesttime.endcompact";
 
 extern const std::string kPropertiesBlock = "rocksdb.properties";
 // Old property block name for backward compatibility

@@ -412,10 +412,19 @@ Status BuildTable(
                                     : TablePropertyCache::kNoRangeDeletions;
       sst_meta()->prop.flags |=
           tp.snapshots.empty() ? 0 : TablePropertyCache::kHasSnapshots;
-      sst_meta()->prop.ratio_expire_time =
-          builder->GetTableProperties().ratio_expire_time;
-      sst_meta()->prop.scan_gap_expire_time =
-          builder->GetTableProperties().scan_gap_expire_time;
+      if (ioptions.ttl_extractor_factory != nullptr) {
+        sst_meta()->prop.ratio_expire_time = DecodeFixed64(
+            builder->GetTableProperties()
+                .user_collected_properties
+                .find(TablePropertiesNames::kEarliestTimeBeginCompact)
+                ->second.c_str());
+
+        sst_meta()->prop.scan_gap_expire_time =
+            DecodeFixed64(builder->GetTableProperties()
+                              .user_collected_properties
+                              .find(TablePropertiesNames::kLatestTimeEndCompact)
+                              ->second.c_str());
+      }
     }
 
     if (s.ok() && !empty) {

@@ -1,12 +1,14 @@
 // Copyright (c) 2020-present, Bytedance Inc.  All rights reserved.
 // This source code is licensed under Apache 2.0 License.
 
+#include "db/table_properties_collector.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block_based_table_builder.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct params {
   params(double ratio = 2.000,
@@ -126,7 +128,7 @@ TEST_F(BlockBasedTableBuilderTest, FunctionTest) {
           new test::StringSource(ss->contents(), 72242, true)));
   TableProperties* props = nullptr;
   s = ReadTableProperties(file_reader.get(), ss->contents().size(),
-                          kBlockBasedTableMagicNumber, ioptions, &props,
+                          kTerarkZipTableMagicNumber, ioptions, &props,
                           true /* compression_type_missing */);
   std::unique_ptr<TableProperties> props_guard(props);
 
@@ -135,7 +137,7 @@ TEST_F(BlockBasedTableBuilderTest, FunctionTest) {
   ASSERT_EQ(16ul * 26, props->raw_key_size);
   ASSERT_EQ(28ul * 26, props->raw_value_size);
   ASSERT_EQ(26ul, props->num_entries);
-  ASSERT_EQ(1ul, props->num_data_blocks);
+  ASSERT_EQ(26ul, props->num_data_blocks);
   ASSERT_EQ(std::numeric_limits<uint64_t>::max(), props->ratio_expire_time);
   ASSERT_EQ(std::numeric_limits<uint64_t>::max(), props->scan_gap_expire_time);
   delete options.env;
@@ -216,7 +218,7 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
 
   TableProperties* props = nullptr;
   s = ReadTableProperties(file_reader.get(), ss->contents().size(),
-                          kBlockBasedTableMagicNumber, ioptions, &props,
+                          kTerarkZipTableMagicNumber, ioptions, &props,
                           true /* compression_type_missing */);
   std::unique_ptr<TableProperties> props_guard(props);
 
@@ -225,8 +227,7 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
   ASSERT_EQ(16ul * 26, props->raw_key_size);
   ASSERT_EQ(36ul * 26, props->raw_value_size);
   ASSERT_EQ(26ul, props->num_entries);
-  ASSERT_EQ(1ul, props->num_data_blocks);
-
+  ASSERT_EQ(26ul, props->num_data_blocks);
   if (n.ttl_ratio > 1.000) {
     ASSERT_EQ(std::numeric_limits<uint64_t>::max(), props->ratio_expire_time);
   } else if (n.ttl_ratio <= 0.0) {
@@ -399,7 +400,7 @@ TEST_F(BlockBasedTableBuilderTest, SmartptrTest) {
   delete options.env;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
