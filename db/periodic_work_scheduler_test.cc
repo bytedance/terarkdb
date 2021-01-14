@@ -102,7 +102,7 @@ TEST_F(PeriodicWorkSchedulerTest, Basic) {
   ASSERT_EQ(4, flush_info_log_counter);
 
   scheduler = dbfull()->TEST_GetPeriodicWorkScheduler();
-  ASSERT_EQ(1u, scheduler->TEST_GetValidTaskNum());
+  ASSERT_EQ(2u, scheduler->TEST_GetValidTaskNum());
 
   // Re-enable one task
   ASSERT_OK(dbfull()->SetDBOptions({{"stats_dump_period_sec", "5"}}));
@@ -111,10 +111,10 @@ TEST_F(PeriodicWorkSchedulerTest, Basic) {
 
   scheduler = dbfull()->TEST_GetPeriodicWorkScheduler();
   ASSERT_NE(nullptr, scheduler);
-  ASSERT_EQ(2, scheduler->TEST_GetValidTaskNum());
+  ASSERT_EQ(3, scheduler->TEST_GetValidTaskNum());
   dbfull()->TEST_WaitForStatsDumpRun(
       [&] { mock_env_->MockSleepForSeconds(static_cast<int>(kPeriodSec)); });
-  ASSERT_EQ(4, dump_st_counter);
+  ASSERT_EQ(5, dump_st_counter);
   ASSERT_EQ(3, pst_st_counter);
   ASSERT_EQ(5, flush_info_log_counter);
 
@@ -149,7 +149,7 @@ TEST_F(PeriodicWorkSchedulerTest, MultiInstances) {
 
   auto dbi = static_cast_with_check<DBImpl>(dbs[kInstanceNum - 1]);
   auto scheduler = dbi->TEST_GetPeriodicWorkScheduler();
-  ASSERT_EQ(kInstanceNum * 3, scheduler->TEST_GetValidTaskNum());
+  ASSERT_EQ(kInstanceNum * 4, scheduler->TEST_GetValidTaskNum());
 
   int expected_run = kInstanceNum;
   dbi->TEST_WaitForStatsDumpRun(
