@@ -369,6 +369,7 @@ TEST_F(DBSSTTest, RateLimitedDelete) {
   // incorrect.
   options.stats_dump_period_sec = 0;
   options.stats_persist_period_sec = 0;
+
   options.env = env_;
 
   int64_t rate_bytes_per_sec = 1024 * 10;  // 10 Kbs / Sec

@@ -15,11 +15,12 @@
 
 #include "monitoring/instrumented_mutex.h"
 #include "rocksdb/env.h"
-#include "util/sync_point.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/mutexlock.h"
+#include "util/sync_point.h"
 #include "util/sync_point_impl.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // A Timer class to handle repeated work.
 //
@@ -51,10 +52,8 @@ class Timer {
   // the function takes 1000us to run. If it starts at time [now]us, then it
   // finishes at [now]+1000us, 2nd run starting time will be at [now]+3000us.
   // repeat_every_us == 0 means do not repeat.
-  void Add(std::function<void()> fn,
-           const std::string& fn_name,
-           uint64_t start_after_us,
-           uint64_t repeat_every_us) {
+  void Add(std::function<void()> fn, const std::string& fn_name,
+           uint64_t start_after_us, uint64_t repeat_every_us) {
     std::unique_ptr<FunctionInfo> fn_info(
         new FunctionInfo(std::move(fn), fn_name,
                          env_->NowMicros() + start_after_us, repeat_every_us));
@@ -182,7 +181,6 @@ class Timer {
 #endif  // NDEBUG
 
  private:
-
   void Run() {
     InstrumentedMutexLock l(&mutex_);
 
@@ -223,8 +221,8 @@ class Timer {
         // current_fn may be cancelled already.
         if (current_fn->IsValid() && current_fn->repeat_every_us > 0) {
           assert(running_);
-          current_fn->next_run_time_us = env_->NowMicros() +
-              current_fn->repeat_every_us;
+          current_fn->next_run_time_us =
+              env_->NowMicros() + current_fn->repeat_every_us;
 
           // Schedule new work into the heap with new time.
           heap_.push(current_fn);
@@ -282,9 +280,7 @@ class Timer {
           repeat_every_us(_repeat_every_us),
           valid(true) {}
 
-    void Cancel() {
-      valid = false;
-    }
+    void Cancel() { valid = false; }
 
     bool IsValid() const { return valid; }
   };
@@ -298,8 +294,7 @@ class Timer {
   }
 
   struct RunTimeOrder {
-    bool operator()(const FunctionInfo* f1,
-                    const FunctionInfo* f2) {
+    bool operator()(const FunctionInfo* f1, const FunctionInfo* f2) {
       return f1->next_run_time_us > f2->next_run_time_us;
     }
   };
@@ -313,13 +308,12 @@ class Timer {
   bool running_;
   bool executing_task_;
 
-  std::priority_queue<FunctionInfo*,
-                      std::vector<FunctionInfo*>,
-                      RunTimeOrder> heap_;
+  std::priority_queue<FunctionInfo*, std::vector<FunctionInfo*>, RunTimeOrder>
+      heap_;
 
   // In addition to providing a mapping from a function name to a function,
   // it is also responsible for memory management.
   std::unordered_map<std::string, std::unique_ptr<FunctionInfo>> map_;
 };
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE

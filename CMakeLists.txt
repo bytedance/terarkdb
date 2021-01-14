@@ -1025,6 +1025,7 @@ if(WITH_TESTS)
         table/merger_test.cc
         table/sst_file_reader_test.cc
         table/table_test.cc
+        table/terark_zip_table_row_ttl_test.cc
         tools/ldb_cmd_test.cc
         tools/reduce_levels_test.cc
         tools/sst_dump_test.cc

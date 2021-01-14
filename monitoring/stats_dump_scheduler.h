@@ -8,9 +8,10 @@
 #ifndef ROCKSDB_LITE
 
 #include "db/db_impl.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/timer.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // StatsDumpScheduler is a singleton object, which is scheduling/running
 // DumpStats() and PersistStats() for all DB instances. All DB instances uses
@@ -59,6 +60,6 @@ class StatsDumpTestScheduler : public StatsDumpScheduler {
 };
 #endif  // !NDEBUG
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

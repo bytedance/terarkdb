@@ -9,8 +9,9 @@
 #pragma once
 
 #include "rocksdb/stats_history.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class InMemoryStatsHistoryIterator final : public StatsHistoryIterator {
  public:
@@ -54,4 +55,4 @@ class InMemoryStatsHistoryIterator final : public StatsHistoryIterator {
   DBImpl* db_impl_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -6,10 +6,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
-#include "db/db_impl.h"
 #include "monitoring/in_memory_stats_history.h"
 
-namespace rocksdb {
+#include "db/db_impl.h"
+#include "rocksdb/terark_namespace.h"
+
+namespace TERARKDB_NAMESPACE {
 
 InMemoryStatsHistoryIterator::~InMemoryStatsHistoryIterator() {}
 
@@ -42,4 +44,4 @@ void InMemoryStatsHistoryIterator::AdvanceIteratorByTime(uint64_t start_time,
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

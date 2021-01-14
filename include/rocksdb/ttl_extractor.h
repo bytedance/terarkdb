@@ -7,10 +7,11 @@
 #include <string>
 
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/types.h"
 #include "utilities/util/factory.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Slice;
 class Status;
@@ -49,4 +50,4 @@ class TtlExtractorFactory
   }
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

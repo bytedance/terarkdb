@@ -6,10 +6,11 @@
 #include "db/periodic_work_scheduler.h"
 
 #include "db/db_impl.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/cast_util.h"
 
 #ifndef ROCKSDB_LITE
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 PeriodicWorkScheduler::PeriodicWorkScheduler(Env* env) {
   timer = std::unique_ptr<Timer>(new Timer(env));
@@ -42,7 +43,7 @@ void PeriodicWorkScheduler::Register(DBImpl* dbi,
   timer->Add([dbi]() { dbi->ScheduleGCTTL(); },
              GetTaskName(dbi, "schedule_gc_ttl"),
              initial_delay.fetch_add(1) % kDefaultScheduleGCTTLPeriodSec *
-             kMicrosInSecond,
+                 kMicrosInSecond,
              kDefaultScheduleGCTTLPeriodSec * kMicrosInSecond);
 }
 
@@ -109,6 +110,6 @@ PeriodicWorkTestScheduler::PeriodicWorkTestScheduler(Env* env)
     : PeriodicWorkScheduler(env) {}
 
 #endif  // !NDEBUG
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE
