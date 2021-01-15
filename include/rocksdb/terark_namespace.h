@@ -4,7 +4,11 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #pragma once
-
-#ifndef TERARKDB_NAMESPACE
-#define TERARKDB_NAMESPACE terarkdb
-#endif
+#define TERARKDB_NAMESPACE rocksdb
+// #ifdef ROCKSDB_WITH_NAMESPACE
+// #define TERARKDB_NAMESPACE rocksdb
+// #else
+// #ifdef TERARKDB_WITH_NAMESPACE
+// #define TERARKDB_NAMESPACE terarkdb
+// #endif
+// #endif
