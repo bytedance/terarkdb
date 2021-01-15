@@ -888,7 +888,7 @@ Status DBImpl::GetStatsHistory(
 void DBImpl::ScheduleTtlGC() {
   TEST_SYNC_POINT("DBImpl:ScheduleTtlGC");
   uint64_t nowSeconds = env_->NowMicros() / 1000U / 1000U;
-  LogBuffer log_buffer_info(InfoLogLevel::DEBUG_LEVEL,
+  LogBuffer log_buffer_info(InfoLogLevel::INFO_LEVEL,
                             immutable_db_options_.info_log.get());
   LogBuffer log_buffer_debug(InfoLogLevel::DEBUG_LEVEL,
                              immutable_db_options_.info_log.get());
