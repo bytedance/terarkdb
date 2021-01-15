@@ -16,7 +16,7 @@ class DBImplGCTTL_Test : public DBTestBase {
   DBImplGCTTL_Test()
       : DBTestBase("./db_GC_ttl_test"),
         mock_env_(new MockTimeEnv(Env::Default())) {}
-  ~DBImplGCTTL_Test() { Close(); }
+  ~DBImplGCTTL_Test() override { Close(); }
   void init() {
     dbname = test::PerThreadDBPath("ttl_gc_test");
     DestroyDB(dbname, options);
@@ -84,12 +84,12 @@ class DBImplGCTTL_Test : public DBTestBase {
               PeriodicWorkTestScheduler::Default(mock_env_.get());
         });
     TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
-        "DBImpl:ScheduleGCTTL", [&](void* /*arg*/) {
+        "DBImpl:ScheduleTtlGC", [&](void* /*arg*/) {
           mark = 0;
           flag = true;
         });
     TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
-        "DBImpl:ScheduleGCTTL-mark", [&](void* /*arg*/) { mark++; });
+        "DBImpl:ScheduleTtlGC-mark", [&](void* /*arg*/) { mark++; });
     TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
         "DBImpl:Exist-SST", [&](void* /*arg*/) { cnt++; });
   }

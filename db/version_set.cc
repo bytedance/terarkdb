@@ -1812,6 +1812,11 @@ void VersionStorageInfo::ComputeFilesMarkedForCompaction() {
   }
 }
 
+void VersionStorageInfo::AddFilesMarkedForCompaction(int level,
+                                                     FileMetaData* meta) {
+  files_marked_for_compaction_.emplace_back(level, meta);
+}
+
 void VersionStorageInfo::ComputeExpiredTtlFiles(
     const ImmutableCFOptions& ioptions, const uint64_t ttl) {
   assert(ttl > 0);

@@ -40,7 +40,7 @@ void PeriodicWorkScheduler::Register(DBImpl* dbi,
              initial_delay.fetch_add(1) % kDefaultFlushInfoLogPeriodSec *
                  kMicrosInSecond,
              kDefaultFlushInfoLogPeriodSec * kMicrosInSecond);
-  timer->Add([dbi]() { dbi->ScheduleGCTTL(); },
+  timer->Add([dbi]() { dbi->ScheduleTtlGC(); },
              GetTaskName(dbi, "schedule_gc_ttl"),
              initial_delay.fetch_add(1) % kDefaultScheduleGCTTLPeriodSec *
                  kMicrosInSecond,
@@ -83,7 +83,7 @@ PeriodicWorkTestScheduler* PeriodicWorkTestScheduler::Default(Env* env) {
   static port::Mutex mutex;
   {
     MutexLock l(&mutex);
-    if (scheduler.timer.get() != nullptr &&
+    if (scheduler.timer != nullptr &&
         scheduler.timer->TEST_GetPendingTaskNum() == 0) {
       scheduler.timer->Shutdown();
       scheduler.timer.reset(new Timer(env));
@@ -95,7 +95,7 @@ PeriodicWorkTestScheduler* PeriodicWorkTestScheduler::Default(Env* env) {
 void PeriodicWorkTestScheduler::TEST_WaitForRun(
     std::function<void()> callback) const {
   if (timer != nullptr) {
-    timer->TEST_WaitForRun(callback);
+    timer->TEST_WaitForRun(std::move(callback));
   }
 }
 

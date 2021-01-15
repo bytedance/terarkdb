@@ -48,7 +48,7 @@ class PeriodicWorkScheduler {
   explicit PeriodicWorkScheduler(Env* env);
 
  private:
-  std::string GetTaskName(DBImpl* dbi, const std::string& func_name);
+  static std::string GetTaskName(DBImpl* dbi, const std::string& func_name);
 };
 
 #ifndef NDEBUG

@@ -795,8 +795,7 @@ class DBImpl : public DB {
   // flush LOG out of application buffer
   void FlushInfoLog();
 
-  void ScheduleGCTTL();
-
+  void ScheduleTtlGC();
  protected:
   Env* const env_;
   const std::string dbname_;
