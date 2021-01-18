@@ -211,8 +211,8 @@ struct AdvancedColumnFamilyOptions {
   // set by the user.  Otherwise, the default is 0.
   int max_write_buffer_number_to_maintain = 0;
 
-  // LazyCompaction
-  bool enable_lazy_compaction = true;
+  // LazyCompaction, default false
+  bool enable_lazy_compaction = false;
 
   // Read TableProperties from file if false
   bool pin_table_properties_in_reader = true;
