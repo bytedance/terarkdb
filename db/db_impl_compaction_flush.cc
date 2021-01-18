@@ -745,6 +745,24 @@ Status DBImpl::CompactRange(const CompactRangeOptions& options,
       }
       TEST_SYNC_POINT("DBImpl::RunManualCompaction()::1");
       TEST_SYNC_POINT("DBImpl::RunManualCompaction()::2");
+      while (cfd->ioptions()->enable_lazy_compaction) {
+        int bottommost_level;
+        {
+          InstrumentedMutexLock l(&mutex_);
+          bottommost_level =
+              cfd->current()->storage_info()->num_non_empty_levels() - 1;
+        }
+        if (max_level_with_files >= bottommost_level) {
+          break;
+        }
+        do {
+          ++max_level_with_files;
+          s = RunManualCompaction(cfd, max_level_with_files,
+                                  max_level_with_files, options.target_path_id,
+                                  options.max_subcompactions, begin, end,
+                                  &files_being_compact, exclusive, false);
+        } while (max_level_with_files < bottommost_level);
+      }
     }
   }
   if (!s.ok()) {
