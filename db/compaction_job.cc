@@ -880,13 +880,22 @@ Status CompactionJob::Run() {
           output.meta.prop.read_amp = tp->read_amp;
           output.meta.prop.dependence = tp->dependence;
           output.meta.prop.inheritance_chain = tp->inheritance_chain;
-          output.meta.prop.ratio_expire_time = tp->ratio_expire_time;
-          output.meta.prop.scan_gap_expire_time = tp->scan_gap_expire_time;
-          // ROCKS_LOG_INFO(db_options_.info_log,
-          //                "ratio:%" PRIu64 ", scan:%" PRIu64,
-          //                tp->ratio_expire_time, tp->scan_gap_expire_time);
-          output.finished = true;
-          c->AddOutputTableFileNumber(file_number);
+          if (iopt->ttl_extractor_factory != nullptr) {
+            output.meta.prop.ratio_expire_time = DecodeFixed64(
+                tp->user_collected_properties
+                    .find(TablePropertiesNames::kEarliestTimeBeginCompact)
+                    ->second.c_str());
+            output.meta.prop.scan_gap_expire_time = DecodeFixed64(
+                tp->user_collected_properties
+                    .find(TablePropertiesNames::kLatestTimeEndCompact)
+                    ->second.c_str());
+            ROCKS_LOG_INFO(db_options_.info_log,
+                           "compaction_run ratio:%" PRIu64 ", scan:%" PRIu64,
+                           output.meta.prop.ratio_expire_time,
+                           output.meta.prop.scan_gap_expire_time);
+            output.finished = true;
+            c->AddOutputTableFileNumber(file_number);
+          }
         }
         if (s.ok()) {
           sub_compact.actual_start = std::move(result.actual_start);
@@ -2122,9 +2131,9 @@ Status CompactionJob::FinishCompactionOutputFile(
           DecodeFixed64(tp.user_collected_properties
                             .find(TablePropertiesNames::kLatestTimeEndCompact)
                             ->second.c_str());
-      ROCKS_LOG_INFO(db_options_.info_log, "ratio:%" PRIu64 ", scan:%" PRIu64,
-                     meta->prop.ratio_expire_time,
-                     meta->prop.scan_gap_expire_time);
+      ROCKS_LOG_INFO(
+          db_options_.info_log, "fcof: ratio:%" PRIu64 ", scan:%" PRIu64,
+          meta->prop.ratio_expire_time, meta->prop.scan_gap_expire_time);
     }
   }
 
