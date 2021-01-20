@@ -3122,8 +3122,8 @@ Status VersionSet::ProcessManifestWrites(
 
   {
     EnvOptions opt_env_opts = env_->OptimizeForManifestWrite(env_options_);
-    mu->Unlock();
 
+    mu->Unlock();
     if (!first_writer.edit_list.front()->IsColumnFamilyManipulation()) {
       for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
         assert(!builder_guards.empty() &&
@@ -3226,6 +3226,7 @@ Status VersionSet::ProcessManifestWrites(
 
     LogFlush(db_options_->info_log);
     TEST_SYNC_POINT("VersionSet::LogAndApply:WriteManifestDone");
+    TEST_SYNC_POINT_CALLBACK("db_impl.cc:DeleteFile:Pass Check",nullptr);
     mu->Lock();
   }
 

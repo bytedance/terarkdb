@@ -20,14 +20,13 @@
 #include "db/write_batch_internal.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/transaction_log.h"
 #include "util/filename.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
-
-#include "rocksdb/terark_namespace.h"
 namespace TERARKDB_NAMESPACE {
 
 class DeleteFileTest : public testing::Test {
@@ -165,6 +164,52 @@ class DeleteFileTest : public testing::Test {
   }
 };
 
+//./deletefile_test --gtest_filter=DeleteFileTest.DeleteFileAfterCompact
+TEST_F(DeleteFileTest, DeleteFileAfterCompact) {
+  int cnt = 0;
+  std::string level2file = "";
+//  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
+//      "db_impl.cc:DeleteFile:Pass Check", [&](void* /*arg*/) {
+//        if(level2file == "") return;
+//        cnt++;
+////        if(cnt > 1) return;
+//        std::cout <<__LINE__ << level2file << std::endl;
+//        fprintf(stdout, "execute global compact  %s %d\n", dbname_.c_str(),cnt);
+//        Status status = db_->DeleteFile(level2file);
+//        fprintf(stdout, "%s Deletion status %s: %s\n",__LINE__, level2file.c_str(),
+//    status.ToString().c_str());
+//      });
+//    TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
+  DBImpl* dbi = reinterpret_cast<DBImpl*>(db_);
+  WriteOptions options;
+  options.sync = false;
+  for (int k = 0; k < 2; k++) {
+    for (int i = 0; i < 50000; i++) {
+      std::string temp = ToString(rand());
+      Slice key(temp);
+      Slice value(temp);
+      ASSERT_OK(db_->Put(options, key, value));
+    }
+    ASSERT_OK(dbi->TEST_FlushMemTable());
+    ASSERT_OK(dbi->TEST_WaitForFlushMemTable());
+  }
+  dbi->TEST_WaitForCompact();
+  std::cout << dbname_ << std::endl;
+  std::vector<LiveFileMetaData> metadata;
+  db_->GetLiveFilesMetaData(&metadata);
+  std::cout << metadata.size() << std::endl;
+  level2file = metadata[1].name;
+  std::cout <<__LINE__ << level2file << std::endl;
+  std::thread t1 = std::thread([&](){
+    Status status = db_->DeleteFile(level2file);
+  });
+  Status status = db_->DeleteFile(level2file);
+  t1.join();
+  fprintf(stdout, "Deletion status %s: %s\n", level2file.c_str(),
+          status.ToString().c_str());
+  CloseDB();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
+}
 TEST_F(DeleteFileTest, AddKeysAndQueryLevels) {
   CreateTwoLevels();
   std::vector<LiveFileMetaData> metadata;
