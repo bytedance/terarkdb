@@ -893,17 +893,17 @@ void DBImpl::ScheduleTtlGC() {
   LogBuffer log_buffer_debug(InfoLogLevel::DEBUG_LEVEL,
                              immutable_db_options_.info_log.get());
 
-  auto should_marked_for_compacted = [&](uint64_t file_number,
+  auto should_marked_for_compacted = [&](int level, uint64_t file_number,
                                          uint64_t ratio_expire_time,
                                          uint64_t scan_gap_expire_time,
                                          uint64_t now) {
     bool should_mark = std::min(ratio_expire_time, scan_gap_expire_time) <= now;
     if (should_mark) {
       ROCKS_LOG_BUFFER(&log_buffer_info,
-                       "SST Table property id = %" PRIu64 ", info : (%" PRIu64
-                       " , %" PRIu64 ") now = %" PRIu64,
-                       file_number, ratio_expire_time, scan_gap_expire_time,
-                       now);
+                       "SST Table property level=%d file-id = %" PRIu64
+                       ", info : (%" PRIu64 " , %" PRIu64 ") now = %" PRIu64,
+                       level, file_number, ratio_expire_time,
+                       scan_gap_expire_time, now);
     }
     return should_mark;
   };
@@ -920,20 +920,21 @@ void DBImpl::ScheduleTtlGC() {
     VersionStorageInfo* vstorage = cfd->current()->storage_info();
     for (int l = 0; l < vstorage->num_non_empty_levels(); l++) {
       for (auto meta : vstorage->LevelFiles(l)) {
-        ++total_cnt;
-        mark_count += meta->marked_for_compaction;
         if (meta->being_compacted) {
           continue;
         }
+        ++total_cnt;
+        marked_count += meta->marked_for_compaction;
         TEST_SYNC_POINT("DBImpl:Exist-SST");
         if (!meta->marked_for_compaction &&
             should_marked_for_compacted(
-                meta->fd.GetNumber(), meta->prop.ratio_expire_time,
+                l, meta->fd.GetNumber(), meta->prop.ratio_expire_time,
                 meta->prop.scan_gap_expire_time, nowSeconds)) {
           meta->marked_for_compaction = true;
           vstorage->AddFilesMarkedForCompaction(l, meta);
         }
         if (meta->marked_for_compaction) {
+          mark_count++;
           TEST_SYNC_POINT("DBImpl:ScheduleTtlGC-mark");
         }
       }

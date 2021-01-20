@@ -1814,7 +1814,12 @@ void VersionStorageInfo::ComputeFilesMarkedForCompaction() {
 
 void VersionStorageInfo::AddFilesMarkedForCompaction(int level,
                                                      FileMetaData* meta) {
-  files_marked_for_compaction_.emplace_back(level, meta);
+  if (level < num_non_empty_levels_ - 1) {
+    files_marked_for_compaction_.emplace_back(level, meta);
+  } else {
+    assert(level == num_non_empty_levels_ - 1);
+    bottommost_files_marked_for_compaction_.emplace_back(level, meta);
+  }
 }
 
 void VersionStorageInfo::ComputeExpiredTtlFiles(
