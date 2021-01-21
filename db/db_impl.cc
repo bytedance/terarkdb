@@ -2979,6 +2979,7 @@ Status DBImpl::DeleteFile(std::string name) {
       job_context.Clean(nullptr);
       return Status::InvalidArgument("File in level 0, but not oldest");
     }
+    metadata->being_compacted = true;
     edit.SetColumnFamily(cfd->GetID());
     edit.DeleteFile(level, number);
     status = versions_->LogAndApply(cfd, *cfd->GetLatestMutableCFOptions(),
@@ -2988,6 +2989,7 @@ Status DBImpl::DeleteFile(std::string name) {
           cfd, &job_context.superversion_contexts[0],
           *cfd->GetLatestMutableCFOptions(), FlushReason::kDeleteFiles);
     }
+    metadata->being_compacted = false;
     FindObsoleteFiles(&job_context, false);
   }  // lock released here
 
