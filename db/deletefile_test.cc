@@ -254,6 +254,93 @@ TEST_F(DeleteFileTest, DeleteFileIssue) {
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
 }
 
+TEST_F(DeleteFileTest, DeleteFileIssue2) {
+  // 1. delete file 0
+  // 2. VersionSet::LogAndApply:num_edits to start compaction file 0  and main
+  // thread stoped at "WriteManifestDone" and next to get Lock to edit version
+  // 2. WriteManifestDone  start a thread
+  // 3. wait compaction thread trigger edit and touch
+  // DeleteFileTest::DeleteFileIssue:3
+  // 4. main thread to write Manifest
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->LoadDependency(
+      {{"DeleteFileTest::DeleteFileIssue:1",
+        "DeleteFileTest::DeleteFileIssue:2"},
+       {"DeleteFileTest::DeleteFileIssue:3",
+        "VersionSet::LogAndApply:WriteManifestDone"}});
+
+  std::atomic<uint64_t> write_manifest_count{0};
+  std::atomic<uint64_t> delete_file_count{0};
+  std::atomic<uint64_t> delete_file_fail_count{0};
+  std::atomic<uint64_t> delete_file_thread_finished{0};
+
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
+      "VersionSet::LogAndApply:num_edits", [&](void* arg) {
+        int* num_edits = reinterpret_cast<int*>(arg);
+        if ((delete_file_count += *num_edits) > 1) {
+          TEST_SYNC_POINT("DeleteFileTest::DeleteFileIssue:3");
+        }
+        std::cout << "VersionSet::LogAndApply:num_edits " << delete_file_count
+                  << std::endl;
+      });
+
+  DBImpl* dbi = reinterpret_cast<DBImpl*>(db_);
+  WriteOptions options;
+  options.sync = false;
+  for (int k = 0; k < 2; k++) {
+    ASSERT_OK(db_->Put(WriteOptions(), db_->DefaultColumnFamily(),
+                       std::to_string(k), ""));
+    ASSERT_OK(dbi->TEST_FlushMemTable());
+  }
+  ASSERT_OK(dbi->TEST_WaitForFlushMemTable());
+
+  auto get_all_files = [&] {
+    ColumnFamilyMetaData cfmd;
+    db_->GetColumnFamilyMetaData(db_->DefaultColumnFamily(), &cfmd);
+
+    std::vector<std::string> file_name_vec;
+
+    for (auto it = cfmd.levels.rbegin(); it != cfmd.levels.rend(); it++) {
+      for (auto it2 = it->files.rbegin(); it2 != it->files.rend(); it2++) {
+        file_name_vec.emplace_back(it2->name);
+      }
+    }
+    return file_name_vec;
+  };
+  std::vector<std::string> file_name_vec = get_all_files();
+  CompactionOptions co;
+
+  ASSERT_EQ(file_name_vec.size(), 2);
+  db_->CompactFiles(co, db_->DefaultColumnFamily(), {file_name_vec[0]}, 1);
+  db_->CompactFiles(co, db_->DefaultColumnFamily(), {file_name_vec[1]}, 1);
+
+  file_name_vec = get_all_files();
+  ASSERT_EQ(file_name_vec.size(), 2);
+
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
+      "VersionSet::LogAndApply:WriteManifest", [&](void* /*arg*/) {
+        if (write_manifest_count++ == 0) {
+          std::thread([&]() {
+            auto s = db_->CompactFiles(co, db_->DefaultColumnFamily(),
+                                       {file_name_vec[0]}, 2);
+            ASSERT_OK(db_->Put(WriteOptions(), db_->DefaultColumnFamily(), "a", ""));
+            std::cout << __LINE__ << " " << s.ToString() << std::endl;
+            TEST_SYNC_POINT("DeleteFileTest::DeleteFileIssue:1");
+          }).detach();
+        }
+      });
+
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
+
+  Status status = db_->DeleteFile(file_name_vec[0]);
+
+  TEST_SYNC_POINT("DeleteFileTest::DeleteFileIssue:2");
+
+  ASSERT_OK(db_->Put(WriteOptions(), db_->DefaultColumnFamily(), "a", ""));
+
+  CloseDB();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
+}
+
 TEST_F(DeleteFileTest, AddKeysAndQueryLevels) {
   CreateTwoLevels();
   std::vector<LiveFileMetaData> metadata;
