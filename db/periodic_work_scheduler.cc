@@ -11,13 +11,14 @@
 #ifndef ROCKSDB_LITE
 namespace TERARKDB_NAMESPACE {
 
-PeriodicWorkScheduler::PeriodicWorkScheduler(Env* env) {
+PeriodicWorkScheduler::PeriodicWorkScheduler(Env* env) : timer_mu_(env) {
   timer = std::unique_ptr<Timer>(new Timer(env));
 }
 
 void PeriodicWorkScheduler::Register(DBImpl* dbi,
                                      unsigned int stats_dump_period_sec,
                                      unsigned int stats_persist_period_sec) {
+  MutexLock l(&timer_mu_);
   static std::atomic<uint64_t> initial_delay(0);
   timer->Start();
   if (stats_dump_period_sec > 0) {
@@ -47,6 +48,7 @@ void PeriodicWorkScheduler::Register(DBImpl* dbi,
 }
 
 void PeriodicWorkScheduler::Unregister(DBImpl* dbi) {
+  MutexLock l(&timer_mu_);
   timer->Cancel(GetTaskName(dbi, "dump_st"));
   timer->Cancel(GetTaskName(dbi, "pst_st"));
   timer->Cancel(GetTaskName(dbi, "flush_info_log"));
@@ -84,7 +86,10 @@ PeriodicWorkTestScheduler* PeriodicWorkTestScheduler::Default(Env* env) {
     MutexLock l(&mutex);
     if (scheduler.timer != nullptr &&
         scheduler.timer->TEST_GetPendingTaskNum() == 0) {
-      scheduler.timer->Shutdown();
+      {
+        MutexLock timer_mu_guard(&scheduler.timer_mu_);
+        scheduler.timer->Shutdown();
+      }
       scheduler.timer.reset(new Timer(env));
     }
   }

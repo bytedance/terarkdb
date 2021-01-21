@@ -24,6 +24,9 @@ namespace TERARKDB_NAMESPACE {
 
 // A Timer class to handle repeated work.
 //
+// `Start()` and `Shutdown()` are currently not thread-safe. The client must
+// serialize calls to these two member functions.
+//
 // A single timer instance can handle multiple functions via a single thread.
 // It is better to leave long running work to a dedicated thread pool.
 //
