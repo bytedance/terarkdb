@@ -414,14 +414,6 @@ TEST_F(VersionBuilderTest, EstimatedActiveKeys) {
   ASSERT_EQ(vstorage_.GetEstimatedActiveKeys(),
             (kEntriesPerFile - kDeletionsPerFile) * kNumFiles);
 }
-TEST_F(VersionBuilderTest, DeleteFile) {
-  UpdateVersionStorageInfo();
-
-  EnvOptions env_options;
-  VersionBuilder version_builder(env_options, nullptr, &vstorage_);
-  version_builder.CheckConsistencyForDeletes(nullptr,1,0);
-
-}
 
 }  // namespace TERARKDB_NAMESPACE
 

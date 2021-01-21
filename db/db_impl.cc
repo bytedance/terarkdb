@@ -100,8 +100,6 @@
 #if !defined(_MSC_VER) && !defined(__APPLE__)
 #include <sys/unistd.h>
 
-
-
 #endif
 #include "utilities/util/valvec.hpp"
 
@@ -112,15 +110,15 @@
 
 #ifdef WITH_TERARK_ZIP
 #include <table/terark_zip_table.h>
-#include <terark/util/fiber_pool.hpp>
+
 #include <terark/thread/fiber_yield.hpp>
+#include <terark/util/fiber_pool.hpp>
 #endif
 
 #ifdef BOOSTLIB
 #include <boost/fiber/all.hpp>
 #endif
 //#include <boost/context/pooled_fixedsize_stack.hpp>
-
 
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
@@ -2736,6 +2734,7 @@ Status DBImpl::DeleteFile(std::string name) {
                      name.c_str());
       mutex_.AssertHeld();
       job_context.Clean(nullptr);
+      TEST_SYNC_POINT_CALLBACK("DBImpl::DeleteFile:being_compacted", metadata);
       return Status::OK();
     }
 
@@ -2764,6 +2763,7 @@ Status DBImpl::DeleteFile(std::string name) {
       job_context.Clean(nullptr);
       return Status::InvalidArgument("File in level 0, but not oldest");
     }
+    metadata->being_compacted = true;
     edit.SetColumnFamily(cfd->GetID());
     edit.DeleteFile(level, number);
     status = versions_->LogAndApply(cfd, *cfd->GetLatestMutableCFOptions(),
@@ -2773,6 +2773,7 @@ Status DBImpl::DeleteFile(std::string name) {
           cfd, &job_context.superversion_contexts[0],
           *cfd->GetLatestMutableCFOptions(), FlushReason::kDeleteFiles);
     }
+    metadata->being_compacted = false;
     FindObsoleteFiles(&job_context, false);
   }  // lock released here
 
@@ -3995,7 +3996,8 @@ Status DBImpl::VerifyChecksum() {
         const auto& fd = vstorage->LevelFiles(i)[j]->fd;
         std::string fname = TableFileName(cfd->ioptions()->cf_paths,
                                           fd.GetNumber(), fd.GetPathId());
-        s = TERARKDB_NAMESPACE::VerifySstFileChecksum(opts, env_options_, fname);
+        s = TERARKDB_NAMESPACE::VerifySstFileChecksum(opts, env_options_,
+                                                      fname);
       }
     }
     if (!s.ok()) {

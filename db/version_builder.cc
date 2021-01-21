@@ -463,40 +463,7 @@ class VersionBuilder::Rep {
       return;
     }
 #endif
-    // a file to be deleted better exist in the previous version
-    bool found = false;
-    for (int l = -1; !found && l < num_levels_; l++) {
-      const std::vector<FileMetaData*>& base_files =
-          base_vstorage_->LevelFiles(l);
-      for (size_t i = 0; i < base_files.size(); i++) {
-        FileMetaData* f = base_files[i];
-        if (f->fd.GetNumber() == number) {
-          found = true;
-          break;
-        }
-      }
-    }
-    // if the file did not exist in the previous version, then it
-    // is possibly moved from lower level to higher level in current
-    // version
-    for (int l = level + 1; !found && l < num_levels_; l++) {
-      auto& level_added = levels_[l];
-      auto got = level_added.find(number);
-      if (got != level_added.end()) {
-        found = true;
-        break;
-      }
-    }
-
-    // maybe this file was added in a previous edit that was Applied
-    if (!found) {
-      auto& level_added = levels_[level];
-      auto got = level_added.find(number);
-      if (got != level_added.end()) {
-        found = true;
-      }
-    }
-    if (!found) {
+    if (levels_[level].count(number) == 0) {
       fprintf(stderr, "not found %" PRIu64 "\n", number);
       abort();
     }
