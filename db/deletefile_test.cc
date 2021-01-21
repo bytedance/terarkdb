@@ -255,6 +255,7 @@ TEST_F(DeleteFileTest, DeleteFileIssue) {
 }
 
 TEST_F(DeleteFileTest, DeleteFileIssue2) {
+  std::cout << __LINE__ << " " << dbname_ << std::endl;
   // 1. delete file 0
   // 2. VersionSet::LogAndApply:num_edits to start compaction file 0  and main
   // thread stoped at "WriteManifestDone" and next to get Lock to edit version
@@ -316,19 +317,29 @@ TEST_F(DeleteFileTest, DeleteFileIssue2) {
   file_name_vec = get_all_files();
   ASSERT_EQ(file_name_vec.size(), 2);
 
+  for (int i = 0; i < 4; ++i) {
+    ASSERT_OK(db_->Put(WriteOptions(), db_->DefaultColumnFamily(),
+                       std::to_string(1), "xx"));
+    ASSERT_OK(dbi->TEST_FlushMemTable());
+  }
+  ASSERT_OK(dbi->TEST_WaitForFlushMemTable());
+
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "VersionSet::LogAndApply:WriteManifest", [&](void* /*arg*/) {
         if (write_manifest_count++ == 0) {
           std::thread([&]() {
-            auto s = db_->CompactFiles(co, db_->DefaultColumnFamily(),
-                                       {file_name_vec[0]}, 2);
-            ASSERT_OK(db_->Put(WriteOptions(), db_->DefaultColumnFamily(), "a", ""));
+            auto s = db_->SuggestCompactRange(db_->DefaultColumnFamily(),
+                                              nullptr, nullptr);
             std::cout << __LINE__ << " " << s.ToString() << std::endl;
+            DBImpl* dbi = reinterpret_cast<DBImpl*>(db_);
+            s = dbi->TEST_WaitForCompact();
+            std::cout << __LINE__ << " " << s.ToString() << std::endl;
+            ASSERT_OK(
+                db_->Put(WriteOptions(), db_->DefaultColumnFamily(), "a", ""));
             TEST_SYNC_POINT("DeleteFileTest::DeleteFileIssue:1");
           }).detach();
         }
       });
-
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
 
   Status status = db_->DeleteFile(file_name_vec[0]);
