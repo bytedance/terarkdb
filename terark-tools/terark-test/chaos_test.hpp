@@ -18,6 +18,7 @@ namespace gujia {
 typedef struct epoll_event Event;
 }
 
+#include <cache/lru_cache.h>
 #include <rocksdb/compaction_filter.h>
 #include <rocksdb/convenience.h>
 #include <rocksdb/db.h>

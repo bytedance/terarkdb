@@ -61,6 +61,10 @@ struct LRUCacheOptions {
   // BlockBasedTableOptions::cache_index_and_filter_blocks_with_high_priority.
   double high_pri_pool_ratio = 0.0;
 
+  bool is_diagnose = false;
+
+  size_t topk = 10;
+
   // If non-nullptr will use this allocator instead of system allocator when
   // allocating memory for cache blocks. Call this method before you start using
   // the cache!
@@ -109,7 +113,8 @@ struct LIRSCacheOptions {
 extern std::shared_ptr<Cache> NewLRUCache(
     size_t capacity, int num_shard_bits = -1,
     bool strict_capacity_limit = false, double high_pri_pool_ratio = 0.0,
-    std::shared_ptr<MemoryAllocator> memory_allocator = nullptr);
+    std::shared_ptr<MemoryAllocator> memory_allocator = nullptr,
+    bool is_diagnose = false, size_t topk = 10);
 
 extern std::shared_ptr<Cache> NewLRUCache(const LRUCacheOptions& cache_opts);
 
