@@ -41,6 +41,19 @@ class ChaosTest {
 
   ~ChaosTest() {}
 
+  void DumpCacheStatistics() {
+    auto dcache = dynamic_cast<DiagnosableLRUCache *>(bbto.block_cache.get());
+    if (dcache == nullptr) {
+      return;
+    }
+    while (true) {
+      auto info = dcache->DumpLRUCacheStatistics();
+      std::cout << info << std::endl;
+      using namespace std::chrono;
+      std::this_thread::sleep_for(60s);
+    }
+  }
+
   void set_options() {
     options.atomic_flush = false;
     options.allow_mmap_reads = false;
@@ -115,7 +128,8 @@ class ChaosTest {
     bbto.pin_top_level_index_and_filter = true;
     bbto.pin_l0_filter_and_index_blocks_in_cache = true;
     bbto.filter_policy.reset(NewBloomFilterPolicy(10, true));
-    bbto.block_cache = NewLRUCache(4ULL << 30, 6, false);
+    //bbto.block_cache = NewLRUCache(4ULL << 30, 6, false);
+    bbto.block_cache = NewLRUCache(4ULL << 30, 6, false, 0.0, nullptr, true);
 
     options.compaction_pri = kMinOverlappingRatio;
     options.compression = kZSTD;
@@ -793,6 +807,8 @@ class ChaosTest {
       options.compaction_style = rocksdb::kCompactionStyleLevel;
       options.write_buffer_size = size_t(file_size_base / 1.1);
       options.enable_lazy_compaction = true;
+      //bbto.block_cache = NewLRUCache(4ULL << 30, 6, false);
+      options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(bbto));
       cfDescriptors.emplace_back("level" + std::to_string(i), options);
     }
     if (flags_ & TestWorker) {
@@ -968,6 +984,7 @@ int main(int argc, char **argv) {
   for (int j = 0; j < write_thread; ++j) {
     thread_vec.emplace_back([&test, j] { test.WriteFunc(j); });
   }
+  thread_vec.emplace_back([&test]() { test.DumpCacheStatistics(); });
   for (auto &t : thread_vec) {
     t.join();
   }
