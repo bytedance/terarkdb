@@ -16,6 +16,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+
 #include <string>
 
 #include "util/mutexlock.h"
@@ -99,11 +100,11 @@ void LRUHandleTable::Resize() {
   length_ = new_length;
 }
 
-LRUCacheShard::LRUCacheShard(size_t capacity, bool strict_capacity_limit,
-                             double high_pri_pool_ratio)
-    : high_pri_pool_usage_(0),
-      usage_(0),
-      lru_usage_(0),
+template <class CacheMonitor>
+LRUCacheShardTemplate<CacheMonitor>::LRUCacheShardTemplate(
+    size_t capacity, bool strict_capacity_limit, double high_pri_pool_ratio,
+    const typename CacheMonitor::Options& options)
+    : CacheMonitor(options),
       capacity_(0),
       strict_capacity_limit_(strict_capacity_limit),
       high_pri_pool_ratio_(high_pri_pool_ratio),
@@ -115,9 +116,11 @@ LRUCacheShard::LRUCacheShard(size_t capacity, bool strict_capacity_limit,
   SetCapacity(capacity);
 }
 
-LRUCacheShard::~LRUCacheShard() {}
+template <class CacheMonitor>
+LRUCacheShardTemplate<CacheMonitor>::~LRUCacheShardTemplate() {}
 
-bool LRUCacheShard::Unref(LRUHandle* e) {
+template <class CacheMonitor>
+bool LRUCacheShardTemplate<CacheMonitor>::Unref(LRUHandle* e) {
   assert(e->refs > 0);
   e->refs--;
   return e->refs == 0;
@@ -125,7 +128,8 @@ bool LRUCacheShard::Unref(LRUHandle* e) {
 
 // Call deleter and free
 
-void LRUCacheShard::EraseUnRefEntries() {
+template <class CacheMonitor>
+void LRUCacheShardTemplate<CacheMonitor>::EraseUnRefEntries() {
   autovector<LRUHandle*> last_reference_list;
   {
     MutexLock l(&mutex_);
@@ -148,8 +152,9 @@ void LRUCacheShard::EraseUnRefEntries() {
   }
 }
 
-void LRUCacheShard::ApplyToAllCacheEntries(void (*callback)(void*, size_t),
-                                           bool thread_safe) {
+template <class CacheMonitor>
+void LRUCacheShardTemplate<CacheMonitor>::ApplyToAllCacheEntries(
+    void (*callback)(void*, size_t), bool thread_safe) {
   if (thread_safe) {
     mutex_.Lock();
   }
@@ -160,12 +165,15 @@ void LRUCacheShard::ApplyToAllCacheEntries(void (*callback)(void*, size_t),
   }
 }
 
-void LRUCacheShard::TEST_GetLRUList(LRUHandle** lru, LRUHandle** lru_low_pri) {
+template <class CacheMonitor>
+void LRUCacheShardTemplate<CacheMonitor>::TEST_GetLRUList(
+    LRUHandle** lru, LRUHandle** lru_low_pri) {
   *lru = &lru_;
   *lru_low_pri = lru_low_pri_;
 }
 
-size_t LRUCacheShard::TEST_GetLRUSize() {
+template <class CacheMonitor>
+size_t LRUCacheShardTemplate<CacheMonitor>::TEST_GetLRUSize() {
   LRUHandle* lru_handle = lru_.next;
   size_t lru_size = 0;
   while (lru_handle != &lru_) {
@@ -175,12 +183,14 @@ size_t LRUCacheShard::TEST_GetLRUSize() {
   return lru_size;
 }
 
-double LRUCacheShard::GetHighPriPoolRatio() {
+template <class CacheMonitor>
+double LRUCacheShardTemplate<CacheMonitor>::GetHighPriPoolRatio() {
   MutexLock l(&mutex_);
   return high_pri_pool_ratio_;
 }
 
-void LRUCacheShard::LRU_Remove(LRUHandle* e) {
+template <class CacheMonitor>
+void LRUCacheShardTemplate<CacheMonitor>::LRU_Remove(LRUHandle* e) {
   assert(e->next != nullptr);
   assert(e->prev != nullptr);
   if (lru_low_pri_ == e) {
@@ -196,7 +206,8 @@ void LRUCacheShard::LRU_Remove(LRUHandle* e) {
   }
 }
 
-void LRUCacheShard::LRU_Insert(LRUHandle* e) {
+template <class CacheMonitor>
+void LRUCacheShardTemplate<CacheMonitor>::LRU_Insert(LRUHandle* e) {
   assert(e->next == nullptr);
   assert(e->prev == nullptr);
   if (high_pri_pool_ratio_ > 0 && (e->IsHighPri() || e->HasHit())) {
@@ -221,7 +232,8 @@ void LRUCacheShard::LRU_Insert(LRUHandle* e) {
   LRUUsageAdd(e);
 }
 
-void LRUCacheShard::MaintainPoolSize() {
+template <class CacheMonitor>
+void LRUCacheShardTemplate<CacheMonitor>::MaintainPoolSize() {
   while (high_pri_pool_usage_ > high_pri_pool_capacity_) {
     // Overflow last entry in high-pri pool to low-pri pool.
     lru_low_pri_ = lru_low_pri_->next;
@@ -231,8 +243,9 @@ void LRUCacheShard::MaintainPoolSize() {
   }
 }
 
-void LRUCacheShard::EvictFromLRU(size_t charge,
-                                 autovector<LRUHandle*>* deleted) {
+template <class CacheMonitor>
+void LRUCacheShardTemplate<CacheMonitor>::EvictFromLRU(
+    size_t charge, autovector<LRUHandle*>* deleted) {
   while (usage_ + charge > capacity_ && lru_.next != &lru_) {
     LRUHandle* old = lru_.next;
     assert(old->InCache());
@@ -246,7 +259,8 @@ void LRUCacheShard::EvictFromLRU(size_t charge,
   }
 }
 
-void LRUCacheShard::SetCapacity(size_t capacity) {
+template <class CacheMonitor>
+void LRUCacheShardTemplate<CacheMonitor>::SetCapacity(size_t capacity) {
   autovector<LRUHandle*> last_reference_list;
   {
     MutexLock l(&mutex_);
@@ -261,12 +275,16 @@ void LRUCacheShard::SetCapacity(size_t capacity) {
   }
 }
 
-void LRUCacheShard::SetStrictCapacityLimit(bool strict_capacity_limit) {
+template <class CacheMonitor>
+void LRUCacheShardTemplate<CacheMonitor>::SetStrictCapacityLimit(
+    bool strict_capacity_limit) {
   MutexLock l(&mutex_);
   strict_capacity_limit_ = strict_capacity_limit;
 }
 
-Cache::Handle* LRUCacheShard::Lookup(const Slice& key, uint32_t hash) {
+template <class CacheMonitor>
+Cache::Handle* LRUCacheShardTemplate<CacheMonitor>::Lookup(const Slice& key,
+                                                           uint32_t hash) {
   MutexLock l(&mutex_);
   LRUHandle* e = table_.Lookup(key, hash);
   if (e != nullptr) {
@@ -280,7 +298,8 @@ Cache::Handle* LRUCacheShard::Lookup(const Slice& key, uint32_t hash) {
   return reinterpret_cast<Cache::Handle*>(e);
 }
 
-bool LRUCacheShard::Ref(Cache::Handle* h) {
+template <class CacheMonitor>
+bool LRUCacheShardTemplate<CacheMonitor>::Ref(Cache::Handle* h) {
   LRUHandle* handle = reinterpret_cast<LRUHandle*>(h);
   MutexLock l(&mutex_);
   if (handle->InCache() && handle->refs == 1) {
@@ -290,14 +309,18 @@ bool LRUCacheShard::Ref(Cache::Handle* h) {
   return true;
 }
 
-void LRUCacheShard::SetHighPriorityPoolRatio(double high_pri_pool_ratio) {
+template <class CacheMonitor>
+void LRUCacheShardTemplate<CacheMonitor>::SetHighPriorityPoolRatio(
+    double high_pri_pool_ratio) {
   MutexLock l(&mutex_);
   high_pri_pool_ratio_ = high_pri_pool_ratio;
   high_pri_pool_capacity_ = capacity_ * high_pri_pool_ratio_;
   MaintainPoolSize();
 }
 
-bool LRUCacheShard::Release(Cache::Handle* handle, bool force_erase) {
+template <class CacheMonitor>
+bool LRUCacheShardTemplate<CacheMonitor>::Release(Cache::Handle* handle,
+                                                  bool force_erase) {
   if (handle == nullptr) {
     return false;
   }
@@ -335,10 +358,11 @@ bool LRUCacheShard::Release(Cache::Handle* handle, bool force_erase) {
   return last_reference;
 }
 
-Status LRUCacheShard::Insert(const Slice& key, uint32_t hash, void* value,
-                             size_t charge,
-                             void (*deleter)(const Slice& key, void* value),
-                             Cache::Handle** handle, Cache::Priority priority) {
+template <class CacheMonitor>
+Status LRUCacheShardTemplate<CacheMonitor>::Insert(
+    const Slice& key, uint32_t hash, void* value, size_t charge,
+    void (*deleter)(const Slice& key, void* value), Cache::Handle** handle,
+    Cache::Priority priority) {
   // Allocate the memory here outside of the mutex
   // If the cache is full, we'll have to release it
   // It shouldn't happen very often though.
@@ -413,7 +437,9 @@ Status LRUCacheShard::Insert(const Slice& key, uint32_t hash, void* value,
   return s;
 }
 
-void LRUCacheShard::Erase(const Slice& key, uint32_t hash) {
+template <class CacheMonitor>
+void LRUCacheShardTemplate<CacheMonitor>::Erase(const Slice& key,
+                                                uint32_t hash) {
   LRUHandle* e;
   bool last_reference = false;
   {
@@ -438,18 +464,21 @@ void LRUCacheShard::Erase(const Slice& key, uint32_t hash) {
   }
 }
 
-size_t LRUCacheShard::GetUsage() const {
+template <class CacheMonitor>
+size_t LRUCacheShardTemplate<CacheMonitor>::GetUsage() const {
   MutexLock l(&mutex_);
   return usage_;
 }
 
-size_t LRUCacheShard::GetPinnedUsage() const {
+template <class CacheMonitor>
+size_t LRUCacheShardTemplate<CacheMonitor>::GetPinnedUsage() const {
   MutexLock l(&mutex_);
   assert(usage_ >= lru_usage_);
   return usage_ - lru_usage_;
 }
 
-std::string LRUCacheShard::GetPrintableOptions() const {
+template <class CacheMonitor>
+std::string LRUCacheShardTemplate<CacheMonitor>::GetPrintableOptions() const {
   const int kBufferSize = 200;
   char buffer[kBufferSize];
   {
@@ -461,28 +490,30 @@ std::string LRUCacheShard::GetPrintableOptions() const {
 }
 
 template <>
-LRUCacheBase<DiagnosableLRUCacheShard>::LRUCacheBase(
+LRUCacheBase<LRUCacheDiagnosableShard>::LRUCacheBase(
     size_t capacity, int num_shard_bits, bool strict_capacity_limit,
-    double high_pri_pool_ratio, std::shared_ptr<MemoryAllocator> allocator,
-    size_t topk)
+    double high_pri_pool_ratio,
+    const typename LRUCacheDiagnosableShard::MonitorOptions& options,
+    std::shared_ptr<MemoryAllocator> allocator)
     : ShardedCache(capacity, num_shard_bits, strict_capacity_limit,
                    std::move(allocator)) {
   num_shards_ = 1 << num_shard_bits;
   shards_ =
-      reinterpret_cast<DiagnosableLRUCacheShard*>(port::cacheline_aligned_alloc(
-          sizeof(DiagnosableLRUCacheShard) * num_shards_));
+      reinterpret_cast<LRUCacheDiagnosableShard*>(port::cacheline_aligned_alloc(
+          sizeof(LRUCacheDiagnosableShard) * num_shards_));
   size_t per_shard = (capacity + (num_shards_ - 1)) / num_shards_;
   for (int i = 0; i < num_shards_; i++) {
-    new (&shards_[i]) DiagnosableLRUCacheShard(per_shard, strict_capacity_limit,
-                                               high_pri_pool_ratio, topk);
+    new (&shards_[i]) LRUCacheDiagnosableShard(per_shard, strict_capacity_limit,
+                                               high_pri_pool_ratio, options);
   }
 }
 
 template <class LRUCacheShardType>
 LRUCacheBase<LRUCacheShardType>::LRUCacheBase(
     size_t capacity, int num_shard_bits, bool strict_capacity_limit,
-    double high_pri_pool_ratio, std::shared_ptr<MemoryAllocator> allocator,
-    size_t /*topk*/)
+    double high_pri_pool_ratio,
+    const typename LRUCacheShardType::MonitorOptions& options,
+    std::shared_ptr<MemoryAllocator> allocator)
     : ShardedCache(capacity, num_shard_bits, strict_capacity_limit,
                    std::move(allocator)) {
   num_shards_ = 1 << num_shard_bits;
@@ -491,12 +522,12 @@ LRUCacheBase<LRUCacheShardType>::LRUCacheBase(
   size_t per_shard = (capacity + (num_shards_ - 1)) / num_shards_;
   for (int i = 0; i < num_shards_; i++) {
     new (&shards_[i]) LRUCacheShardType(per_shard, strict_capacity_limit,
-                                        high_pri_pool_ratio);
+                                        high_pri_pool_ratio, options);
   }
 }
 
 template <>
-std::string LRUCacheBase<DiagnosableLRUCacheShard>::DumpLRUCacheStatistics() {
+std::string LRUCacheBase<LRUCacheDiagnosableShard>::DumpLRUCacheStatistics() {
   std::string res;
   res.append("Cache Summary: \n");
   res.append("usage: " + std::to_string(GetUsage()) +
@@ -514,7 +545,7 @@ std::string LRUCacheBase<LRUCacheShardType>::DumpLRUCacheStatistics() {
 }
 
 template <>
-const char* LRUCacheBase<DiagnosableLRUCacheShard>::Name() const {
+const char* LRUCacheBase<LRUCacheDiagnosableShard>::Name() const {
   return "DiagnosableLRUCache";
 }
 
@@ -528,7 +559,7 @@ LRUCacheBase<LRUCacheShardType>::~LRUCacheBase() {
   if (shards_ != nullptr) {
     assert(num_shards_ > 0);
     for (int i = 0; i < num_shards_; i++) {
-      shards_[i].~LRUCacheShard();
+      shards_[i].~LRUCacheShardType();
     }
     port::cacheline_aligned_free(shards_);
   }
@@ -584,8 +615,8 @@ size_t LRUCacheBase<LRUCacheShardType>::TEST_GetLRUSize() {
   return lru_size_of_all_shards;
 }
 
-//template <class LRUCacheShardType>
-//double LRUCacheBase<LRUCacheShardType>::GetHighPriPoolRatio() 
+// template <class LRUCacheShardType>
+// double LRUCacheBase<LRUCacheShardType>::GetHighPriPoolRatio()
 
 std::shared_ptr<Cache> NewLRUCache(const LRUCacheOptions& cache_opts) {
   return NewLRUCache(
@@ -597,8 +628,7 @@ std::shared_ptr<Cache> NewLRUCache(const LRUCacheOptions& cache_opts) {
 std::shared_ptr<Cache> NewLRUCache(
     size_t capacity, int num_shard_bits, bool strict_capacity_limit,
     double high_pri_pool_ratio,
-    std::shared_ptr<MemoryAllocator> memory_allocator, bool is_diagnose,
-    size_t topk) {
+    std::shared_ptr<MemoryAllocator> memory_allocator) {
   if (num_shard_bits >= 20) {
     return nullptr;  // the cache cannot be sharded into too many fine pieces
   }
@@ -609,14 +639,29 @@ std::shared_ptr<Cache> NewLRUCache(
   if (num_shard_bits < 0) {
     num_shard_bits = GetDefaultCacheShardBits(capacity);
   }
-  if (is_diagnose) {
-    return std::make_shared<DiagnosableLRUCache>(
-        capacity, num_shard_bits, strict_capacity_limit, high_pri_pool_ratio,
-        std::move(memory_allocator), topk);
+  return std::make_shared<LRUCache>(
+      capacity, num_shard_bits, strict_capacity_limit, high_pri_pool_ratio,
+      LRUCacheShard::MonitorOptions{}, std::move(memory_allocator));
+}
+
+std::shared_ptr<Cache> NewDiagnosableLRUCache(
+    size_t capacity, int num_shard_bits, bool strict_capacity_limit,
+    double high_pri_pool_ratio,
+    std::shared_ptr<MemoryAllocator> memory_allocator, size_t topk) {
+  if (num_shard_bits >= 20) {
+    return nullptr;  // the cache cannot be sharded into too many fine pieces
   }
-  return std::make_shared<LRUCache>(capacity, num_shard_bits,
-                                    strict_capacity_limit, high_pri_pool_ratio,
-                                    std::move(memory_allocator));
+  if (high_pri_pool_ratio < 0.0 || high_pri_pool_ratio > 1.0) {
+    // invalid high_pri_pool_ratio
+    return nullptr;
+  }
+  if (num_shard_bits < 0) {
+    num_shard_bits = GetDefaultCacheShardBits(capacity);
+  }
+  return std::make_shared<DiagnosableLRUCache>(
+      capacity, num_shard_bits, strict_capacity_limit, high_pri_pool_ratio,
+      LRUCacheDiagnosableShard::MonitorOptions{topk},
+      std::move(memory_allocator));
 }
 
 }  // namespace rocksdb

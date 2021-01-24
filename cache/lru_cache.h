@@ -8,13 +8,12 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #pragma once
 
-#include <mutex>
 #include <map>
+#include <mutex>
 #include <sstream>
 #include <string>
 
 #include "cache/sharded_cache.h"
-
 #include "port/port.h"
 #include "util/autovector.h"
 
@@ -117,137 +116,6 @@ struct LRUHandle {
   }
 };
 
-// One DiagnoseLRUCacheShard has a DiagnoseContext
-struct DiagnoseContext {
-  DiagnoseContext(size_t topk_count) : k_(topk_count) {}
-  inline void UsageAdd(const LRUHandle* h) {
-    assert(h->refs > 0);
-    mu_.Lock();
-    TopKAdd(topk_in_all_, h);
-    mu_.Unlock();
-    element_new_count.fetch_add(1);
-  }
-  inline void UsageSub(const LRUHandle* h) {
-    assert(h->refs == 0);
-    mu_.Lock();
-    TopKSub(topk_in_hpp_, h);
-    mu_.Unlock();
-    element_del_count.fetch_add(1);
-  }
-
-  inline void LRUUsageAdd(const LRUHandle* h) {
-    mu_.Lock();
-    TopKAdd(topk_in_lru_, h);
-    mu_.Unlock();
-    insert_lru_count.fetch_add(1);
-  }
-  inline void LRUUsageSub(const LRUHandle* h) {
-    mu_.Lock();
-    TopKSub(topk_in_lru_, h);
-    mu_.Unlock();
-    remove_lru_count.fetch_add(1);
-  }
-  inline void HighPriUsageAdd(const LRUHandle* h) {
-    mu_.Lock();
-    TopKAdd(topk_in_hpp_, h);
-    mu_.Unlock();
-    high_pri_add_count.fetch_add(1);
-  }
-  inline void HighPriUsageSub(const LRUHandle* h) {
-    mu_.Lock();
-    TopKSub(topk_in_hpp_, h);
-    mu_.Unlock();
-    high_pri_del_count.fetch_add(1);
-  }
-
-  std::string Dump() {
-    std::stringstream stat;
-    stat << "total insert delta: "
-         << GetDelta(element_new_count, last_element_new_count) << std::endl;
-    stat << "total delete delta: "
-         << GetDelta(element_del_count, last_element_del_count) << std::endl;
-    stat << "lru   insert delta: "
-         << GetDelta(insert_lru_count, last_insert_lru_count) << std::endl;
-    stat << "lr    delete delta: "
-         << GetDelta(remove_lru_count, last_remove_lru_count) << std::endl;
-    stat << "highp insert delta: "
-         << GetDelta(high_pri_add_count, last_high_pri_add_count) << std::endl;
-    stat << "highp delete delta: "
-         << GetDelta(high_pri_del_count, last_high_pri_del_count) << std::endl;
-    stat << "topk in total: " << TopKInfo(topk_in_all_) << std::endl;
-    stat << "topk in lru  : " << TopKInfo(topk_in_lru_) << std::endl;
-    stat << "topk in highp: " << TopKInfo(topk_in_hpp_) << std::endl;
-    return stat.str();
-  }
-
- private:
-  inline void TopKAdd(std::map<size_t, size_t>& s, const LRUHandle* h) {
-    auto findit = s.find(h->charge);
-    if (findit != s.end()) {
-      findit->second++;
-    } else {
-      s[h->charge] = 1;
-    }
-    if (s.size() > k_) {
-      s.erase(s.begin());
-    }
-  }
-
-  // since there is no unique-id for every charge_size in topkset, here just
-  // delete one same charge_size if there are more than one
-  // TODO  maybe use LRUHandle* as it unique_id, but LRUHandle* is a Pointer
-  // that may be free before it remove from set, which may cause
-  // head_use_after_free bug
-  inline void TopKSub(std::map<size_t, size_t>& s, const LRUHandle* h) {
-    auto findit = s.find(h->charge);
-    if (findit == s.end()) return;
-    findit->second--;
-    if (findit->second == 0) {
-      s.erase(findit);
-    }
-  }
-
-  uint64_t GetDelta(std::atomic<uint64_t>& cur, std::atomic<uint64_t>& last) {
-    auto tmp = cur.load();
-    auto delta = tmp - last.load();
-    last.store(tmp);
-    return tmp;
-  }
-  std::string TopKInfo(std::map<size_t, size_t>& topk) {
-    std::string res{"["};
-    for (auto e : topk) {
-      res.append("(" + std::to_string(e.first) + "," +
-                 std::to_string(e.second) + ")" + ",");
-    }
-    if (res.back() == ',') res.pop_back();
-    res.append("]");
-    return res;
-  }
-
-  std::atomic<uint64_t> insert_lru_count{0};
-  std::atomic<uint64_t> remove_lru_count{0};
-  std::atomic<uint64_t> element_new_count{0};
-  std::atomic<uint64_t> element_del_count{0};
-  std::atomic<uint64_t> high_pri_add_count{0};
-  std::atomic<uint64_t> high_pri_del_count{0};
-
-  std::atomic<uint64_t> last_insert_lru_count{0};
-  std::atomic<uint64_t> last_remove_lru_count{0};
-  std::atomic<uint64_t> last_element_new_count{0};
-  std::atomic<uint64_t> last_element_del_count{0};
-  std::atomic<uint64_t> last_high_pri_add_count{0};
-  std::atomic<uint64_t> last_high_pri_del_count{0};
-
-  std::map<size_t, size_t> topk_in_hpp_;
-  std::map<size_t, size_t> topk_in_all_;
-  std::map<size_t, size_t> topk_in_lru_;
-
-  // std::mutex mu_;  // for topK update
-  mutable port::Mutex mu_;
-
-  const size_t k_;
-};
-
 // We provide our own simple hash table since it removes a whole bunch
 // of porting hacks and is also faster than some of the built-in hash
 // table implementations in some of the compiler/runtime combinations
@@ -291,11 +159,25 @@ class LRUHandleTable {
 };
 
 // A single shard of sharded cache.
-class ALIGN_AS(CACHE_LINE_SIZE) LRUCacheShard : public CacheShard {
+template <class CacheMonitor>
+class ALIGN_AS(CACHE_LINE_SIZE) LRUCacheShardTemplate : public CacheMonitor,
+                                                        public CacheShard {
+  using CacheMonitor::high_pri_pool_usage_;
+  using CacheMonitor::HighPriPoolUsageAdd;
+  using CacheMonitor::HighPriPoolUsageSub;
+  using CacheMonitor::lru_usage_;
+  using CacheMonitor::LRUUsageAdd;
+  using CacheMonitor::LRUUsageSub;
+  using CacheMonitor::usage_;
+  using CacheMonitor::UsageAdd;
+  using CacheMonitor::UsageSub;
+
  public:
-  LRUCacheShard(size_t capacity, bool strict_capacity_limit,
-                double high_pri_pool_ratio);
-  virtual ~LRUCacheShard();
+  using MonitorOptions = typename CacheMonitor::Options;
+  LRUCacheShardTemplate(size_t capacity, bool strict_capacity_limit,
+                        double high_pri_pool_ratio,
+                        const typename CacheMonitor::Options& options);
+  virtual ~LRUCacheShardTemplate();
 
   // Separate from constructor so caller can easily make an array of LRUCache
   // if current usage is more than new capacity, the function will attempt to
@@ -342,29 +224,6 @@ class ALIGN_AS(CACHE_LINE_SIZE) LRUCacheShard : public CacheShard {
 
   //  Retrives high pri pool ratio
   double GetHighPriPoolRatio();
-
- protected:
-  virtual inline void HighPriPoolUsageAdd(const LRUHandle* h) {
-    high_pri_pool_usage_ += h->charge;
-  }
-  virtual inline void HighPriPoolUsageSub(const LRUHandle* h) {
-    high_pri_pool_usage_ -= h->charge;
-  }
-  virtual inline void UsageAdd(const LRUHandle* h) { usage_ += h->charge; }
-  virtual inline void UsageSub(const LRUHandle* h) { usage_ -= h->charge; }
-  virtual inline void LRUUsageAdd(const LRUHandle* h) {
-    lru_usage_ += h->charge;
-  }
-  virtual inline void LRUUsageSub(const LRUHandle* h) {
-    lru_usage_ -= h->charge;
-  }
-
-  // Memory size for entries in high-pri pool.
-  size_t high_pri_pool_usage_;
-  // Memory size for entries residing in the cache
-  size_t usage_;
-  // Memory size for entries residing only in the LRU list
-  size_t lru_usage_;
 
  private:
   void LRU_Remove(LRUHandle* e);
@@ -424,52 +283,191 @@ class ALIGN_AS(CACHE_LINE_SIZE) LRUCacheShard : public CacheShard {
   mutable port::Mutex mutex_;
 };
 
-class ALIGN_AS(CACHE_LINE_SIZE) DiagnosableLRUCacheShard
-    : public LRUCacheShard {
+class LRUCacheNoMonitor {
  public:
-  DiagnosableLRUCacheShard(size_t capacity, bool strict_capacity_limit,
-                           double high_pri_pool_ratio, size_t topk)
-      : LRUCacheShard(capacity, strict_capacity_limit, high_pri_pool_ratio),
-        dc_(topk) {}
+  struct Options {};
 
-  inline void HighPriPoolUsageAdd(const LRUHandle* h) override {
+ protected:
+  LRUCacheNoMonitor(const Options&)
+      : high_pri_pool_usage_(0), usage_(0), lru_usage_(0) {}
+
+  void HighPriPoolUsageAdd(const LRUHandle* h) {
     high_pri_pool_usage_ += h->charge;
-    dc_.HighPriUsageAdd(h);
   }
-  inline void HighPriPoolUsageSub(const LRUHandle* h) override {
+  void HighPriPoolUsageSub(const LRUHandle* h) {
     high_pri_pool_usage_ -= h->charge;
-    dc_.HighPriUsageSub(h);
   }
-  inline void UsageAdd(const LRUHandle* h) override {
+  void UsageAdd(const LRUHandle* h) { usage_ += h->charge; }
+  void UsageSub(const LRUHandle* h) { usage_ -= h->charge; }
+  void LRUUsageAdd(const LRUHandle* h) { lru_usage_ += h->charge; }
+  void LRUUsageSub(const LRUHandle* h) { lru_usage_ -= h->charge; }
+
+  // Memory size for entries in high-pri pool.
+  size_t high_pri_pool_usage_;
+  // Memory size for entries residing in the cache
+  size_t usage_;
+  // Memory size for entries residing only in the LRU list
+  size_t lru_usage_;
+};
+
+class LRUCacheDiagnosableMonitor {
+ public:
+  struct Options {
+    size_t top_k;
+  };
+
+ protected:
+  LRUCacheDiagnosableMonitor(const Options& opt)
+      : high_pri_pool_usage_(0), usage_(0), lru_usage_(0), k_(opt.top_k) {}
+
+  void HighPriPoolUsageAdd(const LRUHandle* h) {
+    high_pri_pool_usage_ += h->charge;
+    mu_.Lock();
+    TopKAdd(topk_in_hpp_, h);
+    mu_.Unlock();
+    high_pri_add_count.fetch_add(1);
+  }
+  void HighPriPoolUsageSub(const LRUHandle* h) {
+    high_pri_pool_usage_ -= h->charge;
+    mu_.Lock();
+    TopKSub(topk_in_hpp_, h);
+    mu_.Unlock();
+    high_pri_del_count.fetch_add(1);
+  }
+  void UsageAdd(const LRUHandle* h) {
     usage_ += h->charge;
-    dc_.UsageAdd(h);
+    assert(h->refs > 0);
+    mu_.Lock();
+    TopKAdd(topk_in_all_, h);
+    mu_.Unlock();
+    element_new_count.fetch_add(1);
   }
-  inline void UsageSub(const LRUHandle* h) override {
+  void UsageSub(const LRUHandle* h) {
     usage_ -= h->charge;
-    dc_.UsageSub(h);
+    assert(h->refs == 0);
+    mu_.Lock();
+    TopKSub(topk_in_hpp_, h);
+    mu_.Unlock();
+    element_del_count.fetch_add(1);
   }
-  inline void LRUUsageAdd(const LRUHandle* h) override {
+  void LRUUsageAdd(const LRUHandle* h) {
     lru_usage_ += h->charge;
-    dc_.LRUUsageAdd(h);
+    mu_.Lock();
+    TopKAdd(topk_in_lru_, h);
+    mu_.Unlock();
+    insert_lru_count.fetch_add(1);
   }
-  inline void LRUUsageSub(const LRUHandle* h) override {
+  void LRUUsageSub(const LRUHandle* h) {
     lru_usage_ -= h->charge;
-    dc_.LRUUsageSub(h);
+    mu_.Lock();
+    TopKSub(topk_in_lru_, h);
+    mu_.Unlock();
+    remove_lru_count.fetch_add(1);
   }
 
-  std::string DumpDiagnoseInfo() { return dc_.Dump(); }
+ public:
+  std::string DumpDiagnoseInfo() {
+    std::stringstream stat;
+    stat << "total insert delta: "
+         << GetDelta(element_new_count, last_element_new_count) << std::endl;
+    stat << "total delete delta: "
+         << GetDelta(element_del_count, last_element_del_count) << std::endl;
+    stat << "lru   insert delta: "
+         << GetDelta(insert_lru_count, last_insert_lru_count) << std::endl;
+    stat << "lr    delete delta: "
+         << GetDelta(remove_lru_count, last_remove_lru_count) << std::endl;
+    stat << "highp insert delta: "
+         << GetDelta(high_pri_add_count, last_high_pri_add_count) << std::endl;
+    stat << "highp delete delta: "
+         << GetDelta(high_pri_del_count, last_high_pri_del_count) << std::endl;
+    stat << "topk in total: " << TopKInfo(topk_in_all_) << std::endl;
+    stat << "topk in lru  : " << TopKInfo(topk_in_lru_) << std::endl;
+    stat << "topk in highp: " << TopKInfo(topk_in_hpp_) << std::endl;
+    return stat.str();
+  }
 
- private:
-  DiagnoseContext dc_;
+ protected:
+  void TopKAdd(std::map<size_t, size_t>& s, const LRUHandle* h) {
+    auto findit = s.find(h->charge);
+    if (findit != s.end()) {
+      findit->second++;
+    } else {
+      s[h->charge] = 1;
+    }
+    if (s.size() > k_) {
+      s.erase(s.begin());
+    }
+  }
+
+  // since there is no unique-id for every charge_size in topkset, here just
+  // delete one same charge_size if there are more than one
+  // TODO  maybe use LRUHandle* as it unique_id, but LRUHandle* is a Pointer
+  // that may be free before it remove from set, which may cause
+  // head_use_after_free bug
+  void TopKSub(std::map<size_t, size_t>& s, const LRUHandle* h) {
+    auto findit = s.find(h->charge);
+    if (findit == s.end()) return;
+    findit->second--;
+    if (findit->second == 0) {
+      s.erase(findit);
+    }
+  }
+
+  uint64_t GetDelta(std::atomic<uint64_t>& cur, std::atomic<uint64_t>& last) {
+    auto tmp = cur.load();
+    auto delta = tmp - last.load();
+    last.store(tmp);
+    return tmp;
+  }
+  std::string TopKInfo(std::map<size_t, size_t>& topk) {
+    std::string res{"["};
+    for (auto e : topk) {
+      res.append("(" + std::to_string(e.first) + "," +
+                 std::to_string(e.second) + ")" + ",");
+    }
+    if (res.back() == ',') res.pop_back();
+    res.append("]");
+    return res;
+  }
+
+  std::atomic<uint64_t> insert_lru_count{0};
+  std::atomic<uint64_t> remove_lru_count{0};
+  std::atomic<uint64_t> element_new_count{0};
+  std::atomic<uint64_t> element_del_count{0};
+  std::atomic<uint64_t> high_pri_add_count{0};
+  std::atomic<uint64_t> high_pri_del_count{0};
+
+  std::atomic<uint64_t> last_insert_lru_count{0};
+  std::atomic<uint64_t> last_remove_lru_count{0};
+  std::atomic<uint64_t> last_element_new_count{0};
+  std::atomic<uint64_t> last_element_del_count{0};
+  std::atomic<uint64_t> last_high_pri_add_count{0};
+  std::atomic<uint64_t> last_high_pri_del_count{0};
+
+  std::map<size_t, size_t> topk_in_hpp_;
+  std::map<size_t, size_t> topk_in_all_;
+  std::map<size_t, size_t> topk_in_lru_;
+
+  // std::mutex mu_;  // for topK update
+  mutable port::Mutex mu_;
+
+  // Memory size for entries in high-pri pool.
+  size_t high_pri_pool_usage_;
+  // Memory size for entries residing in the cache
+  size_t usage_;
+  // Memory size for entries residing only in the LRU list
+  size_t lru_usage_;
+
+  const size_t k_;
 };
 
 template <class LRUCacheShardType>
 class LRUCacheBase : public ShardedCache {
  public:
   LRUCacheBase(size_t capacity, int num_shard_bits, bool strict_capacity_limit,
-           double high_pri_pool_ratio,
-           std::shared_ptr<MemoryAllocator> memory_allocator = nullptr,
-           size_t topk = 10);
+               double high_pri_pool_ratio,
+               const typename LRUCacheShardType::MonitorOptions& options,
+               std::shared_ptr<MemoryAllocator> memory_allocator = nullptr);
   virtual ~LRUCacheBase();
   virtual const char* Name() const override;
   virtual CacheShard* GetShard(int shard) override;
@@ -496,7 +494,11 @@ class LRUCacheBase : public ShardedCache {
   int num_shards_ = 0;
 };
 
+using LRUCacheShard = LRUCacheShardTemplate<LRUCacheNoMonitor>;
+using LRUCacheDiagnosableShard =
+    LRUCacheShardTemplate<LRUCacheDiagnosableMonitor>;
+
 using LRUCache = LRUCacheBase<LRUCacheShard>;
-using DiagnosableLRUCache = LRUCacheBase<DiagnosableLRUCacheShard>;
+using DiagnosableLRUCache = LRUCacheBase<LRUCacheDiagnosableShard>;
 
 }  // namespace rocksdb
