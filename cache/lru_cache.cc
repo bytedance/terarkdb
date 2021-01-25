@@ -19,8 +19,6 @@
 
 #include <string>
 
-#include "util/mutexlock.h"
-
 namespace rocksdb {
 
 LRUHandleTable::LRUHandleTable() : list_(nullptr), length_(0), elems_(0) {
@@ -447,11 +445,11 @@ void LRUCacheShardTemplate<CacheMonitor>::Erase(const Slice& key,
     e = table_.Remove(key, hash);
     if (e != nullptr) {
       last_reference = Unref(e);
-      if (last_reference) {
-        UsageSub(e);
-      }
       if (last_reference && e->InCache()) {
         LRU_Remove(e);
+      }
+      if (last_reference) {
+        UsageSub(e);
       }
       e->SetInCache(false);
     }
@@ -526,22 +524,18 @@ LRUCacheBase<LRUCacheShardType>::LRUCacheBase(
   }
 }
 
-template <>
-std::string LRUCacheBase<LRUCacheDiagnosableShard>::DumpLRUCacheStatistics() {
+template <class LRUCacheShardType>
+std::string LRUCacheBase<LRUCacheShardType>::DumpLRUCacheStatistics() {
   std::string res;
   res.append("Cache Summary: \n");
   res.append("usage: " + std::to_string(GetUsage()) +
              ", pinned_usage: " + std::to_string(GetPinnedUsage()) + "\n");
+
   for (int i = 0; i < num_shards_; i++) {
     res.append("shard_" + std::to_string(i) + " : \n");
     res.append(shards_[i].DumpDiagnoseInfo());
   }
   return res;
-}
-
-template <class LRUCacheShardType>
-std::string LRUCacheBase<LRUCacheShardType>::DumpLRUCacheStatistics() {
-  return "";
 }
 
 template <>
@@ -619,10 +613,10 @@ size_t LRUCacheBase<LRUCacheShardType>::TEST_GetLRUSize() {
 // double LRUCacheBase<LRUCacheShardType>::GetHighPriPoolRatio()
 
 std::shared_ptr<Cache> NewLRUCache(const LRUCacheOptions& cache_opts) {
-  return NewLRUCache(
-      cache_opts.capacity, cache_opts.num_shard_bits,
-      cache_opts.strict_capacity_limit, cache_opts.high_pri_pool_ratio,
-      cache_opts.memory_allocator, cache_opts.is_diagnose, cache_opts.topk);
+  return NewLRUCache(cache_opts.capacity, cache_opts.num_shard_bits,
+                     cache_opts.strict_capacity_limit,
+                     cache_opts.high_pri_pool_ratio,
+                     cache_opts.memory_allocator);
 }
 
 std::shared_ptr<Cache> NewLRUCache(
@@ -645,6 +639,15 @@ std::shared_ptr<Cache> NewLRUCache(
 }
 
 std::shared_ptr<Cache> NewDiagnosableLRUCache(
+    const LRUCacheOptions& cache_opts) {
+  assert(cache_opts.is_diagnose);
+  return NewDiagnosableLRUCache(cache_opts.capacity, cache_opts.num_shard_bits,
+                                cache_opts.strict_capacity_limit,
+                                cache_opts.high_pri_pool_ratio,
+                                cache_opts.memory_allocator, cache_opts.topk);
+}
+
+std::shared_ptr<Cache> NewDiagnosableLRUCache(
     size_t capacity, int num_shard_bits, bool strict_capacity_limit,
     double high_pri_pool_ratio,
     std::shared_ptr<MemoryAllocator> memory_allocator, size_t topk) {
@@ -663,5 +666,10 @@ std::shared_ptr<Cache> NewDiagnosableLRUCache(
       LRUCacheDiagnosableShard::MonitorOptions{topk},
       std::move(memory_allocator));
 }
+
+template class LRUCacheShardTemplate<LRUCacheNoMonitor>;
+template class LRUCacheShardTemplate<LRUCacheDiagnosableMonitor>;
+template class LRUCacheBase<LRUCacheShard>;
+template class LRUCacheBase<LRUCacheDiagnosableShard>;
 
 }  // namespace rocksdb

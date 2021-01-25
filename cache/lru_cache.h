@@ -8,14 +8,19 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #pragma once
 
-#include <map>
+#include <iostream>
 #include <mutex>
+#include <queue>
+#include <set>
 #include <sstream>
 #include <string>
+#include <terark/heap_ext.hpp>
+#include <unordered_map>
 
 #include "cache/sharded_cache.h"
 #include "port/port.h"
 #include "util/autovector.h"
+#include "util/mutexlock.h"
 
 namespace rocksdb {
 
@@ -287,6 +292,14 @@ class LRUCacheNoMonitor {
  public:
   struct Options {};
 
+  std::string DumpDiagnoseInfo() {
+    std::stringstream stat;
+    stat << "usage in total: " << usage_ << std::endl;
+    stat << "usage in lru  : " << lru_usage_ << std::endl;
+    stat << "usage in highp: " << high_pri_pool_usage_ << std::endl;
+    return stat.str();
+  }
+
  protected:
   LRUCacheNoMonitor(const Options&)
       : high_pri_pool_usage_(0), usage_(0), lru_usage_(0) {}
@@ -315,59 +328,211 @@ class LRUCacheDiagnosableMonitor {
   struct Options {
     size_t top_k;
   };
+  class TopSet {
+   public:
+    struct DataElement {
+      DataElement(std::string&& k, size_t ch, size_t co, size_t idxheap)
+          : key(k), total_charge(ch), count(co), idx_in_heap_vec(idxheap) {}
+      std::string
+          key;  // key from LRUHandle* can be deleted before we do not need it
+      size_t total_charge;
+      size_t count;  // key remove from hashtable, may not be deleted since its
+                     // has refs
+      size_t idx_in_heap_vec;
+    };
 
- protected:
-  LRUCacheDiagnosableMonitor(const Options& opt)
-      : high_pri_pool_usage_(0), usage_(0), lru_usage_(0), k_(opt.top_k) {}
+    using DataIdx = size_t;
 
-  void HighPriPoolUsageAdd(const LRUHandle* h) {
-    high_pri_pool_usage_ += h->charge;
-    mu_.Lock();
-    TopKAdd(topk_in_hpp_, h);
-    mu_.Unlock();
-    high_pri_add_count.fetch_add(1);
-  }
-  void HighPriPoolUsageSub(const LRUHandle* h) {
-    high_pri_pool_usage_ -= h->charge;
-    mu_.Lock();
-    TopKSub(topk_in_hpp_, h);
-    mu_.Unlock();
-    high_pri_del_count.fetch_add(1);
-  }
-  void UsageAdd(const LRUHandle* h) {
-    usage_ += h->charge;
-    assert(h->refs > 0);
-    mu_.Lock();
-    TopKAdd(topk_in_all_, h);
-    mu_.Unlock();
-    element_new_count.fetch_add(1);
-  }
-  void UsageSub(const LRUHandle* h) {
-    usage_ -= h->charge;
-    assert(h->refs == 0);
-    mu_.Lock();
-    TopKSub(topk_in_hpp_, h);
-    mu_.Unlock();
-    element_del_count.fetch_add(1);
-  }
-  void LRUUsageAdd(const LRUHandle* h) {
-    lru_usage_ += h->charge;
-    mu_.Lock();
-    TopKAdd(topk_in_lru_, h);
-    mu_.Unlock();
-    insert_lru_count.fetch_add(1);
-  }
-  void LRUUsageSub(const LRUHandle* h) {
-    lru_usage_ -= h->charge;
-    mu_.Lock();
-    TopKSub(topk_in_lru_, h);
-    mu_.Unlock();
-    remove_lru_count.fetch_add(1);
-  }
+    struct KeyHash {
+      std::size_t operator()(const Slice& k) const {
+        return Hash(k.data(), k.size(), 0);
+      }
+    };
 
- public:
+    struct KeyEqual {
+      bool operator()(const Slice& lhs, const Slice& rhs) const {
+        return lhs.compare(rhs) == 0;
+      }
+    };
+    struct ChargeCmp {
+      ChargeCmp(std::deque<DataElement>& d) : data_(d) {}
+      bool operator()(const DataIdx& l, const DataIdx& r) {
+        // MaxHeap
+        return data_[l].total_charge < data_[r].total_charge;
+      }
+
+     private:
+      const std::deque<DataElement>& data_;
+    };
+
+    struct SyncIndex {
+      SyncIndex(std::deque<DataElement>& d) : data_(d) {}
+      void operator()(DataIdx di, size_t new_idx) {
+        data_[di].idx_in_heap_vec = new_idx;
+      }
+
+     private:
+      std::deque<DataElement>& data_;
+    };
+
+    TopSet(size_t k)
+        : k_(k),
+          data_storage_(),
+          charge_cmp_(data_storage_),
+          sync_idx_(data_storage_) {}
+
+    void Add(const LRUHandle* h) {
+      mu_.Lock();
+      auto findit = key_map_.find(h->key());
+      size_t heap_idx = size_t(-1);
+
+      if (findit != key_map_.end()) {
+        // same key merge into one item
+        heap_idx = data_storage_[findit->second].idx_in_heap_vec;
+        size_t data_idx = findit->second;
+        data_storage_[data_idx].total_charge += h->charge;
+        data_storage_[data_idx].count++;
+      } else {
+        // new key append to tail
+        heap_idx = data_heap_.size();
+        DataElement de{h->key().ToString(), h->charge, 1, heap_idx};
+        DataIdx new_idx = data_storage_.size();
+        data_storage_.push_back(de);
+        bool ok = key_map_.insert({data_storage_.back().key, new_idx}).second;
+        assert(ok);
+
+        data_heap_.push_back(new_idx);
+      }
+
+      assert(VerifyIdx());
+      terark::terark_heap_hole_up(data_heap_.begin(), heap_idx, size_t(0),
+                                  data_heap_[heap_idx], charge_cmp_, sync_idx_);
+      assert(VerifyIdx());
+
+      assert(key_map_.size() == data_heap_.size() &&
+             key_map_.size() == data_storage_.size());
+      mu_.Unlock();
+    }
+
+    void Sub(const LRUHandle* h) {
+      mu_.Lock();
+      auto findit = key_map_.find(h->key());
+      if (findit != key_map_.end()) {
+        size_t data_idx = findit->second;
+        data_storage_[data_idx].total_charge -= h->charge;
+        data_storage_[data_idx].count--;
+
+        if (data_storage_[data_idx].count == 0) {
+          bool is_last_one = data_idx == data_storage_.size() - 1;
+          // delete heap item, change deleted-item to backvalue, adjust heap and
+          // pop back
+          size_t delete_hole = data_storage_[data_idx].idx_in_heap_vec;
+          assert(VerifyIdx());
+          terark::terark_adjust_heap(data_heap_.begin(), delete_hole,
+                                     data_heap_.size() - 1, data_heap_.back(),
+                                     charge_cmp_, sync_idx_);
+          data_heap_.pop_back();
+
+          // delete key map item
+          assert(findit->second == data_idx);
+          key_map_.erase(findit);
+          auto findlast = key_map_.find(data_storage_.back().key);
+          assert(is_last_one || key_map_.empty() || findlast != key_map_.end());
+
+          // delete storage item
+          if (!is_last_one) {
+            // if not last one, need swap with back, change heap item and
+            // reload key_map's slice
+            data_storage_[data_idx] = data_storage_.back();
+            data_heap_[data_storage_[data_idx].idx_in_heap_vec] = data_idx;
+
+            key_map_.erase(findlast);
+            key_map_.insert({data_storage_[data_idx].key, data_idx});
+          }
+          data_storage_.pop_back();
+
+          assert(VerifyIdx());
+        }
+      }
+      assert(key_map_.size() == data_heap_.size() &&
+             key_map_.size() == data_storage_.size());
+      mu_.Unlock();
+    }
+
+    std::string Info() {
+      mu_.Lock();
+      std::string res{"["};
+      size_t length = data_heap_.size();
+      for (size_t i = 0; i < k_ && i < data_heap_.size(); i++) {
+        assert(VerifyIdx());
+        terark::pop_heap_keep_top(data_heap_.begin(), length -i,
+                                  charge_cmp_, sync_idx_);
+        assert(VerifyIdx());
+        size_t last_idx = length - i - 1;
+        auto& e = data_storage_[data_heap_[last_idx]];
+
+        res.append("(" + Slice(e.key).ToString(true) + "," +
+                   std::to_string(e.total_charge) + "," +
+                   std::to_string(e.count) + ")" + ",");
+        assert(i == 0 ||
+               e.total_charge <=
+                   data_storage_[data_heap_[last_idx + 1]].total_charge);
+      }
+      for (size_t i = 1; i <= k_ && i < data_heap_.size(); i++) {
+        size_t heap_idx = data_heap_.size() - i;
+        assert(VerifyIdx());
+        terark::terark_heap_hole_up(data_heap_.begin(), heap_idx, size_t(0),
+                                    data_heap_[heap_idx], charge_cmp_,
+                                    sync_idx_);
+        assert(VerifyIdx());
+      }
+      if (res.back() == ',') res.pop_back();
+      res.append("]");
+
+      mu_.Unlock();
+      return res;
+    }
+
+    size_t Size() { return data_storage_.size(); }
+
+    const std::deque<DataElement>& TEST_get_elements_storage() {
+      return data_storage_;
+    }
+    const std::unordered_map<Slice, DataIdx, KeyHash, KeyEqual>&
+    TEST_get_elements_map() {
+      return key_map_;
+    }
+    const std::vector<DataIdx> TEST_get_data_heap() { return data_heap_; }
+    const ChargeCmp TEST_get_charge_cmp() { return charge_cmp_; }
+    bool VerifyIdx() {
+      for (size_t data_idx = 0; data_idx < data_storage_.size(); data_idx++) {
+        if (data_heap_[data_storage_[data_idx].idx_in_heap_vec] != data_idx) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    static bool CmpWrapper(const Slice& l, const Slice& r) {
+      return l.compare(r) == 0;
+    }
+
+   private:
+    size_t k_;
+    std::unordered_map<Slice, DataIdx, KeyHash, KeyEqual> key_map_;
+    std::deque<DataElement> data_storage_;
+    std::vector<DataIdx> data_heap_;
+
+    ChargeCmp charge_cmp_;
+    SyncIndex sync_idx_;
+    mutable port::Mutex mu_;
+  };
+
   std::string DumpDiagnoseInfo() {
     std::stringstream stat;
+    stat << "usage in total: " << usage_ << std::endl;
+    stat << "usage in lru  : " << lru_usage_ << std::endl;
+    stat << "usage in highp: " << high_pri_pool_usage_ << std::endl;
     stat << "total insert delta: "
          << GetDelta(element_new_count, last_element_new_count) << std::endl;
     stat << "total delete delta: "
@@ -380,54 +545,90 @@ class LRUCacheDiagnosableMonitor {
          << GetDelta(high_pri_add_count, last_high_pri_add_count) << std::endl;
     stat << "highp delete delta: "
          << GetDelta(high_pri_del_count, last_high_pri_del_count) << std::endl;
-    stat << "topk in total: " << TopKInfo(topk_in_all_) << std::endl;
-    stat << "topk in lru  : " << TopKInfo(topk_in_lru_) << std::endl;
-    stat << "topk in highp: " << TopKInfo(topk_in_hpp_) << std::endl;
+    stat << "topk in total: " << topk_in_all_.Info() << std::endl;
+    stat << "topk in lru  : " << topk_in_lru_.Info() << std::endl;
+    stat << "topk in highp: " << topk_in_hpp_.Info() << std::endl;
+    stat << "topk pinned!!: " << topk_pinned_.Info() << std::endl;
     return stat.str();
   }
 
+  LRUCacheDiagnosableMonitor(const Options& opt)
+      : high_pri_pool_usage_(0),
+        usage_(0),
+        lru_usage_(0),
+        topk_in_hpp_(opt.top_k),
+        topk_in_all_(opt.top_k),
+        topk_in_lru_(opt.top_k),
+        topk_pinned_(opt.top_k) {}
+
+  TopSet& TEST_get_pinned_set() { return topk_pinned_; }
+  TopSet& TEST_get_highpri_set() { return topk_in_hpp_; }
+  TopSet& TEST_get_lru_set() { return topk_in_lru_; }
+  TopSet& TEST_get_total_set() { return topk_in_all_; }
+
  protected:
-  void TopKAdd(std::map<size_t, size_t>& s, const LRUHandle* h) {
-    auto findit = s.find(h->charge);
-    if (findit != s.end()) {
-      findit->second++;
-    } else {
-      s[h->charge] = 1;
-    }
-    if (s.size() > k_) {
-      s.erase(s.begin());
-    }
+  void HighPriPoolUsageAdd(const LRUHandle* h) {
+    high_pri_pool_usage_ += h->charge;
+    topk_in_hpp_.Add(h);
+
+    high_pri_add_count.fetch_add(1);
+  }
+  void HighPriPoolUsageSub(const LRUHandle* h) {
+    high_pri_pool_usage_ -= h->charge;
+    topk_in_hpp_.Sub(h);
+
+    high_pri_del_count.fetch_add(1);
+  }
+  void UsageAdd(const LRUHandle* h) {
+    usage_ += h->charge;
+    assert(h->refs > 0);
+    topk_in_all_.Add(h);
+
+    element_new_count.fetch_add(1);
+  }
+  // only when last_reference is true, we call UsageSub and pinned value is also
+  // removed
+  void UsageSub(const LRUHandle* h) {
+    usage_ -= h->charge;
+    assert(h->refs == 0);
+    topk_in_all_.Sub(h);
+    topk_pinned_.Sub(h);
+
+    element_del_count.fetch_add(1);
+  }
+  void LRUUsageAdd(const LRUHandle* h) {
+    lru_usage_ += h->charge;
+    topk_in_lru_.Add(h);
+
+    insert_lru_count.fetch_add(1);
+  }
+  // value that has been lookup or ref increases its refs, when its refs equals
+  // one, it removed from lru and increate it refs, so that it is pinned and
+  // here we can increate pinned state whenever it remove from lru there are
+  void LRUUsageSub(const LRUHandle* h) {
+    lru_usage_ -= h->charge;
+    topk_in_lru_.Sub(h);
+    topk_pinned_.Add(h);
+
+    remove_lru_count.fetch_add(1);
   }
 
-  // since there is no unique-id for every charge_size in topkset, here just
-  // delete one same charge_size if there are more than one
-  // TODO  maybe use LRUHandle* as it unique_id, but LRUHandle* is a Pointer
-  // that may be free before it remove from set, which may cause
+  // Memory size for entries in high-pri pool.
+  size_t high_pri_pool_usage_;
+  // Memory size for entries residing in the cache
+  size_t usage_;
+  // Memory size for entries residing only in the LRU list
+  size_t lru_usage_;
+
+ private:
+  // since using LRUHandle* as it unique_id can cause
   // head_use_after_free bug
-  void TopKSub(std::map<size_t, size_t>& s, const LRUHandle* h) {
-    auto findit = s.find(h->charge);
-    if (findit == s.end()) return;
-    findit->second--;
-    if (findit->second == 0) {
-      s.erase(findit);
-    }
-  }
 
   uint64_t GetDelta(std::atomic<uint64_t>& cur, std::atomic<uint64_t>& last) {
     auto tmp = cur.load();
     auto delta = tmp - last.load();
     last.store(tmp);
     return tmp;
-  }
-  std::string TopKInfo(std::map<size_t, size_t>& topk) {
-    std::string res{"["};
-    for (auto e : topk) {
-      res.append("(" + std::to_string(e.first) + "," +
-                 std::to_string(e.second) + ")" + ",");
-    }
-    if (res.back() == ',') res.pop_back();
-    res.append("]");
-    return res;
   }
 
   std::atomic<uint64_t> insert_lru_count{0};
@@ -444,21 +645,10 @@ class LRUCacheDiagnosableMonitor {
   std::atomic<uint64_t> last_high_pri_add_count{0};
   std::atomic<uint64_t> last_high_pri_del_count{0};
 
-  std::map<size_t, size_t> topk_in_hpp_;
-  std::map<size_t, size_t> topk_in_all_;
-  std::map<size_t, size_t> topk_in_lru_;
-
-  // std::mutex mu_;  // for topK update
-  mutable port::Mutex mu_;
-
-  // Memory size for entries in high-pri pool.
-  size_t high_pri_pool_usage_;
-  // Memory size for entries residing in the cache
-  size_t usage_;
-  // Memory size for entries residing only in the LRU list
-  size_t lru_usage_;
-
-  const size_t k_;
+  TopSet topk_in_hpp_;
+  TopSet topk_in_all_;
+  TopSet topk_in_lru_;
+  TopSet topk_pinned_;
 };
 
 template <class LRUCacheShardType>
@@ -466,7 +656,7 @@ class LRUCacheBase : public ShardedCache {
  public:
   LRUCacheBase(size_t capacity, int num_shard_bits, bool strict_capacity_limit,
                double high_pri_pool_ratio,
-               const typename LRUCacheShardType::MonitorOptions& options,
+               const typename LRUCacheShardType::MonitorOptions& options = {},
                std::shared_ptr<MemoryAllocator> memory_allocator = nullptr);
   virtual ~LRUCacheBase();
   virtual const char* Name() const override;
@@ -480,6 +670,7 @@ class LRUCacheBase : public ShardedCache {
 
   //  Retrieves number of elements in LRU, for unit test purpose only
   size_t TEST_GetLRUSize();
+
   //  Retrives high pri pool ratio
   double GetHighPriPoolRatio() {
     double result = 0.0;

@@ -7,36 +7,56 @@
 
 #include <string>
 #include <vector>
+#include <terark/heap_ext.hpp>
+
 #include "port/port.h"
 #include "util/testharness.h"
 
 namespace rocksdb {
 
-class LRUCacheTest : public testing::Test {
+class LRUCacheTest : public testing::Test,
+                     virtual public testing::WithParamInterface<bool> {
  public:
   LRUCacheTest() {}
   ~LRUCacheTest() { DeleteCache(); }
 
   void DeleteCache() {
     if (cache_ != nullptr) {
-      cache_->~LRUCacheShard();
+      cache_->~CacheShard();
       port::cacheline_aligned_free(cache_);
       cache_ = nullptr;
     }
   }
 
+  void SetDiagnose(bool d) { is_diagnose_ = d; }
+
   void NewCache(size_t capacity, double high_pri_pool_ratio = 0.0) {
     DeleteCache();
-    cache_ = reinterpret_cast<LRUCacheShard*>(
-        port::cacheline_aligned_alloc(sizeof(LRUCacheShard)));
-    new (cache_) LRUCacheShard(capacity, false /*strict_capcity_limit*/,
-                               high_pri_pool_ratio);
+    if (is_diagnose_) {
+      cache_ = reinterpret_cast<LRUCacheDiagnosableShard*>(
+          port::cacheline_aligned_alloc(sizeof(LRUCacheDiagnosableShard)));
+      LRUCacheDiagnosableMonitor::Options mo;
+      mo.top_k = 10;
+      new (cache_) LRUCacheDiagnosableShard(
+          capacity, false /*strict_capcity_limit*/, high_pri_pool_ratio, mo);
+    } else {
+      cache_ = reinterpret_cast<LRUCacheShard*>(
+          port::cacheline_aligned_alloc(sizeof(LRUCacheShard)));
+      new (cache_) LRUCacheShard(capacity, false /*strict_capcity_limit*/,
+                                 high_pri_pool_ratio, {});
+    }
   }
 
   void Insert(const std::string& key,
               Cache::Priority priority = Cache::Priority::LOW) {
     cache_->Insert(key, 0 /*hash*/, nullptr /*value*/, 1 /*charge*/,
                    nullptr /*deleter*/, nullptr /*handle*/, priority);
+  }
+
+  void Insert(const std::string& key, size_t charge) {
+    cache_->Insert(key, 0 /*hash*/, nullptr /*value*/, charge,
+                   nullptr /*deleter*/, nullptr /*handle*/,
+                   Cache::Priority::LOW);
   }
 
   void Insert(char key, Cache::Priority priority = Cache::Priority::LOW) {
@@ -54,13 +74,24 @@ class LRUCacheTest : public testing::Test {
 
   bool Lookup(char key) { return Lookup(std::string(1, key)); }
 
+  Cache::Handle* LookupNotRelease(const std::string& key) {
+    return cache_->Lookup(key, 0 /*hash*/);
+  }
+
   void Erase(const std::string& key) { cache_->Erase(key, 0 /*hash*/); }
 
   void ValidateLRUList(std::vector<std::string> keys,
                        size_t num_high_pri_pool_keys = 0) {
     LRUHandle* lru;
     LRUHandle* lru_low_pri;
-    cache_->TEST_GetLRUList(&lru, &lru_low_pri);
+    if (is_diagnose_) {
+      reinterpret_cast<LRUCacheDiagnosableShard*>(cache_)->TEST_GetLRUList(
+          &lru, &lru_low_pri);
+    } else {
+      reinterpret_cast<LRUCacheShard*>(cache_)->TEST_GetLRUList(&lru,
+                                                                &lru_low_pri);
+    }
+
     LRUHandle* iter = lru;
     bool in_high_pri_pool = false;
     size_t high_pri_pool_keys = 0;
@@ -84,12 +115,34 @@ class LRUCacheTest : public testing::Test {
     ASSERT_TRUE(in_high_pri_pool);
     ASSERT_EQ(num_high_pri_pool_keys, high_pri_pool_keys);
   }
+  using DataElement = LRUCacheDiagnosableMonitor::TopSet::DataElement;
+  void ValidatePinnedElements(const std::vector<DataElement>& elements) {
+    LRUCacheDiagnosableShard* monitor_cache =
+        reinterpret_cast<LRUCacheDiagnosableShard*>(cache_);
+    auto& topset = monitor_cache->TEST_get_pinned_set();
+    auto& _elements_map = topset.TEST_get_elements_map();
+    auto& _elements = topset.TEST_get_elements_storage();
+
+    for (auto& e : elements) {
+      auto findit = _elements_map.find(Slice(e.key));
+      size_t data_idx = findit->second;
+      ASSERT_TRUE(findit != _elements_map.end());
+      ASSERT_TRUE(_elements[data_idx].count == e.count);
+      ASSERT_TRUE(_elements[data_idx].total_charge == e.total_charge);
+    }
+  }
+
+  CacheShard* cache() { return cache_; }
 
  private:
-  LRUCacheShard* cache_ = nullptr;
+  CacheShard* cache_ = nullptr;
+  bool is_diagnose_;
 };
 
-TEST_F(LRUCacheTest, BasicLRU) {
+INSTANTIATE_TEST_CASE_P(LRUCacheTest, LRUCacheTest, ::testing::Bool());
+
+TEST_P(LRUCacheTest, BasicLRU) {
+  SetDiagnose(GetParam());
   NewCache(5);
   for (char ch = 'a'; ch <= 'e'; ch++) {
     Insert(ch);
@@ -115,7 +168,8 @@ TEST_F(LRUCacheTest, BasicLRU) {
   ValidateLRUList({"e", "z", "d", "u", "v"});
 }
 
-TEST_F(LRUCacheTest, MidpointInsertion) {
+TEST_P(LRUCacheTest, MidpointInsertion) {
+  SetDiagnose(GetParam());
   // Allocate 2 cache entries to high-pri pool.
   NewCache(5, 0.45);
 
@@ -138,7 +192,8 @@ TEST_F(LRUCacheTest, MidpointInsertion) {
   ValidateLRUList({"c", "x", "y", "d", "z"}, 2);
 }
 
-TEST_F(LRUCacheTest, EntriesWithPriority) {
+TEST_P(LRUCacheTest, EntriesWithPriority) {
+  SetDiagnose(GetParam());
   // Allocate 2 cache entries to high-pri pool.
   NewCache(5, 0.45);
 
@@ -188,6 +243,285 @@ TEST_F(LRUCacheTest, EntriesWithPriority) {
   ValidateLRUList({"e", "f", "g", "Z", "d"}, 2);
 }
 
+TEST_F(LRUCacheTest, LRUCacheDiagnosableMonitor) {
+  SetDiagnose(true);
+  NewCache(5);
+  Insert("a");
+  Insert("b");
+  Insert("c");
+  Insert("d");
+
+  LRUCacheDiagnosableShard* monitor_cache =
+      reinterpret_cast<LRUCacheDiagnosableShard*>(cache());
+
+  ASSERT_EQ(monitor_cache->TEST_get_lru_set().TEST_get_elements_map().size(),
+            4);
+  ASSERT_EQ(
+      monitor_cache->TEST_get_lru_set().TEST_get_elements_storage().size(), 4);
+  ASSERT_EQ(
+      monitor_cache->TEST_get_highpri_set().TEST_get_elements_map().size(), 0);
+  ASSERT_EQ(
+      monitor_cache->TEST_get_highpri_set().TEST_get_elements_storage().size(),
+      0);
+  ASSERT_EQ(monitor_cache->TEST_get_total_set().TEST_get_elements_map().size(),
+            4);
+  ASSERT_EQ(
+      monitor_cache->TEST_get_total_set().TEST_get_elements_storage().size(),
+      4);
+
+  ASSERT_EQ(monitor_cache->TEST_get_pinned_set().TEST_get_elements_map().size(),
+            0);
+  ASSERT_EQ(
+      monitor_cache->TEST_get_pinned_set().TEST_get_elements_storage().size(),
+      0);
+
+  LRUHandle* h1 = reinterpret_cast<LRUHandle*>(LookupNotRelease("a"));
+  ASSERT_EQ(h1->refs, 2);
+  LRUHandle* h2 = reinterpret_cast<LRUHandle*>(LookupNotRelease("a"));
+  ASSERT_EQ(h1->refs, 3);
+  ASSERT_EQ(h2->refs, 3);
+  LRUHandle* h3 = reinterpret_cast<LRUHandle*>(LookupNotRelease("a"));
+  ASSERT_EQ(h1->refs, 4);
+  ASSERT_EQ(h2->refs, 4);
+  ASSERT_EQ(h3->refs, 4);
+
+  ASSERT_EQ(monitor_cache->TEST_get_lru_set().TEST_get_elements_map().size(),
+            3);
+  ASSERT_EQ(
+      monitor_cache->TEST_get_lru_set().TEST_get_elements_storage().size(), 3);
+  ASSERT_EQ(monitor_cache->TEST_get_pinned_set().TEST_get_elements_map().size(),
+            1);
+  ASSERT_EQ(
+      monitor_cache->TEST_get_pinned_set().TEST_get_elements_storage().size(),
+      1);
+
+  Erase("d");
+  ASSERT_EQ(monitor_cache->TEST_get_total_set().TEST_get_elements_map().size(),
+            3);
+  ASSERT_EQ(
+      monitor_cache->TEST_get_total_set().TEST_get_elements_storage().size(),
+      3);
+  ASSERT_EQ(monitor_cache->TEST_get_pinned_set().TEST_get_elements_map().size(),
+            1);
+  ASSERT_EQ(
+      monitor_cache->TEST_get_pinned_set().TEST_get_elements_storage().size(),
+      1);
+  ASSERT_EQ(
+      monitor_cache->TEST_get_lru_set().TEST_get_elements_storage().size(), 2);
+  ASSERT_EQ(
+      monitor_cache->TEST_get_lru_set().TEST_get_elements_storage().size(), 2);
+
+  LookupNotRelease("b");
+  ASSERT_EQ(monitor_cache->TEST_get_pinned_set().TEST_get_elements_map().size(),
+            2);
+  ASSERT_EQ(
+      monitor_cache->TEST_get_pinned_set().TEST_get_elements_storage().size(),
+      2);
+
+  Insert("a", 3);
+  LRUHandle* h4 = reinterpret_cast<LRUHandle*>(LookupNotRelease("a"));
+  ASSERT_EQ(h4->refs, 2);
+  ASSERT_EQ(h3->refs, 3);
+  ASSERT_EQ(h2->refs, 3);
+  ASSERT_EQ(h1->refs, 3);
+  std::vector<DataElement> elements;
+
+  elements.emplace_back("a", 4, 2, 0);
+  elements.emplace_back("b", 1, 1, 0);
+  ValidatePinnedElements(elements);
+}
+
+TEST_F(LRUCacheTest, TopSet) {
+  using TopSet = LRUCacheDiagnosableMonitor::TopSet;
+  auto new_lru_handle = [&](int id, size_t charge) {
+    std::string keydata = "handle-" + std::to_string(id);
+    LRUHandle* e = reinterpret_cast<LRUHandle*>(
+        new char[sizeof(LRUHandle) - 1 + keydata.size()]);
+    e->key_length = 13;
+    memcpy(e->key_data, keydata.c_str(), keydata.size());
+
+    e->charge = charge;
+    return e;
+  };
+
+  TopSet ts(10);
+
+  LRUHandle* h1 = new_lru_handle(1, 4);
+  ts.Add(h1);
+  LRUHandle* h2 = new_lru_handle(2, 3);
+  ts.Add(h2);
+
+  ts.Sub(h2);
+
+  auto storage = ts.TEST_get_elements_storage();
+  auto heap = ts.TEST_get_data_heap();
+  auto map = ts.TEST_get_elements_map();
+  ASSERT_EQ(map.size(), 1);
+  ASSERT_EQ(storage.size(), 1);
+  ASSERT_EQ(heap.size(), 1);
+
+  ASSERT_EQ(storage[0].key.substr(0, 8), "handle-1");
+  ASSERT_EQ(storage[0].total_charge, 4);
+  ASSERT_EQ(storage[0].count, 1);
+}
+TEST_F(LRUCacheTest, TopSetAdd) {
+  using TopSet = LRUCacheDiagnosableMonitor::TopSet;
+  using DataIdx = LRUCacheDiagnosableMonitor::TopSet::DataIdx;
+  auto new_lru_handle = [&](int id, size_t charge) {
+    std::string keydata = "handle-" + std::to_string(id);
+    LRUHandle* e = reinterpret_cast<LRUHandle*>(
+        new char[sizeof(LRUHandle) - 1 + keydata.size()]);
+    e->key_length = 13;
+    memcpy(e->key_data, keydata.c_str(), keydata.size());
+
+    e->charge = charge;
+    return e;
+  };
+
+  TopSet ts(10);
+
+  LRUHandle* h1 = new_lru_handle(1, 1);
+  ts.Add(h1);
+  LRUHandle* h2 = new_lru_handle(2, 4);
+  ts.Add(h2);
+  LRUHandle* h3 = new_lru_handle(3, 10);
+  ts.Add(h3);
+  LRUHandle* h4 = new_lru_handle(4, 1);
+  ts.Add(h4);
+  LRUHandle* h5 = new_lru_handle(2, 3);
+  ts.Add(h5);
+  LRUHandle* h6 = new_lru_handle(5, 9);
+  ts.Add(h6);
+
+  auto storage = ts.TEST_get_elements_storage();
+  auto heap = ts.TEST_get_data_heap();
+  auto map = ts.TEST_get_elements_map();
+  ASSERT_EQ(map.size(), 5);
+  ASSERT_EQ(storage.size(), 5);
+  ASSERT_EQ(heap.size(), 5);
+
+  ASSERT_EQ(storage[0].key.substr(0,8), "handle-1");
+  ASSERT_EQ(storage[0].total_charge, 1);
+  ASSERT_EQ(storage[0].count, 1);
+
+  ASSERT_EQ(storage[1].key.substr(0,8), "handle-2");
+  ASSERT_EQ(storage[1].total_charge, 7);
+  ASSERT_EQ(storage[1].count, 2);
+
+  ASSERT_EQ(storage[2].key.substr(0,8), "handle-3");
+  ASSERT_EQ(storage[2].total_charge, 10);
+  ASSERT_EQ(storage[2].count, 1);
+
+  ASSERT_EQ(storage[3].key.substr(0,8), "handle-4");
+  ASSERT_EQ(storage[3].total_charge, 1);
+  ASSERT_EQ(storage[3].count, 1);
+
+  ASSERT_EQ(storage[4].key.substr(0,8), "handle-5");
+  ASSERT_EQ(storage[4].total_charge, 9);
+  ASSERT_EQ(storage[4].count, 1);
+
+  terark::pop_heap_keep_top(heap.begin(), heap.size(),
+                            ts.TEST_get_charge_cmp());
+  DataIdx top_idx = heap.back();
+  ASSERT_EQ(top_idx, 2);
+  for (size_t i = 1; i < heap.size(); i++) {
+    ASSERT_TRUE(ts.VerifyIdx());
+    terark::pop_heap_keep_top(heap.begin(), heap.size() - i,
+                              ts.TEST_get_charge_cmp());
+    ASSERT_TRUE(ts.VerifyIdx());
+    auto cur_top_idx = heap.back();
+    ASSERT_LE(storage[cur_top_idx].total_charge, storage[top_idx].total_charge);
+  }
+}
+
+TEST_F(LRUCacheTest, TopSetSub) {
+  using TopSet = LRUCacheDiagnosableMonitor::TopSet;
+  using DataIdx = LRUCacheDiagnosableMonitor::TopSet::DataIdx;
+  auto new_lru_handle = [&](int id, size_t charge) {
+    std::string keydata = "handle-" + std::to_string(id);
+    LRUHandle* e = reinterpret_cast<LRUHandle*>(
+        new char[sizeof(LRUHandle) - 1 + keydata.size()]);
+    e->key_length = 13;
+    memcpy(e->key_data, keydata.c_str(), keydata.size());
+
+    e->charge = charge;
+    return e;
+  };
+
+  TopSet ts(10);
+
+  LRUHandle* h1 = new_lru_handle(1, 1);
+  ts.Add(h1);
+  LRUHandle* h2 = new_lru_handle(2, 4);
+  ts.Add(h2);
+  LRUHandle* h3 = new_lru_handle(3, 10);
+  ts.Add(h3);
+  LRUHandle* h4 = new_lru_handle(4, 1);
+  ts.Add(h4);
+  LRUHandle* h5 = new_lru_handle(2, 3);
+  ts.Add(h5);
+  LRUHandle* h6 = new_lru_handle(5, 9);
+  ts.Add(h6);
+
+  auto& storage = ts.TEST_get_elements_storage();
+  auto& heap = ts.TEST_get_data_heap();
+  auto& map = ts.TEST_get_elements_map();
+  ASSERT_EQ(map.size(), 5);
+  ASSERT_EQ(storage.size(), 5);
+  ASSERT_EQ(heap.size(), 5);
+
+  ASSERT_EQ(storage[0].key.substr(0,8), "handle-1");
+  ASSERT_EQ(storage[0].total_charge, 1);
+  ASSERT_EQ(storage[0].count, 1);
+
+  ASSERT_EQ(storage[1].key.substr(0,8), "handle-2");
+  ASSERT_EQ(storage[1].total_charge, 7);
+  ASSERT_EQ(storage[1].count, 2);
+
+  ASSERT_EQ(storage[2].key.substr(0,8), "handle-3");
+  ASSERT_EQ(storage[2].total_charge, 10);
+  ASSERT_EQ(storage[2].count, 1);
+
+  ASSERT_EQ(storage[3].key.substr(0,8), "handle-4");
+  ASSERT_EQ(storage[3].total_charge, 1);
+  ASSERT_EQ(storage[3].count, 1);
+
+  ASSERT_EQ(storage[4].key.substr(0,8), "handle-5");
+  ASSERT_EQ(storage[4].total_charge, 9);
+  ASSERT_EQ(storage[4].count, 1);
+
+  ts.Sub(h5);
+
+  ASSERT_EQ(storage[1].key.substr(0,8), "handle-2");
+  ASSERT_EQ(storage[1].total_charge, 4);
+  ASSERT_EQ(storage[1].count, 1);
+
+  ts.Sub(h6);
+
+  ASSERT_EQ(storage[4].key.substr(0,8), "handle-5");
+  ASSERT_EQ(storage[4].total_charge, 0);
+  ASSERT_EQ(storage[4].count, 0);
+
+  auto& storage1 = ts.TEST_get_elements_storage();
+  auto heap1 = ts.TEST_get_data_heap();
+  auto& map1 = ts.TEST_get_elements_map();
+  ASSERT_EQ(map1.size(), 4);
+  ASSERT_EQ(storage1.size(), 4);
+  ASSERT_EQ(heap1.size(), 4);
+
+  terark::pop_heap_keep_top(heap1.begin(), heap1.size(),
+                            ts.TEST_get_charge_cmp());
+  DataIdx top_idx = heap1.back();
+  ASSERT_EQ(top_idx, 2);
+  for (size_t i = 1; i < heap1.size(); i++) {
+    ASSERT_TRUE(ts.VerifyIdx());
+    terark::pop_heap_keep_top(heap1.begin(), heap1.size() - i,
+                              ts.TEST_get_charge_cmp());
+    ASSERT_TRUE(ts.VerifyIdx());
+    auto cur_top_idx = heap1.back();
+    ASSERT_LE(storage[cur_top_idx].total_charge, storage[top_idx].total_charge);
+  }
+}
 }  // namespace rocksdb
 
 int main(int argc, char** argv) {

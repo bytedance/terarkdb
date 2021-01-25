@@ -113,10 +113,17 @@ struct LIRSCacheOptions {
 extern std::shared_ptr<Cache> NewLRUCache(
     size_t capacity, int num_shard_bits = -1,
     bool strict_capacity_limit = false, double high_pri_pool_ratio = 0.0,
-    std::shared_ptr<MemoryAllocator> memory_allocator = nullptr,
-    bool is_diagnose = false, size_t topk = 10);
+    std::shared_ptr<MemoryAllocator> memory_allocator = nullptr);
 
 extern std::shared_ptr<Cache> NewLRUCache(const LRUCacheOptions& cache_opts);
+
+std::shared_ptr<Cache> NewDiagnosableLRUCache(
+    const LRUCacheOptions& cache_opts);
+
+std::shared_ptr<Cache> NewDiagnosableLRUCache(
+    size_t capacity, int num_shard_bits, bool strict_capacity_limit,
+    double high_pri_pool_ratio,
+    std::shared_ptr<MemoryAllocator> memory_allocator, size_t topk);
 
 extern std::shared_ptr<Cache> NewLIRSCache(
     size_t capacity, int num_shard_bits = -1,
