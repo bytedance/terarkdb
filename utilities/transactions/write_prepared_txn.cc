@@ -102,6 +102,7 @@ Status WritePreparedTxn::PrepareInternal() {
   assert(!s.ok() || seq_used != kMaxSequenceNumber);
   auto prepare_seq = seq_used;
   SetId(prepare_seq);
+  TEST_SYNC_POINT_CALLBACK("WritePreparedTxn::PrepareInternal::End", nullptr);
   return s;
 }
 
