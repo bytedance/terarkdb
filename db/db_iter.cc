@@ -575,6 +575,8 @@ bool DBIter::FindNextUserEntryInternal(bool skipping, bool prefix_check) {
                                             kValueTypeForSeek));
       }
       iter_->Seek(last_key);
+      TEST_SYNC_POINT_CALLBACK("DBIter::FindNextUserEntryInternal::Reseek",
+                               &last_key);
       RecordTick(statistics_, NUMBER_OF_RESEEKS_IN_ITERATION);
     } else {
       iter_->Next();

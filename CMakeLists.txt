@@ -1149,5 +1149,6 @@ if(WITH_TOOLS)
 
   add_subdirectory(tools)
   #add_subdirectory(terark-tools/terark-test)
+  add_subdirectory(terark-tools/trx-test)
   add_subdirectory(terark-tools/batch-write-bench)
 endif()
