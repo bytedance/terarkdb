@@ -3,7 +3,7 @@
 
 #include "db/table_properties_collector.h"
 #include "rocksdb/terark_namespace.h"
-#include "table/block_based_table_builder.h"
+#include "table/terark_zip_table_builder.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
@@ -60,7 +60,7 @@ class TestEnv : public EnvWrapper {
   int close_count;
 };
 
-class BlockBasedTableBuilderTest : public ::testing::TestWithParam<params> {};
+class TerarkZipTableBuilderTest : public ::testing::TestWithParam<params> {};
 
 params ttl_param[] = {{0.50, 2},     {1.280, 5}, {0.800, 0}, {1.280, 0},
                       {1.000, 1000}, {0.000, 1}, {-10, 0}};
@@ -68,16 +68,17 @@ params ttl_param[] = {{0.50, 2},     {1.280, 5}, {0.800, 0}, {1.280, 0},
 //                         testing::Values(ttl_param[0], ttl_param[1],
 //                                         ttl_param[2], ttl_param[3],
 //                                         ttl_param[4], ttl_param[5]));
-INSTANTIATE_TEST_CASE_P(CorrectnessTest, BlockBasedTableBuilderTest,
+INSTANTIATE_TEST_CASE_P(CorrectnessTest, TerarkZipTableBuilderTest,
                         testing::ValuesIn(ttl_param));
 
-TEST_F(BlockBasedTableBuilderTest, FunctionTest) {
-  BlockBasedTableOptions blockbasedtableoptions;
-  BlockBasedTableFactory factory(blockbasedtableoptions);
+TEST_F(TerarkZipTableBuilderTest, FunctionTest) {
+  TerarkZipTableOptions terarkziptableoptions;
   test::StringSink sink;
   std::unique_ptr<WritableFileWriter> file_writer(
       test::GetWritableFileWriter(new test::StringSink(), "" /* don't care */));
   Options options;
+  options.table_factory.reset(TERARKDB_NAMESPACE::NewTerarkZipTableFactory(
+      terarkziptableoptions, options.table_factory));
   std::string dbname =
       test::PerThreadDBPath("block_based_table_builder_ttl_test_1");
   ASSERT_OK(DestroyDB(dbname, options));
@@ -99,7 +100,7 @@ TEST_F(BlockBasedTableBuilderTest, FunctionTest) {
       int_tbl_prop_collector_factories;
   std::string column_family_name;
   int unknown_level = -1;
-  std::unique_ptr<TableBuilder> builder(factory.NewTableBuilder(
+  std::unique_ptr<TableBuilder> builder(options.table_factory->NewTableBuilder(
       TableBuilderOptions(ioptions, moptions, ikc,
                           &int_tbl_prop_collector_factories, kNoCompression,
                           CompressionOptions(), nullptr /* compression_dict */,
@@ -123,7 +124,7 @@ TEST_F(BlockBasedTableBuilderTest, FunctionTest) {
           new test::StringSource(ss->contents(), 72242, true)));
   TableProperties* props = nullptr;
   s = ReadTableProperties(file_reader.get(), ss->contents().size(),
-                          kBlockBasedTableMagicNumber, ioptions, &props,
+                          kTerarkZipTableMagicNumber, ioptions, &props,
                           true /* compression_type_missing */);
   std::unique_ptr<TableProperties> props_guard(props);
 
@@ -132,7 +133,7 @@ TEST_F(BlockBasedTableBuilderTest, FunctionTest) {
   ASSERT_EQ(16ul * 26, props->raw_key_size);
   ASSERT_EQ(28ul * 26, props->raw_value_size);
   ASSERT_EQ(26ul, props->num_entries);
-  ASSERT_EQ(1ul, props->num_data_blocks);
+  ASSERT_EQ(26ul, props->num_data_blocks);
   ASSERT_TRUE(props->user_collected_properties.find(
                   TablePropertiesNames::kEarliestTimeBeginCompact) ==
               props->user_collected_properties.end());
@@ -144,13 +145,14 @@ TEST_F(BlockBasedTableBuilderTest, FunctionTest) {
   delete options.env;
 }
 
-TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
-  BlockBasedTableOptions blockbasedtableoptions;
-  BlockBasedTableFactory factory(blockbasedtableoptions);
+TEST_P(TerarkZipTableBuilderTest, BoundaryTest) {
+  TerarkZipTableOptions terarkziptableoptions;
   test::StringSink sink;
   std::unique_ptr<WritableFileWriter> file_writer(
       test::GetWritableFileWriter(new test::StringSink(), "" /* don't care */));
   Options options;
+  options.table_factory.reset(TERARKDB_NAMESPACE::NewTerarkZipTableFactory(
+      terarkziptableoptions, options.table_factory));
   std::string dbname =
       test::PerThreadDBPath("block_based_table_builder_ttl_test_2");
   ASSERT_OK(DestroyDB(dbname, options));
@@ -181,7 +183,7 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
           moptions.ttl_garbage_collection_percentage, moptions.ttl_scan_gap));
   std::string column_family_name;
   int unknown_level = -1;
-  std::unique_ptr<TableBuilder> builder(factory.NewTableBuilder(
+  std::unique_ptr<TableBuilder> builder(options.table_factory->NewTableBuilder(
       TableBuilderOptions(ioptions, moptions, ikc,
                           &int_tbl_prop_collector_factories, kNoCompression,
                           CompressionOptions(), nullptr /* compression_dict */,
@@ -224,7 +226,7 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
 
   TableProperties* props = nullptr;
   s = ReadTableProperties(file_reader.get(), ss->contents().size(),
-                          kBlockBasedTableMagicNumber, ioptions, &props,
+                          kTerarkZipTableMagicNumber, ioptions, &props,
                           true /* compression_type_missing */);
   std::unique_ptr<TableProperties> props_guard(props);
 
@@ -233,7 +235,7 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
   ASSERT_EQ(16ul * 26, props->raw_key_size);
   ASSERT_EQ(36ul * 26, props->raw_value_size);
   ASSERT_EQ(26ul, props->num_entries);
-  ASSERT_EQ(1ul, props->num_data_blocks);
+  ASSERT_EQ(26ul, props->num_data_blocks);
   auto answer1 = props->user_collected_properties.find(
       TablePropertiesNames::kEarliestTimeBeginCompact);
   auto answer2 = props->user_collected_properties.find(
