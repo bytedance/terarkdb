@@ -544,7 +544,7 @@ class VersionBuilder::Rep {
     if (debugger_) {
       debugger_->PushEdit(edit);
     }
-
+    Header(info_log_, "%d version_edit to add/delete", edit->NumEntries());
     // Delete files
     const VersionEdit::DeletedFileSet& del = edit->GetDeletedFiles();
     new_deleted_files_ += del.size();

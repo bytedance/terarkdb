@@ -67,7 +67,7 @@ int FindFileInRange(const InternalKeyComparator& icmp,
                     uint32_t left, uint32_t right) {
   return static_cast<int>(
       terark::lower_bound_ex_n(file_level.files, left, right, key,
-                                         TERARK_FIELD(largest_key), "" < icmp));
+                               TERARK_FIELD(largest_key), "" < icmp));
 }
 
 Status OverlapWithIterator(const Comparator* ucmp,
@@ -2113,8 +2113,7 @@ void VersionStorageInfo::GenerateLevel0NonOverlapping() {
       level_files_brief_[0].files,
       level_files_brief_[0].files + level_files_brief_[0].num_files);
   auto icmp = internal_comparator_;
-  terark::sort_a(level0_sorted_file,
-                           TERARK_FIELD(smallest_key) < *icmp);
+  terark::sort_a(level0_sorted_file, TERARK_FIELD(smallest_key) < *icmp);
 
   for (size_t i = 1; i < level0_sorted_file.size(); ++i) {
     FdWithKeyRange& f = level0_sorted_file[i];
@@ -3634,6 +3633,8 @@ Status VersionSet::Recover(
     return Status::Corruption("CURRENT file corrupted");
   }
 
+  Header(db_options_->info_log, "Recovering from manifest file: %s\n",
+         manifest_filename.c_str());
   ROCKS_LOG_INFO(db_options_->info_log, "Recovering from manifest file: %s\n",
                  manifest_filename.c_str());
 
@@ -3861,6 +3862,18 @@ Status VersionSet::Recover(
         (unsigned long)next_file_number_.load(), (unsigned long)last_sequence_,
         (unsigned long)log_number, (unsigned long)prev_log_number_,
         column_family_set_->GetMaxColumnFamily(), min_log_number_to_keep_2pc());
+    Header(
+        db_options_->info_log,
+        "Recovered from manifest file:%s succeeded,"
+        "manifest_file_number is %lu, next_file_number is %lu, "
+        "last_sequence is %lu, log_number is %lu,"
+        "prev_log_number is %lu,"
+        "max_column_family is %u,"
+        "min_log_number_to_keep is %lu\n",
+        manifest_filename.c_str(), (unsigned long)manifest_file_number_,
+        (unsigned long)next_file_number_.load(), (unsigned long)last_sequence_,
+        (unsigned long)log_number, (unsigned long)prev_log_number_,
+        column_family_set_->GetMaxColumnFamily(), min_log_number_to_keep_2pc());
 
     for (auto cfd : *column_family_set_) {
       if (cfd->IsDropped()) {
@@ -3869,6 +3882,9 @@ Status VersionSet::Recover(
       ROCKS_LOG_INFO(db_options_->info_log,
                      "Column family [%s] (ID %u), log number is %" PRIu64 "\n",
                      cfd->GetName().c_str(), cfd->GetID(), cfd->GetLogNumber());
+      Header(db_options_->info_log,
+             "Column family [%s] (ID %u), log number is %" PRIu64 "\n",
+             cfd->GetName().c_str(), cfd->GetID(), cfd->GetLogNumber());
     }
   }
 

@@ -80,6 +80,8 @@ const std::string LDBCommand::ARG_WRITE_BUFFER_SIZE = "write_buffer_size";
 const std::string LDBCommand::ARG_FILE_SIZE = "file_size";
 const std::string LDBCommand::ARG_CREATE_IF_MISSING = "create_if_missing";
 const std::string LDBCommand::ARG_NO_VALUE = "no_value";
+const std::string LDBCommand::ARG_USE_TERARK_TABLE = "use_terark_table";
+const std::string LDBCommand::ARG_WAL_DIR = "wal_dir";
 
 const char* LDBCommand::DELIM = " ==> ";
 
@@ -449,7 +451,9 @@ std::vector<std::string> LDBCommand::BuildCmdLineOptions(
                                   ARG_FIX_PREFIX_LEN,
                                   ARG_TRY_LOAD_OPTIONS,
                                   ARG_IGNORE_UNKNOWN_OPTIONS,
-                                  ARG_CF_NAME};
+                                  ARG_CF_NAME,
+                                  ARG_USE_TERARK_TABLE,
+                                  ARG_WAL_DIR};
   ret.insert(ret.end(), options.begin(), options.end());
   return ret;
 }
@@ -522,13 +526,16 @@ Options LDBCommand::PrepareOptionsForOpenDB() {
 
   std::map<std::string, std::string>::const_iterator itr;
 
-  BlockBasedTableOptions table_options;
+  BlockBasedTableOptions block_based_table_options;
+  TerarkZipTableOptions terark_zip_table_options;
   bool use_table_options = false;
+  bool use_terark_table =
+      ParseBooleanOption(option_map_, ARG_USE_TERARK_TABLE, true);
   int bits;
   if (ParseIntOption(option_map_, ARG_BLOOM_BITS, bits, exec_state_)) {
     if (bits > 0) {
       use_table_options = true;
-      table_options.filter_policy.reset(NewBloomFilterPolicy(bits));
+      block_based_table_options.filter_policy.reset(NewBloomFilterPolicy(bits));
     } else {
       exec_state_ =
           LDBCommandExecuteResult::Failed(ARG_BLOOM_BITS + " must be > 0.");
@@ -539,7 +546,7 @@ Options LDBCommand::PrepareOptionsForOpenDB() {
   if (ParseIntOption(option_map_, ARG_BLOCK_SIZE, block_size, exec_state_)) {
     if (block_size > 0) {
       use_table_options = true;
-      table_options.block_size = block_size;
+      block_based_table_options.block_size = block_size;
     } else {
       exec_state_ =
           LDBCommandExecuteResult::Failed(ARG_BLOCK_SIZE + " must be > 0.");
@@ -547,7 +554,12 @@ Options LDBCommand::PrepareOptionsForOpenDB() {
   }
 
   if (use_table_options) {
-    cf_opts->table_factory.reset(NewBlockBasedTableFactory(table_options));
+    cf_opts->table_factory.reset(
+        NewBlockBasedTableFactory(block_based_table_options));
+  }
+  if (use_terark_table) {
+    cf_opts->table_factory.reset(NewTerarkZipTableFactory(
+        terark_zip_table_options, cf_opts->table_factory));
   }
 
   itr = option_map_.find(ARG_AUTO_COMPACTION);
@@ -639,6 +651,11 @@ Options LDBCommand::PrepareOptionsForOpenDB() {
       exec_state_ =
           LDBCommandExecuteResult::Failed(ARG_FIX_PREFIX_LEN + " must be > 0.");
     }
+  }
+
+  itr = option_map_.find(ARG_WAL_DIR);
+  if (itr != option_map_.end()) {
+    db_opts->wal_dir = itr->second;
   }
   // TODO(ajkr): this return value doesn't reflect the CF options changed, so
   // subcommands that rely on this won't see the effect of CF-related CLI args.

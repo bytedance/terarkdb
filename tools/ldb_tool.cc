@@ -5,6 +5,7 @@
 //
 #ifndef ROCKSDB_LITE
 #include "rocksdb/ldb_tool.h"
+
 #include "rocksdb/utilities/ldb_cmd.h"
 #include "tools/ldb_cmd_impl.h"
 
@@ -59,6 +60,9 @@ void LDBCommandRunner::PrintHelp(const LDBOptions& ldb_options,
   ret.append("  --" + LDBCommand::ARG_WRITE_BUFFER_SIZE +
              "=<int,e.g.:4194304>\n");
   ret.append("  --" + LDBCommand::ARG_FILE_SIZE + "=<int,e.g.:2097152>\n");
+  ret.append("  --" + LDBCommand::ARG_USE_TERARK_TABLE + "=<bool,e.g.:true>\n");
+  ret.append("  --" + LDBCommand::ARG_WAL_DIR +
+             "=<full_path_to_wal_directory> if different from db\n");
 
   ret.append("\n\n");
   ret.append("Data Access Commands:\n");
@@ -128,6 +132,6 @@ void LDBTool::Run(int argc, char** argv, Options options,
   LDBCommandRunner::RunCommand(argc, argv, options, ldb_options,
                                column_families);
 }
-} // namespace rocksdb
+}  // namespace rocksdb
 
 #endif  // ROCKSDB_LITE

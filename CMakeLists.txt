@@ -913,8 +913,11 @@ IF(WITH_TESTS OR WITH_TOOLS)
   add_library(testharness OBJECT util/testharness.cc)
 ENDIF()
 
-
 if(WITH_TESTS)
+  set(TESTS
+        db/repair_test.cc)
+
+if(WITH_ALL_TESTS)
   set(TESTS
         cache/cache_test.cc
         cache/lru_cache_test.cc
@@ -1063,6 +1066,7 @@ if(WITH_TESTS)
         utilities/ttl/ttl_test.cc
         utilities/write_batch_with_index/write_batch_with_index_test.cc
   )
+  endif()
 
   if(WITH_LIBRADOS)
     list(APPEND TESTS utilities/env_librados_test.cc)

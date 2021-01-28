@@ -194,6 +194,9 @@ class Repairer {
       // Recover using the fresh manifest created by NewDB()
       status =
           vset_.Recover({{kDefaultColumnFamilyName, default_cf_opts_}}, false);
+      // ROCKS_LOG_WARN(db_options_.info_log,
+      //                "%" PRIu64 " counts of file number manifest has used",
+      //                vset_.current_next_file_number());
     }
     if (status.ok()) {
       // Need to scan existing SST files first so the column families are
@@ -317,6 +320,8 @@ class Repairer {
     if (!found_file) {
       return Status::Corruption(dbname_, "repair found no files");
     }
+    Header(immutable_db_options_.info_log, "Find %d sst, %d log, %d manifest",
+           table_fds_.size(), logs_.size(), manifests_.size());
     return Status::OK();
   }
 
@@ -445,7 +450,8 @@ class Repairer {
           nullptr /* event_logger */, 0 /* job_id */, Env::IO_HIGH,
           nullptr /* table_properties */, -1 /* level */, current_time,
           write_hint);
-      ROCKS_LOG_INFO(db_options_.info_log,
+
+      ROCKS_LOG_WARN(db_options_.info_log,
                      "Log #%" PRIu64 ": %d ops saved to Table #%" PRIu64 " %s",
                      log, counter, meta[0].fd.GetNumber(),
                      status.ToString().c_str());
@@ -749,8 +755,10 @@ class Repairer {
     new_file.append("/");
     new_file.append((slash == nullptr) ? fname.c_str() : slash + 1);
     Status s = env_->RenameFile(fname, new_file);
-    ROCKS_LOG_INFO(db_options_.info_log, "Archiving %s: %s\n", fname.c_str(),
-                   s.ToString().c_str());
+    Header(db_options_.info_log, "Archiving %s to %s: %s\n", fname.c_str(),
+           new_file.c_str(), s.ToString().c_str());
+    ROCKS_LOG_INFO(db_options_.info_log, "Archiving %s to %s: %s\n",
+                   fname.c_str(), new_file.c_str(), s.ToString().c_str());
   }
 };
 
