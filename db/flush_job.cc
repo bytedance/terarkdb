@@ -377,18 +377,20 @@ Status FlushJob::WriteLevel0Table() {
           c_style_callback(get_arena_input_iter), &get_arena_input_iter,
           c_style_callback(get_range_del_iters), &get_range_del_iters, &meta_,
           cfd_->internal_comparator(), cfd_->int_tbl_prop_collector_factories(),
-          cfd_->GetID(), cfd_->GetName(), existing_snapshots_,
+          cfd_->int_tbl_prop_collector_factories_for_blob(), cfd_->GetID(),
+          cfd_->GetName(), existing_snapshots_,
           earliest_write_conflict_snapshot_, snapshot_checker_,
           output_compression_, cfd_->ioptions()->compression_opts,
           mutable_cf_options_.paranoid_file_checks, cfd_->internal_stats(),
           TableFileCreationReason::kFlush, event_logger_, job_context_->job_id,
           Env::IO_HIGH, &table_properties_, 0 /* level */, flush_load_,
           current_time, oldest_key_time, write_hint);
-      if (cfd_->ioptions()->ttl_extractor_factory != nullptr) {
+      if (s.ok() && cfd_->ioptions()->ttl_extractor_factory != nullptr) {
         ROCKS_LOG_INFO(db_options_.info_log,
-                       "Flush: ratio:%" PRIu64 ", scan:%" PRIu64,
-                       meta_[0].prop.ratio_expire_time,
-                       meta_[0].prop.scan_gap_expire_time);
+                       "FlushOutput earliest_time_begin_compact = %" PRIu64
+                       ", latest_time_end_compact = %" PRIu64,
+                       meta_[0].prop.earliest_time_begin_compact,
+                       meta_[0].prop.latest_time_end_compact);
       }
 
       LogFlush(db_options_.info_log);

@@ -341,12 +341,12 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // If value less than 0.0, it acts the same as 0.0.
   // If the value greater than 1.000, we do not enable ttl_gc.
   // Default: 1.000
-  double ttl_garbage_collection_percentage = 1.000;
+  double ttl_gc_ratio = 1.000;
 
   // The scan gap of ttl to mark a SST to be compacted.
   // If the value not set, it use 0 default and we do not enable scan_gap.
   // Default: 0
-  size_t ttl_scan_gap = 0;
+  size_t ttl_max_scan_gap = 0;
 
   // Create ColumnFamilyOptions with default values for all fields
   ColumnFamilyOptions();

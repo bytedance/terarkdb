@@ -201,7 +201,7 @@ class KeyGenerator {
         return values_[next_++];
     }
     assert(false);
-    return std::numeric_limits<uint64_t>::max();
+    return port::kMaxUint64;
   }
 
  private:

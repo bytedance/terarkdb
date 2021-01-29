@@ -293,7 +293,7 @@ MutableDBOptions::MutableDBOptions(const DBOptions& options)
       compaction_readahead_size(options.compaction_readahead_size) {}
 
 void MutableDBOptions::Dump(Logger* log) const {
-  ROCKS_LOG_HEADER(log, "            Options.max_background_jobs: %d",
+  ROCKS_LOG_HEADER(log, "                   Options.max_background_jobs: %d",
                    max_background_jobs);
   ROCKS_LOG_HEADER(log, "            Options.max_background_compactions: %d",
                    max_background_compactions);
@@ -304,20 +304,23 @@ void MutableDBOptions::Dump(Logger* log) const {
   ROCKS_LOG_HEADER(
       log, "          Options.writable_file_max_buffer_size: %" ROCKSDB_PRIszt,
       writable_file_max_buffer_size);
-  ROCKS_LOG_HEADER(log, "            Options.delayed_write_rate : %" PRIu64,
+  ROCKS_LOG_HEADER(log,
+                   "                     Options.delayed_write_rate: %" PRIu64,
                    delayed_write_rate);
-  ROCKS_LOG_HEADER(log, "                  Options.max_wal_size: %" PRIu64,
+  ROCKS_LOG_HEADER(log,
+                   "                           Options.max_wal_size: %" PRIu64,
                    max_wal_size);
-  ROCKS_LOG_HEADER(log, "            Options.max_total_wal_size: %" PRIu64,
+  ROCKS_LOG_HEADER(log,
+                   "                     Options.max_total_wal_size: %" PRIu64,
                    max_total_wal_size);
-  ROCKS_LOG_HEADER(
-      log, "            Options.delete_obsolete_files_period_micros: %" PRIu64,
-      delete_obsolete_files_period_micros);
+  ROCKS_LOG_HEADER(log,
+                   "    Options.delete_obsolete_files_period_micros: %" PRIu64,
+                   delete_obsolete_files_period_micros);
   ROCKS_LOG_HEADER(log, "                  Options.stats_dump_period_sec: %u",
                    stats_dump_period_sec);
-  ROCKS_LOG_HEADER(log, "                Options.stats_persist_period_sec: %d",
+  ROCKS_LOG_HEADER(log, "               Options.stats_persist_period_sec: %d",
                    stats_persist_period_sec);
-  ROCKS_LOG_HEADER(log, "                Options.stats_history_buffer_size: %d",
+  ROCKS_LOG_HEADER(log, "              Options.stats_history_buffer_size: %d",
                    stats_history_buffer_size);
   ROCKS_LOG_HEADER(log, "                         Options.max_open_files: %d",
                    max_open_files);
@@ -327,9 +330,9 @@ void MutableDBOptions::Dump(Logger* log) const {
   ROCKS_LOG_HEADER(log,
                    "                     Options.wal_bytes_per_sync: %" PRIu64,
                    wal_bytes_per_sync);
-  ROCKS_LOG_HEADER(log,
-                   "      Options.compaction_readahead_size: %" ROCKSDB_PRIszt,
-                   compaction_readahead_size);
+  ROCKS_LOG_HEADER(
+      log, "              Options.compaction_readahead_size: %" ROCKSDB_PRIszt,
+      compaction_readahead_size);
 }
 
 }  // namespace TERARKDB_NAMESPACE

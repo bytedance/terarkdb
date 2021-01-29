@@ -19,7 +19,6 @@ class Status;
 struct TtlExtractorContext {
   // Which column family this compaction is for.
   uint32_t column_family_id;
-  Env* env;
 };
 
 class TtlExtractor {

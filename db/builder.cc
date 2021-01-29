@@ -28,6 +28,7 @@
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
+#include "rocksdb/table_properties.h"
 #include "rocksdb/terark_namespace.h"
 #include "table/format.h"
 #include "table/internal_iterator.h"
@@ -77,6 +78,8 @@ Status BuildTable(
     const InternalKeyComparator& internal_comparator,
     const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
         int_tbl_prop_collector_factories,
+    const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
+        int_tbl_prop_collector_factories_for_blob,
     uint32_t column_family_id, const std::string& column_family_name,
     std::vector<SequenceNumber> snapshots,
     SequenceNumber earliest_write_conflict_snapshot,
@@ -275,7 +278,7 @@ Status BuildTable(
                                    ioptions.statistics, ioptions.listeners));
         separate_helper.builder.reset(NewTableBuilder(
             ioptions, mutable_cf_options, internal_comparator,
-            int_tbl_prop_collector_factories, column_family_id,
+            int_tbl_prop_collector_factories_for_blob, column_family_id,
             column_family_name, separate_helper.file_writer.get(), compression,
             compression_opts, -1 /* level */, 0 /* compaction_load */, nullptr,
             true));
@@ -413,17 +416,10 @@ Status BuildTable(
       sst_meta()->prop.flags |=
           tp.snapshots.empty() ? 0 : TablePropertyCache::kHasSnapshots;
       if (ioptions.ttl_extractor_factory != nullptr) {
-        sst_meta()->prop.ratio_expire_time = DecodeFixed64(
-            builder->GetTableProperties()
-                .user_collected_properties
-                .find(TablePropertiesNames::kEarliestTimeBeginCompact)
-                ->second.c_str());
-
-        sst_meta()->prop.scan_gap_expire_time =
-            DecodeFixed64(builder->GetTableProperties()
-                              .user_collected_properties
-                              .find(TablePropertiesNames::kLatestTimeEndCompact)
-                              ->second.c_str());
+        GetCompactionTimePoint(
+            builder->GetTableProperties().user_collected_properties,
+            &sst_meta()->prop.earliest_time_begin_compact,
+            &sst_meta()->prop.latest_time_end_compact);
       }
     }
 

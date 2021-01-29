@@ -7,7 +7,6 @@
 
 #include "db/db_impl.h"
 #include "rocksdb/terark_namespace.h"
-#include "util/cast_util.h"
 
 #ifndef ROCKSDB_LITE
 namespace TERARKDB_NAMESPACE {

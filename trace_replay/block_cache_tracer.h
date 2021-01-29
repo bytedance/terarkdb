@@ -23,16 +23,16 @@ extern const uint64_t kMicrosInSecond;
 // 1. BlockBasedTable::GetFilter
 // 2. BlockBasedTable::GetUncompressedDict.
 // 3. BlockBasedTable::MaybeReadAndLoadToCache. (To trace access on data, index,
-// and range deletion block.)
+//    and range deletion block.)
 // 4. BlockBasedTable::Get. (To trace the referenced key and whether the
-// referenced key exists in a fetched data block.)
+//    referenced key exists in a fetched data block.)
 // 5. BlockBasedTable::MultiGet. (To trace the referenced key and whether the
-// referenced key exists in a fetched data block.)
+//    referenced key exists in a fetched data block.)
 // The context is created at:
 // 1. BlockBasedTable::Get. (kUserGet)
 // 2. BlockBasedTable::MultiGet. (kUserMGet)
 // 3. BlockBasedTable::NewIterator. (either kUserIterator, kCompaction, or
-// external SST ingestion calls this function.)
+//    external SST ingestion calls this function.)
 // 4. BlockBasedTable::Open. (kPrefetch)
 // 5. Index/Filter::CacheDependencies. (kPrefetch)
 // 6. BlockBasedTable::ApproximateOffsetOf. (kCompaction or

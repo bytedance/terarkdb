@@ -290,10 +290,8 @@ TEST_F(DBOptionsTest, EnableAutoCompactionAndTriggerStall) {
       options.level0_file_num_compaction_trigger = 1;
       options.level0_stop_writes_trigger = std::numeric_limits<int>::max();
       options.level0_slowdown_writes_trigger = std::numeric_limits<int>::max();
-      options.hard_pending_compaction_bytes_limit =
-          std::numeric_limits<uint64_t>::max();
-      options.soft_pending_compaction_bytes_limit =
-          std::numeric_limits<uint64_t>::max();
+      options.hard_pending_compaction_bytes_limit = port::kMaxUint64;
+      options.soft_pending_compaction_bytes_limit = port::kMaxUint64;
       options.env = env_;
       options.enable_lazy_compaction = false;
       options.blob_size = -1;

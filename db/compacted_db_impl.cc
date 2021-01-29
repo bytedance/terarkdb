@@ -10,6 +10,7 @@
 #include "db/version_set.h"
 #include "rocksdb/terark_namespace.h"
 #include "table/get_context.h"
+
 #if !defined(_MSC_VER) && !defined(__APPLE__)
 #include <sys/unistd.h>
 
@@ -172,6 +173,7 @@ Status CompactedDBImpl::Init(const Options& options) {
 Status CompactedDBImpl::Open(const Options& options, const std::string& dbname,
                              DB** dbptr) {
   *dbptr = nullptr;
+#ifdef WITH_TERARK_ZIP
 #if !defined(_MSC_VER) && !defined(__APPLE__)
   const char* terarkdb_localTempDir = getenv("TerarkZipTable_localTempDir");
   const char* terarkConfigString = getenv("TerarkConfigString");
@@ -183,8 +185,6 @@ Status CompactedDBImpl::Open(const Options& options, const std::string& dbname,
           "env TerarkZipTable_localTempDir",
           terarkdb_localTempDir);
     }
-
-#ifdef WITH_TERARK_ZIP
     if (!TerarkZipIsBlackListCF(kDefaultColumnFamilyName)) {
       const ColumnFamilyOptions& cf_options = options;
       const DBOptions& db_options = options;
@@ -195,8 +195,8 @@ Status CompactedDBImpl::Open(const Options& options, const std::string& dbname,
       Status s = factory->SanitizeOptions(db_options, cf_options);
       if (!s.ok()) return s;
     }
-#endif
   }
+#endif
 #endif
   if (options.max_open_files != -1) {
     return Status::InvalidArgument("require max_open_files = -1");

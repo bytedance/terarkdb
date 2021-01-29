@@ -8,6 +8,7 @@
 #include <functional>
 #include <string>
 
+#include "monitoring/instrumented_mutex.h"
 #include "port/port.h"
 #include "rocksdb/env.h"
 #include "rocksdb/terark_namespace.h"

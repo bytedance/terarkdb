@@ -18,13 +18,11 @@
 #include "rocksdb/env.h"
 #include "rocksdb/table.h"
 #include "rocksdb/terark_namespace.h"
-#include "table/block_builder.h"
 #include "table/cuckoo_table_factory.h"
 #include "table/format.h"
 #include "table/meta_blocks.h"
 #include "util/autovector.h"
 #include "util/file_reader_writer.h"
-#include "util/random.h"
 #include "util/string_util.h"
 
 namespace TERARKDB_NAMESPACE {
@@ -267,9 +265,6 @@ Status CuckooTableBuilder::Finish(
     properties_.read_amp = prop->read_amp;
     properties_.dependence = prop->dependence;
     properties_.inheritance_chain = prop->inheritance_chain;
-    // may be not need
-    properties_.ratio_expire_time = prop->ratio_expire_time;
-    properties_.scan_gap_expire_time = prop->scan_gap_expire_time;
   }
   if (snapshots != nullptr) {
     properties_.snapshots = *snapshots;

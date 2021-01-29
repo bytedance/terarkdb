@@ -16,6 +16,7 @@
 
 namespace TERARKDB_NAMESPACE {
 
+class Env;
 class TtlExtractorFactory;
 
 // Base class for internal table properties collector.
@@ -152,8 +153,8 @@ class UserKeyTablePropertiesCollectorFactory
   std::shared_ptr<TablePropertiesCollectorFactory> user_collector_factory_;
 };
 
-IntTblPropCollectorFactory* NewTtlIntTblPropCollectorFactory(
-    TtlExtractorFactory* ttl_extractor_factory, double ttl_gc_ratio,
+extern IntTblPropCollectorFactory* NewTtlIntTblPropCollectorFactory(
+    TtlExtractorFactory* ttl_extractor_factory, Env* env, double ttl_gc_ratio,
     size_t ttl_max_scan_cap);
 
 }  // namespace TERARKDB_NAMESPACE

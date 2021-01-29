@@ -440,8 +440,9 @@ class Repairer {
           c_style_callback(get_arena_input_iter), &get_arena_input_iter,
           c_style_callback(get_range_del_iters), &get_range_del_iters, &meta,
           cfd->internal_comparator(), cfd->int_tbl_prop_collector_factories(),
-          cfd->GetID(), cfd->GetName(), {}, kMaxSequenceNumber,
-          snapshot_checker, kNoCompression, CompressionOptions(), false,
+          cfd->int_tbl_prop_collector_factories_for_blob(), cfd->GetID(),
+          cfd->GetName(), {}, kMaxSequenceNumber, snapshot_checker,
+          kNoCompression, CompressionOptions(), false,
           nullptr /* internal_stats */, TableFileCreationReason::kRecovery,
           nullptr /* event_logger */, 0 /* job_id */, Env::IO_HIGH,
           nullptr /* table_properties */, -1 /* level */, current_time,
@@ -673,8 +674,6 @@ class Repairer {
       t->meta.prop.read_amp = props->read_amp;
       t->meta.prop.dependence = props->dependence;
       t->meta.prop.inheritance_chain = props->inheritance_chain;
-      t->meta.prop.ratio_expire_time = props->ratio_expire_time;
-      t->meta.prop.scan_gap_expire_time = props->scan_gap_expire_time;
     }
     return status;
   }

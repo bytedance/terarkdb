@@ -52,7 +52,6 @@
 #include "db/range_del_aggregator.h"
 #include "db/version_set.h"
 #include "monitoring/iostats_context_imp.h"
-#include "monitoring/perf_context_imp.h"
 #include "monitoring/thread_status_util.h"
 #include "port/port.h"
 #include "rocksdb/db.h"
@@ -61,6 +60,7 @@
 #include "rocksdb/statistics.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table.h"
+#include "rocksdb/table_properties.h"
 #include "rocksdb/terark_namespace.h"
 #include "table/block_based_table_factory.h"
 #include "table/get_context.h"
@@ -881,21 +881,19 @@ Status CompactionJob::Run() {
           output.meta.prop.dependence = tp->dependence;
           output.meta.prop.inheritance_chain = tp->inheritance_chain;
           if (iopt->ttl_extractor_factory != nullptr) {
-            output.meta.prop.ratio_expire_time = DecodeFixed64(
-                tp->user_collected_properties
-                    .find(TablePropertiesNames::kEarliestTimeBeginCompact)
-                    ->second.c_str());
-            output.meta.prop.scan_gap_expire_time = DecodeFixed64(
-                tp->user_collected_properties
-                    .find(TablePropertiesNames::kLatestTimeEndCompact)
-                    ->second.c_str());
-            ROCKS_LOG_INFO(db_options_.info_log,
-                           "compaction_run ratio:%" PRIu64 ", scan:%" PRIu64,
-                           output.meta.prop.ratio_expire_time,
-                           output.meta.prop.scan_gap_expire_time);
-            output.finished = true;
-            c->AddOutputTableFileNumber(file_number);
+            GetCompactionTimePoint(
+                tp->user_collected_properties,
+                &output.meta.prop.earliest_time_begin_compact,
+                &output.meta.prop.latest_time_end_compact);
+            ROCKS_LOG_INFO(
+                db_options_.info_log,
+                "CompactionOutput earliest_time_begin_compact = %" PRIu64
+                ", latest_time_end_compact = %" PRIu64,
+                output.meta.prop.earliest_time_begin_compact,
+                output.meta.prop.latest_time_end_compact);
           }
+          output.finished = true;
+          c->AddOutputTableFileNumber(file_number);
         }
         if (s.ok()) {
           sub_compact.actual_start = std::move(result.actual_start);
@@ -1029,8 +1027,10 @@ Status CompactionJob::VerifyFiles() {
       // We set for_compaction to false and don't OptimizeForCompactionTableRead
       // here because this is a special case after we finish the table building
       // No matter whether use_direct_io_for_flush_and_compaction is true,
-      // we will regard this verification as user reads since the goal is
-      // to cache it here for further user reads
+      // we
+      // will regard this verification as user reads since the goal is
+      // to cache
+      // it here for further user reads
       auto output_level = compact_->compaction->output_level();
       InternalIterator* iter = cfd->table_cache()->NewIterator(
           ReadOptions(), env_options_, cfd->internal_comparator(),
@@ -2123,17 +2123,14 @@ Status CompactionJob::FinishCompactionOutputFile(
 
     if (compact_->compaction->immutable_cf_options()->ttl_extractor_factory !=
         nullptr) {
-      meta->prop.ratio_expire_time = DecodeFixed64(
-          tp.user_collected_properties
-              .find(TablePropertiesNames::kEarliestTimeBeginCompact)
-              ->second.c_str());
-      meta->prop.scan_gap_expire_time =
-          DecodeFixed64(tp.user_collected_properties
-                            .find(TablePropertiesNames::kLatestTimeEndCompact)
-                            ->second.c_str());
-      ROCKS_LOG_INFO(
-          db_options_.info_log, "fcof: ratio:%" PRIu64 ", scan:%" PRIu64,
-          meta->prop.ratio_expire_time, meta->prop.scan_gap_expire_time);
+      GetCompactionTimePoint(tp.user_collected_properties,
+                             &meta->prop.earliest_time_begin_compact,
+                             &meta->prop.latest_time_end_compact);
+      ROCKS_LOG_INFO(db_options_.info_log,
+                     "CompactionOutput earliest_time_begin_compact = %" PRIu64
+                     ", latest_time_end_compact = %" PRIu64,
+                     meta->prop.earliest_time_begin_compact,
+                     meta->prop.latest_time_end_compact);
     }
   }
 
@@ -2712,8 +2709,8 @@ Status CompactionJob::OpenCompactionOutputBlob(
   // skip_filters always false, Blob all hits
   sub_compact->blob_builder.reset(NewTableBuilder(
       *cfd->ioptions(), *c->mutable_cf_options(), cfd->internal_comparator(),
-      cfd->int_tbl_prop_collector_factories(), cfd->GetID(), cfd->GetName(),
-      sub_compact->blob_outfile.get(),
+      cfd->int_tbl_prop_collector_factories_for_blob(), cfd->GetID(),
+      cfd->GetName(), sub_compact->blob_outfile.get(),
       sub_compact->compaction->output_compression(),
       sub_compact->compaction->output_compression_opts(), -1 /* level */,
       c->compaction_load(), nullptr, true /* skip_filters */,

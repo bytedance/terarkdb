@@ -11,8 +11,7 @@
 namespace TERARKDB_NAMESPACE {
 
 struct params {
-  params(double ratio = 2.000,
-         size_t scan = std::numeric_limits<size_t>::max()) {
+  params(double ratio = 1.000, size_t scan = port::kMaxUint64) {
     ttl_ratio = ratio;
     ttl_scan = scan;
   }
@@ -162,8 +161,8 @@ TEST_P(TerarkZipTableBuilderTest, BoundaryTest) {
   options.create_if_missing = true;
   options.env = env;
   auto n = GetParam();
-  options.ttl_garbage_collection_percentage = n.ttl_ratio;
-  options.ttl_scan_gap = n.ttl_scan;
+  options.ttl_gc_ratio = n.ttl_ratio;
+  options.ttl_max_scan_gap = n.ttl_scan;
   options.ttl_extractor_factory.reset(new test::TestTtlExtractorFactory());
   Status s = DB::Open(options, dbname, &db);
   ASSERT_OK(s);
@@ -180,7 +179,7 @@ TEST_P(TerarkZipTableBuilderTest, BoundaryTest) {
   int_tbl_prop_collector_factories.emplace_back(
       NewTtlIntTblPropCollectorFactory(
           options.ttl_extractor_factory.get(), env,
-          moptions.ttl_garbage_collection_percentage, moptions.ttl_scan_gap));
+          moptions.ttl_gc_ratio, moptions.ttl_max_scan_gap));
   std::string column_family_name;
   int unknown_level = -1;
   std::unique_ptr<TableBuilder> builder(options.table_factory->NewTableBuilder(
@@ -241,8 +240,17 @@ TEST_P(TerarkZipTableBuilderTest, BoundaryTest) {
   auto answer2 = props->user_collected_properties.find(
       TablePropertiesNames::kLatestTimeEndCompact);
   // auto answer3 = props->user_collected_properties.end();
-  uint64_t act_answer1 = DecodeFixed64(answer1->second.c_str());
-  uint64_t act_answer2 = DecodeFixed64(answer2->second.c_str());
+  auto get_varint64 = [](const std::string& v) {
+    Slice s(v);
+    uint64_t r;
+    auto assert_true = [](bool b) {
+      ASSERT_TRUE(b);
+    };
+    assert_true(GetVarint64(&s, &r));
+    return r;
+  };
+  uint64_t act_answer1 = get_varint64(answer1->second);
+  uint64_t act_answer2 = get_varint64(answer2->second);
   if (n.ttl_ratio > 1.000) {
     // ASSERT_EQ(std::numeric_limits<uint64_t>::max(),
     // props->ratio_expire_time);

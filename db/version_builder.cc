@@ -705,6 +705,9 @@ class VersionBuilder::Rep {
         files_meta.emplace_back(item.f, -1);
       }
     }
+    if (files_meta.empty()) {
+      return;
+    }
 
     std::atomic<size_t> next_file_meta_idx(0);
     std::function<void()> load_handlers_func([&]() {
@@ -753,6 +756,9 @@ class VersionBuilder::Rep {
         files_meta.emplace_back(item.f);
       }
     }
+    if (files_meta.empty()) {
+      return;
+    }
 
     std::atomic<size_t> next_file_meta_idx(0);
     std::function<void()> upgrade_func([&]() {
@@ -774,17 +780,6 @@ class VersionBuilder::Rep {
           file_meta->prop.num_deletions = properties->num_deletions;
           file_meta->prop.raw_key_size = properties->raw_key_size;
           file_meta->prop.raw_value_size = properties->raw_value_size;
-          auto its = properties->user_collected_properties.find(
-              TablePropertiesNames::kEarliestTimeBeginCompact);
-          // It's difficult to get ioption
-          if (its != properties->user_collected_properties.end()) {
-            file_meta->prop.ratio_expire_time =
-                DecodeFixed64(its->second.c_str());
-            file_meta->prop.scan_gap_expire_time = DecodeFixed64(
-                properties->user_collected_properties
-                    .find(TablePropertiesNames::kLatestTimeEndCompact)
-                    ->second.c_str());
-          }
         }
       }
     });

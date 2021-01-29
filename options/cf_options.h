@@ -178,9 +178,8 @@ struct MutableCFOptions {
         paranoid_file_checks(options.paranoid_file_checks),
         report_bg_io_stats(options.report_bg_io_stats),
         compression(options.compression),
-        ttl_garbage_collection_percentage(
-            options.ttl_garbage_collection_percentage),
-        ttl_scan_gap(options.ttl_scan_gap) {
+        ttl_gc_ratio(options.ttl_gc_ratio),
+        ttl_max_scan_gap(options.ttl_max_scan_gap) {
     RefreshDerivedOptions(options.num_levels);
   }
 
@@ -214,8 +213,8 @@ struct MutableCFOptions {
         paranoid_file_checks(false),
         report_bg_io_stats(false),
         compression(Snappy_Supported() ? kSnappyCompression : kNoCompression),
-        ttl_garbage_collection_percentage(1.000),
-        ttl_scan_gap(0) {}
+        ttl_gc_ratio(1.000),
+        ttl_max_scan_gap(0) {}
 
   explicit MutableCFOptions(const Options& options);
 
@@ -282,8 +281,8 @@ struct MutableCFOptions {
   // Per-level target file size.
   std::vector<uint64_t> max_file_size;
 
-  double ttl_garbage_collection_percentage;
-  size_t ttl_scan_gap;
+  double ttl_gc_ratio;
+  size_t ttl_max_scan_gap;
 };
 
 uint64_t MultiplyCheckOverflow(uint64_t op1, double op2);

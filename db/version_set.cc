@@ -17,17 +17,13 @@
 #include <stdio.h>
 
 #include <algorithm>
-#include <array>
-#include <cinttypes>
 #include <list>
 #include <map>
-#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "db/compaction.h"
-#include "db/internal_stats.h"
 #include "db/log_reader.h"
 #include "db/log_writer.h"
 #include "db/memtable.h"
@@ -2696,7 +2692,7 @@ void VersionStorageInfo::CalculateBaseBytes(const ImmutableCFOptions& ioptions,
 
     // Prefill every level's max bytes to disallow compaction from there.
     for (int i = 0; i < num_levels_; i++) {
-      level_max_bytes_[i] = std::numeric_limits<uint64_t>::max();
+      level_max_bytes_[i] = port::kMaxUint64;
     }
 
     if (max_level_size == 0) {
@@ -2995,7 +2991,7 @@ Status VersionSet::ProcessManifestWrites(
     batch_edits.push_back(first_writer.edit_list.front());
   } else {
     auto it = manifest_writers_.cbegin();
-    size_t group_start = std::numeric_limits<size_t>::max();
+    size_t group_start = port::kMaxUint64;
     while (it != manifest_writers_.cend()) {
       if ((*it)->edit_list.front()->IsColumnFamilyManipulation()) {
         // no group commits for column family add or drop
@@ -3068,8 +3064,8 @@ Status VersionSet::ProcessManifestWrites(
                batch_edits.back()->remaining_entries_ == 0)) {
             group_start = batch_edits.size();
           }
-        } else if (group_start != std::numeric_limits<size_t>::max()) {
-          group_start = std::numeric_limits<size_t>::max();
+        } else if (group_start != port::kMaxUint64) {
+          group_start = port::kMaxUint64;
         }
         builder->PushEdit(e, this, mu);
         batch_edits.push_back(e);
@@ -4615,11 +4611,10 @@ bool VersionSet::VerifyCompactionFileConsistency(Compaction* c) {
   Version* version = c->column_family_data()->current();
   const VersionStorageInfo* vstorage = version->storage_info();
   if (c->input_version() != version) {
-    ROCKS_LOG_INFO(
-        db_options_->info_log,
-        "[%s] compaction output being applied to a different base version from"
-        " input version",
-        c->column_family_data()->GetName().c_str());
+    ROCKS_LOG_INFO(db_options_->info_log,
+                   "[%s] compaction output being applied to a different base "
+                   "version from input version",
+                   c->column_family_data()->GetName().c_str());
 
     if (vstorage->compaction_style_ == kCompactionStyleLevel &&
         c->start_level() == 0 && c->num_input_levels() > 2U) {

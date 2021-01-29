@@ -12,12 +12,9 @@
 #include <assert.h>
 #include <stdio.h>
 
-#include <exception>
 #include <list>
-#include <map>
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <utility>
 
 #include "db/dbformat.h"
@@ -46,7 +43,6 @@
 #include "util/crc32c.h"
 #include "util/memory_allocator.h"
 #include "util/stop_watch.h"
-#include "util/string_util.h"
 #include "util/xxhash.h"
 
 namespace TERARKDB_NAMESPACE {
@@ -448,7 +444,7 @@ Status BlockBasedTableBuilder::Add(const Slice& key,
                                     r->table_properties_collectors,
                                     r->ioptions.info_log);
   return r->status;
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 Status BlockBasedTableBuilder::AddTombstone(const Slice& key,
                                             const LazyBuffer& lazy_value) {
@@ -894,8 +890,6 @@ Status BlockBasedTableBuilder::Finish(
     r->props.read_amp = prop->read_amp;
     r->props.dependence = prop->dependence;
     r->props.inheritance_chain = prop->inheritance_chain;
-    // r->props.ratio_expire_time = prop->ratio_expire_time;
-    // r->props.scan_gap_expire_time = prop->scan_gap_expire_time;
   }
   if (snapshots != nullptr) {
     r->props.snapshots = *snapshots;

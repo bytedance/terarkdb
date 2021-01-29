@@ -509,8 +509,8 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
     int_tbl_prop_collector_factories.data.emplace_back(
         NewTtlIntTblPropCollectorFactory(
             immutable_cf_options.ttl_extractor_factory, rep_->env,
-            mutable_cf_options.ttl_garbage_collection_percentage,
-            mutable_cf_options.ttl_scan_gap));
+            mutable_cf_options.ttl_gc_ratio,
+            mutable_cf_options.ttl_max_scan_gap));
   }
   const Slice* start = nullptr;
   const Slice* end = nullptr;
