@@ -21,8 +21,8 @@ class DBImplGCTTL_Test : public DBTestBase {
     dbname = test::PerThreadDBPath("ttl_gc_test");
     DestroyDB(dbname, options);
     options.create_if_missing = true;
-    options.ttl_garbage_collection_percentage = 0.50;
-    options.ttl_scan_gap = 10;
+    options.ttl_gc_ratio = 0.50;
+    options.ttl_max_scan_gap = 10;
     options.ttl_extractor_factory.reset(
         new test::TestTtlExtractorFactory(mock_env_.get()));
     options.level0_file_num_compaction_trigger = 8;

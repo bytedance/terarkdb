@@ -46,7 +46,7 @@ class VolatileCacheTier : public PersistentCacheTier {
  public:
   explicit VolatileCacheTier(
       const bool is_compressed = true,
-      const size_t max_size = std::numeric_limits<size_t>::max())
+      const size_t max_size = port::kMaxUint64)
       : is_compressed_(is_compressed), max_size_(max_size) {}
 
   virtual ~VolatileCacheTier();

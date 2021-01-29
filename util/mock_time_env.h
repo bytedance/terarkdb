@@ -7,6 +7,7 @@
 
 #include <atomic>
 
+#include "port/port.h"
 #include "rocksdb/env.h"
 #include "rocksdb/terark_namespace.h"
 
@@ -27,14 +28,14 @@ class MockTimeEnv : public EnvWrapper {
   virtual uint64_t NowMicros() override { return current_time_us_; }
 
   virtual uint64_t NowNanos() override {
-    assert(current_time_us_ <= std::numeric_limits<uint64_t>::max() / 1000);
+    assert(current_time_us_ <= port::kMaxUint64 / 1000);
     return current_time_us_ * 1000;
   }
 
   uint64_t RealNowMicros() { return target()->NowMicros(); }
 
   void set_current_time(uint64_t time_sec) {
-    assert(time_sec < std::numeric_limits<uint64_t>::max() / kMicrosInSecond);
+    assert(time_sec < port::kMaxUint64 / kMicrosInSecond);
     assert(time_sec * kMicrosInSecond >= current_time_us_);
     current_time_us_ = time_sec * kMicrosInSecond;
   }

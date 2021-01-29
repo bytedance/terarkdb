@@ -157,14 +157,6 @@ void PropertyBlockBuilder::AddTableProperty(const TableProperties& props) {
   if (!props.compression_name.empty()) {
     Add(TablePropertiesNames::kCompression, props.compression_name);
   }
-  if (props.ratio_expire_time < std::numeric_limits<uint64_t>::max()) {
-    Add(TablePropertiesNames::kEarliestTimeBeginCompact,
-        props.ratio_expire_time);
-  }
-  if (props.scan_gap_expire_time < std::numeric_limits<uint64_t>::max()) {
-    Add(TablePropertiesNames::kLatestTimeEndCompact,
-        props.scan_gap_expire_time);
-  }
 }
 
 Slice PropertyBlockBuilder::Finish() {
@@ -296,10 +288,6 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
        &new_table_properties->creation_time},
       {TablePropertiesNames::kOldestKeyTime,
        &new_table_properties->oldest_key_time},
-      {TablePropertiesNames::kRatioExpireTime,
-       &new_table_properties->ratio_expire_time},
-      {TablePropertiesNames::kScanGapExpireTime,
-       &new_table_properties->scan_gap_expire_time},
   };
 
   auto GetUint64Vector = [&](const std::string& key, Slice* raw_val,
@@ -350,7 +338,9 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
 
     if (pos != predefined_uint64_properties.end()) {
       if (key == TablePropertiesNames::kDeletedKeys ||
-          key == TablePropertiesNames::kMergeOperands) {
+          key == TablePropertiesNames::kMergeOperands ||
+          key == TablePropertiesNames::kLatestTimeEndCompact ||
+          key == TablePropertiesNames::kEarliestTimeBeginCompact) {
         // Insert in user-collected properties for API backwards compatibility
         new_table_properties->user_collected_properties.insert(
             {key, raw_val.ToString()});
@@ -426,20 +416,6 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
       }
     } else if (key == TablePropertiesNames::kInheritanceChain) {
       GetUint64Vector(key, &raw_val, new_table_properties->inheritance_chain);
-    } else if (key == TablePropertiesNames::kRatioExpireTime) {
-      uint64_t u64_val;
-      if (!GetVarint64(&raw_val, &u64_val)) {
-        log_error();
-        continue;
-      }
-      new_table_properties->ratio_expire_time = u64_val;
-    } else if (key == TablePropertiesNames::kScanGapExpireTime) {
-      uint64_t u64_val;
-      if (!GetVarint64(&raw_val, &u64_val)) {
-        log_error();
-        continue;
-      }
-      new_table_properties->scan_gap_expire_time = u64_val;
     } else {
       // handle user-collected properties
       new_table_properties->user_collected_properties.insert(

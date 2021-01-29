@@ -18,7 +18,6 @@
 
 #include <algorithm>
 #include <cinttypes>
-#include <cstdio>
 #include <map>
 #include <set>
 #include <stdexcept>
@@ -28,40 +27,28 @@
 #include <utility>
 #include <vector>
 
-#include "db/builder.h"
-#include "db/compaction_job.h"
 #include "db/db_info_dumper.h"
 #include "db/db_iter.h"
 #include "db/dbformat.h"
 #include "db/error_handler.h"
 #include "db/event_helpers.h"
 #include "db/external_sst_file_ingestion_job.h"
-#include "db/flush_job.h"
 #include "db/forward_iterator.h"
 #include "db/job_context.h"
-#include "db/log_reader.h"
 #include "db/log_writer.h"
 #include "db/malloc_stats.h"
 #include "db/map_builder.h"
 #include "db/memtable.h"
-#include "db/memtable_list.h"
 #include "db/merge_context.h"
-#include "db/merge_helper.h"
 #include "db/periodic_work_scheduler.h"
 #include "db/range_tombstone_fragmenter.h"
 #include "db/table_cache.h"
-#include "db/table_properties_collector.h"
-#include "db/transaction_log_impl.h"
 #include "db/version_set.h"
 #include "db/write_batch_internal.h"
-#include "db/write_callback.h"
-#include "memtable/hash_linklist_rep.h"
-#include "memtable/hash_skiplist_rep.h"
 #include "monitoring/in_memory_stats_history.h"
 #include "monitoring/iostats_context_imp.h"
 #include "monitoring/perf_context_imp.h"
 #include "monitoring/persistent_stats_history.h"
-#include "monitoring/thread_status_updater.h"
 #include "monitoring/thread_status_util.h"
 #include "options/cf_options.h"
 #include "options/options_helper.h"
@@ -78,14 +65,9 @@
 #include "rocksdb/status.h"
 #include "rocksdb/table.h"
 #include "rocksdb/terark_namespace.h"
-#include "rocksdb/write_buffer_manager.h"
-#include "table/block.h"
 #include "table/block_based_table_factory.h"
 #include "table/merging_iterator.h"
-#include "table/table_builder.h"
 #include "table/two_level_iterator.h"
-#include "tools/sst_dump_tool_imp.h"
-#include "util/auto_roll_logger.h"
 #include "util/autovector.h"
 #include "util/build_version.h"
 #include "util/c_style_callback.h"
@@ -97,12 +79,12 @@
 #include "util/filename.h"
 #include "util/log_buffer.h"
 #include "util/logging.h"
-#include "util/mutexlock.h"
 #include "util/sst_file_manager_impl.h"
 #include "util/stop_watch.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
 #include "utilities/trace/bytedance_metrics_reporter.h"
+
 #if !defined(_MSC_VER) && !defined(__APPLE__)
 #include <sys/unistd.h>
 
@@ -124,12 +106,10 @@
 #ifdef BOOSTLIB
 #include <boost/fiber/all.hpp>
 #endif
-//#include <boost/context/pooled_fixedsize_stack.hpp>
 
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif
-#include <iostream>
 
 namespace TERARKDB_NAMESPACE {
 
@@ -822,12 +802,51 @@ void DBImpl::PersistStats() {
   size_t stats_history_size_limit = 0;
   {
     InstrumentedMutexLock l(&mutex_);
-    stats_dump_period_sec = mutable_db_options_.stats_dump_period_sec;
-    if (stats_dump_period_sec > 0) {
-      if (!thread_dump_stats_) {
-        thread_dump_stats_.reset(new TERARKDB_NAMESPACE::RepeatableThread(
-            [this]() { DBImpl::DumpStats(); }, "dump_st", env_,
-            stats_dump_period_sec * 1000000));
+    stats_history_size_limit = mutable_db_options_.stats_history_buffer_size;
+  }
+
+  std::map<std::string, uint64_t> stats_map;
+  if (!statistics->getTickerMap(&stats_map)) {
+    return;
+  }
+
+  if (immutable_db_options_.persist_stats_to_disk) {
+    WriteBatch batch;
+    if (stats_slice_initialized_) {
+      for (const auto& stat : stats_map) {
+        char key[100];
+        int length =
+            EncodePersistentStatsKey(now_seconds, stat.first, 100, key);
+        // calculate the delta from last time
+        if (stats_slice_.find(stat.first) != stats_slice_.end()) {
+          uint64_t delta = stat.second - stats_slice_[stat.first];
+          batch.Put(persist_stats_cf_handle_, Slice(key, std::min(100, length)),
+                    ToString(delta));
+        }
+      }
+    }
+    stats_slice_initialized_ = true;
+    std::swap(stats_slice_, stats_map);
+    WriteOptions wo;
+    wo.low_pri = true;
+    wo.no_slowdown = true;
+    wo.sync = false;
+    Status s = Write(wo, &batch);
+    if (!s.ok()) {
+      ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                     "Writing to persistent stats CF failed -- %s\n",
+                     s.ToString().c_str());
+    }
+    // TODO(Zhongyi): add purging for persisted data
+  } else {
+    InstrumentedMutexLock l(&stats_history_mutex_);
+    // calculate the delta from last time
+    if (stats_slice_initialized_) {
+      std::map<std::string, uint64_t> stats_delta;
+      for (const auto& stat : stats_map) {
+        if (stats_slice_.find(stat.first) != stats_slice_.end()) {
+          stats_delta[stat.first] = stat.second - stats_slice_[stat.first];
+        }
       }
       stats_history_[now_seconds] = stats_delta;
     }
@@ -885,6 +904,7 @@ Status DBImpl::GetStatsHistory(
   }
   return (*stats_iterator)->status();
 }
+
 void DBImpl::ScheduleTtlGC() {
   TEST_SYNC_POINT("DBImpl:ScheduleTtlGC");
   uint64_t nowSeconds = env_->NowMicros() / 1000U / 1000U;
@@ -894,16 +914,17 @@ void DBImpl::ScheduleTtlGC() {
                              immutable_db_options_.info_log.get());
 
   auto should_marked_for_compacted = [&](int level, uint64_t file_number,
-                                         uint64_t ratio_expire_time,
-                                         uint64_t scan_gap_expire_time,
+                                         uint64_t earliest_time_begin_compact,
+                                         uint64_t latest_time_end_compact,
                                          uint64_t now) {
-    bool should_mark = std::min(ratio_expire_time, scan_gap_expire_time) <= now;
+    bool should_mark =
+        std::min(earliest_time_begin_compact, latest_time_end_compact) <= now;
     if (should_mark) {
       ROCKS_LOG_BUFFER(&log_buffer_info,
                        "SST Table property level=%d file-id = %" PRIu64
                        ", info : (%" PRIu64 " , %" PRIu64 ") now = %" PRIu64,
-                       level, file_number, ratio_expire_time,
-                       scan_gap_expire_time, now);
+                       level, file_number, earliest_time_begin_compact,
+                       latest_time_end_compact, now);
     }
     return should_mark;
   };
@@ -928,8 +949,8 @@ void DBImpl::ScheduleTtlGC() {
         TEST_SYNC_POINT("DBImpl:Exist-SST");
         if (!meta->marked_for_compaction &&
             should_marked_for_compacted(
-                l, meta->fd.GetNumber(), meta->prop.ratio_expire_time,
-                meta->prop.scan_gap_expire_time, nowSeconds)) {
+                l, meta->fd.GetNumber(), meta->prop.earliest_time_begin_compact,
+                meta->prop.latest_time_end_compact, nowSeconds)) {
           meta->marked_for_compaction = true;
           vstorage->AddFilesMarkedForCompaction(l, meta);
         }
@@ -1169,19 +1190,15 @@ Status DBImpl::SetDBOptions(
         MaybeScheduleFlushOrCompaction();
       }
       if (new_options.stats_dump_period_sec !=
-          mutable_db_options_.stats_dump_period_sec) {
-        if (thread_dump_stats_) {
-          mutex_.Unlock();
-          thread_dump_stats_->cancel();
-          mutex_.Lock();
-        }
-        if (new_options.stats_dump_period_sec > 0) {
-          thread_dump_stats_.reset(new TERARKDB_NAMESPACE::RepeatableThread(
-              [this]() { DBImpl::DumpStats(); }, "dump_st", env_,
-              new_options.stats_dump_period_sec * 1000000));
-        } else {
-          thread_dump_stats_.reset();
-        }
+              mutable_db_options_.stats_dump_period_sec ||
+          new_options.stats_persist_period_sec !=
+              mutable_db_options_.stats_persist_period_sec) {
+        mutex_.Unlock();
+        periodic_work_scheduler_->Unregister(this);
+        periodic_work_scheduler_->Register(
+            this, new_options.stats_dump_period_sec,
+            new_options.stats_persist_period_sec);
+        mutex_.Lock();
       }
       write_controller_.set_max_delayed_write_rate(
           new_options.delayed_write_rate);
@@ -1449,9 +1466,9 @@ void DBImpl::SchedulePurge() {
 void DBImpl::BackgroundCallPurge() {
   mutex_.Lock();
 
-  // We use one single loop to clear both queues so that after existing the
-  // loop both queues are empty. This is stricter than what is needed, but can
-  // make it easier for us to reason the correctness.
+  // We use one single loop to clear both queues so that after existing the loop
+  // both queues are empty. This is stricter than what is needed, but can make
+  // it easier for us to reason the correctness.
   while (!purge_queue_.empty() | !superversion_to_free_queue_.empty() |
          !logs_to_free_queue_.empty()) {
     if (!superversion_to_free_queue_.empty()) {
@@ -2443,8 +2460,8 @@ Status DBImpl::NewIterators(
 #endif
   } else {
     // Note: no need to consider the special case of
-    // last_seq_same_as_publish_seq_==false since NewIterators is overridden
-    // in WritePreparedTxnDB
+    // last_seq_same_as_publish_seq_==false since NewIterators is overridden in
+    // WritePreparedTxnDB
     auto snapshot = read_options.snapshot != nullptr
                         ? read_options.snapshot->GetSequenceNumber()
                         : versions_->LastSequence();
@@ -3821,8 +3838,7 @@ Status DBImpl::DeleteObsoleteOptionsFiles() {
     FileType type;
     if (ParseFileName(filename, &file_number, &type) && type == kOptionsFile) {
       options_filenames.insert(
-          {std::numeric_limits<uint64_t>::max() - file_number,
-           GetName() + "/" + filename});
+          {port::kMaxUint64 - file_number, GetName() + "/" + filename});
     }
   }
 

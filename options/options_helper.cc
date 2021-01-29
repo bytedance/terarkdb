@@ -189,9 +189,8 @@ ColumnFamilyOptions BuildColumnFamilyOptions(
   cf_opts.max_bytes_for_level_multiplier =
       mutable_cf_options.max_bytes_for_level_multiplier;
   cf_opts.ttl = mutable_cf_options.ttl;
-  cf_opts.ttl_garbage_collection_percentage =
-      mutable_cf_options.ttl_garbage_collection_percentage;
-  cf_opts.ttl_scan_gap = mutable_cf_options.ttl_scan_gap;
+  cf_opts.ttl_gc_ratio = mutable_cf_options.ttl_gc_ratio;
+  cf_opts.ttl_max_scan_gap = mutable_cf_options.ttl_max_scan_gap;
 
   cf_opts.max_bytes_for_level_multiplier_additional.clear();
   for (auto value :
@@ -1629,8 +1628,7 @@ std::unordered_map<std::string, OptionTypeInfo>
           offsetof(struct MutableDBOptions, stats_persist_period_sec)}},
         {"persist_stats_to_disk",
          {offsetof(struct DBOptions, persist_stats_to_disk),
-          OptionType::kBoolean, OptionVerificationType::kNormal, false,
-          offsetof(struct ImmutableDBOptions, persist_stats_to_disk)}},
+          OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},
         {"stats_history_buffer_size",
          {offsetof(struct DBOptions, stats_history_buffer_size),
           OptionType::kSizeT, OptionVerificationType::kNormal, true,
@@ -2070,15 +2068,14 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offset_of(&ColumnFamilyOptions::ttl), OptionType::kUInt64T,
           OptionVerificationType::kNormal, true,
           offsetof(struct MutableCFOptions, ttl)}},
-        {"ttl_garbage_collection_percentage",
-         {offset_of(&ColumnFamilyOptions::ttl_garbage_collection_percentage),
-          OptionType::kDouble, OptionVerificationType::kNormal, true,
-          offsetof(struct MutableCFOptions,
-                   ttl_garbage_collection_percentage)}},
-        {"ttl_scan_gap",
-         {offset_of(&ColumnFamilyOptions::ttl_scan_gap), OptionType::kSizeT,
+        {"ttl_gc_ratio",
+         {offset_of(&ColumnFamilyOptions::ttl_gc_ratio), OptionType::kDouble,
           OptionVerificationType::kNormal, true,
-          offsetof(struct MutableCFOptions, ttl_scan_gap)}}};
+          offsetof(struct MutableCFOptions, ttl_gc_ratio)}},
+        {"ttl_max_scan_gap",
+         {offset_of(&ColumnFamilyOptions::ttl_max_scan_gap), OptionType::kSizeT,
+          OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, ttl_max_scan_gap)}}};
 
 std::unordered_map<std::string, OptionTypeInfo>
     OptionsHelper::fifo_compaction_options_type_info = {

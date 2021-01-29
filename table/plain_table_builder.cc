@@ -188,8 +188,6 @@ Status PlainTableBuilder::Finish(const TablePropertyCache* prop,
     properties_.read_amp = prop->read_amp;
     properties_.dependence = prop->dependence;
     properties_.inheritance_chain = prop->inheritance_chain;
-    properties_.ratio_expire_time = prop->ratio_expire_time;
-    properties_.scan_gap_expire_time = prop->scan_gap_expire_time;
   }
   if (snapshots != nullptr) {
     properties_.snapshots = *snapshots;

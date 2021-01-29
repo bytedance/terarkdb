@@ -9,7 +9,6 @@
 #include "rocksdb/env.h"
 #include "rocksdb/iterator.h"
 #include "rocksdb/terark_namespace.h"
-#include "table/block.h"
 #include "table/internal_iterator.h"
 #include "table/table_properties_internal.h"
 #include "util/string_util.h"
@@ -157,13 +156,6 @@ std::string TablePropertiesBase::ToString(const std::string& prop_delim,
   AppendProperty(result, "time stamp of earliest key", oldest_key_time,
                  prop_delim, kv_delim);
 
-  // Add for ttl feature property
-  AppendProperty(result, "expire time of fixed ratio", ratio_expire_time,
-                 prop_delim, kv_delim);
-
-  AppendProperty(result, "expire time of fixed scan gap", scan_gap_expire_time,
-                 prop_delim, kv_delim);
-
   return result;
 }
 
@@ -182,20 +174,6 @@ void TableProperties::Add(const TableProperties& tp) {
   num_deletions += tp.num_deletions;
   num_merge_operands += tp.num_merge_operands;
   num_range_deletions += tp.num_range_deletions;
-  ratio_expire_time = std::min(ratio_expire_time, tp.ratio_expire_time);
-  scan_gap_expire_time =
-      std::min(scan_gap_expire_time, tp.scan_gap_expire_time);
-  // uint64_t max_uint64_t = std::numeric_limits<uint64_t>::max();
-  // if (max_uint64_t - ratio_expire_time > tp.ratio_expire_time) {
-  //   ratio_expire_time += tp.ratio_expire_time;
-  // } else {
-  //   ratio_expire_time = max_uint64_t;
-  // }
-  // if (max_uint64_t - scan_gap_expire_time > tp.scan_gap_expire_time) {
-  //   scan_gap_expire_time += tp.scan_gap_expire_time;
-  // } else {
-  //   scan_gap_expire_time = max_uint64_t;
-  // }
 }
 
 const std::string TablePropertiesNames::kDataSize = "rocksdb.data.size";
@@ -252,9 +230,9 @@ const std::string TablePropertiesNames::kDependenceEntryCount =
 const std::string TablePropertiesNames::kInheritanceChain =
     "rocksdb.sst.inheritance-chain";
 const std::string TablePropertiesNames::kEarliestTimeBeginCompact =
-    "rocksdb.earliesttime.begincompact";
+    "rocksdb.compact.earliest-time-begin";
 const std::string TablePropertiesNames::kLatestTimeEndCompact =
-    "rocksdb.latesttime.endcompact";
+    "rocksdb.compact.latest-time-end";
 
 extern const std::string kPropertiesBlock = "rocksdb.properties";
 // Old property block name for backward compatibility

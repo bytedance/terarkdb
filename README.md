@@ -154,7 +154,8 @@ options.bytes_per_sync = 32768;
 
 // Manually specify target table and table options
 rocksdb::BlockBasedTableOptions table_options;
-table_options.block_cache = rocksdb::NewLRUCache(32ULL << 30, 8, false);
+table_options.block_cache =
+    rocksdb::NewLRUCache(32ULL << 30, 8, false);
 table_options.block_size = 8ULL << 10;
 options.table_factory = std::shared_ptr<rocksdb::TableFactory>
                           (NewBlockBasedTableFactory(table_options));
@@ -203,7 +204,8 @@ tzt_options.indexNestLevel = 3;
 tzt_options.sampleRatio = 0.01;
 tzt_options.terarkZipMinLevel = 2; // Start using TerarkZipTable from level 2
 
-table_factory.reset(rocksdb::NewTerarkZipTableFactory(tzt_options, table_factory));
+table_factory.reset(
+    rocksdb::NewTerarkZipTableFactory(tzt_options, table_factory));
 
 options.table_factory = table_factory;
 

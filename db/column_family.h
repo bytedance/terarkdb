@@ -151,9 +151,10 @@ extern ColumnFamilyOptions SanitizeOptions(const ImmutableDBOptions& db_options,
 // into internal ones in int_tbl_prop_collector_factories. Add a system internal
 // one too.
 extern void GetIntTblPropCollectorFactory(
-    const ImmutableCFOptions& ioptions,
+    const ImmutableCFOptions& ioptions, const MutableCFOptions& moptions,
     std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
-        int_tbl_prop_collector_factories);
+        int_tbl_prop_collector_factories,
+    bool with_ttl_extractor);
 
 class ColumnFamilySet;
 
@@ -330,6 +331,12 @@ class ColumnFamilyData {
   int_tbl_prop_collector_factories() const {
     return &int_tbl_prop_collector_factories_;
   }
+  const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
+  int_tbl_prop_collector_factories_for_blob() const {
+    return int_tbl_prop_collector_factories_for_blob_.empty()
+               ? &int_tbl_prop_collector_factories_
+               : &int_tbl_prop_collector_factories_for_blob_;
+  }
 
   SuperVersion* GetSuperVersion() { return super_version_; }
   // thread-safe
@@ -434,6 +441,8 @@ class ColumnFamilyData {
   const InternalKeyComparator internal_comparator_;
   std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
       int_tbl_prop_collector_factories_;
+  std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
+      int_tbl_prop_collector_factories_for_blob_;
 
   const ColumnFamilyOptions initial_cf_options_;
   const ImmutableCFOptions ioptions_;

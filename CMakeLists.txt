@@ -35,7 +35,7 @@ CMAKE_DEPENDENT_OPTION(WITH_TESTS "build with tests" ON "CMAKE_BUILD_TYPE STREQU
 option(WITH_TOOLS "build with tools" OFF)
 option(WITH_TERARK_ZIP "build with TerarkZipTable support" ON)
 option(WITH_BOOSTLIB "build with boost, if WITH_TERARK_ZIP is ON, this will also set to ON" OFF)
-option(WITH_TERARKDB_NAMESPACE "namespace" "terark")
+option(WITH_TERARKDB_NAMESPACE "namespace" "terarkdb")
 
 option(BUILD_SUFFIX "library sufix" "d")
 option(FORCE_TERARKDB_RELEASE_BUILD "ignore outside cmake_build_type" OFF)
@@ -45,7 +45,7 @@ Find_Package(Threads REQUIRED)
 
 #----------------------- namespace
 if(WITH_TERARKDB_NAMESPACE)
-  add_definitions(-DTERARKDB_NAMESPACE=WITH_TERARKDB_NAMESPACE)
+  add_definitions(-DTERARKDB_NAMESPACE=${WITH_TERARKDB_NAMESPACE})
 endif()
 
 #----------------------- Global Options
@@ -79,13 +79,13 @@ IF(WITH_COVERAGE)
 ENDIF()
 
 #-------------------------- Print Global Options
-message("[terarkdb] FORCE_RELEASE_BUILD = ${FORCE_TERARKDB_RELEASE_BUILD}, cmake_build_type = ${CMAKE_BUILD_TYPE}")
-message("[terarkdb] WITH_TOOLS = ${WITH_TOOLS}, WITH_ASAN = ${WITH_ASAN}, WITH_TESTS = ${WITH_TESTS}")
-message("[terarkdb] WITH_JEMALLOC = ${WITH_JEMALLOC}, WITH_COVERAGE=${WITH_COVERAGE}")
+MESSAGE("[terarkdb] FORCE_RELEASE_BUILD = ${FORCE_TERARKDB_RELEASE_BUILD}, cmake_build_type = ${CMAKE_BUILD_TYPE}")
+MESSAGE("[terarkdb] TERARKDB_NAMESPACE=${WITH_TERARKDB_NAMESPACE}")
+MESSAGE("[terarkdb] WITH_TOOLS = ${WITH_TOOLS}, WITH_ASAN = ${WITH_ASAN}, WITH_TESTS = ${WITH_TESTS}")
+MESSAGE("[terarkdb] WITH_JEMALLOC = ${WITH_JEMALLOC}, WITH_COVERAGE=${WITH_COVERAGE}")
 MESSAGE("[terarkdb] CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}, BUILD_SUFFIX=${BUILD_SUFFIX}")
 MESSAGE("[terarkdb] CMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}")
 MESSAGE("[terarkdb] CMAKE_THREAD_LIBS_INIT=${CMAKE_THREAD_LIBS_INIT}")
-
 
 #-------------------------- Third-party Libraries
 ADD_SUBDIRECTORY(third-party)
@@ -922,13 +922,11 @@ if(NOT WIN32 OR ROCKSDB_INSTALL_ON_WINDOWS)
   )
 endif()
 
-
 IF(WITH_TESTS OR WITH_TOOLS)
-  add_library(testharness OBJECT util/testharness.cc util/mock_time_env.cc)
-  target_link_libraries(testharness gtest)
+  add_library(testharness OBJECT util/testharness.cc)
 ENDIF()
+
 if(WITH_TESTS)
-  add_definitions(-DDBGCMESSAGE=1)
   set(TESTS
         cache/cache_test.cc
         cache/lru_cache_test.cc
@@ -1093,6 +1091,7 @@ if(WITH_TESTS)
       db/db_test_util.cc
       monitoring/thread_status_updater_debug.cc
       table/mock_table.cc
+      util/mock_time_env.cc
       util/fault_injection_test_env.cc
       utilities/cassandra/test_utils.cc
   )

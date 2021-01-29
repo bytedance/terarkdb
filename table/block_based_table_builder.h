@@ -15,7 +15,6 @@
 #include <utility>
 #include <vector>
 
-#include "monitoring/histogram.h"
 #include "rocksdb/flush_block_policy.h"
 #include "rocksdb/listener.h"
 #include "rocksdb/options.h"

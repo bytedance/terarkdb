@@ -122,7 +122,7 @@ DBOptions SanitizeOptions(const std::string& dbname, const DBOptions& src) {
   }
 
   if (result.db_paths.size() == 0) {
-    result.db_paths.emplace_back(dbname, std::numeric_limits<uint64_t>::max());
+    result.db_paths.emplace_back(dbname, port::kMaxUint64);
   }
 
   if (result.use_direct_reads && result.compaction_readahead_size == 0) {
@@ -1171,8 +1171,10 @@ Status DBImpl::WriteLevel0TableForRecovery(int job_id, ColumnFamilyData* cfd,
           c_style_callback(get_arena_input_iter), &get_arena_input_iter,
           c_style_callback(get_range_del_iters), &get_range_del_iters,
           &meta_vec, cfd->internal_comparator(),
-          cfd->int_tbl_prop_collector_factories(), cfd->GetID(), cfd->GetName(),
-          snapshot_seqs, earliest_write_conflict_snapshot, snapshot_checker,
+          cfd->int_tbl_prop_collector_factories(),
+          cfd->int_tbl_prop_collector_factories_for_blob(), cfd->GetID(),
+          cfd->GetName(), snapshot_seqs, earliest_write_conflict_snapshot,
+          snapshot_checker,
           GetCompressionFlush(*cfd->ioptions(), mutable_cf_options),
           cfd->ioptions()->compression_opts, paranoid_file_checks,
           cfd->internal_stats(), TableFileCreationReason::kRecovery,

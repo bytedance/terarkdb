@@ -701,10 +701,8 @@ TESTS = \
 	range_tombstone_fragmenter_test \
 	range_del_aggregator_test \
 	sst_file_reader_test \
-<<<<<<< HEAD:deprecated/Makefile
 	lazy_buffer_test \
 	map_builder_test \
-=======
 	db_secondary_test \
 	block_cache_tracer_test \
 	block_cache_trace_analyzer_test \
@@ -716,7 +714,6 @@ TESTS = \
 ifeq ($(USE_FOLLY_DISTRIBUTED_MUTEX),1)
 	TESTS += folly_synchronization_distributed_mutex_test
 endif
->>>>>>> 0355d14dd... Add a simple timer support to schedule work at fixed times/intervals (#6543):Makefile
 
 PARALLEL_TEST = \
 	backupable_db_test \

@@ -187,8 +187,6 @@ struct TablePropertiesBase {
   uint64_t num_merge_operands = 0;
   // the number of range deletions in this table
   uint64_t num_range_deletions = 0;
-  // the number of k-v pairs has raw ttl in this table
-  // uint64_t num_has_raw_ttl = 0;
   // format version, reserved for backward compatibility
   uint64_t format_version = 0;
   // If 0, key is variable length. Otherwise number of bytes for each key.
@@ -258,12 +256,6 @@ struct TablePropertiesBase {
   // Inheritance chain
   std::vector<uint64_t> inheritance_chain;
 
-  // Expire time of fixed ratio
-  uint64_t ratio_expire_time = std::numeric_limits<uint64_t>::max();
-
-  // Expire time of fixed scan gap
-  uint64_t scan_gap_expire_time = std::numeric_limits<uint64_t>::max();
-
   // convert this object to a human readable form
   //   @prop_delim: delimiter for each property.
   std::string ToString(const std::string& prop_delim = "; ",
@@ -291,5 +283,8 @@ struct TableProperties : public TablePropertiesBase {
 extern uint64_t GetDeletedKeys(const UserCollectedProperties& props);
 extern uint64_t GetMergeOperands(const UserCollectedProperties& props,
                                  bool* property_present);
+extern void GetCompactionTimePoint(const UserCollectedProperties& props,
+                                   uint64_t* earliest_time_begin_compact,
+                                   uint64_t* latest_time_end_compact);
 
 }  // namespace TERARKDB_NAMESPACE

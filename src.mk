@@ -8,13 +8,13 @@ LIB_SOURCES =                                                   \
   db/c.cc                                                       \
   db/column_family.cc                                           \
   db/compacted_db_impl.cc                                       \
-  db/compaction_dispatcher.cc                                   \
   db/compaction.cc                                              \
   db/compaction_iterator.cc                                     \
   db/compaction_job.cc                                          \
   db/compaction_picker.cc                                       \
   db/compaction_picker_fifo.cc                                  \
   db/compaction_picker_universal.cc                             \
+  db/compaction_dispatcher.cc                                   \
   db/convenience.cc                                             \
   db/db_filesnapshot.cc                                         \
   db/db_impl.cc                                                 \
@@ -281,7 +281,6 @@ TEST_LIB_SOURCES = \
   utilities/cassandra/test_utils.cc                             \
 
 MAIN_SOURCES =                                                          \
-  table/table_test.cc                                                   \
   cache/cache_bench.cc                                                  \
   cache/cache_test.cc                                                   \
   db/column_family_test.cc                                              \
@@ -390,6 +389,11 @@ MAIN_SOURCES =                                                          \
   table/merger_test.cc                                                  \
   table/sst_file_reader_test.cc                                         \
   table/table_reader_bench.cc                                           \
+  table/table_test.cc                                                   \
+  table/terark_zip_config.cc                                            \
+  table/terark_zip_table_builder.cc                                     \
+  table/terark_zip_table_reader.cc                                      \
+  table/terark_zip_table.cc                                             \
   third-party/gtest-1.7.0/fused-src/gtest/gtest-all.cc                  \
   tools/db_bench.cc                                                     \
   tools/db_bench_tool_test.cc                                           \

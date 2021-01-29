@@ -78,8 +78,6 @@ if sanitizer == "":
 cpp_library(
     name = "rocksdb_lib",
     srcs = [
-<<<<<<< HEAD
-=======
         "cache/cache.cc",
         "cache/clock_cache.cc",
         "cache/lru_cache.cc",
@@ -368,7 +366,6 @@ cpp_library(
     name = "rocksdb_whole_archive_lib",
     srcs = [
         "cache/cache.cc",
->>>>>>> 1e0090973... Periodically flush info log out of application buffer (#7488)
         "cache/clock_cache.cc",
         "cache/lru_cache.cc",
         "cache/sharded_cache.cc",
@@ -413,11 +410,8 @@ cpp_library(
         "db/memtable_list.cc",
         "db/merge_helper.cc",
         "db/merge_operator.cc",
-<<<<<<< HEAD
-=======
         "db/output_validator.cc",
         "db/periodic_work_scheduler.cc",
->>>>>>> 1e0090973... Periodically flush info log out of application buffer (#7488)
         "db/range_del_aggregator.cc",
         "db/range_tombstone_fragmenter.cc",
         "db/repair.cc",
@@ -609,13 +603,10 @@ cpp_library(
     srcs = [
         "db/db_test_util.cc",
         "table/mock_table.cc",
-<<<<<<< HEAD
-=======
         "test_util/mock_time_env.cc",
         "test_util/testharness.cc",
         "test_util/testutil.cc",
         "tools/block_cache_analyzer/block_cache_trace_analyzer.cc",
->>>>>>> ac1734d06... Fix/minimize mock_time_env.h dependencies (#7426)
         "tools/trace_analyzer_tool.cc",
         "util/fault_injection_test_env.cc",
         "util/testharness.cc",

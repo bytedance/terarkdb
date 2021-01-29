@@ -332,7 +332,7 @@ void PersistentCacheDBTest::RunTest(
     BlockBasedTableOptions table_options;
     table_options.cache_index_and_filter_blocks = true;
 
-    const size_t size_max = std::numeric_limits<size_t>::max();
+    const size_t size_max = port::kMaxUint64;
 
     switch (iter) {
       case 0:

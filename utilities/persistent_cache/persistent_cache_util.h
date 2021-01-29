@@ -22,14 +22,14 @@ template <class T>
 class BoundedQueue {
  public:
   explicit BoundedQueue(
-      const size_t max_size = std::numeric_limits<size_t>::max())
+      const size_t max_size = port::kMaxUint64)
       : cond_empty_(&lock_), max_size_(max_size) {}
 
   virtual ~BoundedQueue() {}
 
   void Push(T&& t) {
     MutexLock _(&lock_);
-    if (max_size_ != std::numeric_limits<size_t>::max() &&
+    if (max_size_ != port::kMaxUint64 &&
         size_ + t.Size() >= max_size_) {
       // overflow
       return;
