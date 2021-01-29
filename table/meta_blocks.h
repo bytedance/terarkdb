@@ -19,7 +19,8 @@
 #include "table/format.h"
 #include "util/kv_map.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class BlockBuilder;
 class BlockHandle;
@@ -142,4 +143,4 @@ Status ReadMetaBlock(RandomAccessFileReader* file,
                      bool compression_type_missing = false,
                      MemoryAllocator* memory_allocator = nullptr);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

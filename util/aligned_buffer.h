@@ -11,7 +11,8 @@
 #include <algorithm>
 #include "port/port.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 inline size_t TruncateToPageBoundary(size_t page_size, size_t s) {
   s -= (s & (page_size - 1));

@@ -21,7 +21,8 @@
 #include "port/port.h"
 #include "util/cast_util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 HistogramBucketMapper::HistogramBucketMapper() {
   // If you change this, you also need to change

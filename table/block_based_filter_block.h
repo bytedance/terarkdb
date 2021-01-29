@@ -24,7 +24,8 @@
 #include "table/filter_block.h"
 #include "util/hash.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 
 // A BlockBasedFilterBlockBuilder is used to construct all of the filters for a
@@ -112,4 +113,4 @@ class BlockBasedFilterBlockReader : public FilterBlockReader {
   BlockBasedFilterBlockReader(const BlockBasedFilterBlockReader&);
   void operator=(const BlockBasedFilterBlockReader&);
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

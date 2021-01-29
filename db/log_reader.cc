@@ -16,7 +16,8 @@
 #include "util/file_reader_writer.h"
 #include "util/util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace log {
 
 Reader::Reporter::~Reporter() {
@@ -410,4 +411,4 @@ unsigned int Reader::ReadPhysicalRecord(Slice* result, size_t* drop_size) {
 }
 
 }  // namespace log
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

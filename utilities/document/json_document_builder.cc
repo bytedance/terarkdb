@@ -10,7 +10,8 @@
 #include "rocksdb/utilities/json_document.h"
 #include "third-party/fbson/FbsonWriter.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 JSONDocumentBuilder::JSONDocumentBuilder()
 : writer_(new fbson::FbsonWriter()) {
 }
@@ -115,6 +116,6 @@ JSONDocument JSONDocumentBuilder::GetJSONDocument() {
 JSONDocumentBuilder::~JSONDocumentBuilder() {
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

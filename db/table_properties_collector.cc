@@ -10,7 +10,8 @@
 #include "util/string_util.h"
 #include "utilities/util/factory.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace {
 
 uint64_t GetUint64Property(const UserCollectedProperties& props,
@@ -63,6 +64,6 @@ uint64_t GetMergeOperands(const UserCollectedProperties& props,
                            property_present);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
-TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::TablePropertiesCollectorFactory*);
+TERARK_FACTORY_INSTANTIATE_GNS(TERARKDB_NAMESPACE::TablePropertiesCollectorFactory*);

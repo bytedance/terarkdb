@@ -9,7 +9,8 @@
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class DBTestInPlaceUpdate : public DBTestBase {
  public:
@@ -73,7 +74,7 @@ TEST_F(DBTestInPlaceUpdate, InPlaceUpdateCallbackSmallerSize) {
     options.env = env_;
     options.write_buffer_size = 100000;
     options.inplace_callback =
-      rocksdb::DBTestInPlaceUpdate::updateInPlaceSmallerSize;
+      TERARKDB_NAMESPACE::DBTestInPlaceUpdate::updateInPlaceSmallerSize;
     options.allow_concurrent_memtable_write = false;
     Reopen(options);
     CreateAndReopenWithCF({"pikachu"}, options);
@@ -102,7 +103,7 @@ TEST_F(DBTestInPlaceUpdate, InPlaceUpdateCallbackSmallerVarintSize) {
     options.env = env_;
     options.write_buffer_size = 100000;
     options.inplace_callback =
-      rocksdb::DBTestInPlaceUpdate::updateInPlaceSmallerVarintSize;
+      TERARKDB_NAMESPACE::DBTestInPlaceUpdate::updateInPlaceSmallerVarintSize;
     options.allow_concurrent_memtable_write = false;
     Reopen(options);
     CreateAndReopenWithCF({"pikachu"}, options);
@@ -131,7 +132,7 @@ TEST_F(DBTestInPlaceUpdate, InPlaceUpdateCallbackLargeNewValue) {
     options.env = env_;
     options.write_buffer_size = 100000;
     options.inplace_callback =
-      rocksdb::DBTestInPlaceUpdate::updateInPlaceLargerSize;
+      TERARKDB_NAMESPACE::DBTestInPlaceUpdate::updateInPlaceLargerSize;
     options.allow_concurrent_memtable_write = false;
     Reopen(options);
     CreateAndReopenWithCF({"pikachu"}, options);
@@ -158,7 +159,7 @@ TEST_F(DBTestInPlaceUpdate, InPlaceUpdateCallbackNoAction) {
     options.env = env_;
     options.write_buffer_size = 100000;
     options.inplace_callback =
-        rocksdb::DBTestInPlaceUpdate::updateInPlaceNoAction;
+        TERARKDB_NAMESPACE::DBTestInPlaceUpdate::updateInPlaceNoAction;
     options.allow_concurrent_memtable_write = false;
     Reopen(options);
     CreateAndReopenWithCF({"pikachu"}, options);
@@ -168,10 +169,10 @@ TEST_F(DBTestInPlaceUpdate, InPlaceUpdateCallbackNoAction) {
     ASSERT_EQ(Get(1, "key"), "NOT_FOUND");
   } while (ChangeCompactOptions());
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

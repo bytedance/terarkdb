@@ -7,7 +7,8 @@
 #include "rocksdb/env.h"
 #include "rocksdb/status.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE
 
@@ -145,4 +146,4 @@ Env* NewTimedEnv(Env* /*base_env*/) { return nullptr; }
 
 #endif  // !ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

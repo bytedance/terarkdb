@@ -25,7 +25,7 @@ class RespMachine {
 
   State GetState() const { return state_; }
 
-  const rocksdb::autovector<nonstd::string_view>& GetArgv() const {
+  const TERARKDB_NAMESPACE::autovector<nonstd::string_view>& GetArgv() const {
     return argv_;
   }
 
@@ -74,7 +74,7 @@ class RespMachine {
 
   State state_ = kInit;
   ReqType req_type_ = kUnknown;
-  rocksdb::autovector<nonstd::string_view> argv_;
+  TERARKDB_NAMESPACE::autovector<nonstd::string_view> argv_;
   int multi_bulk_len_ = 0;
   int bulk_len_ = -1;
 };

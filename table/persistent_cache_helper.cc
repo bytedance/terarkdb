@@ -7,7 +7,8 @@
 #include "table/block_based_table_reader.h"
 #include "table/format.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 void PersistentCacheHelper::InsertRawPage(
     const PersistentCacheOptions& cache_options, const BlockHandle& handle,
@@ -110,4 +111,4 @@ Status PersistentCacheHelper::LookupUncompressedPage(
   return Status::OK();
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

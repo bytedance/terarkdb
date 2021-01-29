@@ -14,7 +14,8 @@
 #include "table/table_reader.h"
 #include "util/file_reader_writer.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 struct SstFileReader::Rep {
   Options options;
@@ -80,6 +81,6 @@ Status SstFileReader::VerifyChecksum() {
   return rep_->table_reader->VerifyChecksum();
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // !ROCKSDB_LITE

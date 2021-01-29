@@ -10,7 +10,8 @@
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 static int cfilter_count = 0;
 static int cfilter_skips = 0;
@@ -879,10 +880,10 @@ TEST_F(DBTestCompactionFilter, SkipUntilWithBloomFilter) {
   EXPECT_EQ("v50", val);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

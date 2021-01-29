@@ -27,7 +27,8 @@ namespace fbson {
   typedef FbsonWriterT<FbsonOutStream> FbsonWriter;
 }  // namespace fbson
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // NOTE: none of this is thread-safe
 class JSONDocument {
@@ -190,6 +191,6 @@ class JSONDocumentBuilder {
   std::unique_ptr<fbson::FbsonWriter> writer_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

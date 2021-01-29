@@ -23,7 +23,8 @@
 #include "util/log_buffer.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace {
 uint64_t GetTotalFilesSize(const std::vector<FileMetaData*>& files) {
   uint64_t total_size = 0;
@@ -239,5 +240,5 @@ Compaction* FIFOCompactionPicker::CompactRange(
   return c;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // !ROCKSDB_LITE

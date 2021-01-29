@@ -10,7 +10,8 @@
 
 #include "rocksdb/utilities/env_mirror.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // An implementation of Env that mirrors all work over two backend
 // Env's.  This is useful for debugging purposes.
@@ -260,5 +261,5 @@ Status EnvMirror::ReuseWritableFile(const std::string& fname,
   return as;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif

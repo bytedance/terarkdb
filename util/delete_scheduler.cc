@@ -17,7 +17,8 @@
 #include "util/sst_file_manager_impl.h"
 #include "util/sync_point.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 DeleteScheduler::DeleteScheduler(Env* env, int64_t rate_bytes_per_sec,
                                  Logger* info_log,
@@ -383,6 +384,6 @@ void DeleteScheduler::WaitForEmptyTrash() {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

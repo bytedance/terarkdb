@@ -7,7 +7,8 @@
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/slice.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace cassandra {
 
 /**
@@ -42,4 +43,4 @@ private:
  size_t operands_limit_;
 };
 } // namespace cassandra
-} // namespace rocksdb
+} // namespace TERARKDB_NAMESPACE

@@ -21,13 +21,14 @@
 #include "rocksdb/utilities/write_batch_with_index.h"
 #include "utilities/transactions/transaction_util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class TransactionBaseImpl : public Transaction {
  public:
   TransactionBaseImpl(
       DB* db, const WriteOptions& write_options,
-      const rocksdb::WriteBatchEntryIndexFactory* index_factory = nullptr);
+      const TERARKDB_NAMESPACE::WriteBatchEntryIndexFactory* index_factory = nullptr);
 
   virtual ~TransactionBaseImpl();
 
@@ -340,6 +341,6 @@ class TransactionBaseImpl : public Transaction {
   void SetSnapshotInternal(const Snapshot* snapshot);
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

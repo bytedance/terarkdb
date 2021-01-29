@@ -10,7 +10,8 @@
 #include "rocksdb/write_buffer_manager.h"
 #include "util/testharness.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class WriteBufferManagerTest : public testing::Test {};
 
@@ -143,7 +144,7 @@ TEST_F(WriteBufferManagerTest, NoCapCacheCost) {
   ASSERT_LT(cache->GetPinnedUsage(), 1024 * 1024 + 10000);
 }
 #endif  // ROCKSDB_LITE
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

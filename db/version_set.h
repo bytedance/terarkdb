@@ -46,7 +46,8 @@
 #include "port/port.h"
 #include "rocksdb/env.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 namespace log {
 class Writer;
@@ -334,7 +335,7 @@ class VersionStorageInfo {
   // REQUIRES: This version has been saved (see VersionSet::SaveTo)
   const DependenceMap& dependence_map() const { return dependence_map_; }
 
-  const rocksdb::LevelFilesBrief& LevelFilesBrief(int level) const {
+  const TERARKDB_NAMESPACE::LevelFilesBrief& LevelFilesBrief(int level) const {
     assert(level < static_cast<int>(level_files_brief_.size()));
     return level_files_brief_[level];
   }
@@ -497,7 +498,7 @@ class VersionStorageInfo {
   std::vector<uint64_t> level_max_bytes_;
 
   // A short brief metadata of files per level
-  autovector<rocksdb::LevelFilesBrief> level_files_brief_;
+  autovector<TERARKDB_NAMESPACE::LevelFilesBrief> level_files_brief_;
   FileIndexer file_indexer_;
   Arena arena_;  // Used to allocate space for file_levels_
 
@@ -1191,4 +1192,4 @@ class VersionSet {
                          bool apply = true);
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

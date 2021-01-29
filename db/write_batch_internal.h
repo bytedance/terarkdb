@@ -16,7 +16,8 @@
 #include "rocksdb/options.h"
 #include "util/autovector.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class MemTable;
 class FlushScheduler;
@@ -234,4 +235,4 @@ class LocalSavePoint {
 #endif
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

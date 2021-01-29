@@ -14,7 +14,8 @@
 #include "rocksdb/status.h"
 #include "rocksdb/table_properties.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 typedef std::unordered_map<std::string, std::shared_ptr<const TableProperties>>
     TablePropertiesCollection;
@@ -484,4 +485,4 @@ class EventListener {};
 
 #endif  // ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

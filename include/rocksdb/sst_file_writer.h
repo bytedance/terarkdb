@@ -21,7 +21,8 @@
 #define ROCKSDB_DEPRECATED_FUNC __declspec(deprecated)
 #endif
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Comparator;
 
@@ -133,6 +134,6 @@ class SstFileWriter {
   struct Rep;
   std::unique_ptr<Rep> rep_;
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // !ROCKSDB_LITE

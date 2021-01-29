@@ -23,7 +23,8 @@
 #endif
 
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class DBWithTTLImpl : public DBWithTTL {
  public:

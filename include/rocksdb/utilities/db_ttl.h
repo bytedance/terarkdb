@@ -12,7 +12,8 @@
 #include "rocksdb/utilities/stackable_db.h"
 #include "rocksdb/db.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // Database with TTL support.
 //
@@ -68,5 +69,5 @@ class DBWithTTL : public StackableDB {
   explicit DBWithTTL(DB* db) : StackableDB(db) {}
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

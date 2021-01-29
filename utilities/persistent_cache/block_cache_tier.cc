@@ -16,7 +16,8 @@
 #include "util/sync_point.h"
 #include "utilities/persistent_cache/block_cache_tier_file.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 //
 // BlockCacheImpl
@@ -420,6 +421,6 @@ Status NewPersistentCache(Env* const env, const std::string& path,
   return s;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ifndef ROCKSDB_LITE

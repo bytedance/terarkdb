@@ -28,7 +28,8 @@
 #include "util/sync_point.h"
 #include "utilities/util/function.hpp"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 Status ExternalSstFileIngestionJob::Prepare(
     const std::vector<std::string>& external_files_paths,
@@ -584,6 +585,6 @@ bool ExternalSstFileIngestionJob::IngestedFileFitInLevel(
   return true;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // !ROCKSDB_LITE

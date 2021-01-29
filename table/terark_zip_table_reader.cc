@@ -26,7 +26,7 @@
 #include <zstd/zstd.h>
 
 namespace {
-using namespace rocksdb;
+using namespace TERARKDB_NAMESPACE;
 
 // copy & modify from block_based_table_reader.cc
 SequenceNumber GetGlobalSequenceNumber(const TableProperties& table_properties,
@@ -210,7 +210,8 @@ static bool Overlap(const fstring& a, const fstring& b) {
 
 }  // namespace
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 Status ReadMetaBlockAdapte(RandomAccessFileReader* file, uint64_t file_size,
                            uint64_t table_magic_number,
@@ -1846,4 +1847,4 @@ Status TerarkZipTableMultiReader::Open(RandomAccessFileReader* file,
   return Status::OK();
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

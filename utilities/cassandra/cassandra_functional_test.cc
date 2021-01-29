@@ -15,9 +15,10 @@
 #include "utilities/cassandra/merge_operator.h"
 #include "utilities/cassandra/test_utils.h"
 
-using namespace rocksdb;
+using namespace TERARKDB_NAMESPACE;
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace cassandra {
 
 // Path to the database on file system
@@ -307,7 +308,7 @@ TEST_F(CassandraFunctionalTest, CompactionShouldRemoveTombstoneFromPut) {
 }
 
 } // namespace cassandra
-} // namespace rocksdb
+} // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

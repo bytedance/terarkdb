@@ -24,7 +24,8 @@
 #include "rocksdb/write_batch.h"
 #include "util/autovector.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class WriteThread {
  public:
@@ -423,4 +424,4 @@ class WriteThread {
   void CompleteFollower(Writer* w, WriteGroup& write_group);
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

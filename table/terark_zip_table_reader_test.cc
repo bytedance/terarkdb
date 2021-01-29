@@ -16,7 +16,8 @@
 #include "rocksdb/perf_context.h"
 #include "table/terark_zip_table.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 
@@ -95,9 +96,9 @@ class TerarkZipReaderTest : public DBTestBase {
     }
     options.table_factory.reset(NewTerarkZipTableFactory(tzto, nullptr));
     DestroyAndReopen(options);
-    rocksdb::ReadOptions ro;
-    rocksdb::WriteOptions wo;
-    rocksdb::FlushOptions fo;
+    TERARKDB_NAMESPACE::ReadOptions ro;
+    TERARKDB_NAMESPACE::WriteOptions wo;
+    TERARKDB_NAMESPACE::FlushOptions fo;
     std::string value;
 
     auto db = db_;
@@ -166,9 +167,9 @@ class TerarkZipReaderTest : public DBTestBase {
     }
     options.table_factory.reset(NewTerarkZipTableFactory(tzto, nullptr));
     DestroyAndReopen(options);
-    rocksdb::ReadOptions ro;
-    rocksdb::WriteOptions wo;
-    rocksdb::FlushOptions fo;
+    TERARKDB_NAMESPACE::ReadOptions ro;
+    TERARKDB_NAMESPACE::WriteOptions wo;
+    TERARKDB_NAMESPACE::FlushOptions fo;
     std::string value, value_get;
 
     auto db = db_;
@@ -188,7 +189,7 @@ class TerarkZipReaderTest : public DBTestBase {
       ASSERT_OK(db->Flush(fo));
     }
     ASSERT_OK(
-        db->CompactRange(rocksdb::CompactRangeOptions(), nullptr, nullptr));
+        db->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(), nullptr, nullptr));
     mt.seed(seed);
     for (size_t sst = 0; sst < 8; ++sst) {
       for (size_t i = sst, e = i + 8 * count; i < e; i += 8) {
@@ -239,9 +240,9 @@ class TerarkZipReaderTest : public DBTestBase {
     options.table_factory.reset(NewTerarkZipTableFactory(tzto, nullptr));
     options.disable_auto_compactions = true;
     DestroyAndReopen(options);
-    rocksdb::ReadOptions ro;
-    rocksdb::WriteOptions wo;
-    rocksdb::FlushOptions fo;
+    TERARKDB_NAMESPACE::ReadOptions ro;
+    TERARKDB_NAMESPACE::WriteOptions wo;
+    TERARKDB_NAMESPACE::FlushOptions fo;
     std::string value;
     auto get_value_by_type = [type](size_t i) -> std::string {
       switch (type) {
@@ -271,7 +272,7 @@ class TerarkZipReaderTest : public DBTestBase {
     }
     ASSERT_OK(db->Put(wo, get_key(count * 2), get_value_by_type(count * 2)));
     ASSERT_OK(db->Flush(fo));
-    rocksdb::ColumnFamilyMetaData meta;
+    TERARKDB_NAMESPACE::ColumnFamilyMetaData meta;
     db->GetColumnFamilyMetaData(&meta);
     ASSERT_EQ(meta.levels[0].files.size(), 3);
     db->CompactFiles(CompactionOptions(),
@@ -341,9 +342,9 @@ class TerarkZipReaderTest : public DBTestBase {
     options.table_factory.reset(NewTerarkZipTableFactory(tzto, nullptr));
     options.disable_auto_compactions = true;
     DestroyAndReopen(options);
-    rocksdb::ReadOptions ro;
-    rocksdb::WriteOptions wo;
-    rocksdb::FlushOptions fo;
+    TERARKDB_NAMESPACE::ReadOptions ro;
+    TERARKDB_NAMESPACE::WriteOptions wo;
+    TERARKDB_NAMESPACE::FlushOptions fo;
     std::string value;
 
     auto db = db_;
@@ -357,7 +358,7 @@ class TerarkZipReaderTest : public DBTestBase {
     }
     ASSERT_OK(db->Put(wo, get_key(count * 2), ""));
     ASSERT_OK(db->Flush(fo));
-    rocksdb::ColumnFamilyMetaData meta;
+    TERARKDB_NAMESPACE::ColumnFamilyMetaData meta;
     db->GetColumnFamilyMetaData(&meta);
     ASSERT_EQ(meta.levels[0].files.size(), 3);
     db->CompactFiles(CompactionOptions(),
@@ -433,9 +434,9 @@ class TerarkZipReaderTest : public DBTestBase {
     }
     options.table_factory.reset(NewTerarkZipTableFactory(tzto, nullptr));
     DestroyAndReopen(options);
-    rocksdb::ReadOptions ro1, ro2, ro3, ro4;
-    rocksdb::WriteOptions wo;
-    rocksdb::FlushOptions fo;
+    TERARKDB_NAMESPACE::ReadOptions ro1, ro2, ro3, ro4;
+    TERARKDB_NAMESPACE::WriteOptions wo;
+    TERARKDB_NAMESPACE::FlushOptions fo;
 
     struct comp_t {
       bool greater = 0;
@@ -1012,10 +1013,10 @@ TEST_F(TerarkZipReaderTest, IndexBuildTest) {
   IterTest(data_list, test_list, true , 4, 64, 1024, 1);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   int ret = RUN_ALL_TESTS();
   fprintf(stderr, "exit in 5 seconds\n");

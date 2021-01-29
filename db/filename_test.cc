@@ -14,7 +14,8 @@
 #include "util/logging.h"
 #include "util/testharness.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class FileNameTest : public testing::Test {};
 
@@ -172,7 +173,7 @@ TEST_F(FileNameTest, Construction) {
   ASSERT_EQ(kMetaDatabase, type);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

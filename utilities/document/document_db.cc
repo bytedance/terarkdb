@@ -18,7 +18,8 @@
 #include "util/mutexlock.h"
 #include "port/port.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // IMPORTANT NOTE: Secondary index column families should be very small and
 // generally fit in memory. Assume that accessing secondary index column
@@ -1205,5 +1206,5 @@ Status DocumentDB::Open(const DocumentDBOptions& options,
   return Status::OK();
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

@@ -19,7 +19,8 @@
 #include "rocksdb/flush_block_policy.h"
 #include "rocksdb/table.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 struct EnvOptions;
 
@@ -189,4 +190,4 @@ static std::unordered_map<std::string, OptionTypeInfo>
                    pin_top_level_index_and_filter),
           OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}}};
 #endif  // !ROCKSDB_LITE
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

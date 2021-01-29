@@ -10,7 +10,8 @@
 #include "util/testharness.h"
 #include "util/coding.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace crc32c {
 
 class CRC { };
@@ -138,7 +139,7 @@ TEST(CRC, Mask) {
 }
 
 }  // namespace crc32c
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 // copied from folly
 const uint64_t FNV_64_HASH_START = 14695981039346656037ULL;
@@ -162,12 +163,12 @@ int main(int argc, char** argv) {
   // Populate a buffer with a deterministic pattern
   // on which to compute checksums
 
-  const uint8_t* src = (uint8_t*)rocksdb::crc32c::buffer;
-  uint64_t* dst = (uint64_t*)rocksdb::crc32c::buffer;
-  const uint64_t* end = (const uint64_t*)(rocksdb::crc32c::buffer + rocksdb::crc32c::BUFFER_SIZE);
+  const uint8_t* src = (uint8_t*)TERARKDB_NAMESPACE::crc32c::buffer;
+  uint64_t* dst = (uint64_t*)TERARKDB_NAMESPACE::crc32c::buffer;
+  const uint64_t* end = (const uint64_t*)(TERARKDB_NAMESPACE::crc32c::buffer + TERARKDB_NAMESPACE::crc32c::BUFFER_SIZE);
   *dst++ = 0;
   while (dst < end) {
-    rocksdb::EncodeFixed64(reinterpret_cast<char*>(dst), fnv64_buf((const char*)src, sizeof(uint64_t)));
+    TERARKDB_NAMESPACE::EncodeFixed64(reinterpret_cast<char*>(dst), fnv64_buf((const char*)src, sizeof(uint64_t)));
     dst++;
     src += sizeof(uint64_t);
   }

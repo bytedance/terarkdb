@@ -71,15 +71,15 @@ AJSON(AJsonStatus, code, subcode, sev, state);
 namespace ajson {
 #ifdef USE_AJSON
 template <>
-struct json_impl<rocksdb::Status, void> {
-  static inline void read(reader& rd, rocksdb::Status& v) {
+struct json_impl<TERARKDB_NAMESPACE::Status, void> {
+  static inline void read(reader& rd, TERARKDB_NAMESPACE::Status& v) {
     AJsonStatus s;
     json_impl<AJsonStatus>::read(rd, s);
-    v = rocksdb::Status(s.code, s.subcode, s.sev,
+    v = TERARKDB_NAMESPACE::Status(s.code, s.subcode, s.sev,
                         s.state.empty() ? nullptr : s.state.c_str());
   }
   template <typename write_ty>
-  static inline void write(write_ty& wt, rocksdb::Status const& v) {
+  static inline void write(write_ty& wt, TERARKDB_NAMESPACE::Status const& v) {
     AJsonStatus s = {v.code(), v.subcode(), v.severity(),
                      v.getState() == nullptr ? std::string() : v.getState()};
     json_impl<AJsonStatus>::template write<write_ty>(wt, s);
@@ -87,9 +87,9 @@ struct json_impl<rocksdb::Status, void> {
 };
 
 template <>
-struct json_impl<rocksdb::CompactionWorkerContext::EncodedString, void> {
+struct json_impl<TERARKDB_NAMESPACE::CompactionWorkerContext::EncodedString, void> {
   static inline void read(reader& rd,
-                          rocksdb::CompactionWorkerContext::EncodedString& v) {
+                          TERARKDB_NAMESPACE::CompactionWorkerContext::EncodedString& v) {
     std::string s;
     json_impl<std::string>::read(rd, s);
     v.data.resize(s.size() / 2);
@@ -100,22 +100,22 @@ struct json_impl<rocksdb::CompactionWorkerContext::EncodedString, void> {
   }
   template <typename write_ty>
   static inline void write(
-      write_ty& wt, rocksdb::CompactionWorkerContext::EncodedString const& v) {
+      write_ty& wt, TERARKDB_NAMESPACE::CompactionWorkerContext::EncodedString const& v) {
     json_impl<std::string>::template write<write_ty>(
-        wt, rocksdb::Slice(v.data).ToString(true));
+        wt, TERARKDB_NAMESPACE::Slice(v.data).ToString(true));
   }
 };
 
 template <>
-struct json_impl<rocksdb::InternalKey, void> {
-  static inline void read(reader& rd, rocksdb::InternalKey& v) {
-    rocksdb::CompactionWorkerContext::EncodedString s;
-    json_impl<rocksdb::CompactionWorkerContext::EncodedString>::read(rd, s);
+struct json_impl<TERARKDB_NAMESPACE::InternalKey, void> {
+  static inline void read(reader& rd, TERARKDB_NAMESPACE::InternalKey& v) {
+    TERARKDB_NAMESPACE::CompactionWorkerContext::EncodedString s;
+    json_impl<TERARKDB_NAMESPACE::CompactionWorkerContext::EncodedString>::read(rd, s);
     *v.rep() = std::move(s.data);
   }
   template <typename write_ty>
-  static inline void write(write_ty& wt, rocksdb::InternalKey const& v) {
-    rocksdb::Slice s(*v.rep());
+  static inline void write(write_ty& wt, TERARKDB_NAMESPACE::InternalKey const& v) {
+    TERARKDB_NAMESPACE::Slice s(*v.rep());
     json_impl<std::string>::template write<write_ty>(wt, s.ToString(true));
   }
 };
@@ -126,14 +126,14 @@ void load_from_buff(T& x, std::string& data) {
 }
 
 template <class T>
-void load_from_buff(T& x, const rocksdb::Slice& data) {
+void load_from_buff(T& x, const TERARKDB_NAMESPACE::Slice& data) {
   load_from_buff(x, &data.ToString()[0], data.size());
 }
 
 #else  // USE_AJSON
 
 template <class T>
-void load_from_buff(T& x, const rocksdb::Slice& data) {
+void load_from_buff(T& x, const TERARKDB_NAMESPACE::Slice& data) {
   using namespace terark;
   LittleEndianDataInput<MemIO> dio;
   dio.set((char*)data.data(), data.size());
@@ -154,20 +154,21 @@ void save_to(string_stream& ss, const T& x) {
 }  // namespace ajson
 
 #ifdef USE_AJSON
-using namespace rocksdb;
+using namespace TERARKDB_NAMESPACE;
 #else
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 template <class DataIO>
-void DataIO_loadObject(DataIO& dio, rocksdb::Status& x) {
+void DataIO_loadObject(DataIO& dio, TERARKDB_NAMESPACE::Status& x) {
   AJsonStatus s;
   dio >> s;
-  x = rocksdb::Status(s.code, s.subcode, s.sev,
+  x = TERARKDB_NAMESPACE::Status(s.code, s.subcode, s.sev,
                       s.state.empty() ? nullptr : s.state.c_str());
 }
 
 template <class DataIO>
-void DataIO_saveObject(DataIO& dio, const rocksdb::Status& v) {
+void DataIO_saveObject(DataIO& dio, const TERARKDB_NAMESPACE::Status& v) {
   AJsonStatus s = {v.code(), v.subcode(), v.severity(),
                    v.getState() == nullptr ? std::string() : v.getState()};
   dio << s;
@@ -243,10 +244,11 @@ AJSON(CompactionWorkerContext, user_comparator, merge_operator,
 
 #ifdef USE_AJSON
 #else
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 template <class T>
 using STMap = std::unordered_map<std::string, std::shared_ptr<T>>;
@@ -1166,4 +1168,4 @@ std::shared_ptr<CompactionDispatcher> NewCommandLineCompactionDispatcher(
   return std::make_shared<CommandLineCompactionDispatcher>(std::move(cmd));
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

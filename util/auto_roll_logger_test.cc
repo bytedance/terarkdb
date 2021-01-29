@@ -23,7 +23,8 @@
 #include "util/sync_point.h"
 #include "util/testharness.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace {
 class NoSleepEnv : public EnvWrapper {
  public:
@@ -281,7 +282,7 @@ TEST_F(AutoRollLoggerTest, LogFlushWhileRolling) {
   AutoRollLogger* auto_roll_logger =
       dynamic_cast<AutoRollLogger*>(logger.get());
   ASSERT_TRUE(auto_roll_logger);
-  rocksdb::port::Thread flush_thread;
+  TERARKDB_NAMESPACE::port::Thread flush_thread;
 
   // Notes:
   // (1) Need to pin the old logger before beginning the roll, as rolling grabs
@@ -292,7 +293,7 @@ TEST_F(AutoRollLoggerTest, LogFlushWhileRolling) {
   //     logger after auto-roll logger has cut over to a new logger.
   // (3) PosixLogger::Flush() happens in both threads but its SyncPoints only
   //     are enabled in flush_thread (the one pinning the old logger).
-  rocksdb::SyncPoint::GetInstance()->LoadDependencyAndMarkers(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->LoadDependencyAndMarkers(
       {{"AutoRollLogger::Flush:PinnedLogger",
         "AutoRollLoggerTest::LogFlushWhileRolling:PreRollAndPostThreadInit"},
        {"PosixLogger::Flush:Begin1",
@@ -301,7 +302,7 @@ TEST_F(AutoRollLoggerTest, LogFlushWhileRolling) {
         "PosixLogger::Flush:Begin2"}},
       {{"AutoRollLogger::Flush:PinnedLogger", "PosixLogger::Flush:Begin1"},
        {"AutoRollLogger::Flush:PinnedLogger", "PosixLogger::Flush:Begin2"}});
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
 
   flush_thread = port::Thread ([&]() { auto_roll_logger->Flush(); });
   TEST_SYNC_POINT(
@@ -309,7 +310,7 @@ TEST_F(AutoRollLoggerTest, LogFlushWhileRolling) {
   RollLogFileBySizeTest(auto_roll_logger, options.max_log_file_size,
                         kSampleMessage + ":LogFlushWhileRolling");
   flush_thread.join();
-  rocksdb::SyncPoint::GetInstance()->DisableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
 }
 
 #endif  // OS_WIN
@@ -491,8 +492,8 @@ TEST_F(AutoRollLoggerTest, LogHeaderTest) {
 }
 
 TEST_F(AutoRollLoggerTest, LogFileExistence) {
-  rocksdb::DB* db;
-  rocksdb::Options options;
+  TERARKDB_NAMESPACE::DB* db;
+  TERARKDB_NAMESPACE::Options options;
 #ifdef OS_WIN
   // Replace all slashes in the path so windows CompSpec does not
   // become confused
@@ -506,12 +507,12 @@ TEST_F(AutoRollLoggerTest, LogFileExistence) {
   ASSERT_EQ(system(deleteCmd.c_str()), 0);
   options.max_log_file_size = 100 * 1024 * 1024;
   options.create_if_missing = true;
-  ASSERT_OK(rocksdb::DB::Open(options, kTestDir, &db));
+  ASSERT_OK(TERARKDB_NAMESPACE::DB::Open(options, kTestDir, &db));
   ASSERT_OK(default_env->FileExists(kLogFile));
   delete db;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

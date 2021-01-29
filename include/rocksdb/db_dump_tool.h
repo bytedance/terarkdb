@@ -10,7 +10,8 @@
 
 #include "rocksdb/db.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 struct DumpOptions {
   // Database that will be dumped
@@ -24,7 +25,7 @@ struct DumpOptions {
 class DbDumpTool {
  public:
   bool Run(const DumpOptions& dump_options,
-           rocksdb::Options options = rocksdb::Options());
+           TERARKDB_NAMESPACE::Options options = TERARKDB_NAMESPACE::Options());
 };
 
 struct UndumpOptions {
@@ -39,7 +40,7 @@ struct UndumpOptions {
 class DbUndumpTool {
  public:
   bool Run(const UndumpOptions& undump_options,
-           rocksdb::Options options = rocksdb::Options());
+           TERARKDB_NAMESPACE::Options options = TERARKDB_NAMESPACE::Options());
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

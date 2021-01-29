@@ -38,7 +38,8 @@
 #include "util/allocator.h"
 #include "util/random.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 template<typename Key, class Comparator>
 class SkipList {
@@ -494,4 +495,4 @@ bool SkipList<Key, Comparator>::Contains(const Key& key) const {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

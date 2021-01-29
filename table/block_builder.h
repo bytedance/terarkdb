@@ -15,7 +15,8 @@
 #include "rocksdb/table.h"
 #include "table/data_block_hash_index.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class BlockBuilder {
  public:
@@ -74,4 +75,4 @@ class BlockBuilder {
   DataBlockHashIndexBuilder data_block_hash_index_builder_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

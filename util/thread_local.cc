@@ -26,7 +26,8 @@
 #include <boost/fiber/fss.hpp>
 #endif
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 struct Entry {
   Entry() : ptr(nullptr) {}
@@ -414,4 +415,4 @@ void ThreadLocalPtr::Fold(FoldFunc func, void* res) {
   Instance()->Fold(id_, func, res);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

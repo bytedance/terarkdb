@@ -46,7 +46,8 @@
 #include "rocksdb/slice.h"
 #include "util/coding.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 /// An abstraction over the "list" concept.
 /// All operations may throw a RedisListException
@@ -305,5 +306,5 @@ class RedisListIterator {
   std::vector<char> result_;    // The output data
 };
 
-} // namespace rocksdb
+} // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

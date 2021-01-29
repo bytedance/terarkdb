@@ -12,7 +12,8 @@
 
 #include "rocksdb/db.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // Date tiered database is a wrapper of DB that implements
 // a simplified DateTieredCompactionStrategy by using multiple column famillies
@@ -104,5 +105,5 @@ class DateTieredDB {
   static const uint64_t kTSLength = sizeof(int64_t);  // size of timestamp
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

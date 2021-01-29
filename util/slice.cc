@@ -18,7 +18,8 @@
 #include "util/string_util.h"
 #include "utilities/util/factory.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 
@@ -242,9 +243,9 @@ TERARK_FACTORY_REGISTER_EX(CappedPrefixTransform, "rocksdb.CappedPrefix",
 
 TERARK_FACTORY_REGISTER_EX(NoopTransform, "rocksdb.Noop", &S_NewNoopTransform);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
-TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::SliceTransform*,
+TERARK_FACTORY_INSTANTIATE_GNS(TERARKDB_NAMESPACE::SliceTransform*,
                                          const std::string&);
-TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::ValueExtractorFactory*,
-                                         rocksdb::Slice);
+TERARK_FACTORY_INSTANTIATE_GNS(TERARKDB_NAMESPACE::ValueExtractorFactory*,
+                                         TERARKDB_NAMESPACE::Slice);

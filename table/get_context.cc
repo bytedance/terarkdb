@@ -15,7 +15,8 @@
 #include "rocksdb/statistics.h"
 #include "util/util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE
 
@@ -305,4 +306,4 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
   return false;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

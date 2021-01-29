@@ -22,7 +22,8 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class MapBuilderTest : public testing::Test {
  public:
@@ -394,7 +395,7 @@ TEST_F(MapBuilderTest, NoNeedBuildMapSst) {
   ASSERT_LE(output_file->fd.GetNumber(), 0);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

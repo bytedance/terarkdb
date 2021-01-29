@@ -13,7 +13,8 @@
 
 #include <algorithm>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 HistogramWindowingImpl::HistogramWindowingImpl() {
   env_ = Env::Default();
@@ -199,4 +200,4 @@ void HistogramWindowingImpl::SwapHistoryBucket() {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -13,7 +13,8 @@
 #include "db/write_batch_internal.h"
 #include "util/file_reader_writer.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 TransactionLogIteratorImpl::TransactionLogIteratorImpl(
     const std::string& dir, const ImmutableDBOptions* options,
@@ -339,5 +340,5 @@ Status TransactionLogIteratorImpl::OpenLogReader(const LogFile* logFile) {
                       false /* retry_after_eof */));
   return Status::OK();
 }
-}  //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

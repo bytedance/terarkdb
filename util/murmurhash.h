@@ -33,7 +33,8 @@ typedef unsigned int murmur_t;
 #endif
 
 // Allow slice to be hashable by murmur hash.
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 struct murmur_hash {
   size_t operator()(const Slice& slice) const {
     return MurmurHash(slice.data(), static_cast<int>(slice.size()), 0);

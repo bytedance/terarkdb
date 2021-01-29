@@ -10,7 +10,8 @@
 
 #pragma once
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace cassandra {
 namespace {
 const int64_t kCharMask = 0xFFLL;
@@ -72,4 +73,4 @@ inline int64_t Deserialize<int64_t>(const char* src, std::size_t offset) {
 }
 
 } // namepsace cassandrda
-} // namespace rocksdb
+} // namespace TERARKDB_NAMESPACE

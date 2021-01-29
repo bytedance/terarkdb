@@ -15,7 +15,8 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class GenerateLevelFilesBriefTest : public testing::Test {
  public:
@@ -1093,7 +1094,7 @@ INSTANTIATE_TEST_CASE_P(
                     VersionSetTestBase::kColumnFamilyName2,
                     VersionSetTestBase::kColumnFamilyName3));
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

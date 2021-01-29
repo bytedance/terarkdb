@@ -16,7 +16,8 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 extern const uint64_t kCuckooTableMagicNumber;
 
 namespace {
@@ -615,7 +616,7 @@ TEST_F(CuckooBuilderTest, FailWhenSameKeyInserted) {
   ASSERT_TRUE(builder.Finish(nullptr, nullptr).IsNotSupported());
   ASSERT_OK(file_writer->Close());
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

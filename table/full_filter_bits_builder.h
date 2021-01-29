@@ -14,7 +14,8 @@
 
 #include "rocksdb/filter_policy.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Slice;
 
@@ -71,4 +72,4 @@ class FullFilterBitsBuilder : public FilterBitsBuilder {
   void operator=(const FullFilterBitsBuilder&);
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

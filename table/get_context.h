@@ -13,7 +13,8 @@
 #include "rocksdb/types.h"
 #include "table/block.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 class MergeContext;
 
 struct GetContextStats {
@@ -125,4 +126,4 @@ class GetContext {
   bool is_finished_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

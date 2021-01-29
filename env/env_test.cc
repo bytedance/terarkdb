@@ -54,7 +54,8 @@ static const size_t kPageSize = sysconf(_SC_PAGESIZE);
 static const size_t kPageSize = 4 * 1024;
 #endif
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 static const int kDelayMicros = 100000;
 
@@ -100,7 +101,7 @@ class EnvPosixTest : public testing::Test {
     env_->SetBackgroundThreads(1, Env::Priority::LOW);
     env_->SetBackgroundThreads(1, Env::Priority::HIGH);
   }
-};  // namespace rocksdb
+};  // namespace TERARKDB_NAMESPACE
 
 class EnvPosixTestWithParam
     : public EnvPosixTest,
@@ -1066,7 +1067,7 @@ TEST_P(EnvPosixTestWithParam, DISABLED_InvalidateCache) {
 #else
 TEST_P(EnvPosixTestWithParam, InvalidateCache) {
 #endif
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
   EnvOptions soptions;
   soptions.use_direct_reads = soptions.use_direct_writes = direct_io_;
   std::string fname = test::PerThreadDBPath(env_, "testfile");
@@ -1131,7 +1132,7 @@ TEST_P(EnvPosixTestWithParam, InvalidateCache) {
   }
   // Delete the file
   ASSERT_OK(env_->DeleteFile(fname));
-  rocksdb::SyncPoint::GetInstance()->ClearTrace();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->ClearTrace();
 }
 #endif  // not TRAVIS
 #endif  // OS_LINUX || OS_WIN
@@ -1254,7 +1255,7 @@ TEST_P(EnvPosixTestWithParam, LogBufferMaxSizeTest) {
 }
 
 TEST_P(EnvPosixTestWithParam, Preallocation) {
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
   const std::string src = test::PerThreadDBPath(env_, "testfile");
   std::unique_ptr<WritableFile> srcfile;
   EnvOptions soptions;
@@ -1262,7 +1263,7 @@ TEST_P(EnvPosixTestWithParam, Preallocation) {
 #if !defined(OS_MACOSX) && !defined(OS_WIN) && !defined(OS_SOLARIS) && \
     !defined(OS_AIX) && !defined(OS_OPENBSD) && !defined(OS_FREEBSD)
   if (soptions.use_direct_writes) {
-    rocksdb::SyncPoint::GetInstance()->SetCallBack(
+    TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
         "NewWritableFile:O_DIRECT", [&](void* arg) {
           int* val = static_cast<int*>(arg);
           *val &= ~O_DIRECT;
@@ -1305,13 +1306,13 @@ TEST_P(EnvPosixTestWithParam, Preallocation) {
     srcfile->GetPreallocationStatus(&block_size, &last_allocated_block);
     ASSERT_EQ(last_allocated_block, 7UL);
   }
-  rocksdb::SyncPoint::GetInstance()->ClearTrace();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->ClearTrace();
 }
 
 // Test that the two ways to get children file attributes (in bulk or
 // individually) behave consistently.
 TEST_P(EnvPosixTestWithParam, ConsistentChildrenAttributes) {
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
   EnvOptions soptions;
   soptions.use_direct_reads = soptions.use_direct_writes = direct_io_;
   const int kNumChildren = 10;
@@ -1324,7 +1325,7 @@ TEST_P(EnvPosixTestWithParam, ConsistentChildrenAttributes) {
 #if !defined(OS_MACOSX) && !defined(OS_WIN) && !defined(OS_SOLARIS) && \
     !defined(OS_AIX) && !defined(OS_OPENBSD) && !defined(OS_FREEBSD)
     if (soptions.use_direct_writes) {
-      rocksdb::SyncPoint::GetInstance()->SetCallBack(
+      TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
           "NewWritableFile:O_DIRECT", [&](void* arg) {
             int* val = static_cast<int*>(arg);
             *val &= ~O_DIRECT;
@@ -1353,7 +1354,7 @@ TEST_P(EnvPosixTestWithParam, ConsistentChildrenAttributes) {
     ASSERT_EQ(size, 4096 * i);
     ASSERT_EQ(size, file_attrs_iter->size_bytes);
   }
-  rocksdb::SyncPoint::GetInstance()->ClearTrace();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->ClearTrace();
 }
 
 // Test that all WritableFileWrapper forwards all calls to WritableFile.
@@ -1767,7 +1768,7 @@ INSTANTIATE_TEST_CASE_P(
     ::testing::Values(std::pair<Env*, bool>(chroot_env.get(), true)));
 #endif  // !defined(ROCKSDB_LITE) && !defined(OS_WIN)
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

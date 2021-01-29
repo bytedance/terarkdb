@@ -1,6 +1,7 @@
 #include "chaos_test.hpp"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class ChaosTest {
  public:
@@ -11,8 +12,8 @@ class ChaosTest {
   ImmutableDBOptions db_options_;
   BlockBasedTableOptions bbto;
   TerarkZipTableOptions tzto;
-  std::vector<rocksdb::ColumnFamilyDescriptor> cfDescriptors;
-  std::vector<rocksdb::ColumnFamilyHandle *> hs;
+  std::vector<TERARKDB_NAMESPACE::ColumnFamilyDescriptor> cfDescriptors;
+  std::vector<TERARKDB_NAMESPACE::ColumnFamilyHandle *> hs;
   std::atomic<bool> shutting_down_;
   SequenceNumber preserve_deletes_seqnum_;
   WriteOptions wo;
@@ -96,12 +97,12 @@ class ChaosTest {
     options.fail_if_options_file_error = false;
     options.use_fsync = false;
     options.wal_recovery_mode =
-        rocksdb::WALRecoveryMode::kTolerateCorruptedTailRecords;
+        TERARKDB_NAMESPACE::WALRecoveryMode::kTolerateCorruptedTailRecords;
     options.delete_obsolete_files_period_micros = 21600000000;
     options.enable_write_thread_adaptive_yield = false;
     options.avoid_flush_during_shutdown = false;
     options.write_thread_max_yield_usec = 100;
-    options.info_log_level = rocksdb::INFO_LEVEL;
+    options.info_log_level = TERARKDB_NAMESPACE::INFO_LEVEL;
     options.max_file_opening_threads = 16;
     options.dump_malloc_stats = false;
     options.allow_mmap_populate = false;
@@ -109,9 +110,9 @@ class ChaosTest {
     options.access_hint_on_compaction_start = Options::AccessHint::NORMAL;
     options.preserve_deletes = false;
     options.env->SetBackgroundThreads(options.max_background_compactions,
-                                      rocksdb::Env::LOW);
+                                      TERARKDB_NAMESPACE::Env::LOW);
     options.env->SetBackgroundThreads(options.max_background_flushes,
-                                      rocksdb::Env::HIGH);
+                                      TERARKDB_NAMESPACE::Env::HIGH);
     bbto.pin_top_level_index_and_filter = true;
     bbto.pin_l0_filter_and_index_blocks_in_cache = true;
     bbto.filter_policy.reset(NewBloomFilterPolicy(10, true));
@@ -169,19 +170,19 @@ class ChaosTest {
 
     options.force_consistency_checks = true;
     options.max_file_opening_threads = 8;
-    options.compaction_style = rocksdb::kCompactionStyleLevel;
+    options.compaction_style = TERARKDB_NAMESPACE::kCompactionStyleLevel;
     options.blob_gc_ratio = 0.1;
     options.create_if_missing = true;
     options.create_missing_column_families = true;
     options.use_aio_reads = (flags_ & TestAsync) ? true : false;
-    options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(bbto));
+    options.table_factory.reset(TERARKDB_NAMESPACE::NewBlockBasedTableFactory(bbto));
 #ifdef WITH_TERARK_ZIP
     if (flags_ & TestTerark) {
       tzto.localTempDir = dbname_;
       tzto.indexNestLevel = 3;
       tzto.checksumLevel = 2;
-      tzto.entropyAlgo = rocksdb::TerarkZipTableOptions::kHuffman;
-      // tzto.entropyAlgo = rocksdb::TerarkZipTableOptions::kNoEntropy;
+      tzto.entropyAlgo = TERARKDB_NAMESPACE::TerarkZipTableOptions::kHuffman;
+      // tzto.entropyAlgo = TERARKDB_NAMESPACE::TerarkZipTableOptions::kNoEntropy;
       tzto.terarkZipMinLevel = 0;
       tzto.debugLevel = 0;
       tzto.indexNestScale = 8;
@@ -211,7 +212,7 @@ class ChaosTest {
       tzto.optimizeCpuL3Cache = false;
       tzto.forceMetaInMemory = false;
       options.table_factory.reset(
-          rocksdb::NewTerarkZipTableFactory(tzto, options.table_factory));
+          TERARKDB_NAMESPACE::NewTerarkZipTableFactory(tzto, options.table_factory));
     }
 #endif
   }
@@ -328,7 +329,7 @@ class ChaosTest {
 #endif
                               nullptr;
 
-    WriteBatchWithIndex b(rocksdb::BytewiseComparator(), 0, false, 0,
+    WriteBatchWithIndex b(TERARKDB_NAMESPACE::BytewiseComparator(), 0, false, 0,
                           index_factory);
     std::string key, value;
     std::mt19937_64 mt(seed);
@@ -340,7 +341,7 @@ class ChaosTest {
       if (flags_ & TestCompaction) {
         if (mt() % (1ull << 20) == 0) {
           auto keys = get_ran_range_pair(mt() & 1, mt, uid);
-          rocksdb::Slice slice0 = keys.first, slice1 = keys.second;
+          TERARKDB_NAMESPACE::Slice slice0 = keys.first, slice1 = keys.second;
           db->CompactRange(co, hs[mt() % hs.size()], &slice0, &slice1);
         }
       }
@@ -386,7 +387,7 @@ class ChaosTest {
       if (flags_ & TestRangeDel) {
         if (count % 70003 == 0) {
           auto keys = get_ran_range_pair(0, mt, uid);
-          rocksdb::Slice slice0 = keys.first, slice1 = keys.second;
+          TERARKDB_NAMESPACE::Slice slice0 = keys.first, slice1 = keys.second;
           fprintf(stderr, "RangeDel [%s, %s)\n", keys.first.c_str(),
                   keys.second.c_str());
           for (auto &h : hs) {
@@ -395,7 +396,7 @@ class ChaosTest {
         }
         if (count % 90017 == 0) {
           auto keys = get_ran_range_pair(1, mt, uid);
-          rocksdb::Slice slice0 = keys.first, slice1 = keys.second;
+          TERARKDB_NAMESPACE::Slice slice0 = keys.first, slice1 = keys.second;
           fprintf(stderr, "RangeDel [%s, %s)\n", keys.first.c_str(),
                   keys.second.c_str());
           for (auto &h : hs) {
@@ -418,7 +419,7 @@ class ChaosTest {
         }
         b.Clear();
         if (snapshot_mutex.try_lock()) {
-          auto del_snapshot = [&](const rocksdb::Snapshot *s) {
+          auto del_snapshot = [&](const TERARKDB_NAMESPACE::Snapshot *s) {
             db->ReleaseSnapshot(s);
           };
           if (snapshot.size() < 2) {
@@ -439,7 +440,7 @@ class ChaosTest {
                 std::uniform_int_distribution<uint64_t> uid) {
     uint64_t iter_seqno = uint64_t(-1);
     ctx.seqno = uint64_t(-1);
-    std::vector<rocksdb::Iterator *> iter_for_new;
+    std::vector<TERARKDB_NAMESPACE::Iterator *> iter_for_new;
     auto snapshot = get_snapshot(mt);
     ctx.ro.snapshot = snapshot.get();
     if (ctx.ro.snapshot == nullptr) {
@@ -605,7 +606,7 @@ class ChaosTest {
     if (options.comparator->Compare(key2, key3) > 0) {
       std::swap(key2, key3);
     }
-    rocksdb::Range range[2];
+    TERARKDB_NAMESPACE::Range range[2];
     range[0].start = key0;
     range[0].limit = key1;
     range[1].start = key2;
@@ -723,7 +724,7 @@ class ChaosTest {
       ctx.iter.resize(hs.size());
       for (size_t i = 0; i < hs.size(); ++i) {
         ctx.iter[i] =
-            std::unique_ptr<rocksdb::Iterator>(db->NewIterator(ctx.ro, hs[i]));
+            std::unique_ptr<TERARKDB_NAMESPACE::Iterator>(db->NewIterator(ctx.ro, hs[i]));
       }
     }
     ctx.ss.resize(hs.size());
@@ -736,7 +737,7 @@ class ChaosTest {
   void HashTest(ReadContext &ctx, std::mt19937_64 &mt,
                 std::uniform_int_distribution<uint64_t> &uid) {
     auto snapshot = get_snapshot(mt);
-    std::vector<rocksdb::Iterator *> iter_for_new;
+    std::vector<TERARKDB_NAMESPACE::Iterator *> iter_for_new;
     ctx.ro.snapshot = snapshot.get();
     if (ctx.ro.snapshot == nullptr) {
       ctx.seqno = uint64_t(-1);
@@ -782,15 +783,15 @@ class ChaosTest {
     set_options();
     exit_ = false;
     for (int i = 0; i < cf_num; ++i) {
-      options.compaction_style = rocksdb::kCompactionStyleLevel;
+      options.compaction_style = TERARKDB_NAMESPACE::kCompactionStyleLevel;
       options.write_buffer_size = size_t(file_size_base * 1.2);
       options.enable_lazy_compaction = true;
-      cfDescriptors.emplace_back(rocksdb::kDefaultColumnFamilyName, options);
-      options.compaction_style = rocksdb::kCompactionStyleUniversal;
+      cfDescriptors.emplace_back(TERARKDB_NAMESPACE::kDefaultColumnFamilyName, options);
+      options.compaction_style = TERARKDB_NAMESPACE::kCompactionStyleUniversal;
       options.write_buffer_size = size_t(file_size_base * 1.1);
       options.enable_lazy_compaction = true;
       cfDescriptors.emplace_back("universal" + std::to_string(i), options);
-      options.compaction_style = rocksdb::kCompactionStyleLevel;
+      options.compaction_style = TERARKDB_NAMESPACE::kCompactionStyleLevel;
       options.write_buffer_size = size_t(file_size_base / 1.1);
       options.enable_lazy_compaction = true;
       cfDescriptors.emplace_back("level" + std::to_string(i), options);
@@ -907,7 +908,7 @@ class ChaosTest {
     }
   }
 };  // ChaosTest
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char **argv) {
   google::ParseCommandLineFlags(&argc, &argv, true);
@@ -960,7 +961,7 @@ int main(int argc, char **argv) {
   int read_thread = FLAGS_read_thread;
   int cf_num = FLAGS_cf_num;
   std::vector<std::thread> thread_vec;
-  rocksdb::ChaosTest test(flags);
+  TERARKDB_NAMESPACE::ChaosTest test(flags);
   test.Open(cf_num);
   for (int j = 0; j < read_thread; ++j) {
     thread_vec.emplace_back([&test, j] { test.ReadFunc(j); });

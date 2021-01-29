@@ -22,7 +22,8 @@
 #include "rocksdb/write_batch.h"
 #include "rocksdb/write_batch_base.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class ColumnFamilyHandle;
 class Comparator;
@@ -291,6 +292,6 @@ class WriteBatchWithIndex : public WriteBatchBase {
   std::unique_ptr<Rep> rep;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // !ROCKSDB_LITE

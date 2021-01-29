@@ -18,7 +18,8 @@
 #include "rocksdb/types.h"
 #include "util/filename.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class LogFileImpl : public LogFile {
  public:
@@ -128,5 +129,5 @@ class TransactionLogIteratorImpl : public TransactionLogIterator {
   void UpdateCurrentWriteBatch(const Slice& record);
   Status OpenLogReader(const LogFile* file);
 };
-}  //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

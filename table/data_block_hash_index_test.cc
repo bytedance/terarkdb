@@ -18,7 +18,8 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 bool SearchForOffset(DataBlockHashIndex& index, const char* data,
                      uint16_t map_offset, const Slice& key,
@@ -719,7 +720,7 @@ TEST(DataBlockHashIndex, BlockBoundary) {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

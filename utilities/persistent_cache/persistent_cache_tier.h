@@ -52,7 +52,8 @@
 //               |
 //               V
 //              null
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // Persistent Cache Config
 //
@@ -331,6 +332,6 @@ class PersistentTieredCache : public PersistentCacheTier {
   std::list<Tier> tiers_;  // list of tiers top-down
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif

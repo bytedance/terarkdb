@@ -12,7 +12,8 @@
 #include "util/allocator.h"
 #include "util/hash.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 

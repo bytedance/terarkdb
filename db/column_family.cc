@@ -39,7 +39,8 @@
 #include "util/compression.h"
 #include "util/sst_file_manager_impl.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 ColumnFamilyHandleImpl::ColumnFamilyHandleImpl(
     ColumnFamilyData* column_family_data, DBImpl* db, InstrumentedMutex* mutex)
@@ -1494,4 +1495,4 @@ const Comparator* GetColumnFamilyUserComparator(
   return nullptr;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -216,5 +216,5 @@ class TimerQueue {
    public:
     std::vector<WorkItem>& getContainer() { return this->c; }
   } m_items;
-  rocksdb::port::Thread m_th;
+  TERARKDB_NAMESPACE::port::Thread m_th;
 };

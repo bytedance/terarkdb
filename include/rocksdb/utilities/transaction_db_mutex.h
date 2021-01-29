@@ -10,7 +10,8 @@
 
 #include "rocksdb/status.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // TransactionDBMutex and TransactionDBCondVar APIs allows applications to
 // implement custom mutexes and condition variables to be used by a
@@ -87,6 +88,6 @@ class TransactionDBMutexFactory {
   virtual ~TransactionDBMutexFactory() {}
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

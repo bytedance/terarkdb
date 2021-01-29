@@ -16,7 +16,8 @@
 #include <cstddef>
 #include "rocksdb/cache.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class WriteBufferManager {
  public:
@@ -99,4 +100,4 @@ class WriteBufferManager {
   WriteBufferManager(const WriteBufferManager&) = delete;
   WriteBufferManager& operator=(const WriteBufferManager&) = delete;
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

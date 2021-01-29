@@ -15,7 +15,8 @@
 #include "util/sync_point.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace port {
 
 /*

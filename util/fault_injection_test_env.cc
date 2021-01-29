@@ -15,7 +15,8 @@
 #include <functional>
 #include <utility>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // Assume a filename, and not a directory name like "/foo/bar/"
 std::string GetDirName(const std::string filename) {
@@ -39,7 +40,7 @@ Status Truncate(Env* env, const std::string& filename, uint64_t length) {
   }
 
   std::unique_ptr<char[]> scratch(new char[length]);
-  rocksdb::Slice result;
+  TERARKDB_NAMESPACE::Slice result;
   s = orig_file->Read(length, &result, scratch.get());
 #ifdef OS_WIN
   orig_file.reset();
@@ -340,4 +341,4 @@ void FaultInjectionTestEnv::UntrackFile(const std::string& f) {
   db_file_state_.erase(f);
   open_files_.erase(f);
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -53,9 +53,10 @@ DEFINE_int32(value_size, 40, "");
 DEFINE_bool(enable_print, false, "Print options generated to console.");
 
 // Path to the database on file system
-const std::string kDbName = rocksdb::test::PerThreadDBPath("prefix_test");
+const std::string kDbName = TERARKDB_NAMESPACE::test::PerThreadDBPath("prefix_test");
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 struct TestKey {
   uint64_t prefix;
@@ -878,7 +879,7 @@ TEST_F(PrefixTest, PrefixSeekModePrev3) {
   }
 }
 
-}  // end namespace rocksdb
+}  // end namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

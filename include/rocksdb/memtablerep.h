@@ -45,7 +45,8 @@
 #include <unordered_map>
 #include <vector>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Arena;
 class Allocator;
@@ -67,7 +68,7 @@ class MemTableRep {
   // concatenated with values.
   class KeyComparator {
    public:
-    typedef rocksdb::Slice DecodedType;
+    typedef TERARKDB_NAMESPACE::Slice DecodedType;
 
     virtual DecodedType decode_key(const char* key) const {
       // The format of key is frozen and can be terated as a part of the API
@@ -454,4 +455,4 @@ MemTableRepFactory* CreateMemTableRepFactory(
     const std::string& name,
     const std::unordered_map<std::string, std::string>& options, Status*);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

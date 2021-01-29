@@ -38,7 +38,8 @@
 #include "util/mutexlock.h"
 #include "util/util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 ImmutableMemTableOptions::ImmutableMemTableOptions(
     const ImmutableCFOptions& ioptions,
@@ -138,7 +139,7 @@ size_t MemTable::ApproximateMemoryUsage() {
   autovector<size_t> usages = {arena_.ApproximateMemoryUsage(),
                                table_->ApproximateMemoryUsage(),
                                range_del_table_->ApproximateMemoryUsage(),
-                               rocksdb::ApproximateMemoryUsage(insert_hints_)};
+                               TERARKDB_NAMESPACE::ApproximateMemoryUsage(insert_hints_)};
   size_t total_usage = 0;
   for (size_t usage : usages) {
     // If usage + total_usage >= kMaxSizet, return kMaxSizet.
@@ -981,4 +982,4 @@ uint64_t MemTable::GetMinLogContainingPrepSection() {
   return min_prep_log_referenced_.load();
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

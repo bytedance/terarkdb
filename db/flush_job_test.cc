@@ -19,7 +19,8 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // TODO(icanadi) Mock out everything else:
 // 1. VersionSet
@@ -42,7 +43,7 @@ class FlushJobTest : public testing::Test {
     EXPECT_OK(env_->CreateDirIfMissing(dbname_));
     db_options_.db_paths.emplace_back(dbname_,
                                       std::numeric_limits<uint64_t>::max());
-    db_options_.statistics = rocksdb::CreateDBStatistics();
+    db_options_.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
     // TODO(icanadi) Remove this once we mock out VersionSet
     NewDB();
     std::vector<ColumnFamilyDescriptor> column_families;
@@ -440,7 +441,7 @@ TEST_F(FlushJobTest, Snapshots) {
   job_context.Clean(&mutex_);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

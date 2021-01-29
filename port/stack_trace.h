@@ -4,7 +4,8 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 #pragma once
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace port {
 
 // Install a signal handler to print callstack on the following signals:
@@ -16,4 +17,4 @@ void InstallStackTraceHandler();
 void PrintStack(int first_frames_to_skip = 0);
 
 }  // namespace port
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

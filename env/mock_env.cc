@@ -19,7 +19,8 @@
 #include "util/random.h"
 #include "util/rate_limiter.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class MemFile {
  public:
@@ -804,4 +805,4 @@ Env* NewMemEnv(Env* /*base_env*/) { return nullptr; }
 
 #endif  // !ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

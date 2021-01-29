@@ -22,7 +22,8 @@
 #include "rocksdb/status.h"
 #include "rocksdb/transaction_log.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Env;
 class Directory;
@@ -164,4 +165,4 @@ extern Status SetIdentityFile(Env* env, const std::string& dbname);
 extern Status SyncManifest(Env* env, const ImmutableDBOptions* db_options,
                            WritableFileWriter* file);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

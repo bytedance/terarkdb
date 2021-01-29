@@ -32,7 +32,8 @@ using std::cout;
 using std::endl;
 using std::flush;
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class ObsoleteFilesTest : public testing::Test {
  public:
@@ -251,7 +252,7 @@ TEST_F(ObsoleteFilesTest, DeleteObsoleteOptionsFile) {
   ASSERT_EQ(2, opts_file_count);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

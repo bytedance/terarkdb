@@ -36,7 +36,8 @@
 #include "util/stop_watch.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 
@@ -777,5 +778,5 @@ LazyBuffer PlainTableIterator::value() const {
 
 Status PlainTableIterator::status() const { return status_; }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

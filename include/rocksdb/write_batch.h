@@ -32,7 +32,8 @@
 #include "rocksdb/types.h"
 #include "rocksdb/write_batch_base.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Slice;
 class ColumnFamilyHandle;
@@ -363,4 +364,4 @@ class WriteBatch : public WriteBatchBase {
   // Intentionally copyable
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

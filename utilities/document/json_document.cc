@@ -140,7 +140,8 @@ void CreateObject(std::unique_ptr<char[]>* data, fbson::FbsonValue** value) {
 
 }  // namespace
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 
 // TODO(stash): find smth easier
@@ -606,5 +607,5 @@ JSONDocument::const_item_iterator
   return const_item_iterator(new const_item_iterator::Impl(object_.end()));
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

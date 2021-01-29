@@ -9,7 +9,8 @@
 #include "monitoring/statistics.h"
 #include "rocksdb/persistent_cache.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // PersistentCacheOptions
 //
@@ -31,4 +32,4 @@ struct PersistentCacheOptions {
   Statistics* statistics = nullptr;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -14,7 +14,8 @@
 #include "rocksdb/slice.h"
 #include "utilities/merge_operators.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // Implementation for the merge operation (concatenates two strings)
 bool StringAppendTESTOperator::FullMergeV2(
@@ -146,4 +147,4 @@ TERARK_FACTORY_REGISTER(StringAppendTESTOperator, &NewStringAppendTESTOperator);
 TERARK_FACTORY_REGISTER_EX(StringAppendTESTOperator, "stringappend",
                            &NewStringAppendTESTOperator);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

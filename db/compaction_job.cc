@@ -90,7 +90,8 @@
 #include "utilities/util/function.hpp"
 #include "utilities/util/valvec.hpp"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 const char* GetCompactionReasonString(CompactionReason compaction_reason) {
   switch (compaction_reason) {
@@ -854,15 +855,15 @@ Status CompactionJob::Run() {
           output.meta.largest = std::move(file_info.largest);
           output.meta.marked_for_compaction = file_info.marked_for_compaction;
           // output.stat_one = std::move(file_info.stat_one);
-          std::unique_ptr<rocksdb::RandomAccessFile> file;
+          std::unique_ptr<TERARKDB_NAMESPACE::RandomAccessFile> file;
           s = env_->NewRandomAccessFile(fname, &file, env_options_);
           if (!s.ok()) {
             break;
           }
-          std::unique_ptr<rocksdb::RandomAccessFileReader> file_reader(
-              new rocksdb::RandomAccessFileReader(std::move(file), fname,
+          std::unique_ptr<TERARKDB_NAMESPACE::RandomAccessFileReader> file_reader(
+              new TERARKDB_NAMESPACE::RandomAccessFileReader(std::move(file), fname,
                                                   env_));
-          std::unique_ptr<rocksdb::TableReader> reader;
+          std::unique_ptr<TERARKDB_NAMESPACE::TableReader> reader;
           TableReaderOptions table_reader_options(
               *c->immutable_cf_options(),
               c->mutable_cf_options()->prefix_extractor.get(), env_options_,
@@ -950,7 +951,7 @@ Status CompactionJob::RunSelf() {
       vec_process_arg[i].task_id = int(i);
       vec_process_arg[i].future = vec_process_arg[i].finished.get_future();
       env_->Schedule(&CompactionJob::CallProcessCompaction, &vec_process_arg[i],
-                     rocksdb::Env::LOW, this, nullptr);
+                     TERARKDB_NAMESPACE::Env::LOW, this, nullptr);
     }
     ProcessCompaction(&compact_->sub_compact_states.back());
     for (auto& arg : vec_process_arg) {
@@ -1698,7 +1699,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   sub_compact->c_iter.reset();
   input.reset();
   sub_compact->status = status;
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
   assert(sub_compact != nullptr);
@@ -2922,4 +2923,4 @@ bool ReapMatureAction(const void* obj, std::string* result) {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -12,7 +12,8 @@
 
 #include "rocksdb/table_properties.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // Base class for internal table properties collector.
 class IntTblPropCollector {
@@ -148,4 +149,4 @@ class UserKeyTablePropertiesCollectorFactory
   std::shared_ptr<TablePropertiesCollectorFactory> user_collector_factory_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

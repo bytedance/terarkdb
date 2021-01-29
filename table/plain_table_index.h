@@ -18,7 +18,8 @@
 #include "util/hash.h"
 #include "util/murmurhash.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // PlainTableIndex contains buckets size of index_size_, each is a
 // 32-bit integer. The lower 31 bits contain an offset value (explained below)
@@ -224,6 +225,6 @@ class PlainTableIndexBuilder {
   static const size_t kRecordsPerGroup = 256;
 };
 
-};  // namespace rocksdb
+};  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

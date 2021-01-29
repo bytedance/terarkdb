@@ -4,7 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 // This file implements the "bridge" between Java and C++ and enables
-// calling C++ rocksdb::OptionsUtil methods from Java side.
+// calling C++ TERARKDB_NAMESPACE::OptionsUtil methods from Java side.
 
 #include <jni.h>
 
@@ -17,17 +17,17 @@
 
 void build_column_family_descriptor_list(
     JNIEnv* env, jobject jcfds,
-    std::vector<rocksdb::ColumnFamilyDescriptor>& cf_descs) {
-  jmethodID add_mid = rocksdb::ListJni::getListAddMethodId(env);
+    std::vector<TERARKDB_NAMESPACE::ColumnFamilyDescriptor>& cf_descs) {
+  jmethodID add_mid = TERARKDB_NAMESPACE::ListJni::getListAddMethodId(env);
   if (add_mid == nullptr) {
     // exception occurred accessing method
     return;
   }
 
   // Column family descriptor
-  for (rocksdb::ColumnFamilyDescriptor& cfd : cf_descs) {
+  for (TERARKDB_NAMESPACE::ColumnFamilyDescriptor& cfd : cf_descs) {
     // Construct a ColumnFamilyDescriptor java object
-    jobject jcfd = rocksdb::ColumnFamilyDescriptorJni::construct(env, &cfd);
+    jobject jcfd = TERARKDB_NAMESPACE::ColumnFamilyDescriptorJni::construct(env, &cfd);
     if (env->ExceptionCheck()) {
       // exception occurred constructing object
       if (jcfd != nullptr) {
@@ -57,15 +57,15 @@ void Java_org_rocksdb_OptionsUtil_loadLatestOptions(
     JNIEnv* env, jclass /*jcls*/, jstring jdbpath, jlong jenv_handle,
     jlong jdb_opts_handle, jobject jcfds, jboolean ignore_unknown_options) {
   const char* db_path = env->GetStringUTFChars(jdbpath, nullptr);
-  std::vector<rocksdb::ColumnFamilyDescriptor> cf_descs;
-  rocksdb::Status s = rocksdb::LoadLatestOptions(
-      db_path, reinterpret_cast<rocksdb::Env*>(jenv_handle),
-      reinterpret_cast<rocksdb::DBOptions*>(jdb_opts_handle), &cf_descs,
+  std::vector<TERARKDB_NAMESPACE::ColumnFamilyDescriptor> cf_descs;
+  TERARKDB_NAMESPACE::Status s = TERARKDB_NAMESPACE::LoadLatestOptions(
+      db_path, reinterpret_cast<TERARKDB_NAMESPACE::Env*>(jenv_handle),
+      reinterpret_cast<TERARKDB_NAMESPACE::DBOptions*>(jdb_opts_handle), &cf_descs,
       ignore_unknown_options);
   env->ReleaseStringUTFChars(jdbpath, db_path);
 
   if (!s.ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   }
 
   build_column_family_descriptor_list(env, jcfds, cf_descs);
@@ -80,15 +80,15 @@ void Java_org_rocksdb_OptionsUtil_loadOptionsFromFile(
     JNIEnv* env, jclass /*jcls*/, jstring jopts_file_name, jlong jenv_handle,
     jlong jdb_opts_handle, jobject jcfds, jboolean ignore_unknown_options) {
   const char* opts_file_name = env->GetStringUTFChars(jopts_file_name, nullptr);
-  std::vector<rocksdb::ColumnFamilyDescriptor> cf_descs;
-  rocksdb::Status s = rocksdb::LoadOptionsFromFile(
-      opts_file_name, reinterpret_cast<rocksdb::Env*>(jenv_handle),
-      reinterpret_cast<rocksdb::DBOptions*>(jdb_opts_handle), &cf_descs,
+  std::vector<TERARKDB_NAMESPACE::ColumnFamilyDescriptor> cf_descs;
+  TERARKDB_NAMESPACE::Status s = TERARKDB_NAMESPACE::LoadOptionsFromFile(
+      opts_file_name, reinterpret_cast<TERARKDB_NAMESPACE::Env*>(jenv_handle),
+      reinterpret_cast<TERARKDB_NAMESPACE::DBOptions*>(jdb_opts_handle), &cf_descs,
       ignore_unknown_options);
   env->ReleaseStringUTFChars(jopts_file_name, opts_file_name);
 
   if (!s.ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   }
 
   build_column_family_descriptor_list(env, jcfds, cf_descs);
@@ -104,8 +104,8 @@ jstring Java_org_rocksdb_OptionsUtil_getLatestOptionsFileName(
   const char* db_path = env->GetStringUTFChars(jdbpath, nullptr);
   std::string options_file_name;
   if (db_path != nullptr) {
-    rocksdb::GetLatestOptionsFileName(
-        db_path, reinterpret_cast<rocksdb::Env*>(jenv_handle),
+    TERARKDB_NAMESPACE::GetLatestOptionsFileName(
+        db_path, reinterpret_cast<TERARKDB_NAMESPACE::Env*>(jenv_handle),
         &options_file_name);
   }
   env->ReleaseStringUTFChars(jdbpath, db_path);

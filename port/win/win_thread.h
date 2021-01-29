@@ -13,7 +13,8 @@
 #include <functional>
 #include <type_traits>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace port {
 
 // This class is a replacement for std::thread
@@ -109,12 +110,12 @@ public:
   void swap(WindowsThread&);
 };
 } // namespace port
-} // namespace rocksdb
+} // namespace TERARKDB_NAMESPACE
 
 namespace std {
   inline
-  void swap(rocksdb::port::WindowsThread& th1, 
-    rocksdb::port::WindowsThread& th2) {
+  void swap(TERARKDB_NAMESPACE::port::WindowsThread& th1,
+    TERARKDB_NAMESPACE::port::WindowsThread& th2) {
     th1.swap(th2);
   }
 } // namespace std

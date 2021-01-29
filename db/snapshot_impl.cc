@@ -7,7 +7,8 @@
 
 #include "rocksdb/db.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 ManagedSnapshot::ManagedSnapshot(DB* db) : db_(db),
                                            snapshot_(db->GetSnapshot()) {}
@@ -23,4 +24,4 @@ ManagedSnapshot::~ManagedSnapshot() {
 
 const Snapshot* ManagedSnapshot::snapshot() { return snapshot_;}
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

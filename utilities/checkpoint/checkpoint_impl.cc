@@ -30,7 +30,8 @@
 #include "util/filename.h"
 #include "util/sync_point.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 Status Checkpoint::Create(DB* db, Checkpoint** checkpoint_ptr) {
   *checkpoint_ptr = new CheckpointImpl(db);
@@ -326,6 +327,6 @@ Status CheckpointImpl::CreateCustomCheckpoint(
   return s;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

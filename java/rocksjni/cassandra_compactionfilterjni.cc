@@ -16,7 +16,7 @@
 jlong Java_org_rocksdb_CassandraCompactionFilter_createNewCassandraCompactionFilter0(
     JNIEnv* /*env*/, jclass /*jcls*/, jboolean purge_ttl_on_expiration,
     jint gc_grace_period_in_seconds) {
-  auto* compaction_filter = new rocksdb::cassandra::CassandraCompactionFilter(
+  auto* compaction_filter = new TERARKDB_NAMESPACE::cassandra::CassandraCompactionFilter(
       purge_ttl_on_expiration, gc_grace_period_in_seconds);
   // set the native handle to our native compaction filter
   return reinterpret_cast<jlong>(compaction_filter);

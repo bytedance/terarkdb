@@ -13,7 +13,8 @@
 
 #include "table/internal_iterator.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class SeparateHelper;
 
@@ -204,4 +205,4 @@ class LazyInternalIteratorWrapper : public InternalIterator {
   std::unique_ptr<InternalIterator> iter_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

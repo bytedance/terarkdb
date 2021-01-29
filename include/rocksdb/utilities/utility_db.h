@@ -11,7 +11,8 @@
 #include "rocksdb/utilities/db_ttl.h"
 #include "rocksdb/db.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // Please don't use this class. It's deprecated
 class UtilityDB {
@@ -31,5 +32,5 @@ class UtilityDB {
                                                       bool read_only = false);
 };
 
-} //  namespace rocksdb
+} //  namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

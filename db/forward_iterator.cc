@@ -25,7 +25,8 @@
 #include "util/sync_point.h"
 #include "utilities/util/valvec.hpp"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // Usage:
 //     ForwardLevelIterator iter;
@@ -855,6 +856,6 @@ void ForwardIterator::DeleteIterator(InternalIterator* iter, bool is_arena) {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

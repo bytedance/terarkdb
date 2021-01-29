@@ -30,7 +30,8 @@
 #include "utilities/transactions/transaction_base.h"
 #include "utilities/transactions/transaction_util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class WritePreparedTxnDB;
 
@@ -106,6 +107,6 @@ class WritePreparedTxn : public PessimisticTransaction {
   size_t prepare_batch_cnt_ = 0;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

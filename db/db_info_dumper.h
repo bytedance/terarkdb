@@ -8,7 +8,8 @@
 
 #include "options/db_options.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 void DumpDBFileSummary(const ImmutableDBOptions& options,
                        const std::string& dbname);
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

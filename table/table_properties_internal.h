@@ -8,7 +8,8 @@
 #include "rocksdb/status.h"
 #include "rocksdb/iterator.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class BlockHandle;
 
@@ -28,4 +29,4 @@ Status SeekToCompressionDictBlock(InternalIteratorBase<Slice>* meta_iter,
 Status SeekToRangeDelBlock(InternalIteratorBase<Slice>* meta_iter,
                            bool* is_found, BlockHandle* block_handle);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

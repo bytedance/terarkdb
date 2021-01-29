@@ -23,7 +23,8 @@
 #include "util/string_util.h"
 #include "util/sync_point.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 static const std::string kRocksDbTFileExt = "sst";
 static const std::string kLevelDbTFileExt = "ldb";
@@ -395,4 +396,4 @@ Status SyncManifest(Env* env, const ImmutableDBOptions* db_options,
   return file->Sync(db_options->use_fsync);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

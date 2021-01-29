@@ -13,7 +13,8 @@
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 struct EnvOptions;
 
@@ -207,5 +208,5 @@ static std::unordered_map<std::string, OptionTypeInfo> plain_table_type_info = {
      {offsetof(struct PlainTableOptions, store_index_in_file),
       OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}}};
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

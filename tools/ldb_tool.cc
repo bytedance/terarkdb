@@ -8,7 +8,8 @@
 #include "rocksdb/utilities/ldb_cmd.h"
 #include "tools/ldb_cmd_impl.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 LDBOptions::LDBOptions() {}
 
@@ -128,6 +129,6 @@ void LDBTool::Run(int argc, char** argv, Options options,
   LDBCommandRunner::RunCommand(argc, argv, options, ldb_options,
                                column_families);
 }
-} // namespace rocksdb
+} // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

@@ -20,7 +20,8 @@
 #include "utilities/merge_operators.h"
 #include "utilities/merge_operators/string_append/stringappend.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 class ColumnFamilyHandleImplDummy : public ColumnFamilyHandleImpl {
@@ -1871,7 +1872,7 @@ for (auto index_type : all_index_types) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

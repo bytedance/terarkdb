@@ -9,7 +9,8 @@
 #include <memory>
 #include "rocksdb/utilities/table_properties_collectors.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 CompactOnDeletionCollector::CompactOnDeletionCollector(
     size_t sliding_window_size, size_t deletion_trigger)
@@ -86,5 +87,5 @@ std::shared_ptr<CompactOnDeletionCollectorFactory>
       new CompactOnDeletionCollectorFactory(
           sliding_window_size, deletion_trigger));
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // !ROCKSDB_LITE

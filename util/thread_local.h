@@ -13,7 +13,8 @@
 
 #include "util/autovector.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // Cleanup function that will be called for a stored thread local
 // pointer (if not NULL) when one of the following happens:
@@ -88,4 +89,4 @@ class ThreadLocalPtr {
   const uint32_t id_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

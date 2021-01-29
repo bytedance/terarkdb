@@ -13,7 +13,8 @@
 #include "util/coding.h"
 #include "utilities/col_buf_encoder.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 struct ColDeclaration;
 
@@ -116,4 +117,4 @@ struct KVPairColBufDecoders {
         ColBufDecoder::NewColBufDecoder(*kvp_cd.value_checksum_declaration));
   }
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

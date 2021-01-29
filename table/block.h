@@ -34,7 +34,8 @@
 #include "util/random.h"
 #include "util/sync_point.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 struct BlockContents;
 class Comparator;
@@ -44,7 +45,7 @@ class DataBlockIter;
 class IndexBlockIter;
 class BlockPrefixIndex;
 
-// BlockReadAmpBitmap is a bitmap that map the rocksdb::Block data bytes to
+// BlockReadAmpBitmap is a bitmap that map the TERARKDB_NAMESPACE::Block data bytes to
 // a bitmap with ratio bytes_per_bit. Whenever we access a range of bytes in
 // the Block we update the bitmap and increment READ_AMP_ESTIMATE_USEFUL_BYTES.
 class BlockReadAmpBitmap {
@@ -584,4 +585,4 @@ class IndexBlockIter final : public BlockIter<BlockHandle> {
   inline void DecodeCurrentValue(uint32_t shared);
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

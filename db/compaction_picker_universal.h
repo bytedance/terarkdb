@@ -12,7 +12,8 @@
 
 #include "db/compaction_picker.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 class UniversalCompactionPicker : public CompactionPicker {
  public:
   UniversalCompactionPicker(TableCache* table_cache,
@@ -85,5 +86,5 @@ class UniversalCompactionPicker : public CompactionPicker {
                             const MutableCFOptions& mutable_cf_options,
                             uint64_t file_size);
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // !ROCKSDB_LITE

@@ -10,17 +10,17 @@ namespace cheapis {
 class ExecutorMemImpl final : public Executor {
  private:
   struct Task {
-    rocksdb::autovector<std::string> argv;
+    TERARKDB_NAMESPACE::autovector<std::string> argv;
     Client* c;
     int fd;
   };
 
  public:
-  explicit ExecutorMemImpl(rocksdb::DBImpl* db) : db_(db) {}
+  explicit ExecutorMemImpl(TERARKDB_NAMESPACE::DBImpl* db) : db_(db) {}
 
   ~ExecutorMemImpl() override = default;
 
-  void Submit(const rocksdb::autovector<nonstd::string_view>& argv, Client* c,
+  void Submit(const TERARKDB_NAMESPACE::autovector<nonstd::string_view>& argv, Client* c,
               int fd) override {
     tasks_.emplace_back();
     Task& task = tasks_.back();
@@ -61,7 +61,7 @@ class ExecutorMemImpl final : public Executor {
         map_.erase(argv[1]);
         RespMachine::AppendSimpleString(&c->output, "OK");
       } else if (argv[0] == "TERARKDB_OPS_FULL_COMPACT" && argv.size() == 1) {
-        rocksdb::CompactRangeOptions cro{};
+        TERARKDB_NAMESPACE::CompactRangeOptions cro{};
         cro.exclusive_manual_compaction = false;
         auto s = db_->CompactRange(cro, nullptr, nullptr);
         if (s.ok()) {
@@ -95,10 +95,10 @@ class ExecutorMemImpl final : public Executor {
  private:
   std::deque<Task> tasks_;
   std::map<std::string, std::string> map_;
-  rocksdb::DBImpl* db_;
+  TERARKDB_NAMESPACE::DBImpl* db_;
 };
 
-std::unique_ptr<Executor> OpenExecutorMem(rocksdb::DBImpl* db) {
+std::unique_ptr<Executor> OpenExecutorMem(TERARKDB_NAMESPACE::DBImpl* db) {
   return std::make_unique<ExecutorMemImpl>(db);
 }
 }  // namespace cheapis

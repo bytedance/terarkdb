@@ -9,7 +9,8 @@
 #include "rocksdb/comparator.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class RangeTombstoneFragmenterTest : public testing::Test {};
 
@@ -544,7 +545,7 @@ TEST_F(RangeTombstoneFragmenterTest, SeekOutOfBounds) {
                     {{"", {}, true /* out of range */}, {"z", {"l", "n", 4}}});
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

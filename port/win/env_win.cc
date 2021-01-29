@@ -40,7 +40,8 @@
 
 #include <algorithm>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 ThreadStatusUpdater* CreateThreadStatusUpdater() {
   return new ThreadStatusUpdater();
@@ -115,7 +116,7 @@ Status WinEnvIO::DeleteFile(const std::string& fname) {
 
 Status WinEnvIO::Truncate(const std::string& fname, size_t size) {
   Status s;
-  int result = rocksdb::port::Truncate(fname, size);
+  int result = TERARKDB_NAMESPACE::port::Truncate(fname, size);
   if (result != 0) {
     s = IOError("Failed to truncate: " + fname, errno);
   }
@@ -1195,7 +1196,7 @@ void WinEnvThreads::StartThread(void(*function)(void* arg), void* arg) {
   state->arg = arg;
   try {
 
-    rocksdb::port::WindowsThread th(&StartThreadWrapper, state.get());
+    TERARKDB_NAMESPACE::port::WindowsThread th(&StartThreadWrapper, state.get());
     state.release();
 
     std::lock_guard<std::mutex> lg(mu_);
@@ -1483,4 +1484,4 @@ std::string Env::GenerateUniqueId() {
   return result;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

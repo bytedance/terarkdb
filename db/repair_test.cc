@@ -17,7 +17,8 @@
 #include "util/file_util.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE
 class RepairTest : public DBTestBase {
@@ -347,7 +348,7 @@ TEST_F(RepairTest, DbNameContainsTrailingSlash) {
   ASSERT_EQ(Get("key"), "val");
 }
 #endif  // ROCKSDB_LITE
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

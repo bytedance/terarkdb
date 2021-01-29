@@ -15,7 +15,8 @@
 #include <table/terark_zip_table.h>
 #endif
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE
 
@@ -248,4 +249,4 @@ Status DB::OpenForReadOnly(
 }
 #endif  // !ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

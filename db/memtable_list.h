@@ -25,7 +25,8 @@
 #include "util/filename.h"
 #include "util/log_buffer.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class ColumnFamilyData;
 class InternalKeyComparator;
@@ -334,4 +335,4 @@ extern Status InstallMemtableAtomicFlushResults(
     InstrumentedMutex* mu, const autovector<const FileMetaData*>& file_meta,
     autovector<MemTable*>* to_delete, Directory* db_directory,
     LogBuffer* log_buffer);
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -62,7 +62,8 @@
 #include "rocksdb/slice.h"
 #include "util/testharness.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace cassandra {
 
 // Identify the type of the column.
@@ -194,4 +195,4 @@ private:
 };
 
 } // namepsace cassandrda
-} // namespace rocksdb
+} // namespace TERARKDB_NAMESPACE

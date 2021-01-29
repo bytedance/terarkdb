@@ -11,7 +11,8 @@
 #include "util/murmurhash.h"
 #include "rocksdb/options.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 const uint32_t kCuckooMurmurSeedMultiplier = 816922183;
 static inline uint64_t CuckooHash(
@@ -88,5 +89,5 @@ class CuckooTableFactory : public TableFactory {
   CuckooTableOptions table_options_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

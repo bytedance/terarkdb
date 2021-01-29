@@ -30,7 +30,8 @@
 #include "util/file_reader_writer.h"
 #include "util/stop_watch.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 
@@ -313,5 +314,5 @@ uint64_t PlainTableBuilder::FileSize() const {
   return offset_;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

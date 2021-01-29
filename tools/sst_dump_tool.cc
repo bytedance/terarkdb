@@ -49,7 +49,8 @@
 #include <table/terark_zip_table.h>
 #endif
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 SstFileDumper::SstFileDumper(const std::string& file_path, bool verify_checksum,
                              bool output_hex)
@@ -215,7 +216,7 @@ int SstFileDumper::ShowAllCompressionSizes(
   const ImmutableCFOptions imoptions(opts);
   const ColumnFamilyOptions cfo(opts);
   const MutableCFOptions moptions(cfo);
-  rocksdb::InternalKeyComparator ikc(opts.comparator);
+  TERARKDB_NAMESPACE::InternalKeyComparator ikc(opts.comparator);
   std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
       block_based_table_factories;
 
@@ -245,7 +246,7 @@ Status SstFileDumper::ReadTableProperties(uint64_t table_magic_number,
                                           RandomAccessFileReader* file,
                                           uint64_t file_size) {
   TableProperties* table_properties = nullptr;
-  Status s = rocksdb::ReadTableProperties(file, file_size, table_magic_number,
+  Status s = TERARKDB_NAMESPACE::ReadTableProperties(file, file_size, table_magic_number,
                                           ioptions_, &table_properties);
   if (s.ok()) {
     table_properties_.reset(table_properties);
@@ -535,14 +536,14 @@ int SSTDumpTool::Run(int argc, char** argv) {
     } else if (strncmp(argv[i], "--parse_internal_key=", 21) == 0) {
       std::string in_key(argv[i] + 21);
       try {
-        in_key = rocksdb::LDBCommand::HexToString(in_key);
+        in_key = TERARKDB_NAMESPACE::LDBCommand::HexToString(in_key);
       } catch (...) {
         std::cerr << "ERROR: Invalid key input '" << in_key
                   << "' Use 0x{hex representation of internal rocksdb key}"
                   << std::endl;
         return -1;
       }
-      Slice sl_key = rocksdb::Slice(in_key);
+      Slice sl_key = TERARKDB_NAMESPACE::Slice(in_key);
       ParsedInternalKey ikey;
       int retc = 0;
       if (!ParseInternalKey(sl_key, &ikey)) {
@@ -566,10 +567,10 @@ int SSTDumpTool::Run(int argc, char** argv) {
 
   if (input_key_hex) {
     if (has_from || use_from_as_prefix) {
-      from_key = rocksdb::LDBCommand::HexToString(from_key);
+      from_key = TERARKDB_NAMESPACE::LDBCommand::HexToString(from_key);
     }
     if (has_to) {
-      to_key = rocksdb::LDBCommand::HexToString(to_key);
+      to_key = TERARKDB_NAMESPACE::LDBCommand::HexToString(to_key);
     }
   }
 
@@ -580,8 +581,8 @@ int SSTDumpTool::Run(int argc, char** argv) {
   }
 
   std::vector<std::string> filenames;
-  rocksdb::Env* env = rocksdb::Env::Default();
-  rocksdb::Status st = env->GetChildren(dir_or_file, &filenames);
+  TERARKDB_NAMESPACE::Env* env = TERARKDB_NAMESPACE::Env::Default();
+  TERARKDB_NAMESPACE::Status st = env->GetChildren(dir_or_file, &filenames);
   bool dir = true;
   if (!st.ok()) {
     filenames.clear();
@@ -590,8 +591,8 @@ int SSTDumpTool::Run(int argc, char** argv) {
   }
 
   fprintf(stdout, "from [%s] to [%s]\n",
-          rocksdb::Slice(from_key).ToString(true).c_str(),
-          rocksdb::Slice(to_key).ToString(true).c_str());
+          TERARKDB_NAMESPACE::Slice(from_key).ToString(true).c_str(),
+          TERARKDB_NAMESPACE::Slice(to_key).ToString(true).c_str());
 
   uint64_t total_read = 0;
   for (size_t i = 0; i < filenames.size(); i++) {
@@ -605,7 +606,7 @@ int SSTDumpTool::Run(int argc, char** argv) {
       filename = std::string(dir_or_file) + "/" + filename;
     }
 
-    rocksdb::SstFileDumper dumper(filename, verify_checksum, output_hex);
+    TERARKDB_NAMESPACE::SstFileDumper dumper(filename, verify_checksum, output_hex);
     if (!dumper.getStatus().ok()) {
       fprintf(stderr, "%s: %s\n", filename.c_str(),
               dumper.getStatus().ToString().c_str());
@@ -660,9 +661,9 @@ int SSTDumpTool::Run(int argc, char** argv) {
     }
 
     if (show_properties || show_summary) {
-      const rocksdb::TableProperties* table_properties;
+      const TERARKDB_NAMESPACE::TableProperties* table_properties;
 
-      std::shared_ptr<const rocksdb::TableProperties>
+      std::shared_ptr<const TERARKDB_NAMESPACE::TableProperties>
           table_properties_from_reader;
       st = dumper.ReadTableProperties(&table_properties_from_reader);
       if (!st.ok()) {
@@ -712,6 +713,6 @@ int SSTDumpTool::Run(int argc, char** argv) {
   }
   return 0;
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

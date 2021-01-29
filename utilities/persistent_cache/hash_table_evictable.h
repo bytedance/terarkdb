@@ -13,7 +13,8 @@
 #include "utilities/persistent_cache/hash_table.h"
 #include "utilities/persistent_cache/lrulist.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // Evictable Hash Table
 //
@@ -163,6 +164,6 @@ class EvictableHashTable : private HashTable<T*, Hash, Equal> {
   std::unique_ptr<LRUListType[]> lru_lists_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif

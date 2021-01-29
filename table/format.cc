@@ -29,7 +29,8 @@
 #include "util/string_util.h"
 #include "util/xxhash.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 extern const uint64_t kLegacyBlockBasedTableMagicNumber;
 extern const uint64_t kBlockBasedTableMagicNumber;
@@ -217,14 +218,14 @@ std::string Footer::ToString() const {
     result.append("metaindex handle: " + metaindex_handle_.ToString() + "\n  ");
     result.append("index handle: " + index_handle_.ToString() + "\n  ");
     result.append("table_magic_number: " +
-                  rocksdb::ToString(table_magic_number_) + "\n  ");
+                  TERARKDB_NAMESPACE::ToString(table_magic_number_) + "\n  ");
   } else {
-    result.append("checksum: " + rocksdb::ToString(checksum_) + "\n  ");
+    result.append("checksum: " + TERARKDB_NAMESPACE::ToString(checksum_) + "\n  ");
     result.append("metaindex handle: " + metaindex_handle_.ToString() + "\n  ");
     result.append("index handle: " + index_handle_.ToString() + "\n  ");
-    result.append("footer version: " + rocksdb::ToString(version_) + "\n  ");
+    result.append("footer version: " + TERARKDB_NAMESPACE::ToString(version_) + "\n  ");
     result.append("table_magic_number: " +
-                  rocksdb::ToString(table_magic_number_) + "\n  ");
+                  TERARKDB_NAMESPACE::ToString(table_magic_number_) + "\n  ");
   }
   return result;
 }
@@ -407,4 +408,4 @@ Status UncompressBlockContents(const UncompressionContext& uncompression_ctx,
                                                    ioptions, allocator);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

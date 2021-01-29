@@ -14,7 +14,8 @@
 
 #include "rocksdb/status.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 /**
  * Keep adding ticker's here.
@@ -379,4 +380,4 @@ class Statistics {
 // Create a concrete DBStatistics object
 std::shared_ptr<Statistics> CreateDBStatistics();
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

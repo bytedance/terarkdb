@@ -16,7 +16,8 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class WritableFileWriter;
 
@@ -110,4 +111,4 @@ class Writer {
 };
 
 }  // namespace log
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

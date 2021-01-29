@@ -23,7 +23,8 @@
 
 #include "port/port.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 static const std::string option_file_header =
     "# This is a RocksDB option file.\n"
@@ -806,6 +807,6 @@ Status RocksDBOptionsParser::VerifyTableFactory(
   }
   return Status::OK();
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // !ROCKSDB_LITE

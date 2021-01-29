@@ -9,11 +9,11 @@
 #include "rocksdb/merge_operator.h"
 #include "utilities/merge_operators.h"
 
-using rocksdb::LazyBuffer;
-using rocksdb::LazyBufferReference;
-using rocksdb::Logger;
-using rocksdb::MergeOperator;
-using rocksdb::Slice;
+using TERARKDB_NAMESPACE::LazyBuffer;
+using TERARKDB_NAMESPACE::LazyBufferReference;
+using TERARKDB_NAMESPACE::Logger;
+using TERARKDB_NAMESPACE::MergeOperator;
+using TERARKDB_NAMESPACE::Slice;
 
 namespace {  // anonymous namespace
 
@@ -84,7 +84,8 @@ class MaxOperator : public MergeOperator {
 
 }  // end of anonymous namespace
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 std::shared_ptr<MergeOperator> MergeOperators::CreateMaxOperator() {
   return std::make_shared<MaxOperator>();
@@ -97,4 +98,4 @@ static MergeOperator* NewMaxOperator(const std::string& /*options*/) {
 TERARK_FACTORY_REGISTER(MaxOperator, &NewMaxOperator);
 TERARK_FACTORY_REGISTER_EX(MaxOperator, "max", &NewMaxOperator);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

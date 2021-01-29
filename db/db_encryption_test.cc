@@ -12,7 +12,8 @@
 #include <iostream>
 #include <string>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class DBEncryptionTest : public DBTestBase {
  public:
@@ -85,10 +86,10 @@ TEST_F(DBEncryptionTest, CheckEncrypted) {
 
 #endif // ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

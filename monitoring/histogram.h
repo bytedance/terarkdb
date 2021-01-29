@@ -16,7 +16,8 @@
 #include <map>
 #include <mutex>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class HistogramBucketMapper {
  public:
@@ -146,4 +147,4 @@ class HistogramImpl : public Histogram {
   std::mutex mutex_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

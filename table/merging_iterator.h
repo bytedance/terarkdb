@@ -12,7 +12,8 @@
 #include "db/dbformat.h"
 #include "rocksdb/types.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Comparator;
 class Env;
@@ -63,4 +64,4 @@ class MergeIteratorBuilder {
   Arena* arena;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -17,7 +17,8 @@
 
 #include "util/mutexlock.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 ShardedCache::ShardedCache(size_t capacity, int num_shard_bits,
                            bool strict_capacity_limit,
@@ -163,4 +164,4 @@ int GetDefaultCacheShardBits(size_t capacity) {
   return num_shard_bits;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

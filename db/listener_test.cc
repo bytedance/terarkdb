@@ -36,7 +36,8 @@
 
 #ifndef ROCKSDB_LITE
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class EventListenerTest : public DBTestBase {
  public:
@@ -45,16 +46,16 @@ class EventListenerTest : public DBTestBase {
   const size_t k110KB = 110 << 10;
 };
 
-struct TestPropertiesCollector : public rocksdb::TablePropertiesCollector {
-  virtual rocksdb::Status AddUserKey(const rocksdb::Slice& /*key*/,
-                                     const rocksdb::Slice& /*value*/,
-                                     rocksdb::EntryType /*type*/,
-                                     rocksdb::SequenceNumber /*seq*/,
+struct TestPropertiesCollector : public TERARKDB_NAMESPACE::TablePropertiesCollector {
+  virtual TERARKDB_NAMESPACE::Status AddUserKey(const TERARKDB_NAMESPACE::Slice& /*key*/,
+                                     const TERARKDB_NAMESPACE::Slice& /*value*/,
+                                     TERARKDB_NAMESPACE::EntryType /*type*/,
+                                     TERARKDB_NAMESPACE::SequenceNumber /*seq*/,
                                      uint64_t /*file_size*/) override {
     return Status::OK();
   }
-  virtual rocksdb::Status Finish(
-      rocksdb::UserCollectedProperties* properties) override {
+  virtual TERARKDB_NAMESPACE::Status Finish(
+      TERARKDB_NAMESPACE::UserCollectedProperties* properties) override {
     properties->insert({"0", "1"});
     return Status::OK();
   }
@@ -63,8 +64,8 @@ struct TestPropertiesCollector : public rocksdb::TablePropertiesCollector {
     return "TestTablePropertiesCollector";
   }
 
-  rocksdb::UserCollectedProperties GetReadableProperties() const override {
-    rocksdb::UserCollectedProperties ret;
+  TERARKDB_NAMESPACE::UserCollectedProperties GetReadableProperties() const override {
+    TERARKDB_NAMESPACE::UserCollectedProperties ret;
     ret["2"] = "3";
     return ret;
   }
@@ -847,10 +848,10 @@ TEST_F(EventListenerTest, BackgroundErrorListenerFailedFlushTest) {
 
   // the usual TEST_WaitForFlushMemTable() doesn't work for failed flushes, so
   // forge a custom one for the failed flush case.
-  rocksdb::SyncPoint::GetInstance()->LoadDependency(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->LoadDependency(
       {{"DBImpl::BGWorkFlush:done",
         "EventListenerTest:BackgroundErrorListenerFailedFlushTest:1"}});
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
 
   env_->drop_writes_.store(true, std::memory_order_release);
   env_->no_slowdown_ = true;
@@ -964,7 +965,7 @@ TEST_F(EventListenerTest, OnFileOperationTest) {
   ASSERT_GT(listener->file_reads_.load(), 0);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE
 

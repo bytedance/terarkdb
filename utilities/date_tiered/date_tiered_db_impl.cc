@@ -21,7 +21,8 @@
 #include "util/filename.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // Open the db inside DateTieredDBImpl because options needs pointer to its ttl
 DateTieredDBImpl::DateTieredDBImpl(
@@ -407,5 +408,5 @@ Iterator* DateTieredDBImpl::NewIterator(const ReadOptions& opts) {
   }
   return db_iter;
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

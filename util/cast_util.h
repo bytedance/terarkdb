@@ -5,7 +5,8 @@
 
 #pragma once
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 // The helper function to assert the move from dynamic_cast<> to
 // static_cast<> is correct. This function is to deal with legacy code.
 // It is not recommanded to add new code to issue class casting. The preferred
@@ -18,4 +19,4 @@ inline DestClass* static_cast_with_check(SrcClass* x) {
 #endif
   return ret;
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

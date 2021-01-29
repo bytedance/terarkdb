@@ -9,7 +9,8 @@
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // An interface for converting a slice to a readable string
 class SliceFormatter {
@@ -38,6 +39,6 @@ class LDBTool {
       const std::vector<ColumnFamilyDescriptor>* column_families = nullptr);
 };
 
-} // namespace rocksdb
+} // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

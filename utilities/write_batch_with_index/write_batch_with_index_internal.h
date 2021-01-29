@@ -18,7 +18,8 @@
 #include "rocksdb/status.h"
 #include "rocksdb/utilities/write_batch_with_index.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class MergeContext;
 struct Options;
@@ -140,5 +141,5 @@ class WriteBatchEntryIndexFactory {
   virtual const char* Name() const = 0;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // !ROCKSDB_LITE

@@ -11,7 +11,8 @@
 
 #include <stddef.h>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Cache;
 class Comparator;
@@ -141,4 +142,4 @@ struct LevelDBOptions {
 // Converts a LevelDBOptions object into a RocksDB Options object.
 Options ConvertOptions(const LevelDBOptions& leveldb_options);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

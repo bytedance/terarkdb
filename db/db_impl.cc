@@ -126,7 +126,8 @@
 #pragma GCC diagnostic pop
 #endif
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 const std::string kDefaultColumnFamilyName("default");
 const uint64_t kDumpStatsWaitMicroseconds = 10000;
 void DumpRocksDBBuildVersion(Logger* log);
@@ -765,7 +766,7 @@ void DBImpl::StartTimedTasks() {
     stats_dump_period_sec = mutable_db_options_.stats_dump_period_sec;
     if (stats_dump_period_sec > 0) {
       if (!thread_dump_stats_) {
-        thread_dump_stats_.reset(new rocksdb::RepeatableThread(
+        thread_dump_stats_.reset(new TERARKDB_NAMESPACE::RepeatableThread(
             [this]() { DBImpl::DumpStats(); }, "dump_st", env_,
             stats_dump_period_sec * 1000000));
       }
@@ -985,7 +986,7 @@ Status DBImpl::SetDBOptions(
           mutex_.Lock();
         }
         if (new_options.stats_dump_period_sec > 0) {
-          thread_dump_stats_.reset(new rocksdb::RepeatableThread(
+          thread_dump_stats_.reset(new TERARKDB_NAMESPACE::RepeatableThread(
               [this]() { DBImpl::DumpStats(); }, "dump_st", env_,
               new_options.stats_dump_period_sec * 1000000));
         } else {
@@ -1798,7 +1799,7 @@ std::vector<Status> DBImpl::MultiGet(
   PERF_TIMER_STOP(get_post_process_time);
 
   return stat_list;
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 Status DBImpl::CreateColumnFamily(const ColumnFamilyOptions& cf_options,
                                   const std::string& column_family,
@@ -3994,7 +3995,7 @@ Status DBImpl::VerifyChecksum() {
         const auto& fd = vstorage->LevelFiles(i)[j]->fd;
         std::string fname = TableFileName(cfd->ioptions()->cf_paths,
                                           fd.GetNumber(), fd.GetPathId());
-        s = rocksdb::VerifySstFileChecksum(opts, env_options_, fname);
+        s = TERARKDB_NAMESPACE::VerifySstFileChecksum(opts, env_options_, fname);
       }
     }
     if (!s.ok()) {
@@ -4085,4 +4086,4 @@ Status DBImpl::TraceIteratorSeekForPrev(const uint32_t& cf_id,
 
 #endif  // ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

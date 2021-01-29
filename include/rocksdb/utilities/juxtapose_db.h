@@ -2,7 +2,8 @@
 
 #include "rocksdb/utilities/stackable_db.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class JuxtaposeDB : public StackableDB {
   DB* db_ref_;
@@ -417,4 +418,4 @@ class JuxtaposeDB : public StackableDB {
   }
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

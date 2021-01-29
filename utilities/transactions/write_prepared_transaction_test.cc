@@ -42,7 +42,8 @@
 
 using std::string;
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 using CommitEntry = WritePreparedTxnDB::CommitEntry;
 using CommitEntry64b = WritePreparedTxnDB::CommitEntry64b;
@@ -149,7 +150,7 @@ TEST(PreparedHeap, EmptyAtTheEnd) {
 // successfully emptied at the end.
 TEST(PreparedHeap, Concurrent) {
   const size_t t_cnt = 10;
-  rocksdb::port::Thread t[t_cnt];
+  TERARKDB_NAMESPACE::port::Thread t[t_cnt];
   Random rnd(1103);
   WritePreparedTxnDB::PreparedHeap heap;
   port::RWMutex prepared_mutex;
@@ -158,7 +159,7 @@ TEST(PreparedHeap, Concurrent) {
     for (size_t i = 0; i < t_cnt; i++) {
       // This is not recommended usage but we should be resilient against it.
       bool skip_push = rnd.OneIn(5);
-      t[i] = rocksdb::port::Thread([&heap, &prepared_mutex, skip_push, i]() {
+      t[i] = TERARKDB_NAMESPACE::port::Thread([&heap, &prepared_mutex, skip_push, i]() {
         auto seq = i;
         std::this_thread::yield();
         if (!skip_push) {
@@ -403,7 +404,7 @@ class WritePreparedTransactionTestBase : public TransactionTestBase {
     wp_db->UpdateSnapshots(old_snapshots, ++version);
 
     // Starting from the first thread, cut each thread at two points
-    rocksdb::SyncPoint::GetInstance()->LoadDependency({
+    TERARKDB_NAMESPACE::SyncPoint::GetInstance()->LoadDependency({
         {"WritePreparedTxnDB::CheckAgainstSnapshots:p:" + std::to_string(a1),
          "WritePreparedTxnDB::UpdateSnapshots:s:start"},
         {"WritePreparedTxnDB::UpdateSnapshots:p:" + std::to_string(b1),
@@ -415,23 +416,23 @@ class WritePreparedTransactionTestBase : public TransactionTestBase {
         {"WritePreparedTxnDB::CheckAgainstSnapshots:p:end",
          "WritePreparedTxnDB::UpdateSnapshots:s:" + std::to_string(b2)},
     });
-    rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+    TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
     {
       ASSERT_TRUE(wp_db->old_commit_map_empty_);
-      rocksdb::port::Thread t1(
+      TERARKDB_NAMESPACE::port::Thread t1(
           [&]() { wp_db->UpdateSnapshots(new_snapshots, version); });
-      rocksdb::port::Thread t2([&]() { wp_db->CheckAgainstSnapshots(entry); });
+      TERARKDB_NAMESPACE::port::Thread t2([&]() { wp_db->CheckAgainstSnapshots(entry); });
       t1.join();
       t2.join();
       ASSERT_FALSE(wp_db->old_commit_map_empty_);
     }
-    rocksdb::SyncPoint::GetInstance()->DisableProcessing();
+    TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
 
     wp_db->old_commit_map_empty_ = true;
     wp_db->UpdateSnapshots(empty_snapshots, ++version);
     wp_db->UpdateSnapshots(old_snapshots, ++version);
     // Starting from the second thread, cut each thread at two points
-    rocksdb::SyncPoint::GetInstance()->LoadDependency({
+    TERARKDB_NAMESPACE::SyncPoint::GetInstance()->LoadDependency({
         {"WritePreparedTxnDB::UpdateSnapshots:p:" + std::to_string(a1),
          "WritePreparedTxnDB::CheckAgainstSnapshots:s:start"},
         {"WritePreparedTxnDB::CheckAgainstSnapshots:p:" + std::to_string(b1),
@@ -443,17 +444,17 @@ class WritePreparedTransactionTestBase : public TransactionTestBase {
         {"WritePreparedTxnDB::UpdateSnapshots:p:end",
          "WritePreparedTxnDB::CheckAgainstSnapshots:s:" + std::to_string(b2)},
     });
-    rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+    TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
     {
       ASSERT_TRUE(wp_db->old_commit_map_empty_);
-      rocksdb::port::Thread t1(
+      TERARKDB_NAMESPACE::port::Thread t1(
           [&]() { wp_db->UpdateSnapshots(new_snapshots, version); });
-      rocksdb::port::Thread t2([&]() { wp_db->CheckAgainstSnapshots(entry); });
+      TERARKDB_NAMESPACE::port::Thread t2([&]() { wp_db->CheckAgainstSnapshots(entry); });
       t1.join();
       t2.join();
       ASSERT_FALSE(wp_db->old_commit_map_empty_);
     }
-    rocksdb::SyncPoint::GetInstance()->DisableProcessing();
+    TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
   }
 
   // Verify value of keys.
@@ -1188,10 +1189,10 @@ TEST_P(SeqAdvanceConcurrentTest, SeqAdvanceConcurrentTest) {
 
     linked = 0;
     std::atomic<bool> batch_formed(false);
-    rocksdb::SyncPoint::GetInstance()->SetCallBack(
+    TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
         "WriteThread::EnterAsBatchGroupLeader:End",
         [&](void* /*arg*/) { batch_formed = true; });
-    rocksdb::SyncPoint::GetInstance()->SetCallBack(
+    TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
         "WriteThread::JoinBatchGroup:Wait", [&](void* /*arg*/) {
           linked++;
           if (linked == 1) {
@@ -1209,7 +1210,7 @@ TEST_P(SeqAdvanceConcurrentTest, SeqAdvanceConcurrentTest) {
           // but it should be tolerable.
         });
 
-    rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+    TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
     for (size_t bi = 0; bi < txn_cnt; bi++) {
       // get the bi-th digit in number system based on type_cnt
       size_t d = (n % base[bi + 1]) / base[bi];
@@ -1260,8 +1261,8 @@ TEST_P(SeqAdvanceConcurrentTest, SeqAdvanceConcurrentTest) {
     seq = db_impl->TEST_GetLastVisibleSequence();
     ASSERT_EQ(exp_seq, seq);
 
-    rocksdb::SyncPoint::GetInstance()->DisableProcessing();
-    rocksdb::SyncPoint::GetInstance()->ClearAllCallBacks();
+    TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
+    TERARKDB_NAMESPACE::SyncPoint::GetInstance()->ClearAllCallBacks();
 
     // Check if recovery preserves the last sequence number
     db_impl->FlushWAL(true);
@@ -2104,7 +2105,7 @@ TEST_P(WritePreparedTransactionTest, IteratorRefreshNotSupported) {
 // Test that updating the commit map will not affect the existing snapshots
 TEST_P(WritePreparedTransactionTest, AtomicCommit) {
   for (bool skip_prepare : {true, false}) {
-    rocksdb::SyncPoint::GetInstance()->LoadDependency({
+    TERARKDB_NAMESPACE::SyncPoint::GetInstance()->LoadDependency({
         {"WritePreparedTxnDB::AddCommitted:start",
          "AtomicCommit::GetSnapshot:start"},
         {"AtomicCommit::Get:end",
@@ -2113,8 +2114,8 @@ TEST_P(WritePreparedTransactionTest, AtomicCommit) {
         {"AtomicCommit::Get2:end",
          "WritePreparedTxnDB::AddCommitted:end:pause:"},
     });
-    rocksdb::SyncPoint::GetInstance()->EnableProcessing();
-    rocksdb::port::Thread write_thread([&]() {
+    TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
+    TERARKDB_NAMESPACE::port::Thread write_thread([&]() {
       if (skip_prepare) {
         db->Put(WriteOptions(), Slice("key"), Slice("value"));
       } else {
@@ -2127,7 +2128,7 @@ TEST_P(WritePreparedTransactionTest, AtomicCommit) {
         delete txn;
       }
     });
-    rocksdb::port::Thread read_thread([&]() {
+    TERARKDB_NAMESPACE::port::Thread read_thread([&]() {
       ReadOptions roptions;
       TEST_SYNC_POINT("AtomicCommit::GetSnapshot:start");
       roptions.snapshot = db->GetSnapshot();
@@ -2141,7 +2142,7 @@ TEST_P(WritePreparedTransactionTest, AtomicCommit) {
     });
     read_thread.join();
     write_thread.join();
-    rocksdb::SyncPoint::GetInstance()->DisableProcessing();
+    TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
   }
 }
 
@@ -2173,7 +2174,7 @@ TEST_P(WritePreparedTransactionTest, WC_WP_WALForwardIncompatibility) {
   CrossCompatibilityTest(WRITE_PREPARED, WRITE_COMMITTED, !empty_wal);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

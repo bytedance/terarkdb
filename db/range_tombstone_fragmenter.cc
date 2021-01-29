@@ -18,7 +18,8 @@
 #include "util/vector_iterator.h"
 #include "utilities/util/valvec.hpp"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 FragmentedRangeTombstoneList::FragmentedRangeTombstoneList(
     std::unique_ptr<InternalIteratorBase<Slice>> unfragmented_tombstones,
@@ -417,4 +418,4 @@ FragmentedRangeTombstoneIterator::SplitBySnapshot(
   return splits;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

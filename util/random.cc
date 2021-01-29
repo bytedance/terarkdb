@@ -20,7 +20,8 @@
 #define STORAGE_DECL static
 #endif
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 Random* Random::GetTLSInstance() {
   STORAGE_DECL Random* tls_instance;
@@ -35,4 +36,4 @@ Random* Random::GetTLSInstance() {
   return rv;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

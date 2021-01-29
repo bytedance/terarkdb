@@ -5,7 +5,8 @@
 
 #include "rocksdb/compaction_job_stats.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE
 
@@ -83,4 +84,4 @@ void CompactionJobStats::Add(const CompactionJobStats& /*stats*/) {}
 
 #endif  // !ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

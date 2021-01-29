@@ -25,7 +25,8 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace mock {
 
 stl_wrappers::KVMap MakeMockFile(
@@ -236,4 +237,4 @@ class MockTableFactory : public TableFactory {
 };
 
 }  // namespace mock
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

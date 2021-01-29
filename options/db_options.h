@@ -11,7 +11,8 @@
 #include "rocksdb/options.h"
 #include "rocksdb/listener.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 struct ImmutableDBOptions {
   ImmutableDBOptions();
@@ -112,4 +113,4 @@ struct MutableDBOptions {
   size_t compaction_readahead_size;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

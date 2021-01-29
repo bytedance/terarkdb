@@ -12,7 +12,8 @@
 
 #include "rocksdb/db.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class SnapshotList;
 
@@ -143,4 +144,4 @@ class SnapshotList {
   uint64_t count_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -15,7 +15,8 @@
 
 #include "rocksdb/env.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // Creates a new T using the factory function that was registered with a pattern
 // that matches the provided "target" string according to std::regex_match.
@@ -86,5 +87,5 @@ Registrar<T>::Registrar(std::string pattern, FactoryFunc<T> factory) {
       std::regex(std::move(pattern)), std::move(factory)});
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

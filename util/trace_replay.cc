@@ -14,7 +14,8 @@
 #include "util/coding.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 const std::string kTraceMagic = "feedcafedeadbeef";
 
@@ -274,4 +275,4 @@ Status Replayer::ReadTrace(Trace* trace) {
   return s;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

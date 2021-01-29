@@ -14,7 +14,8 @@
 #include "utilities/util/factory.h"
 #include "utilities/util/function.hpp"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Slice;
 
@@ -93,4 +94,4 @@ extern const Comparator* BytewiseComparator();
 // ordering.
 extern const Comparator* ReverseBytewiseComparator();
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

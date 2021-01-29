@@ -9,7 +9,8 @@
 
 #include "db/db_impl.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 Status MemoryUtil::GetApproximateMemoryUsageByType(
     const std::vector<DB*>& dbs,
@@ -48,5 +49,5 @@ Status MemoryUtil::GetApproximateMemoryUsageByType(
 
   return Status::OK();
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // !ROCKSDB_LITE

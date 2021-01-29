@@ -21,7 +21,8 @@
 #include "util/arena.h"
 #include "util/autovector.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Arena;
 class DBIter;
@@ -110,4 +111,4 @@ extern ArenaWrappedDBIter* NewArenaWrappedDbIterator(
     uint64_t max_sequential_skip_in_iterations, uint64_t version_number,
     ReadCallback* read_callback, DBImpl* db_impl = nullptr,
     ColumnFamilyData* cfd = nullptr, bool allow_refresh = true);
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

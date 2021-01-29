@@ -16,7 +16,8 @@
 #include "rocksdb/sst_file_manager.h"
 #include "util/delete_scheduler.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Env;
 class Logger;
@@ -190,6 +191,6 @@ class SstFileManagerImpl : public SstFileManager {
   ErrorHandler* cur_instance_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

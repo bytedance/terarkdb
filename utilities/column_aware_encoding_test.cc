@@ -11,7 +11,8 @@
 #include "utilities/col_buf_decoder.h"
 #include "utilities/col_buf_encoder.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class ColumnAwareEncodingTest : public testing::Test {
  public:
@@ -235,7 +236,7 @@ TEST_F(ColumnAwareEncodingTest, ChunkBufEncodeDecode) {
   delete[] decoded_data_base;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

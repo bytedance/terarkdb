@@ -13,7 +13,8 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class DocumentDBTest : public testing::Test {
  public:
@@ -320,7 +321,7 @@ TEST_F(DocumentDBTest, ComplexQueryTest) {
   ASSERT_OK(db_->DropIndex("priority"));
 }
 
-}  //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

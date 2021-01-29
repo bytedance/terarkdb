@@ -13,7 +13,8 @@
 #include "table/plain_table_factory.h"
 #include "util/file_reader_writer.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 enum PlainTableEntryType : unsigned char {
   kFullKey = 0,
@@ -494,5 +495,5 @@ Status PlainTableKeyDecoder::NextKeyNoValue(uint32_t start_offset,
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LIT

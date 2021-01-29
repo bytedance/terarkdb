@@ -7,7 +7,8 @@
 
 #include "rocksdb/env.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class MockTimeEnv : public EnvWrapper {
  public:
@@ -40,4 +41,4 @@ class MockTimeEnv : public EnvWrapper {
   std::atomic<uint64_t> current_time_{0};
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

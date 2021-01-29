@@ -40,7 +40,8 @@
 #include "table/data_block_footer.h"
 #include "util/coding.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 BlockBuilder::BlockBuilder(
     int block_restart_interval, bool use_delta_encoding,
@@ -193,4 +194,4 @@ void BlockBuilder::Add(const Slice& key, const Slice& value,
   estimate_ += buffer_.size() - curr_size;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -7,7 +7,8 @@
 #include "rocksdb/env.h"
 #include "stats.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 class ByteDanceHistReporterHandle : public HistReporterHandle {
  public:
 #ifdef TERARKDB_ENABLE_METRICS
@@ -118,4 +119,4 @@ class ByteDanceMetricsReporterFactory : public MetricsReporterFactory {
 
   void InitNamespace(const std::string& ns);
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

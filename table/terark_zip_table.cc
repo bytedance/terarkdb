@@ -52,7 +52,7 @@ const char* git_version_hash_info_zbs();
 const char* git_version_hash_info_idx();
 #endif
 
-void PrintVersionHashInfo(rocksdb::Logger* info_log) {
+void PrintVersionHashInfo(TERARKDB_NAMESPACE::Logger* info_log) {
   std::call_once(PrintVersionHashInfoFlag, [info_log] {
 #if !defined(_MSC_VER) && !defined(BUILD_BY_CMAKE)
     INFO(info_log, "core %s", git_version_hash_info_core());
@@ -63,7 +63,8 @@ void PrintVersionHashInfo(rocksdb::Logger* info_log) {
   });
 }
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 terark::profiling g_pf;
 
@@ -709,4 +710,4 @@ TERARK_FACTORY_REGISTER_EX(TerarkZipTableFactory, "TerarkZipTable",
                                                              s);
                            }));
 
-} /* namespace rocksdb */
+} /* namespace TERARKDB_NAMESPACE */

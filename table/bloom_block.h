@@ -8,7 +8,8 @@
 #include <string>
 #include "util/dynamic_bloom.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 class Logger;
 
 class BloomBlockBuilder {
@@ -35,4 +36,4 @@ class BloomBlockBuilder {
   DynamicBloom bloom_;
 };
 
-};  // namespace rocksdb
+};  // namespace TERARKDB_NAMESPACE

@@ -13,7 +13,8 @@
 #include "rocksdb/utilities/json_document.h"
 #include "rocksdb/db.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // IMPORTANT: DocumentDB is a work in progress. It is unstable and we might
 // change the API without warning. Talk to RocksDB team before using this in
@@ -145,5 +146,5 @@ class DocumentDB : public StackableDB {
                         const JSONDocument& query) = 0;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

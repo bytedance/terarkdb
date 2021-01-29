@@ -10,7 +10,8 @@
 #include "port/stack_trace.h"
 #include "rocksdb/statistics.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class DBStatisticsTest : public DBTestBase {
  public:
@@ -45,7 +46,7 @@ TEST_F(DBStatisticsTest, CompressionStatsTest) {
 
   Options options = CurrentOptions();
   options.compression = type;
-  options.statistics = rocksdb::CreateDBStatistics();
+  options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   options.statistics->stats_level_ = StatsLevel::kExceptTimeForMutex;
   DestroyAndReopen(options);
 
@@ -91,7 +92,7 @@ TEST_F(DBStatisticsTest, CompressionStatsTest) {
 TEST_F(DBStatisticsTest, MutexWaitStatsDisabledByDefault) {
   Options options = CurrentOptions();
   options.create_if_missing = true;
-  options.statistics = rocksdb::CreateDBStatistics();
+  options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   CreateAndReopenWithCF({"pikachu"}, options);
   const uint64_t kMutexWaitDelay = 100;
   ThreadStatusUtil::TEST_SetStateDelay(ThreadStatus::STATE_MUTEX_WAIT,
@@ -104,7 +105,7 @@ TEST_F(DBStatisticsTest, MutexWaitStatsDisabledByDefault) {
 TEST_F(DBStatisticsTest, MutexWaitStats) {
   Options options = CurrentOptions();
   options.create_if_missing = true;
-  options.statistics = rocksdb::CreateDBStatistics();
+  options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   options.statistics->stats_level_ = StatsLevel::kAll;
   CreateAndReopenWithCF({"pikachu"}, options);
   const uint64_t kMutexWaitDelay = 100;
@@ -118,7 +119,7 @@ TEST_F(DBStatisticsTest, MutexWaitStats) {
 TEST_F(DBStatisticsTest, ResetStats) {
   Options options = CurrentOptions();
   options.create_if_missing = true;
-  options.statistics = rocksdb::CreateDBStatistics();
+  options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   DestroyAndReopen(options);
   for (int i = 0; i < 2; ++i) {
     // pick arbitrary ticker and histogram. On first iteration they're zero
@@ -140,10 +141,10 @@ TEST_F(DBStatisticsTest, ResetStats) {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

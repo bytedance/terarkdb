@@ -26,7 +26,8 @@
 #include "util/coding.h"
 #include "util/logging.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // Helper routine: decode the next block entry starting at "p",
 // storing the number of shared key bytes, non_shared key bytes,
@@ -915,4 +916,4 @@ size_t Block::ApproximateMemoryUsage() const {
   return usage;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

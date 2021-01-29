@@ -8,7 +8,8 @@
 #include "monitoring/thread_status_updater.h"
 #include "rocksdb/env.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 #ifdef ROCKSDB_USING_THREAD_STATUS
 __thread ThreadStatusUpdater* ThreadStatusUtil::thread_updater_local_cache_ =
@@ -203,4 +204,4 @@ AutoThreadOperationStageUpdater::~AutoThreadOperationStageUpdater() {}
 
 #endif  // ROCKSDB_USING_THREAD_STATUS
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

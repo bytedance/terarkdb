@@ -13,7 +13,8 @@
 #include "table/iterator_wrapper.h"
 #include "util/arena.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 Cleanable::Cleanable() {
   cleanup_.function = nullptr;
@@ -240,4 +241,4 @@ template InternalIteratorBase<Slice>* NewErrorInternalIterator(
 template InternalIteratorBase<LazyBuffer>* NewErrorInternalIterator(
     const Status& status, Arena* arena);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

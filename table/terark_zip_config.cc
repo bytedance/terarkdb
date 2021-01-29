@@ -44,7 +44,8 @@ void DictZipBlobStore_setZipThreads(int zipThreads);
   MyGetUInt(obj.compaction_options_universal, name, \
             obj.compaction_options_universal.name)
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 void TerarkZipDeleteTempFiles(const std::string& tmpPath) {
   Env* env = Env::Default();
@@ -151,7 +152,7 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
   cfo.min_write_buffer_number_to_merge = 1;
   cfo.target_file_size_base = cfo.write_buffer_size;
   cfo.target_file_size_multiplier = 1;
-  cfo.compaction_style = rocksdb::kCompactionStyleUniversal;
+  cfo.compaction_style = TERARKDB_NAMESPACE::kCompactionStyleUniversal;
   cfo.compaction_options_universal.allow_trivial_move = true;
   cfo.max_subcompactions = 1;  // no sub compactions
 
@@ -171,7 +172,7 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
   dbo.max_open_files = -1;
 
   dbo.env->SetBackgroundThreads(max(1, min(4, iCpuNum / 2)),
-                                rocksdb::Env::HIGH);
+                                TERARKDB_NAMESPACE::Env::HIGH);
 }
 
 void TerarkZipAutoConfigForOnlineDB(struct TerarkZipTableOptions& tzo,
@@ -422,7 +423,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo,
     STD_INFO("TerarkZipConfigFromEnv(dbo, cfo) successed\n");
   }
   return true;
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 void TerarkZipConfigCompactionWorkerFromEnv(TerarkZipTableOptions& tzo) {
   assert(IsCompactionWorkerNode());
@@ -463,8 +464,8 @@ void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
 
   dbo.env->SetBackgroundThreads(
       dbo.max_background_compactions + dbo.max_background_garbage_collections,
-      rocksdb::Env::LOW);
-  dbo.env->SetBackgroundThreads(dbo.max_background_flushes, rocksdb::Env::HIGH);
+      TERARKDB_NAMESPACE::Env::LOW);
+  dbo.env->SetBackgroundThreads(dbo.max_background_flushes, TERARKDB_NAMESPACE::Env::HIGH);
 }
 
 class TerarkBlackListCF : public terark::hash_strmap<> {
@@ -511,4 +512,4 @@ void TerarkZipMultiCFOptionsFromEnv(
 ROCKSDB_REGISTER_MEM_TABLE("patricia", PatriciaTrieRepFactory);
 ROCKSDB_REGISTER_WRITE_BATCH_WITH_INDEX(patricia);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

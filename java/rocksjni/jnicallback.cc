@@ -10,7 +10,8 @@
 #include "rocksjni/jnicallback.h"
 #include "rocksjni/portal.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 JniCallback::JniCallback(JNIEnv* env, jobject jcallback_obj) {
   // Note: jcallback_obj may be accessed by multiple threads,
   // so we ref the jvm not the env
@@ -50,4 +51,4 @@ JniCallback::~JniCallback() {
   releaseJniEnv(attached_thread);
 }
 // @lint-ignore TXT4 T25377293 Grandfathered in
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

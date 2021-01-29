@@ -11,7 +11,8 @@
 #include "rocksdb/options.h"
 #include "util/filename.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 Status LoadOptionsFromFile(const std::string& file_name, Env* env,
                            DBOptions* db_options,
                            std::vector<ColumnFamilyDescriptor>* cf_descs,
@@ -98,5 +99,5 @@ Status CheckOptionsCompatibility(
       kDefaultLevel, ignore_unknown_options);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // !ROCKSDB_LITE

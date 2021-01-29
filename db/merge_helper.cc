@@ -18,7 +18,8 @@
 #include "table/format.h"
 #include "table/internal_iterator.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 MergeHelper::MergeHelper(Env* env, const Comparator* user_comparator,
                          const MergeOperator* user_merge_operator,
@@ -418,4 +419,4 @@ CompactionFilter::Decision MergeHelper::FilterMerge(
   return ret;
 }
 
-} // namespace rocksdb
+} // namespace TERARKDB_NAMESPACE

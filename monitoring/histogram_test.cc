@@ -9,7 +9,8 @@
 #include "monitoring/histogram_windowing.h"
 #include "util/testharness.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class HistogramTest : public testing::Test {};
 
@@ -213,7 +214,7 @@ TEST_F(HistogramTest, HistogramWindowingMerge) {
   ASSERT_EQ(histogramWindowing.max(), 5);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

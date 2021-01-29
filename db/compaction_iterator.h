@@ -18,7 +18,8 @@
 #include "rocksdb/compaction_filter.h"
 #include "table/iterator_wrapper.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class CompactionIterator {
  public:
@@ -225,4 +226,4 @@ InternalIterator* NewCompactionIterator(
     CompactionIterator*(*new_compaction_iter_callback)(void*), void* arg,
     const Slice* start_user_key = nullptr);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -11,7 +11,8 @@
 #include <memory>
 #include <vector>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class LogFile;
 typedef std::vector<std::unique_ptr<LogFile>> VectorLogPtr;
@@ -119,4 +120,4 @@ class TransactionLogIterator {
         : verify_checksums_(verify_checksums) {}
   };
 };
-} //  namespace rocksdb
+} //  namespace TERARKDB_NAMESPACE

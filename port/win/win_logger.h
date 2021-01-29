@@ -19,13 +19,14 @@
 #include <stdint.h>
 #include <windows.h>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Env;
 
 namespace port {
 
-class WinLogger : public rocksdb::Logger {
+class WinLogger : public TERARKDB_NAMESPACE::Logger {
  public:
   WinLogger(uint64_t (*gettid)(), Env* env, HANDLE file,
             const InfoLogLevel log_level = InfoLogLevel::ERROR_LEVEL);
@@ -38,7 +39,7 @@ class WinLogger : public rocksdb::Logger {
 
   void Flush() override;
 
-  using rocksdb::Logger::Logv;
+  using TERARKDB_NAMESPACE::Logger::Logv;
   void Logv(const char* format, va_list ap) override;
 
   size_t GetLogFileSize() const override;
@@ -64,4 +65,4 @@ protected:
 
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

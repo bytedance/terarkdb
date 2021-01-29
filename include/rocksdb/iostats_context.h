@@ -12,7 +12,8 @@
 // A thread local context for gathering io-stats efficiently and transparently.
 // Use SetPerfLevel(PerfLevel::kEnableTime) to enable time stats.
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 struct IOStatsContext {
   // reset all io-stats counter to zero
@@ -49,4 +50,4 @@ struct IOStatsContext {
 // Get Thread-local IOStatsContext object pointer
 IOStatsContext* get_iostats_context();
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

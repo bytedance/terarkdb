@@ -4,11 +4,12 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 // This file implements the callback "bridge" between Java and C++ for
-// rocksdb::Statistics
+// TERARKDB_NAMESPACE::Statistics
 
 #include "rocksjni/statisticsjni.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
   StatisticsJni::StatisticsJni(std::shared_ptr<Statistics> stats)
       : StatisticsImpl(stats), m_ignore_histograms() {

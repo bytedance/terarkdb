@@ -22,7 +22,8 @@
 #include "util/random.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class DBPropertiesTest : public DBTestBase {
  public:
@@ -392,7 +393,7 @@ TEST_F(DBPropertiesTest, ReadLatencyHistogramByLevel) {
   options.max_bytes_for_level_base = 4500 << 10;
   options.target_file_size_base = 98 << 10;
   options.max_write_buffer_number = 2;
-  options.statistics = rocksdb::CreateDBStatistics();
+  options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   options.max_open_files = 100;
 
   BlockBasedTableOptions table_options;
@@ -1695,10 +1696,10 @@ TEST_F(DBPropertiesTest, BlockCacheProperties) {
 }
 
 #endif  // ROCKSDB_LITE
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

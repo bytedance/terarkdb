@@ -7,7 +7,8 @@
 
 #include "rocksdb/status.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class DB;
 
@@ -29,4 +30,4 @@ class PreReleaseCallback {
   virtual Status Callback(SequenceNumber seq, bool is_mem_disabled) = 0;
 };
 
-}  //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE

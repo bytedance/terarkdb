@@ -32,7 +32,8 @@ int main() {
 #include "util/testutil.h"
 #include "util/trace_replay.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 static const int kMaxArgCount = 100;
@@ -45,7 +46,7 @@ class TraceAnalyzerTest : public testing::Test {
   TraceAnalyzerTest() : rnd_(0xFB) {
     // test_path_ = test::TmpDir() + "trace_analyzer_test";
     test_path_ = test::PerThreadDBPath("trace_analyzer_test");
-    env_ = rocksdb::Env::Default();
+    env_ = TERARKDB_NAMESPACE::Env::Default();
     env_->CreateDir(test_path_);
     dbname_ = test_path_ + "/db";
   }
@@ -114,7 +115,7 @@ class TraceAnalyzerTest : public testing::Test {
       cursor += static_cast<int>(arg.size()) + 1;
     }
 
-    ASSERT_EQ(0, rocksdb::trace_analyzer_tool(argc, argv));
+    ASSERT_EQ(0, TERARKDB_NAMESPACE::trace_analyzer_tool(argc, argv));
   }
 
   void CheckFileContent(const std::vector<std::string>& cnt,
@@ -171,7 +172,7 @@ class TraceAnalyzerTest : public testing::Test {
     RunTraceAnalyzer(paras);
   }
 
-  rocksdb::Env* env_;
+  TERARKDB_NAMESPACE::Env* env_;
   EnvOptions env_options_;
   std::string test_path_;
   std::string dbname_;
@@ -703,7 +704,7 @@ TEST_F(TraceAnalyzerTest, Iterator) {
   CheckFileContent(top_qps, file_path, true);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

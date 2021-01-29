@@ -12,7 +12,8 @@
 #include "utilities/transactions/write_prepared_txn.h"
 #include "utilities/transactions/write_unprepared_txn_db.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class WriteUnpreparedTxnDB;
 class WriteUnpreparedTxn;
@@ -137,6 +138,6 @@ class WriteUnpreparedTxn : public WritePreparedTxn {
   std::map<uint32_t, std::vector<std::string>> write_set_keys_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

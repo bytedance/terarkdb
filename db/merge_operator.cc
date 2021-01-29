@@ -12,7 +12,8 @@
 #include "rocksdb/status.h"
 #include "utilities/util/factory.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 bool MergeOperator::FullMergeV2(const MergeOperationInput& merge_in,
                                 MergeOperationOutput* merge_out) const {
@@ -104,6 +105,6 @@ bool AssociativeMergeOperator::PartialMerge(const Slice& key,
                new_value->trans_to_string(), logger);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
-TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::MergeOperator*, const std::string&);
+TERARK_FACTORY_INSTANTIATE_GNS(TERARKDB_NAMESPACE::MergeOperator*, const std::string&);

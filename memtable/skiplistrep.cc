@@ -13,7 +13,8 @@
 #include "table/terark_zip_internal.h"
 #endif
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace {
 template <class ComparatorType>
 class SkipListRep : public MemTableRep {
@@ -294,7 +295,7 @@ class SkipListRep : public MemTableRep {
 };
 
 struct BytewiseKeyComparator {
-  typedef rocksdb::Slice DecodedType;
+  typedef TERARKDB_NAMESPACE::Slice DecodedType;
   const InternalKeyComparator comparator;
   DecodedType decode_key(const char* key) const {
     return GetLengthPrefixedSlice(key);
@@ -331,7 +332,7 @@ struct BytewiseKeyComparator {
 };
 
 struct ReverseBytewiseKeyComparator {
-  typedef rocksdb::Slice DecodedType;
+  typedef TERARKDB_NAMESPACE::Slice DecodedType;
   const InternalKeyComparator comparator;
   DecodedType decode_key(const char* key) const {
     return GetLengthPrefixedSlice(key);
@@ -421,4 +422,4 @@ static MemTableRepFactory* NewSkipListFactory(
 
 ROCKSDB_REGISTER_MEM_TABLE("skip_list", SkipListFactory);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -18,7 +18,8 @@
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/slice.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class StringAppendTESTOperator : public MergeOperator {
  public:
@@ -49,4 +50,4 @@ class StringAppendTESTOperator : public MergeOperator {
 
 };
 
-} // namespace rocksdb
+} // namespace TERARKDB_NAMESPACE

@@ -11,7 +11,8 @@
 #include "rocksdb/sst_file_writer.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE
 class ExternalSSTFileBasicTest : public DBTestBase,
@@ -628,12 +629,12 @@ TEST_F(ExternalSSTFileBasicTest, FadviseTrigger) {
   const int kNumKeys = 10000;
 
   size_t total_fadvised_bytes = 0;
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "SstFileWriter::Rep::InvalidatePageCache", [&](void* arg) {
         size_t fadvise_size = *(reinterpret_cast<size_t*>(arg));
         total_fadvised_bytes += fadvise_size;
       });
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
 
   std::unique_ptr<SstFileWriter> sst_file_writer;
 
@@ -660,7 +661,7 @@ TEST_F(ExternalSSTFileBasicTest, FadviseTrigger) {
   ASSERT_EQ(total_fadvised_bytes, sst_file_writer->FileSize());
   ASSERT_GT(total_fadvised_bytes, 0);
 
-  rocksdb::SyncPoint::GetInstance()->DisableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
 }
 
 TEST_P(ExternalSSTFileBasicTest, IngestionWithRangeDeletions) {
@@ -752,10 +753,10 @@ INSTANTIATE_TEST_CASE_P(ExternalSSTFileBasicTest, ExternalSSTFileBasicTest,
 
 #endif  // ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

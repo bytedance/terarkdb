@@ -12,7 +12,8 @@
 #include <utility>
 #include <vector>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class CompactorCommand : public LDBCommand {
  public:
@@ -575,4 +576,4 @@ class IngestExternalSstFilesCommand : public LDBCommand {
   static const std::string ARG_WRITE_GLOBAL_SEQNO;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

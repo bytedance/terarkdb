@@ -7,7 +7,8 @@
 #include "db/version_edit.h"
 #include "util/random.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 static const uint32_t kFileReadSampleRate = 1024;
 extern bool should_sample_file_read();
 extern void sample_file_read_inc(FileMetaData*);

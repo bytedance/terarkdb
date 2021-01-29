@@ -17,7 +17,8 @@
 #include "utilities/persistent_cache/hash_table_evictable.h"
 #include "utilities/persistent_cache/lrulist.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 //
 // Block Cache Tier Metadata
@@ -120,6 +121,6 @@ class BlockCacheTierMetadata {
   BlockIndexType block_index_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif

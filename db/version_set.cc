@@ -56,7 +56,8 @@
 #include "util/sync_point.h"
 #include "utilities/util/valvec.hpp"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 
@@ -4758,4 +4759,4 @@ uint64_t VersionSet::GetTotalSstFilesSize(Version* dummy_versions) {
   return total_files_size;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

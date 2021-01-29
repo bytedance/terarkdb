@@ -17,7 +17,8 @@
 #include "table/plain_table_key_coding.h"
 #include "table/table_builder.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class BlockBuilder;
 class BlockHandle;
@@ -126,6 +127,6 @@ class PlainTableBuilder: public TableBuilder {
   void operator=(const PlainTableBuilder&) = delete;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

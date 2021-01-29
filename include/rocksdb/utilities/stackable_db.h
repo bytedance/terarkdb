@@ -14,7 +14,8 @@
 #endif
 
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // This class contains APIs to stack rocksdb wrappers.Eg. Stack TTL over base d
 class StackableDB : public DB {
@@ -395,4 +396,4 @@ class StackableDB : public DB {
   std::shared_ptr<DB> shared_db_ptr_;
 };
 
-} //  namespace rocksdb
+} //  namespace TERARKDB_NAMESPACE

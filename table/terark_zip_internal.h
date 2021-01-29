@@ -42,9 +42,10 @@
 #define TERARK_ROCKSDB_5007(...)
 #endif
 
-void PrintVersion(rocksdb::Logger* info_log);
+void PrintVersion(TERARKDB_NAMESPACE::Logger* info_log);
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 using terark::byte_t;
 using terark::fstring;
@@ -221,4 +222,4 @@ class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
 static auto& terark_zip_table_type_info =
     TerarkZipTableFactory::terark_zip_table_type_info;
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

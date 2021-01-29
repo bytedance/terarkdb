@@ -12,7 +12,8 @@
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace mock {
 
 namespace {
@@ -172,4 +173,4 @@ void MockTableFactory::AssertLatestFile(
 }
 
 }  // namespace mock
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

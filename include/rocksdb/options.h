@@ -32,7 +32,8 @@
 #undef max
 #endif
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Cache;
 class CompactionFilter;
@@ -1391,4 +1392,4 @@ struct TraceOptions {
   uint64_t max_trace_file_size = uint64_t{64} * 1024 * 1024 * 1024;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

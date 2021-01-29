@@ -9,7 +9,8 @@
 #ifndef ROCKSDB_LITE
 #include <exception>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class RedisListException: public std::exception {
  public:
@@ -18,5 +19,5 @@ class RedisListException: public std::exception {
   }
 };
 
-} // namespace rocksdb
+} // namespace TERARKDB_NAMESPACE
 #endif

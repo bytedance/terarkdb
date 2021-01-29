@@ -30,7 +30,8 @@
 #include "util/mutexlock.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 void TailPrefetchStats::RecordEffectiveSize(size_t len) {
   MutexLock l(&mutex_);
@@ -621,4 +622,4 @@ static TableFactory* BlockedCreator(const std::string& options, Status* s) {
 TERARK_FACTORY_REGISTER_EX(BlockBasedTableFactory,
                           "BlockBasedTable", &BlockedCreator);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

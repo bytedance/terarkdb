@@ -13,7 +13,8 @@
 #include "utilities/transactions/write_unprepared_txn.h"
 #include "utilities/transactions/write_unprepared_txn_db.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class WriteUnpreparedTransactionTestBase : public TransactionTestBase {
  public:
@@ -425,7 +426,7 @@ TEST_P(WriteUnpreparedTransactionTest, MarkLogWithPrepSection) {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

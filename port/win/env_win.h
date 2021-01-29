@@ -32,7 +32,8 @@
 #undef DeleteFile
 #undef GetTickCount
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace port {
 
 // Currently not designed for inheritance but rather a replacement
@@ -339,4 +340,4 @@ private:
 };
 
 } // namespace port
-} // namespace rocksdb
+} // namespace TERARKDB_NAMESPACE

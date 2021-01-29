@@ -26,7 +26,8 @@
 #include "util/coding.h"
 #include "utilities/util/valvec.hpp"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace {
 const uint64_t CACHE_LINE_MASK = ~((uint64_t)CACHE_LINE_SIZE - 1);
 const uint32_t kInvalidIndex = std::numeric_limits<uint32_t>::max();
@@ -420,5 +421,5 @@ InternalIterator* CuckooTableReader::NewIterator(
 
 size_t CuckooTableReader::ApproximateMemoryUsage() const { return 0; }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif

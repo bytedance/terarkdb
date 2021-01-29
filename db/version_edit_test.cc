@@ -11,7 +11,8 @@
 #include "util/sync_point.h"
 #include "util/testharness.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 namespace {
   TablePropertyCache GetPropCache(
@@ -121,7 +122,7 @@ TEST_F(VersionEditTest, ForwardCompatibleNewFile4) {
 
   // Call back function to add extra customized builds.
   bool first = true;
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "VersionEdit::EncodeTo:NewFile4:CustomizeFields", [&](void* arg) {
         std::string* str = reinterpret_cast<std::string*>(arg);
         PutVarint32(str, 33);
@@ -134,9 +135,9 @@ TEST_F(VersionEditTest, ForwardCompatibleNewFile4) {
           PutLengthPrefixedSlice(str, str2);
         }
       });
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
   edit.EncodeTo(&encoded);
-  rocksdb::SyncPoint::GetInstance()->DisableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
 
   VersionEdit parsed;
   Status s = parsed.DecodeFrom(encoded);
@@ -165,15 +166,15 @@ TEST_F(VersionEditTest, NewFile4NotSupportedField) {
   std::string encoded;
 
   // Call back function to add extra customized builds.
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "VersionEdit::EncodeTo:NewFile4:CustomizeFields", [&](void* arg) {
         std::string* str = reinterpret_cast<std::string*>(arg);
         const std::string str1 = "s";
         PutLengthPrefixedSlice(str, str1);
       });
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
   edit.EncodeTo(&encoded);
-  rocksdb::SyncPoint::GetInstance()->DisableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
 
   VersionEdit parsed;
   Status s = parsed.DecodeFrom(encoded);
@@ -216,7 +217,7 @@ TEST_F(VersionEditTest, AtomicGroupTest) {
   TestEncodeDecode(edit);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

@@ -9,7 +9,8 @@
 
 #include "db/db_impl.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 Status GetAllKeyVersions(DB* db, Slice begin_key, Slice end_key,
                          size_t max_num_ikeys,
@@ -62,6 +63,6 @@ Status GetAllKeyVersions(DB* db, Slice begin_key, Slice end_key,
   return Status::OK();
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

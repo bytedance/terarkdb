@@ -4,7 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 // This file implements the "bridge" between Java and C++ for
-// rocksdb::ColumnFamilyHandle.
+// TERARKDB_NAMESPACE::ColumnFamilyHandle.
 
 #include <jni.h>
 #include <stdio.h>
@@ -21,9 +21,9 @@
 jbyteArray Java_org_rocksdb_ColumnFamilyHandle_getName(JNIEnv* env,
                                                        jobject /*jobj*/,
                                                        jlong jhandle) {
-  auto* cfh = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jhandle);
+  auto* cfh = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jhandle);
   std::string cf_name = cfh->GetName();
-  return rocksdb::JniUtil::copyBytes(env, cf_name);
+  return TERARKDB_NAMESPACE::JniUtil::copyBytes(env, cf_name);
 }
 
 /*
@@ -34,7 +34,7 @@ jbyteArray Java_org_rocksdb_ColumnFamilyHandle_getName(JNIEnv* env,
 jint Java_org_rocksdb_ColumnFamilyHandle_getID(JNIEnv* /*env*/,
                                                jobject /*jobj*/,
                                                jlong jhandle) {
-  auto* cfh = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jhandle);
+  auto* cfh = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jhandle);
   const int32_t id = cfh->GetID();
   return static_cast<jint>(id);
 }
@@ -47,13 +47,13 @@ jint Java_org_rocksdb_ColumnFamilyHandle_getID(JNIEnv* /*env*/,
 jobject Java_org_rocksdb_ColumnFamilyHandle_getDescriptor(JNIEnv* env,
                                                           jobject /*jobj*/,
                                                           jlong jhandle) {
-  auto* cfh = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jhandle);
-  rocksdb::ColumnFamilyDescriptor desc;
-  rocksdb::Status s = cfh->GetDescriptor(&desc);
+  auto* cfh = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jhandle);
+  TERARKDB_NAMESPACE::ColumnFamilyDescriptor desc;
+  TERARKDB_NAMESPACE::Status s = cfh->GetDescriptor(&desc);
   if (s.ok()) {
-    return rocksdb::ColumnFamilyDescriptorJni::construct(env, &desc);
+    return TERARKDB_NAMESPACE::ColumnFamilyDescriptorJni::construct(env, &desc);
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
     return nullptr;
   }
 }
@@ -66,7 +66,7 @@ jobject Java_org_rocksdb_ColumnFamilyHandle_getDescriptor(JNIEnv* env,
 void Java_org_rocksdb_ColumnFamilyHandle_disposeInternal(JNIEnv* /*env*/,
                                                          jobject /*jobj*/,
                                                          jlong jhandle) {
-  auto* cfh = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jhandle);
+  auto* cfh = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jhandle);
   assert(cfh != nullptr);
   delete cfh;
 }

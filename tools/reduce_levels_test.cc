@@ -15,7 +15,8 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class ReduceLevelTest : public testing::Test {
 public:
@@ -80,10 +81,10 @@ private:
 };
 
 Status ReduceLevelTest::OpenDB(bool create_if_missing, int num_levels) {
-  rocksdb::Options opt;
+  TERARKDB_NAMESPACE::Options opt;
   opt.num_levels = num_levels;
   opt.create_if_missing = create_if_missing;
-  rocksdb::Status st = rocksdb::DB::Open(opt, dbname_, &db_);
+  TERARKDB_NAMESPACE::Status st = TERARKDB_NAMESPACE::DB::Open(opt, dbname_, &db_);
   if (!st.ok()) {
     fprintf(stderr, "Can't open the db:%s\n", st.ToString().c_str());
   }
@@ -91,7 +92,7 @@ Status ReduceLevelTest::OpenDB(bool create_if_missing, int num_levels) {
 }
 
 bool ReduceLevelTest::ReduceLevels(int target_level) {
-  std::vector<std::string> args = rocksdb::ReduceDBLevelsCommand::PrepareArgs(
+  std::vector<std::string> args = TERARKDB_NAMESPACE::ReduceDBLevelsCommand::PrepareArgs(
       dbname_, target_level, false);
   LDBCommand* level_reducer = LDBCommand::InitFromCmdLineArgs(
       args, Options(), LDBOptions(), nullptr, LDBCommand::SelectCommand);

@@ -34,7 +34,8 @@
 
 #include "port/port.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // Return true if the ith bit is set in combination represented by comb
 bool IsInCombination(size_t i, size_t comb) { return comb & (size_t(1) << i); }
@@ -450,4 +451,4 @@ class TransactionStressTest : public TransactionTest {};
 
 class MySQLStyleTransactionTest : public TransactionTest {};
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

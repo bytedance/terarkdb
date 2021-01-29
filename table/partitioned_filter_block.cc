@@ -21,7 +21,8 @@
 #include "table/block_based_table_reader.h"
 #include "util/coding.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 PartitionedFilterBlockBuilder::PartitionedFilterBlockBuilder(
     const SliceTransform* prefix_extractor, bool whole_key_filtering,
@@ -352,4 +353,4 @@ void PartitionedFilterBlockReader::CacheDependencies(
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

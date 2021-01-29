@@ -27,7 +27,8 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class DeleteFileTest : public testing::Test {
  public:
@@ -297,13 +298,13 @@ TEST_F(DeleteFileTest, BackgroundPurgeCFDropTest) {
     CheckFileTypeCounts(dbname_, 0, 1, 1);
 
     if (bg_purge) {
-      rocksdb::SyncPoint::GetInstance()->LoadDependency({
+      TERARKDB_NAMESPACE::SyncPoint::GetInstance()->LoadDependency({
           {"DeleteFileTest::BackgroundPurgeCFDropTest:1",
            "DBImpl::DeleteObsoleteFileImpl:BeforeDeletion"},
           {"DBImpl::DeleteObsoleteFileImpl:AfterDeletion",
            "DeleteFileTest::BackgroundPurgeCFDropTest:2"},
       });
-      rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+      TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
     }
 
     delete cfh;
@@ -317,7 +318,7 @@ TEST_F(DeleteFileTest, BackgroundPurgeCFDropTest) {
     // The file should have been deleted.
     CheckFileTypeCounts(dbname_, 0, 0, 1);
 
-    rocksdb::SyncPoint::GetInstance()->DisableProcessing();
+    TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
   };
 
   {
@@ -391,11 +392,11 @@ TEST_F(DeleteFileTest, BackgroundPurgeTestMultipleJobs) {
   CheckFileTypeCounts(dbname_, 0, 5, 1);
 
   // ~DBImpl should wait until all BGWorkPurge are finished
-  rocksdb::SyncPoint::GetInstance()->LoadDependency(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->LoadDependency(
       {{"DBImpl::~DBImpl:WaitJob", "DBImpl::BGWorkPurge"},
        {"DeleteFileTest::GuardFinish",
         "DeleteFileTest::BackgroundPurgeTestMultipleJobs:DBClose"}});
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
 
   delete itr1;
   env_->Schedule(&DeleteFileTest::DoSleep, this, Env::Priority::HIGH);
@@ -406,7 +407,7 @@ TEST_F(DeleteFileTest, BackgroundPurgeTestMultipleJobs) {
   TEST_SYNC_POINT("DeleteFileTest::BackgroundPurgeTestMultipleJobs:DBClose");
   // 1 sst after iterator deletion
   CheckFileTypeCounts(dbname_, 0, 1, 1);
-  rocksdb::SyncPoint::GetInstance()->DisableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
 }
 
 TEST_F(DeleteFileTest, DeleteFileWithIterator) {
@@ -486,8 +487,8 @@ TEST_F(DeleteFileTest, DeleteNonDefaultColumnFamily) {
   column_families.emplace_back();
   column_families.emplace_back("new_cf", ColumnFamilyOptions());
 
-  std::vector<rocksdb::ColumnFamilyHandle*> handles;
-  rocksdb::DB* db;
+  std::vector<TERARKDB_NAMESPACE::ColumnFamilyHandle*> handles;
+  TERARKDB_NAMESPACE::DB* db;
   ASSERT_OK(DB::Open(db_options, dbname_, column_families, &handles, &db));
 
   Random rnd(5);
@@ -546,7 +547,7 @@ TEST_F(DeleteFileTest, DeleteNonDefaultColumnFamily) {
   delete db;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

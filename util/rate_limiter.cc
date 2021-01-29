@@ -14,7 +14,8 @@
 #include "util/aligned_buffer.h"
 #include "util/sync_point.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 size_t RateLimiter::RequestToken(size_t bytes, size_t alignment,
                                  Env::IOPriority io_priority, Statistics* stats,
@@ -337,4 +338,4 @@ RateLimiter* NewGenericRateLimiter(
                                 mode, Env::Default(), auto_tuned);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -14,7 +14,8 @@
 #include <boost/stacktrace.hpp>
 #endif
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace {
 Statistics* stats_for_report(Env* env, Statistics* stats) {
   if (env != nullptr && stats != nullptr &&
@@ -173,4 +174,4 @@ bool InstrumentedCondVar::TimedWaitInternal(uint64_t abs_time_us) {
   return r;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

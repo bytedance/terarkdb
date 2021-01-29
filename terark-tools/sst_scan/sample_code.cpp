@@ -57,7 +57,8 @@
 # include <table/terark_zip_common.h>
 # include <table/terark_zip_table.h>
 #else
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
   struct TerarkZipTableOptions{};
 }
 #endif
@@ -74,21 +75,21 @@ size_t file_size_base = 32ull << 20;
 #define READ_ONLY 0
 #define WORKER_TEST 0
 
-class ComparatorRename : public rocksdb::Comparator {
+class ComparatorRename : public TERARKDB_NAMESPACE::Comparator {
 public:
   virtual const char* Name() const override {
     return n;
   }
 
-  virtual int Compare(const rocksdb::Slice& a, const rocksdb::Slice& b) const override {
+  virtual int Compare(const TERARKDB_NAMESPACE::Slice& a, const TERARKDB_NAMESPACE::Slice& b) const override {
     return c->Compare(a, b);
   }
 
-  virtual bool Equal(const rocksdb::Slice& a, const rocksdb::Slice& b) const override {
+  virtual bool Equal(const TERARKDB_NAMESPACE::Slice& a, const TERARKDB_NAMESPACE::Slice& b) const override {
     return c->Equal(a, b);
   }
   virtual void FindShortestSeparator(std::string* start,
-                                     const rocksdb::Slice& limit) const override {
+                                     const TERARKDB_NAMESPACE::Slice& limit) const override {
     c->FindShortestSeparator(start, limit);
   }
 
@@ -97,28 +98,28 @@ public:
   }
 
   const char* n;
-  const rocksdb::Comparator* c;
+  const TERARKDB_NAMESPACE::Comparator* c;
 
-  ComparatorRename(const char* _n, const rocksdb::Comparator* _c) : n(_n), c(_c) {}
+  ComparatorRename(const char* _n, const TERARKDB_NAMESPACE::Comparator* _c) : n(_n), c(_c) {}
 };
 
-uint64_t get_snapshot_seqno(const rocksdb::Snapshot* s) {
+uint64_t get_snapshot_seqno(const TERARKDB_NAMESPACE::Snapshot* s) {
   return ((const uint64_t*)s)[1];
 };
-void set_snapshot_seqno(const rocksdb::Snapshot* s, uint64_t seqno) {
+void set_snapshot_seqno(const TERARKDB_NAMESPACE::Snapshot* s, uint64_t seqno) {
   ((uint64_t*)s)[1] = seqno;
 };
 
 #if WORKER_TEST
 # include <rocksdb/compaction_dispatcher.h>
 
-class AsyncCompactionDispatcher : public rocksdb::RemoteCompactionDispatcher {
+class AsyncCompactionDispatcher : public TERARKDB_NAMESPACE::RemoteCompactionDispatcher {
 public:
-  class AsyncWorker : public rocksdb::RemoteCompactionDispatcher::Worker {
+  class AsyncWorker : public TERARKDB_NAMESPACE::RemoteCompactionDispatcher::Worker {
   public:
-    AsyncWorker(const rocksdb::Options& options, std::string working_dir, uint64_t seed)
-      : rocksdb::RemoteCompactionDispatcher::Worker(
-            rocksdb::EnvOptions(options),
+    AsyncWorker(const TERARKDB_NAMESPACE::Options& options, std::string working_dir, uint64_t seed)
+      : TERARKDB_NAMESPACE::RemoteCompactionDispatcher::Worker(
+            TERARKDB_NAMESPACE::EnvOptions(options),
             options.env),
         working_dir_(working_dir),
         seed_(seed) {
@@ -138,7 +139,7 @@ public:
     : self_(self),
       working_dir_(working_dir) {}
 
-  virtual std::future<std::string> DoCompaction(rocksdb::Slice data) {
+  virtual std::future<std::string> DoCompaction(TERARKDB_NAMESPACE::Slice data) {
     uint64_t seed = seed_.fetch_add(65536);
     return std::async([this, data, seed]()->std::string {
       //popen("self working_dir seed" << data) >> result
@@ -170,23 +171,23 @@ public:
 };
 
 #endif
-class TestMergeOperator : public rocksdb::StringAppendOperator {
-//class TestMergeOperator : public rocksdb::StringAppendTESTOperator {
+class TestMergeOperator : public TERARKDB_NAMESPACE::StringAppendOperator {
+//class TestMergeOperator : public TERARKDB_NAMESPACE::StringAppendTESTOperator {
 public:
-TestMergeOperator(char delim_char) : rocksdb::StringAppendOperator(delim_char) {}
-  //TestMergeOperator(char delim_char) : rocksdb::StringAppendTESTOperator(delim_char) {}
+TestMergeOperator(char delim_char) : TERARKDB_NAMESPACE::StringAppendOperator(delim_char) {}
+  //TestMergeOperator(char delim_char) : TERARKDB_NAMESPACE::StringAppendTESTOperator(delim_char) {}
 
-  virtual rocksdb::Status Serialize(std::string* /*bytes*/) const override {
-    return rocksdb::Status::OK();
+  virtual TERARKDB_NAMESPACE::Status Serialize(std::string* /*bytes*/) const override {
+    return TERARKDB_NAMESPACE::Status::OK();
   }
-  virtual rocksdb::Status Deserialize(const rocksdb::Slice& /*bytes*/) override {
-    return rocksdb::Status::OK();
+  virtual TERARKDB_NAMESPACE::Status Deserialize(const TERARKDB_NAMESPACE::Slice& /*bytes*/) override {
+    return TERARKDB_NAMESPACE::Status::OK();
   }
 };
 
-class TestCompactionFilter : public rocksdb::CompactionFilter {
-  bool Filter(int /*level*/, const rocksdb::Slice& /*key*/,
-              const rocksdb::Slice& /*existing_value*/,
+class TestCompactionFilter : public TERARKDB_NAMESPACE::CompactionFilter {
+  bool Filter(int /*level*/, const TERARKDB_NAMESPACE::Slice& /*key*/,
+              const TERARKDB_NAMESPACE::Slice& /*existing_value*/,
               std::string* /*new_value*/,
               bool* /*value_changed*/) const override {
     return false;
@@ -249,24 +250,24 @@ std::string get_value(size_t i)
 }
 
 void get_options(int argc, const char* argv[],
-                 rocksdb::Options &options,
-                 rocksdb::BlockBasedTableOptions& bbto,
-                 rocksdb::TerarkZipTableOptions& tzto) {
+                 TERARKDB_NAMESPACE::Options &options,
+                 TERARKDB_NAMESPACE::BlockBasedTableOptions& bbto,
+                 TERARKDB_NAMESPACE::TerarkZipTableOptions& tzto) {
 
   //bbto.no_block_cache = true;
-  //bbto.block_cache = rocksdb::NewLRUCache(1ULL << 30, 5, false);
+  //bbto.block_cache = TERARKDB_NAMESPACE::NewLRUCache(1ULL << 30, 5, false);
 
-  //options.compaction_style = rocksdb::kCompactionStyleUniversal;
-  options.compaction_pri = rocksdb::kMinOverlappingRatio;
-  //options.compression = rocksdb::kZSTD;
+  //options.compaction_style = TERARKDB_NAMESPACE::kCompactionStyleUniversal;
+  options.compaction_pri = TERARKDB_NAMESPACE::kMinOverlappingRatio;
+  //options.compression = TERARKDB_NAMESPACE::kZSTD;
 
-  static ComparatorRename  c{     "RocksDB_SE_v3.10", rocksdb::       BytewiseComparator() };
-  static ComparatorRename rc{ "rev:RocksDB_SE_v3.10", rocksdb::ReverseBytewiseComparator() };
+  static ComparatorRename  c{     "RocksDB_SE_v3.10", TERARKDB_NAMESPACE::       BytewiseComparator() };
+  static ComparatorRename rc{ "rev:RocksDB_SE_v3.10", TERARKDB_NAMESPACE::ReverseBytewiseComparator() };
   static TestCompactionFilter filter;
 
   options.comparator = &c;
   options.compaction_filter = &filter;
-  //options.prefix_extractor.reset(rocksdb::NewFixedPrefixTransform(1));
+  //options.prefix_extractor.reset(TERARKDB_NAMESPACE::NewFixedPrefixTransform(1));
   options.allow_concurrent_memtable_write = false;
   options.max_open_files = -1;
 
@@ -283,7 +284,7 @@ void get_options(int argc, const char* argv[],
   options.compaction_options_universal.max_merge_width = 4;
   options.compaction_options_universal.allow_trivial_move = true;
   //options.compaction_options_universal.allow_trivial_move = false;
-  options.compaction_options_universal.stop_style = rocksdb::kCompactionStopStyleSimilarSize;
+  options.compaction_options_universal.stop_style = TERARKDB_NAMESPACE::kCompactionStopStyleSimilarSize;
 
   options.use_aio_reads = true;
   options.base_background_compactions = 3;
@@ -304,7 +305,7 @@ void get_options(int argc, const char* argv[],
   options.force_consistency_checks = true;
   options.max_file_opening_threads = 64;
   //options.delayed_write_rate = 32ull << 20;
-  //options.rate_limiter.reset(rocksdb::NewGenericRateLimiter(16ull << 20, 1000));
+  //options.rate_limiter.reset(TERARKDB_NAMESPACE::NewGenericRateLimiter(16ull << 20, 1000));
 
 #if WORKER_TEST
   options.compaction_dispatcher.reset(new AsyncCompactionDispatcher(argv[0], argv[1]));
@@ -315,8 +316,8 @@ void get_options(int argc, const char* argv[],
   tzto.localTempDir = argv[1];
   tzto.indexNestLevel = 3;
   tzto.checksumLevel = 2;
-  //tzto.entropyAlgo = rocksdb::TerarkZipTableOptions::kHuffman;
-  tzto.entropyAlgo = rocksdb::TerarkZipTableOptions::kNoEntropy;
+  //tzto.entropyAlgo = TERARKDB_NAMESPACE::TerarkZipTableOptions::kHuffman;
+  tzto.entropyAlgo = TERARKDB_NAMESPACE::TerarkZipTableOptions::kNoEntropy;
   tzto.terarkZipMinLevel = 0;
   tzto.debugLevel = 0;
   tzto.indexNestScale = 8;
@@ -427,7 +428,7 @@ double GenSortedRunGroup(const std::vector<double>& sr, size_t group,
 }
 
 void test_g() {
-  using namespace rocksdb;
+  using namespace TERARKDB_NAMESPACE;
   std::vector<SortedRunGroup> o;
   std::vector<double> sr;
   std::mt19937_64 mt;
@@ -469,7 +470,7 @@ void test_g() {
 int main(int argc, const char* argv[], const char* env[])
 {
   {
-    using namespace rocksdb;
+    using namespace TERARKDB_NAMESPACE;
 #define ASSERT_OK(a) assert((a).ok())
 #define ASSERT_NOK(a) assert(!(a).ok())
 #define ASSERT_EQ(a,b) assert((a) == (b))
@@ -589,11 +590,11 @@ int main(int argc, const char* argv[], const char* env[])
   if (argc < 2) {
     return -1;
   }
-  auto statistics = rocksdb::CreateDBStatistics();
+  auto statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   std::mt19937_64 mt;
-  rocksdb::Options options;
-  rocksdb::BlockBasedTableOptions bbto;
-  rocksdb::TerarkZipTableOptions tzto;
+  TERARKDB_NAMESPACE::Options options;
+  TERARKDB_NAMESPACE::BlockBasedTableOptions bbto;
+  TERARKDB_NAMESPACE::TerarkZipTableOptions tzto;
   get_options(argc, argv, options, bbto, tzto);
   options.statistics = statistics;
 
@@ -601,13 +602,13 @@ int main(int argc, const char* argv[], const char* env[])
 #if WORKER_TEST
     AsyncCompactionDispatcher::AsyncWorker worker(options, argv[1], terark::lcast(argv[2]));
     worker.RegistComparator(options.comparator);
-    worker.RegistTableFactory("TerarkZipTable", [&](std::shared_ptr<rocksdb::TableFactory>* ptr, const std::string&) {
-      ptr->reset(rocksdb::NewTerarkZipTableFactory(tzto, nullptr));
-      return rocksdb::Status::OK();
+    worker.RegistTableFactory("TerarkZipTable", [&](std::shared_ptr<TERARKDB_NAMESPACE::TableFactory>* ptr, const std::string&) {
+      ptr->reset(TERARKDB_NAMESPACE::NewTerarkZipTableFactory(tzto, nullptr));
+      return TERARKDB_NAMESPACE::Status::OK();
     });
-    worker.RegistMergeOperator([](std::shared_ptr<rocksdb::MergeOperator>* ptr) {
+    worker.RegistMergeOperator([](std::shared_ptr<TERARKDB_NAMESPACE::MergeOperator>* ptr) {
       ptr->reset(new TestMergeOperator(','));
-      return rocksdb::Status::OK();
+      return TERARKDB_NAMESPACE::Status::OK();
     });
 
     std::string input;
@@ -619,7 +620,7 @@ int main(int argc, const char* argv[], const char* env[])
   }
 
 #if TEST_TERARK
-  rocksdb::TerarkZipDeleteTempFiles(tzto.localTempDir);
+  TERARKDB_NAMESPACE::TerarkZipDeleteTempFiles(tzto.localTempDir);
 #endif
 
 #if TEST_TERARK
@@ -768,32 +769,32 @@ int main(int argc, const char* argv[], const char* env[])
 //  }
 #endif
 
-  std::vector<rocksdb::ColumnFamilyDescriptor> cfDescriptors;
+  std::vector<TERARKDB_NAMESPACE::ColumnFamilyDescriptor> cfDescriptors;
   //options.disable_auto_compactions = true;
   {
-    options.compaction_style = rocksdb::kCompactionStyleUniversal;
-    //options.compaction_style = rocksdb::kCompactionStyleLevel;
+    options.compaction_style = TERARKDB_NAMESPACE::kCompactionStyleUniversal;
+    //options.compaction_style = TERARKDB_NAMESPACE::kCompactionStyleLevel;
     options.write_buffer_size = options.target_file_size_base = file_size_base;
     //options.arena_block_size = 512 << 10;
     options.max_bytes_for_level_base = options.target_file_size_base * 4;
-    options.memtable_factory.reset(new rocksdb::SkipListFactory());
+    options.memtable_factory.reset(new TERARKDB_NAMESPACE::SkipListFactory());
     options.target_file_size_multiplier = 1;
     //options.level0_stop_writes_trigger = 40;
     options.enable_lazy_compaction = true;
     options.blob_size = 8;
     options.blob_gc_ratio = 0.1;
 #if TEST_TERARK
-    //options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(bbto));
-    rocksdb::Status ignore;
-    //options.memtable_factory.reset(rocksdb::NewPatriciaTrieRepFactory({}, &ignore));
-    options.table_factory.reset(rocksdb::NewTerarkZipTableFactory(tzto, options.table_factory));
+    //options.table_factory.reset(TERARKDB_NAMESPACE::NewBlockBasedTableFactory(bbto));
+    TERARKDB_NAMESPACE::Status ignore;
+    //options.memtable_factory.reset(TERARKDB_NAMESPACE::NewPatriciaTrieRepFactory({}, &ignore));
+    options.table_factory.reset(TERARKDB_NAMESPACE::NewTerarkZipTableFactory(tzto, options.table_factory));
 #else
-    options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(bbto));
+    options.table_factory.reset(TERARKDB_NAMESPACE::NewBlockBasedTableFactory(bbto));
 #endif
-    cfDescriptors.emplace_back(rocksdb::kDefaultColumnFamilyName, options);
+    cfDescriptors.emplace_back(TERARKDB_NAMESPACE::kDefaultColumnFamilyName, options);
 
-    options.compaction_style = rocksdb::kCompactionStyleLevel;
-    //options.compaction_style = rocksdb::kCompactionStyleUniversal;
+    options.compaction_style = TERARKDB_NAMESPACE::kCompactionStyleLevel;
+    //options.compaction_style = TERARKDB_NAMESPACE::kCompactionStyleUniversal;
     options.write_buffer_size = options.target_file_size_base = size_t(file_size_base * 1.618);
     //options.arena_block_size = 512 << 10;
     options.max_bytes_for_level_base = options.target_file_size_base * 4;
@@ -807,10 +808,10 @@ int main(int argc, const char* argv[], const char* env[])
 #if TEST_TERARK
     options.enable_lazy_compaction = false;
 #endif
-    //rocksdb::PlainTableOptions pto;
+    //TERARKDB_NAMESPACE::PlainTableOptions pto;
     //pto.hash_table_ratio = 0;
-    //options.table_factory.reset(rocksdb::NewPlainTableFactory(pto));
-    options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(bbto));
+    //options.table_factory.reset(TERARKDB_NAMESPACE::NewPlainTableFactory(pto));
+    options.table_factory.reset(TERARKDB_NAMESPACE::NewBlockBasedTableFactory(bbto));
     cfDescriptors.emplace_back("__system__", options);
     //options.comparator = &rc;
     //cfDescriptors.emplace_back("rev:cf1", options);
@@ -818,24 +819,24 @@ int main(int argc, const char* argv[], const char* env[])
 
   //options.table_properties_collector_factories.emplace_back(new MongoRocksOplogPropertiesCollectorFactory);
 
-  options.env->SetBackgroundThreads(options.max_background_compactions + options.max_background_garbage_collections, rocksdb::Env::LOW);
-  options.env->SetBackgroundThreads(options.max_background_flushes, rocksdb::Env::HIGH);
+  options.env->SetBackgroundThreads(options.max_background_compactions + options.max_background_garbage_collections, TERARKDB_NAMESPACE::Env::LOW);
+  options.env->SetBackgroundThreads(options.max_background_flushes, TERARKDB_NAMESPACE::Env::HIGH);
 
   options.create_if_missing = true;
 
-  rocksdb::DBOptions dbo = options;
+  TERARKDB_NAMESPACE::DBOptions dbo = options;
   dbo.create_missing_column_families = true;
   //dbo.max_log_file_size = 2ull << 20;
-  rocksdb::Status s, s0, s1;
-  std::vector<rocksdb::ColumnFamilyHandle*> hs;
+  TERARKDB_NAMESPACE::Status s, s0, s1;
+  std::vector<TERARKDB_NAMESPACE::ColumnFamilyHandle*> hs;
 
   if (1) {
-    rocksdb::EnvOptions eo(options);
-    rocksdb::InternalKeyComparator ikc(options.comparator);
-    rocksdb::ImmutableDBOptions idbo(options);
-    rocksdb::ImmutableCFOptions ioptions(idbo, cfDescriptors[0].options);
-    rocksdb::TableReaderOptions tro(ioptions, nullptr, eo, ikc);
-    rocksdb::MutableCFOptions mutable_cf_options(cfDescriptors[0].options);
+    TERARKDB_NAMESPACE::EnvOptions eo(options);
+    TERARKDB_NAMESPACE::InternalKeyComparator ikc(options.comparator);
+    TERARKDB_NAMESPACE::ImmutableDBOptions idbo(options);
+    TERARKDB_NAMESPACE::ImmutableCFOptions ioptions(idbo, cfDescriptors[0].options);
+    TERARKDB_NAMESPACE::TableReaderOptions tro(ioptions, nullptr, eo, ikc);
+    TERARKDB_NAMESPACE::MutableCFOptions mutable_cf_options(cfDescriptors[0].options);
 //    const char* dump =
 //R"(
 //DEBUG: 1st pass => '00000001746573742E7231' seq:7, type:1 / 000100000000000001000000000000000101
@@ -846,22 +847,22 @@ int main(int argc, const char* argv[], const char* env[])
 //DEBUG: 1st pass => '00000007' seq:4, type:1 / 000100000101
 //)";
 //
-//    std::vector<std::unique_ptr<rocksdb::IntTblPropCollectorFactory>> int_tbl_prop_collector_factories;
+//    std::vector<std::unique_ptr<TERARKDB_NAMESPACE::IntTblPropCollectorFactory>> int_tbl_prop_collector_factories;
 //    std::string sst_file_path = std::string(argv[1]) + "/temp.sst";
 //
-//    rocksdb::TableBuilderOptions table_builder_options(ioptions, mutable_cf_options, ikc,
-//                                                       &int_tbl_prop_collector_factories, rocksdb::kNoCompression, {},
+//    TERARKDB_NAMESPACE::TableBuilderOptions table_builder_options(ioptions, mutable_cf_options, ikc,
+//                                                       &int_tbl_prop_collector_factories, TERARKDB_NAMESPACE::kNoCompression, {},
 //                                                       nullptr, true,
 //#if TEST_TERARK
 //                                                       false,
 //#endif
 //                                                       cfDescriptors[0].name, -1, 0);
 //
-//    std::unique_ptr<rocksdb::WritableFile> sst_file;
+//    std::unique_ptr<TERARKDB_NAMESPACE::WritableFile> sst_file;
 //    options.env->NewWritableFile(sst_file_path, &sst_file, eo);
-//    std::unique_ptr<rocksdb::WritableFileWriter> file_writer(new rocksdb::WritableFileWriter(std::move(sst_file), sst_file_path, eo, nullptr, idbo.listeners));
-//    std::unique_ptr<rocksdb::TableBuilder> builder(ioptions.table_factory->NewTableBuilder(table_builder_options, 0, file_writer.get()));
-//    rocksdb::InternalKey ik;
+//    std::unique_ptr<TERARKDB_NAMESPACE::WritableFileWriter> file_writer(new TERARKDB_NAMESPACE::WritableFileWriter(std::move(sst_file), sst_file_path, eo, nullptr, idbo.listeners));
+//    std::unique_ptr<TERARKDB_NAMESPACE::TableBuilder> builder(ioptions.table_factory->NewTableBuilder(table_builder_options, 0, file_writer.get()));
+//    TERARKDB_NAMESPACE::InternalKey ik;
 //    for (auto str : make_split(string_ref<>(dump), '\n')) {
 //      auto sr = string_ref<>(str);
 //      if (sr.empty()) {
@@ -869,7 +870,7 @@ int main(int argc, const char* argv[], const char* env[])
 //      }
 //      auto user_key = make_split(sr, '\'')[1];
 //      auto sequence = make_split_any_of(sr, ",:")[2].to_value<uint64_t>();
-//      auto type = (rocksdb::ValueType)make_split_any_of(sr, " :")[9].to_value<uint8_t>();
+//      auto type = (TERARKDB_NAMESPACE::ValueType)make_split_any_of(sr, " :")[9].to_value<uint8_t>();
 //      auto value = make_split(sr, ' ')[8];
 //      std::string key_buffer, value_buffer;
 //      key_buffer.resize(user_key.size() / 2);
@@ -883,7 +884,7 @@ int main(int argc, const char* argv[], const char* env[])
 //        value_buffer[i / 2] = std::stoi(x, nullptr, 16);
 //      }
 //      ik.Set(key_buffer, sequence, type);
-//      builder->Add(ik.Encode(), rocksdb::LazySlice(value_buffer));
+//      builder->Add(ik.Encode(), TERARKDB_NAMESPACE::LazySlice(value_buffer));
 //      //builder->Add(ik.Encode(), value_buffer);
 //    }
 //    s = builder->Finish(nullptr);
@@ -893,30 +894,30 @@ int main(int argc, const char* argv[], const char* env[])
 
     auto proc = [&](std::string file_name) {
       std::cout << "# open file " + file_name + " ...\n";
-      std::unique_ptr<rocksdb::RandomAccessFile> file;
+      std::unique_ptr<TERARKDB_NAMESPACE::RandomAccessFile> file;
       uint64_t file_size = terark::FileStream(file_name, "rb").fsize();
       ioptions.env->NewRandomAccessFile(file_name, &file, eo);
-      std::unique_ptr<rocksdb::RandomAccessFileReader> file_reader(new rocksdb::RandomAccessFileReader(std::move(file), file_name, options.env));
-      std::unique_ptr<rocksdb::TableReader> reader;
+      std::unique_ptr<TERARKDB_NAMESPACE::RandomAccessFileReader> file_reader(new TERARKDB_NAMESPACE::RandomAccessFileReader(std::move(file), file_name, options.env));
+      std::unique_ptr<TERARKDB_NAMESPACE::TableReader> reader;
       auto s = ioptions.table_factory->NewTableReader(tro, std::move(file_reader), file_size, &reader, false);
-      auto it = reader->NewIterator(rocksdb::ReadOptions(), nullptr);
-      rocksdb::FileMetaData m;
+      auto it = reader->NewIterator(TERARKDB_NAMESPACE::ReadOptions(), nullptr);
+      TERARKDB_NAMESPACE::FileMetaData m;
       m.fd.smallest_seqno = size_t(-1);
       m.fd.largest_seqno = 0;
-      rocksdb::ParsedInternalKey pik;
+      TERARKDB_NAMESPACE::ParsedInternalKey pik;
       std::string save;
 
-//      rocksdb::InternalKey ikey;
-//      ikey.Set("FFF9900000000", 0, rocksdb::kTypeValue);
+//      TERARKDB_NAMESPACE::InternalKey ikey;
+//      ikey.Set("FFF9900000000", 0, TERARKDB_NAMESPACE::kTypeValue);
 //      size_t as = reader->ApproximateOffsetOf(ikey.Encode());
-//      ikey.Set("FFFFF", 0, rocksdb::kTypeValue);
+//      ikey.Set("FFFFF", 0, TERARKDB_NAMESPACE::kTypeValue);
 //      size_t ae = reader->ApproximateOffsetOf(ikey.Encode());
 
       auto cmp = [c = options.comparator](const std::string& a, const std::string& b) {
-        int r = c->Compare(rocksdb::ExtractUserKey(a), rocksdb::ExtractUserKey(b));
+        int r = c->Compare(TERARKDB_NAMESPACE::ExtractUserKey(a), TERARKDB_NAMESPACE::ExtractUserKey(b));
         if (r == 0) {
-          const uint64_t anum = rocksdb::DecodeFixed64(a.data() + a.size() - 8);
-          const uint64_t bnum = rocksdb::DecodeFixed64(b.data() + b.size() - 8);
+          const uint64_t anum = TERARKDB_NAMESPACE::DecodeFixed64(a.data() + a.size() - 8);
+          const uint64_t bnum = TERARKDB_NAMESPACE::DecodeFixed64(b.data() + b.size() - 8);
           if (anum > bnum) {
             r = -1;
           } else if (anum < bnum) {
@@ -926,8 +927,8 @@ int main(int argc, const char* argv[], const char* env[])
         return r < 0;
       };
       std::set<std::string, decltype(cmp)> data(cmp);
-//      rocksdb::InternalKey seek_key;
-//      seek_key.Set(rocksdb::Slice("\0\0\0\1", 4), 0, rocksdb::kValueTypeForSeek);
+//      TERARKDB_NAMESPACE::InternalKey seek_key;
+//      seek_key.Set(TERARKDB_NAMESPACE::Slice("\0\0\0\1", 4), 0, TERARKDB_NAMESPACE::kValueTypeForSeek);
 //      for (it->Seek(seek_key.Encode()); it->Valid(); it->Next()) {
 //        auto key = it->key();
 //        auto val = it->value();
@@ -938,15 +939,15 @@ int main(int argc, const char* argv[], const char* env[])
 //      {
 //        std::string err_key("\0\0\x03,\0\0\0\0\0\x85\xe0P\x10\xcf\xb5\xfc,\0\0\0", 20);
 //
-//        rocksdb::LazyBuffer buffer;
-//        rocksdb::GetContext ctx(options.comparator, options.merge_operator.get(), nullptr, nullptr, rocksdb::GetContext::kNotFound,
-//                                rocksdb::ExtractUserKey(err_key), &buffer, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
-//        s = reader->Get(rocksdb::ReadOptions(), err_key, &ctx, nullptr, true);
+//        TERARKDB_NAMESPACE::LazyBuffer buffer;
+//        TERARKDB_NAMESPACE::GetContext ctx(options.comparator, options.merge_operator.get(), nullptr, nullptr, TERARKDB_NAMESPACE::GetContext::kNotFound,
+//                                TERARKDB_NAMESPACE::ExtractUserKey(err_key), &buffer, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+//        s = reader->Get(TERARKDB_NAMESPACE::ReadOptions(), err_key, &ctx, nullptr, true);
 //
 //      }
 //      it->SeekToLast();
 //      std::string ikey = it->key().ToString();
-//      rocksdb::MapSstElement e;
+//      TERARKDB_NAMESPACE::MapSstElement e;
 //      e.Decode(ikey, it->value().slice());
 //      it->SeekForPrev(ikey);
       size_t i = 0;
@@ -954,12 +955,12 @@ int main(int argc, const char* argv[], const char* env[])
 //        if (i == 3276749) {
 //          DebugBreak();
 //        }
-        rocksdb::LazyBuffer buffer;
-        rocksdb::GetContext ctx(options.comparator, options.merge_operator.get(), nullptr, nullptr, rocksdb::GetContext::kNotFound,
-                                rocksdb::ExtractUserKey(it->key()), &buffer, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
-        s = reader->Get(rocksdb::ReadOptions(), it->key(), &ctx, nullptr, true);
+        TERARKDB_NAMESPACE::LazyBuffer buffer;
+        TERARKDB_NAMESPACE::GetContext ctx(options.comparator, options.merge_operator.get(), nullptr, nullptr, TERARKDB_NAMESPACE::GetContext::kNotFound,
+                                TERARKDB_NAMESPACE::ExtractUserKey(it->key()), &buffer, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+        s = reader->Get(TERARKDB_NAMESPACE::ReadOptions(), it->key(), &ctx, nullptr, true);
         assert(s.ok());
-        assert(ctx.State() == rocksdb::GetContext::kFound);
+        assert(ctx.State() == TERARKDB_NAMESPACE::GetContext::kFound);
         assert(buffer.fetch().ok());
         auto value = it->value();
         assert(value.fetch().ok());
@@ -970,8 +971,8 @@ int main(int argc, const char* argv[], const char* env[])
         auto value = it->value();
         s = value.fetch();
         assert(s.ok());
-        rocksdb::ParsedInternalKey ikey;
-        rocksdb::ParseInternalKey(it->key(), &ikey);
+        TERARKDB_NAMESPACE::ParsedInternalKey ikey;
+        TERARKDB_NAMESPACE::ParseInternalKey(it->key(), &ikey);
 
         printf("DEBUG: 1st pass => %s / %s \n",
                 ikey.DebugString(true).c_str(), value.ToString(true).c_str());
@@ -1018,29 +1019,29 @@ int main(int argc, const char* argv[], const char* env[])
   }
 
 
-  //rocksdb::DestroyDB(argv[1], options);
-  //rocksdb::TransactionDBOptions tdbo;
-  //tdbo.write_policy = rocksdb::WRITE_COMMITTED;
-  //rocksdb::TransactionDB *db;
-  rocksdb::DB *db;
+  //TERARKDB_NAMESPACE::DestroyDB(argv[1], options);
+  //TERARKDB_NAMESPACE::TransactionDBOptions tdbo;
+  //tdbo.write_policy = TERARKDB_NAMESPACE::WRITE_COMMITTED;
+  //TERARKDB_NAMESPACE::TransactionDB *db;
+  TERARKDB_NAMESPACE::DB *db;
 #if READ_ONLY
-  //s = rocksdb::TransactionDB::Open(dbo, tdbo, argv[1], cfDescriptors, &hs, &db);
-  s = rocksdb::DB::OpenForReadOnly(dbo, argv[1], cfDescriptors, &hs, &db);
+  //s = TERARKDB_NAMESPACE::TransactionDB::Open(dbo, tdbo, argv[1], cfDescriptors, &hs, &db);
+  s = TERARKDB_NAMESPACE::DB::OpenForReadOnly(dbo, argv[1], cfDescriptors, &hs, &db);
 #else
-  //s = rocksdb::TransactionDB::Open(dbo, tdbo, argv[1], cfDescriptors, &hs, &db);
-  s = rocksdb::DB::Open(dbo, argv[1], cfDescriptors, &hs, &db);
+  //s = TERARKDB_NAMESPACE::TransactionDB::Open(dbo, tdbo, argv[1], cfDescriptors, &hs, &db);
+  s = TERARKDB_NAMESPACE::DB::Open(dbo, argv[1], cfDescriptors, &hs, &db);
 #endif
   if (!s.ok()) {
     fprintf(stderr, "%s\n", s.getState());
     return -1;
   }
-  rocksdb::ColumnFamilyHandle *h0 = hs[0], *h1 = hs[1];
+  TERARKDB_NAMESPACE::ColumnFamilyHandle *h0 = hs[0], *h1 = hs[1];
 
   //std::this_thread::sleep_for(std::chrono::hours(24));
 
-  rocksdb::WriteOptions wo;
-  rocksdb::FlushOptions fo;
-  rocksdb::CompactRangeOptions co;
+  TERARKDB_NAMESPACE::WriteOptions wo;
+  TERARKDB_NAMESPACE::FlushOptions fo;
+  TERARKDB_NAMESPACE::CompactRangeOptions co;
 
   //std::random_device rd;
   //mt.seed(rd());
@@ -1052,22 +1053,22 @@ int main(int argc, const char* argv[], const char* env[])
 
   if (0) {
     std::string file_name = "/Users/zhaoming/Documents/Work/000030.sst";
-    rocksdb::ImmutableCFOptions icfo(rocksdb::ImmutableDBOptions(options), cfDescriptors[0].options);
-    rocksdb::EnvOptions eo(options);
-    rocksdb::InternalKeyComparator ikc(options.comparator);
-    rocksdb::TableReaderOptions tro(icfo, nullptr, eo, ikc);
-    std::unique_ptr<rocksdb::RandomAccessFile> file;
+    TERARKDB_NAMESPACE::ImmutableCFOptions icfo(TERARKDB_NAMESPACE::ImmutableDBOptions(options), cfDescriptors[0].options);
+    TERARKDB_NAMESPACE::EnvOptions eo(options);
+    TERARKDB_NAMESPACE::InternalKeyComparator ikc(options.comparator);
+    TERARKDB_NAMESPACE::TableReaderOptions tro(icfo, nullptr, eo, ikc);
+    std::unique_ptr<TERARKDB_NAMESPACE::RandomAccessFile> file;
     uint64_t file_size = terark::FileStream(file_name, "rb").fsize();
     icfo.env->NewRandomAccessFile(file_name, &file, eo);
-    std::unique_ptr<rocksdb::RandomAccessFileReader> file_reader(new rocksdb::RandomAccessFileReader(std::move(file), file_name, options.env));
-    std::unique_ptr<rocksdb::TableReader> reader;
+    std::unique_ptr<TERARKDB_NAMESPACE::RandomAccessFileReader> file_reader(new TERARKDB_NAMESPACE::RandomAccessFileReader(std::move(file), file_name, options.env));
+    std::unique_ptr<TERARKDB_NAMESPACE::TableReader> reader;
     auto s = icfo.table_factory->NewTableReader(tro, std::move(file_reader), file_size, &reader, false);
-    auto it = reader->NewIterator(rocksdb::ReadOptions(), nullptr);
+    auto it = reader->NewIterator(TERARKDB_NAMESPACE::ReadOptions(), nullptr);
 
-    rocksdb::ReadOptions ro;
-    rocksdb::WriteBatch b;
+    TERARKDB_NAMESPACE::ReadOptions ro;
+    TERARKDB_NAMESPACE::WriteBatch b;
     size_t c = 0;
-    uint64_t number = VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(rocksdb::TableFileNameToNumber(file_name));
+    uint64_t number = VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(TERARKDB_NAMESPACE::TableFileNameToNumber(file_name));
     std::string key_buffer((char*)&number, sizeof number);
     std::string value_buffer;
     for (it->SeekToFirst(); it->Valid(); it->Next()) {
@@ -1132,28 +1133,28 @@ int main(int argc, const char* argv[], const char* env[])
 //    }
 //  }
 //  return -1;
-  //auto start = rocksdb::Slice(key_buf + 8, 4);
+  //auto start = TERARKDB_NAMESPACE::Slice(key_buf + 8, 4);
   //std::string limit_storage = start.ToString();
   //++limit_storage[3];
-  //auto limit = rocksdb::Slice(limit_storage);
-  //rocksdb::RangePtr r(&start, &limit, true, false);
-  //rocksdb::DeleteFilesInRanges(db, h0, &r, 1);
+  //auto limit = TERARKDB_NAMESPACE::Slice(limit_storage);
+  //TERARKDB_NAMESPACE::RangePtr r(&start, &limit, true, false);
+  //TERARKDB_NAMESPACE::DeleteFilesInRanges(db, h0, &r, 1);
 
-  //raw_iter0->Seek(rocksdb::Slice(key_buf + 8, 4));
+  //raw_iter0->Seek(TERARKDB_NAMESPACE::Slice(key_buf + 8, 4));
   //auto k = raw_iter0->key();
   //key = k.ToString();
   //for (raw_iter0->SeekToFirst(); raw_iter0->Valid(); raw_iter0->Next()) {
   //  k = raw_iter0->key();
   //  key = k.ToString();
-  //  assert(!k.starts_with(rocksdb::Slice(key_buf + 8, 4)));
+  //  assert(!k.starts_with(TERARKDB_NAMESPACE::Slice(key_buf + 8, 4)));
   //}
   //for (raw_iter0->SeekToLast(); raw_iter0->Valid(); raw_iter0->Prev()) {
   //  k = raw_iter0->key();
   //  key = k.ToString();
-  //  assert(!k.starts_with(rocksdb::Slice(key_buf + 8, 4)));
+  //  assert(!k.starts_with(TERARKDB_NAMESPACE::Slice(key_buf + 8, 4)));
   //}
 
-  std::vector<std::shared_ptr<const rocksdb::Snapshot>> snapshot;
+  std::vector<std::shared_ptr<const TERARKDB_NAMESPACE::Snapshot>> snapshot;
   std::mutex snapshot_mutex;
 
   co.exclusive_manual_compaction = false;
@@ -1163,16 +1164,16 @@ int main(int argc, const char* argv[], const char* env[])
   //std::uniform_int_distribution<uint64_t> uid(0, stop);
 
   struct ReadContext {
-    rocksdb::ReadOptions ro;
+    TERARKDB_NAMESPACE::ReadOptions ro;
     uint64_t seqno;
   #if ITER_TEST
-    std::unique_ptr<rocksdb::Iterator> raw_iter0;
-    std::unique_ptr<rocksdb::Iterator> raw_iter1;
+    std::unique_ptr<TERARKDB_NAMESPACE::Iterator> raw_iter0;
+    std::unique_ptr<TERARKDB_NAMESPACE::Iterator> raw_iter1;
   #endif
     size_t count = 0;
     std::string key;
-    std::vector<rocksdb::Status> ss = std::vector<rocksdb::Status>(2);
-    std::vector<rocksdb::Slice> keys = std::vector<rocksdb::Slice>(2);
+    std::vector<TERARKDB_NAMESPACE::Status> ss = std::vector<TERARKDB_NAMESPACE::Status>(2);
+    std::vector<TERARKDB_NAMESPACE::Slice> keys = std::vector<TERARKDB_NAMESPACE::Slice>(2);
     std::vector<std::string> values = std::vector<std::string>(2);
   };
   std::atomic<bool> has_error{false};
@@ -1212,7 +1213,7 @@ int main(int argc, const char* argv[], const char* env[])
 
       i = 0;
       for (raw_iter0->SeekToFirst(); raw_iter0->Valid(); raw_iter0->Next()) {
-        rocksdb::LazyBuffer value;
+        TERARKDB_NAMESPACE::LazyBuffer value;
         ss[0] = db->Get(ro, h0, raw_iter0->key(), &value);
         assert(ss[0].ok());
         assert(value.valid());
@@ -1528,7 +1529,7 @@ int main(int argc, const char* argv[], const char* env[])
     db->ReleaseSnapshot(snapshot);
   }
 
-  auto get_snapshot = [&snapshot, &snapshot_mutex](std::mt19937_64& mt)->std::shared_ptr<const rocksdb::Snapshot> {
+  auto get_snapshot = [&snapshot, &snapshot_mutex](std::mt19937_64& mt)->std::shared_ptr<const TERARKDB_NAMESPACE::Snapshot> {
     snapshot_mutex.lock();
     size_t si = mt() % (snapshot.size() + 1);
     auto ret = si == snapshot.size() ? nullptr : snapshot[si];
@@ -1545,8 +1546,8 @@ int main(int argc, const char* argv[], const char* env[])
     auto& raw_iter0 = ctx.raw_iter0;
     auto& raw_iter1 = ctx.raw_iter1;
     ro.snapshot = db->GetSnapshot();
-    raw_iter0 = std::unique_ptr<rocksdb::Iterator>(db->NewIterator(ro, h0));
-    raw_iter1 = std::unique_ptr<rocksdb::Iterator>(db->NewIterator(ro, h1));
+    raw_iter0 = std::unique_ptr<TERARKDB_NAMESPACE::Iterator>(db->NewIterator(ro, h0));
+    raw_iter1 = std::unique_ptr<TERARKDB_NAMESPACE::Iterator>(db->NewIterator(ro, h1));
     iter_seqno = get_snapshot_seqno(ro.snapshot);
     db->ReleaseSnapshot(ro.snapshot);
 #endif
@@ -1590,7 +1591,7 @@ int main(int argc, const char* argv[], const char* env[])
         if (options.comparator->Compare(key2, key3) > 0) {
           std::swap(key2, key3);
         }
-        rocksdb::Range range[2];
+        TERARKDB_NAMESPACE::Range range[2];
         range[0].start = key0;
         range[0].limit = key1;
         range[1].start = key2;
@@ -1692,9 +1693,9 @@ int main(int argc, const char* argv[], const char* env[])
     }
   };
   auto write_func = [db, h0, h1, &atomic_count, &has_error, &wo, &co, &snapshot, &snapshot_mutex, &options](int seed) {
-    rocksdb::WriteBatchWithIndex b(rocksdb::BytewiseComparator(), 0, false, 0,
+    TERARKDB_NAMESPACE::WriteBatchWithIndex b(TERARKDB_NAMESPACE::BytewiseComparator(), 0, false, 0,
 #if TEST_TERARK
-                                   rocksdb::patricia_WriteBatchEntryIndexFactory()
+                                   TERARKDB_NAMESPACE::patricia_WriteBatchEntryIndexFactory()
 #else
                                    nullptr
 #endif
@@ -1711,7 +1712,7 @@ int main(int argc, const char* argv[], const char* env[])
 //        if (options.comparator->Compare(key0, key1) > 0) {
 //          std::swap(key0, key1);
 //        }
-//        rocksdb::Slice slice0 = key0, slice1 = key1;
+//        TERARKDB_NAMESPACE::Slice slice0 = key0, slice1 = key1;
 //        db->CompactRange(co, h0, &slice0, &slice1);
 //        db->CompactRange(co, h1, &slice0, &slice1);
 //      }
@@ -1782,7 +1783,7 @@ int main(int argc, const char* argv[], const char* env[])
         }
         b.Clear();
         snapshot_mutex.lock();
-        auto del_snapshot = [db](const rocksdb::Snapshot* s) {
+        auto del_snapshot = [db](const TERARKDB_NAMESPACE::Snapshot* s) {
           db->ReleaseSnapshot(s);
         };
         if (snapshot.size() < 2) {
@@ -1801,19 +1802,19 @@ int main(int argc, const char* argv[], const char* env[])
   };
 
   auto verify_func = [db, &hs, h0, h1, &has_error, &atomic_count, &options, get_snapshot, check_assert] {
-    rocksdb::ReadOptions ro;
+    TERARKDB_NAMESPACE::ReadOptions ro;
     //ro.snapshot = db->GetSnapshot();
     //set_snapshot_seqno(ro.snapshot, 6845218240);
-    std::unique_ptr<rocksdb::Iterator> iter0(db->NewIterator(ro, h0));
-    std::unique_ptr<rocksdb::Iterator> iter1(db->NewIterator(ro, h1));
+    std::unique_ptr<TERARKDB_NAMESPACE::Iterator> iter0(db->NewIterator(ro, h0));
+    std::unique_ptr<TERARKDB_NAMESPACE::Iterator> iter1(db->NewIterator(ro, h1));
     size_t i = 0;
     size_t notify = 100000;
     size_t notify_i = notify;
     std::string value;
-    rocksdb::LazyBuffer buffer;
-    std::vector<rocksdb::Slice> key_list;
+    TERARKDB_NAMESPACE::LazyBuffer buffer;
+    std::vector<TERARKDB_NAMESPACE::Slice> key_list;
     std::vector<std::string> value_list;
-    std::vector<rocksdb::Status> status_list;
+    std::vector<TERARKDB_NAMESPACE::Status> status_list;
     for (iter1->SeekToFirst(); iter1->Valid(); iter1->Next()) {
     //for (iter1->Seek("3B2219C48449BD3A98FFF6E00C23092D1272DD2A85ADBE06484BFF709F94103"); iter1->Valid(); iter1->Next()) {
       buffer.reset(&value);
@@ -1859,17 +1860,17 @@ int main(int argc, const char* argv[], const char* env[])
       fprintf(stderr, "iter err = %s\n", iter1->status().ToString().c_str());
     }
   };
-  auto iterate_func = [db, &hs, h0, h1, &has_error, &atomic_count, &options, get_snapshot, check_assert](rocksdb::ColumnFamilyHandle* cfh) {
-    rocksdb::ReadOptions ro;
-    std::unique_ptr<rocksdb::Iterator> iter(db->NewIterator(ro, cfh));
+  auto iterate_func = [db, &hs, h0, h1, &has_error, &atomic_count, &options, get_snapshot, check_assert](TERARKDB_NAMESPACE::ColumnFamilyHandle* cfh) {
+    TERARKDB_NAMESPACE::ReadOptions ro;
+    std::unique_ptr<TERARKDB_NAMESPACE::Iterator> iter(db->NewIterator(ro, cfh));
     size_t i = 0;
     size_t notify = 100000;
     size_t notify_i = notify;
     std::string value;
-    rocksdb::LazyBuffer buffer;
-    std::vector<rocksdb::Slice> key_list;
+    TERARKDB_NAMESPACE::LazyBuffer buffer;
+    std::vector<TERARKDB_NAMESPACE::Slice> key_list;
     std::vector<std::string> value_list;
-    std::vector<rocksdb::Status> status_list;
+    std::vector<TERARKDB_NAMESPACE::Status> status_list;
     for (iter->Seek("\000\000\000\001abc.poster_candidate"); iter->Valid(); iter->Next()) {
     //for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
       buffer.reset(&value);
@@ -1911,7 +1912,7 @@ int main(int argc, const char* argv[], const char* env[])
   }
 
 
-  //db->CompactRange(rocksdb::CompactRangeOptions(), nullptr, nullptr);
+  //db->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(), nullptr, nullptr);
 
   snapshot.clear();
   db->DestroyColumnFamilyHandle(h0);

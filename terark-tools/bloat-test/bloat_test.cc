@@ -10,7 +10,8 @@
 #include "rocksdb/table.h"
 #include "util/hash.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 uint64_t gene_seed() {
   std::random_device rd;
@@ -24,15 +25,15 @@ public:
 
   DB *db_;
   std::string db_name_ = "";
-  std::vector<rocksdb::ColumnFamilyHandle *> cf_handles_; // size = 1
+  std::vector<TERARKDB_NAMESPACE::ColumnFamilyHandle *> cf_handles_; // size = 1
 
   DB *db_ss_;
   std::string db_ss_name_ = "";
-  std::vector<rocksdb::ColumnFamilyHandle *> cf_ss_handles_; // size = 1
+  std::vector<TERARKDB_NAMESPACE::ColumnFamilyHandle *> cf_ss_handles_; // size = 1
 
   DB *db_ms_;
   std::string db_ms_name_ = "";
-  std::vector<rocksdb::ColumnFamilyHandle *> cf_ms_handles_; // size = 64
+  std::vector<TERARKDB_NAMESPACE::ColumnFamilyHandle *> cf_ms_handles_; // size = 64
 
   DBOptions db_options_;
   ColumnFamilyDescriptor cf_desc_;
@@ -46,9 +47,9 @@ public:
     db_ss_name_(ss_name),
     db_ms_name_(ms_name) {
 
-    std::vector<rocksdb::ColumnFamilyDescriptor> cf_descs;
+    std::vector<TERARKDB_NAMESPACE::ColumnFamilyDescriptor> cf_descs;
 
-    rocksdb::Status s = rocksdb::LoadOptionsFromFile(
+    TERARKDB_NAMESPACE::Status s = TERARKDB_NAMESPACE::LoadOptionsFromFile(
         config_file_,
         Env::Default(), // ?
         &db_options_,
@@ -71,9 +72,9 @@ public:
   ~BloatTest () {};
 
   void OpenDB() {
-    rocksdb::Status s;
+    TERARKDB_NAMESPACE::Status s;
 
-    std::vector<rocksdb::ColumnFamilyDescriptor> cf_descs;
+    std::vector<TERARKDB_NAMESPACE::ColumnFamilyDescriptor> cf_descs;
 
     // create single cf non-kv-split DB
     cf_descs.push_back(cf_desc_);
@@ -128,7 +129,7 @@ public:
       fill_kv(key_seed(), key, value);
       fprintf(stderr, "key size: %u, value size: %u \n", key.size(), value.size());
 
-      rocksdb::Status s;
+      TERARKDB_NAMESPACE::Status s;
       // only put
       s = db_->Put(WriteOptions(), cf_handles_[0], Slice(key), Slice(value));
       if (!s.ok()) {
@@ -154,11 +155,11 @@ private:
   /* data */
 };
 
-} // namespace rocksdb
+} // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char *argv[])
 {
-  rocksdb::BloatTest t("./db.ini",
+  TERARKDB_NAMESPACE::BloatTest t("./db.ini",
       "/data00/bt/sn-bloatdb",
       "/data01/bt/ss-bloatdb",
       "/data04/bt/ms-bloatdb");
@@ -166,7 +167,7 @@ int main(int argc, char *argv[])
   uint32_t thread_num  = 2;
   std::vector<std::thread> thread_vec;
   for (int j = 0; j < thread_num; ++j) {
-    thread_vec.emplace_back(&rocksdb::BloatTest::WriteFunc, std::ref(t));
+    thread_vec.emplace_back(&TERARKDB_NAMESPACE::BloatTest::WriteFunc, std::ref(t));
   }
   for (auto &t : thread_vec) {
     t.join();

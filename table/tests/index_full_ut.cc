@@ -27,9 +27,10 @@ using terark::OutputBuffer;
 using terark::LittleEndianDataInput;
 using terark::LittleEndianDataOutput;
 
-using rocksdb::TerarkIndex;
+using TERARKDB_NAMESPACE::TerarkIndex;
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
   struct TerarkZipTableOptions {};
 
   class FileWriter {
@@ -64,7 +65,7 @@ void clear() {
 }
 
 void init_data_ascend() {
-  rocksdb::FileWriter fwriter;
+  TERARKDB_NAMESPACE::FileWriter fwriter;
   fwriter.path = key_path;
   fwriter.open();
   keys.resize(110);
@@ -91,7 +92,7 @@ void init_data_ascend() {
 }
 
 void init_data_descend() {
-  rocksdb::FileWriter fwriter;
+  TERARKDB_NAMESPACE::FileWriter fwriter;
   fwriter.path = key_path;
   fwriter.open();
   keys.resize(110);
@@ -142,8 +143,8 @@ void test_simple(bool ascend) {
   // build index
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
-  auto factory = rocksdb::TerarkIndex::GetFactory("UintIndex_AllOne");
-  rocksdb::TerarkZipTableOptions tableOpt;
+  auto factory = TERARKDB_NAMESPACE::TerarkIndex::GetFactory("UintIndex_AllOne");
+  TERARKDB_NAMESPACE::TerarkZipTableOptions tableOpt;
   TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
   printf("\tbuild done\n");
   // save & reload
@@ -246,7 +247,7 @@ void test_simple(bool ascend) {
 
 void test_select() {
   // cfactory -> UintIndexFactory
-  const rocksdb::TerarkIndex::Factory* cfactory = nullptr;
+  const TERARKDB_NAMESPACE::TerarkIndex::Factory* cfactory = nullptr;
   {
     TerarkIndex::KeyStat stat;
     stat.numKeys = 100;

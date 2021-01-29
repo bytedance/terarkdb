@@ -16,7 +16,8 @@
 #include "port/port.h"
 #include "util/file_reader_writer.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace test {
 
 const uint32_t kDefaultFormatVersion = BlockBasedTableOptions().format_version;
@@ -421,4 +422,4 @@ bool IsDirectIOSupported(Env* env, const std::string& dir) {
 }
 
 }  // namespace test
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -10,7 +10,8 @@
 
 #include "rocksdb/env.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // Prints logs to stderr for faster debugging
 class StderrLogger : public Logger {
@@ -28,4 +29,4 @@ class StderrLogger : public Logger {
   }
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

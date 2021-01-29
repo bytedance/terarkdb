@@ -26,7 +26,8 @@
 #include "util/heap.h"
 #include "util/kv_map.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class TruncatedRangeDelIterator {
  public:
@@ -431,4 +432,4 @@ extern InternalIteratorBase<Slice>* NewTruncatedRangeDelMergingIter(
     const InternalKeyComparator* icmp,
     const std::vector<std::unique_ptr<TruncatedRangeDelIterator>>& children);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

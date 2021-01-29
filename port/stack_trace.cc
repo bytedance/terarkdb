@@ -10,12 +10,13 @@
 
 // noop
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace port {
 void InstallStackTraceHandler() {}
 void PrintStack(int /*first_frames_to_skip*/) {}
 }  // namespace port
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #else
 
@@ -27,7 +28,8 @@ void PrintStack(int /*first_frames_to_skip*/) {}
 #include <unistd.h>
 #include <cxxabi.h>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace port {
 
 namespace {
@@ -133,6 +135,6 @@ void InstallStackTraceHandler() {
 }
 
 }  // namespace port
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif

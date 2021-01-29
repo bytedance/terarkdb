@@ -17,7 +17,8 @@
 #include "port/likely.h"
 #include "rocksdb/statistics.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // The order of items listed in  Tickers should be the same as
 // the order listed in TickersNameMap
@@ -332,4 +333,4 @@ bool StatisticsImpl::HistEnabledForType(uint32_t type) const {
   return type < HISTOGRAM_ENUM_MAX;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -11,7 +11,8 @@
 
 #include "utilities/transactions/write_prepared_txn_db.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 #ifdef ROCKSDB_LITE
 WritePreparedSnapshotChecker::WritePreparedSnapshotChecker(
@@ -38,4 +39,4 @@ bool WritePreparedSnapshotChecker::IsInSnapshot(
 #endif  // ROCKSDB_LITE
 DisableGCSnapshotChecker DisableGCSnapshotChecker::instance_;
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

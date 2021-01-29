@@ -14,7 +14,8 @@
 #include <unistd.h>
 #endif
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 
@@ -646,7 +647,7 @@ TEST_F(TtlTest, ChangeTtlOnOpenDb) {
   CloseTtl();
 }
 
-} //  namespace rocksdb
+} //  namespace TERARKDB_NAMESPACE
 
 // A black-box test for the ttl wrapper around rocksdb
 int main(int argc, char** argv) {

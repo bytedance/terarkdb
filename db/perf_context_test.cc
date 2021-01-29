@@ -31,9 +31,10 @@ int FLAGS_min_write_buffer_number_to_merge = 7;
 bool FLAGS_verbose = false;
 
 // Path to the database on file system
-const std::string kDbName = rocksdb::test::PerThreadDBPath("perf_context_test");
+const std::string kDbName = TERARKDB_NAMESPACE::test::PerThreadDBPath("perf_context_test");
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 std::shared_ptr<DB> OpenDb(bool read_only = false) {
     DB* db;
@@ -47,7 +48,7 @@ std::shared_ptr<DB> OpenDb(bool read_only = false) {
 
     if (FLAGS_use_set_based_memetable) {
 #ifndef ROCKSDB_LITE
-      options.prefix_extractor.reset(rocksdb::NewFixedPrefixTransform(0));
+      options.prefix_extractor.reset(TERARKDB_NAMESPACE::NewFixedPrefixTransform(0));
       options.memtable_factory.reset(NewHashSkipListRepFactory());
 #endif  // ROCKSDB_LITE
     }
@@ -585,7 +586,7 @@ TEST_F(PerfContextTest, DBMutexLockCounter) {
     for (int c = 0; c < 2; ++c) {
     InstrumentedMutex mutex(nullptr, Env::Default(), stats_code[c]);
     mutex.Lock();
-    rocksdb::port::Thread child_thread([&] {
+    TERARKDB_NAMESPACE::port::Thread child_thread([&] {
       SetPerfLevel(perf_level_test);
       get_perf_context()->Reset();
       ASSERT_EQ(get_perf_context()->db_mutex_lock_nanos, 0);
@@ -714,7 +715,7 @@ TEST_F(PerfContextTest, PerfContextByLevelGetSet) {
   ASSERT_NE(std::string::npos,
             zero_excluded.find("bloom_filter_full_true_positive = 1@level2"));
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

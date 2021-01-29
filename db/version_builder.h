@@ -11,7 +11,8 @@
 #include "rocksdb/env.h"
 #include "rocksdb/slice_transform.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class TableCache;
 class VersionStorageInfo;
@@ -49,4 +50,4 @@ class VersionBuilder {
 };
 
 extern bool NewestFirstBySeqNo(FileMetaData* a, FileMetaData* b);
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

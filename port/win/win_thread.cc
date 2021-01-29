@@ -17,7 +17,8 @@
 #include <system_error>
 #include <thread>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace port {
 
 struct WindowsThread::Data {
@@ -171,4 +172,4 @@ unsigned int __stdcall  WindowsThread::Data::ThreadProc(void* arg) {
   return 0;
 }
 } // namespace port
-} // namespace rocksdb
+} // namespace TERARKDB_NAMESPACE

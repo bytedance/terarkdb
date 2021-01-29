@@ -24,7 +24,8 @@
 #include <vector>
 #include "rocksdb/env.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class SequentialFileMirror;
 class RandomAccessFileMirror;
@@ -180,6 +181,6 @@ class EnvMirror : public EnvWrapper {
   }
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

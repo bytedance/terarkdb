@@ -4,12 +4,13 @@
 
 #include "key_path_analysis.hpp"
 
-using namespace rocksdb;
+using namespace TERARKDB_NAMESPACE;
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 extern const uint64_t kPlainTableMagicNumber;
 extern const uint64_t kLegacyPlainTableMagicNumber;
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 namespace terark {
 
@@ -77,10 +78,10 @@ void KeyPathAnalysis::printTableType(const uint64_t magic_number) {
   } else if (magic_number == kLegacyBlockBasedTableMagicNumber) {
     std::cout << "Magic Number Table Type: "
               << "kLegacyBlockBasedTableMagicNumber" << std::endl;
-  } else if (magic_number == rocksdb::kPlainTableMagicNumber) {
+  } else if (magic_number == TERARKDB_NAMESPACE::kPlainTableMagicNumber) {
     std::cout << "Magic Number Table Type: "
               << "kPlainTableMagicNumber" << std::endl;
-  } else if (magic_number == rocksdb::kLegacyPlainTableMagicNumber) {
+  } else if (magic_number == TERARKDB_NAMESPACE::kLegacyPlainTableMagicNumber) {
     std::cout << "Magic Number Table Type: "
               << "kLegacyPlainTableMagicNumber" << std::endl;
   } else {
@@ -135,7 +136,7 @@ Status KeyPathAnalysis::GetTableReader(const std::string& sst_fname) {
   auto s = options_.env->GetFileSize(sst_fname, &file_size);
   // std::cout << "Try ReadTableProperties, file_size = " << file_size
   //          << std::endl;
-  s = rocksdb::ReadTableProperties(file_reader_.get(), file_size, magic_number,
+  s = TERARKDB_NAMESPACE::ReadTableProperties(file_reader_.get(), file_size, magic_number,
                                    ioptions_, &table_properties);
   if (s.ok()) {
     table_properties_.reset(table_properties);
@@ -166,7 +167,7 @@ void KeyPathAnalysis::Get(const std::string& sst_fname, const Slice& key) {
   auto s = GetTableReader(sst_fname);
 
   LazyBuffer val;
-  rocksdb::GetContext ctx(options_.comparator, options_.merge_operator.get(),
+  TERARKDB_NAMESPACE::GetContext ctx(options_.comparator, options_.merge_operator.get(),
                           nullptr, nullptr, GetContext::GetState::kNotFound,
                           key, &val, nullptr, nullptr, nullptr, nullptr,
                           nullptr, nullptr, nullptr);
@@ -174,7 +175,7 @@ void KeyPathAnalysis::Get(const std::string& sst_fname, const Slice& key) {
   std::cout << "Table Entries: " << table_properties_->num_entries << ", ";
   std::cout << "Table CF Name: " << table_properties_->column_family_name
             << std::endl;
-  s = table_reader_->Get(rocksdb::ReadOptions(), key, &ctx, nullptr, false);
+  s = table_reader_->Get(TERARKDB_NAMESPACE::ReadOptions(), key, &ctx, nullptr, false);
   if (s.ok()) {
     std::cout << "KEY FOUND, KEY = " << key.ToString(true) << std::endl;
   } else {
@@ -184,7 +185,7 @@ void KeyPathAnalysis::Get(const std::string& sst_fname, const Slice& key) {
 
 void KeyPathAnalysis::Seek(const std::string& sst_fname, const Slice& key) {
   auto s = GetTableReader(sst_fname);
-  auto it = table_reader_->NewIterator(rocksdb::ReadOptions(), nullptr);
+  auto it = table_reader_->NewIterator(TERARKDB_NAMESPACE::ReadOptions(), nullptr);
   // std::cout << "Table Entries: " << table_properties_->num_entries <<
   // std::endl; std::cout << "Table CF Name: " <<
   // table_properties_->column_family_name
@@ -200,8 +201,8 @@ void KeyPathAnalysis::Seek(const std::string& sst_fname, const Slice& key) {
     // std::cout << "it->key()=" << it->key().ToString(true) << std::endl;
     return;
   } else {
-    rocksdb::ParsedInternalKey parsed_key;
-    rocksdb::ParseInternalKey(it->key(), &parsed_key);
+    TERARKDB_NAMESPACE::ParsedInternalKey parsed_key;
+    TERARKDB_NAMESPACE::ParseInternalKey(it->key(), &parsed_key);
 
     if (memcmp(parsed_key.user_key.data(), key.data(), key.size() - 8) != 0) {
       return;
@@ -217,8 +218,8 @@ void KeyPathAnalysis::Seek(const std::string& sst_fname, const Slice& key) {
   it->Next();
   while (it->Valid()) {
     std::cout << "\tstep forward:" << std::endl;
-    rocksdb::ParsedInternalKey parsed_key;
-    rocksdb::ParseInternalKey(it->key(), &parsed_key);
+    TERARKDB_NAMESPACE::ParsedInternalKey parsed_key;
+    TERARKDB_NAMESPACE::ParseInternalKey(it->key(), &parsed_key);
     std::cout << "\t\tseek_ukey=" << parsed_key.user_key.ToString(false)
               << " | seq=" << parsed_key.sequence << std::endl;
     if (memcmp(parsed_key.user_key.data(), key.data(), key.size() - 8) != 0) {
@@ -233,15 +234,15 @@ void KeyPathAnalysis::Seek(const std::string& sst_fname, const Slice& key) {
  */
 void KeyPathAnalysis::ListKeys(const std::string& sst_fname, bool print_val) {
   auto s = GetTableReader(sst_fname);
-  auto it = table_reader_->NewIterator(rocksdb::ReadOptions(), nullptr);
+  auto it = table_reader_->NewIterator(TERARKDB_NAMESPACE::ReadOptions(), nullptr);
   std::cout << "Print all keys: " << std::endl;
 
   int cnt = 0;
   for (it->SeekToFirst(); it->Valid(); it->Next()) {
     cnt += 1;
     // auto key = it->key();
-    rocksdb::ParsedInternalKey parsed_key;
-    rocksdb::ParseInternalKey(it->key(), &parsed_key);
+    TERARKDB_NAMESPACE::ParsedInternalKey parsed_key;
+    TERARKDB_NAMESPACE::ParseInternalKey(it->key(), &parsed_key);
     std::cout << "len=" << parsed_key.user_key.size()
               << " | seq=" << parsed_key.sequence
               << " | type=" << parsed_key.type << " | "

@@ -17,7 +17,8 @@
 
 #include <string>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 #ifdef ROCKSDB_USING_THREAD_STATUS
 
@@ -118,4 +119,4 @@ struct StateInfo {
 };
 
 #endif  // ROCKSDB_USING_THREAD_STATUS
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

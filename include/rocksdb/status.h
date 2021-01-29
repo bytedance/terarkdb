@@ -20,7 +20,8 @@
 
 #include "rocksdb/slice.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Status {
  public:
@@ -362,4 +363,4 @@ inline void Status::swap(Status& y) noexcept {
   std::swap(state_, y.state_);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

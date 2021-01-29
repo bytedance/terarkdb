@@ -12,7 +12,8 @@
 #include "utilities/merge_operators.h"
 #include "utilities/merge_operators/string_append/stringappend2.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class TestReadCallback : public ReadCallback {
  public:
@@ -473,8 +474,8 @@ TEST_P(MergeOperatorPinningTest, TailingIterator) {
     delete iter;
   };
 
-  rocksdb::port::Thread writer_thread(writer_func);
-  rocksdb::port::Thread reader_thread(reader_func);
+  TERARKDB_NAMESPACE::port::Thread writer_thread(writer_func);
+  TERARKDB_NAMESPACE::port::Thread reader_thread(reader_func);
 
   writer_thread.join();
   reader_thread.join();
@@ -511,19 +512,19 @@ TEST_F(DBMergeOperatorTest, TailingIteratorMemtableUnrefedBySomeoneElse) {
 
   bool pushed_first_operand = false;
   bool stepped_to_next_operand = false;
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "DBIter::MergeValuesNewToOld:PushedFirstOperand", [&](void*) {
         EXPECT_FALSE(pushed_first_operand);
         pushed_first_operand = true;
         db_->Flush(FlushOptions()); // Switch to SuperVersion B
       });
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "DBIter::MergeValuesNewToOld:SteppedToNextOperand", [&](void*) {
         EXPECT_FALSE(stepped_to_next_operand);
         stepped_to_next_operand = true;
         someone_else.reset(); // Unpin SuperVersion A
       });
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
 
   ReadOptions ro;
   ro.tailing = true;
@@ -626,10 +627,10 @@ TEST_F(DBMergeOperatorTest, SnapshotCheckerAndReadCallback) {
   db_->ReleaseSnapshot(snapshot2);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

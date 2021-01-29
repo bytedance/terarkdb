@@ -9,7 +9,8 @@
 
 #include "util/mutexlock.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 //
 // Simple synchronized queue implementation with the option of
@@ -64,4 +65,4 @@ class BoundedQueue {
   const size_t max_size_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

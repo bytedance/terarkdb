@@ -13,7 +13,8 @@
 #include "db/version_edit.h"
 #include "rocksdb/comparator.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 FileIndexer::FileIndexer(const Comparator* ucmp)
     : num_levels_(0), ucmp_(ucmp), level_rb_(nullptr) {}
@@ -211,4 +212,4 @@ void FileIndexer::CalculateRB(
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

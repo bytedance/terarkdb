@@ -16,7 +16,8 @@
 #include "util/mutexlock.h"
 #include "util/sync_point.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE
 // Rolls the log file by size and/or time
@@ -142,4 +143,4 @@ Status CreateLoggerFromOptions(const std::string& dbname,
                                const DBOptions& options,
                                std::shared_ptr<Logger>* logger);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

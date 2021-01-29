@@ -18,7 +18,8 @@
 #include "rocksdb/env.h"
 #include "util/filename.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 void DumpDBFileSummary(const ImmutableDBOptions& options,
                        const std::string& dbname) {
@@ -124,4 +125,4 @@ void DumpDBFileSummary(const ImmutableDBOptions& options,
   Header(options.info_log, "Write Ahead Log file in %s: %s\n",
          options.wal_dir.c_str(), wal_info.c_str());
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

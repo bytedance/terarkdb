@@ -26,7 +26,8 @@
 #include "util/coding.h"
 #include "util/logging.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class InternalKey;
 
@@ -832,4 +833,4 @@ extern Slice ArenaPinSlice(const Slice& slice, Arena* arena);
 extern Slice ArenaPinInternalKey(const Slice& user_key, SequenceNumber seq,
                                  ValueType type, Arena* arena);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

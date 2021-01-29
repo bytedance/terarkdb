@@ -7,7 +7,8 @@
 
 #include "rocksdb/types.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class ReadCallback {
  public:
@@ -27,4 +28,4 @@ class ReadCallback {
   inline virtual SequenceNumber MaxUnpreparedSequenceNumber() { return 0; };
 };
 
-}  //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE

@@ -25,7 +25,8 @@
 #include "rocksdb/transaction_log.h"
 #include "rocksdb/types.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE
 class WalManager {
@@ -113,4 +114,4 @@ class WalManager {
 };
 
 #endif  // ROCKSDB_LITE
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

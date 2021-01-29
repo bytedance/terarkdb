@@ -12,7 +12,8 @@
 
 #ifdef ROCKSDB_USING_THREAD_STATUS
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class SimulatedBackgroundTask {
  public:
@@ -335,7 +336,7 @@ TEST_F(ThreadListTest, SimpleEventTest) {
                        ThreadStatus::NUM_OP_TYPES);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

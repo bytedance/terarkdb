@@ -10,7 +10,8 @@
 #include "table/table_builder.h"
 #include "utilities/util/factory.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 AdaptiveTableFactory::AdaptiveTableFactory(
     std::shared_ptr<TableFactory> table_factory_to_write,
@@ -129,9 +130,9 @@ extern TableFactory* NewAdaptiveTableFactory(
                                   plain_table_factory, cuckoo_table_factory);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
-TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::TableFactory*, const std::string&,
-                               rocksdb::Status*);
+TERARK_FACTORY_INSTANTIATE_GNS(TERARKDB_NAMESPACE::TableFactory*, const std::string&,
+                               TERARKDB_NAMESPACE::Status*);
 
 #endif  // ROCKSDB_LITE

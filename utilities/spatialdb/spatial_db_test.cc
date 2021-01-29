@@ -15,7 +15,8 @@
 #include "util/testutil.h"
 #include "util/random.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace spatial {
 
 class SpatialDBTest : public testing::Test {
@@ -289,7 +290,7 @@ TEST_F(SpatialDBTest, RandomizedTest) {
 }
 
 }  // namespace spatial
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

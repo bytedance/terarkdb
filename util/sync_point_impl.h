@@ -21,7 +21,8 @@
 #pragma once
 
 #ifndef NDEBUG
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 struct SyncPoint::Data {
   Data() : enabled_(false) {}
   // Enable proper deletion by subclasses

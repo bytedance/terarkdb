@@ -14,7 +14,8 @@
 #include "port/port.h"
 #include "util/random.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // An array of core-local values. Ideally the value type, T, is cache aligned to
 // prevent false sharing.
@@ -80,4 +81,4 @@ T* CoreLocalArray<T>::AccessAtCore(size_t core_idx) const {
   return &data_[core_idx];
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

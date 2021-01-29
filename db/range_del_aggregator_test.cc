@@ -14,7 +14,8 @@
 #include "db/range_tombstone_fragmenter.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class RangeDelAggregatorTest : public testing::Test {};
 
@@ -701,7 +702,7 @@ TEST_F(RangeDelAggregatorTest,
                                                                {"f", "g", 8}});
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

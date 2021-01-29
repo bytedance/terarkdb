@@ -17,7 +17,8 @@
 #include "util/hash.h"
 #include "table/filter_block.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class FilterPolicy;
 class FilterBitsBuilder;
@@ -130,4 +131,4 @@ class FullFilterBlockReader : public FilterBlockReader {
 
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

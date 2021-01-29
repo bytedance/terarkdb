@@ -11,17 +11,18 @@
 #include "util/coding.h"
 #include "util/testharness.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class LockTest : public testing::Test {
  public:
   static LockTest* current_;
   std::string file_;
-  rocksdb::Env* env_;
+  TERARKDB_NAMESPACE::Env* env_;
 
   LockTest()
       : file_(test::PerThreadDBPath("db_testlock_file")),
-        env_(rocksdb::Env::Default()) {
+        env_(TERARKDB_NAMESPACE::Env::Default()) {
     current_ = this;
   }
 
@@ -134,7 +135,7 @@ TEST_F(LockTest, LockBySameThread) {
 
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

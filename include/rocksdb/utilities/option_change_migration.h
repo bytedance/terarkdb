@@ -9,11 +9,12 @@
 #include "rocksdb/options.h"
 #include "rocksdb/status.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 // Try to migrate DB created with old_opts to be use new_opts.
 // Multiple column families is not supported.
 // It is best-effort. No guarantee to succeed.
 // A full compaction may be executed.
 Status OptionChangeMigration(std::string dbname, const Options& old_opts,
                              const Options& new_opts);
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

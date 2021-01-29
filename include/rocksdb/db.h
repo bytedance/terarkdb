@@ -49,7 +49,8 @@ class future;  // forward declaration
 }  // namespace boost
 #endif
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 using std::future;
 struct Options;
@@ -176,7 +177,7 @@ class DB {
   // read only, you can specify only a subset of column families in the
   // database that should be opened. However, you always need to specify default
   // column family. The default column family name is 'default' and it's stored
-  // in rocksdb::kDefaultColumnFamilyName
+  // in TERARKDB_NAMESPACE::kDefaultColumnFamilyName
   //
   // Not supported in ROCKSDB_LITE, in which case the function will
   // return Status::NotSupported.
@@ -194,7 +195,7 @@ class DB {
   // ListColumnFamilies(). Also, you can open only a subset of column families
   // for read-only access.
   // The default column family name is 'default' and it's stored
-  // in rocksdb::kDefaultColumnFamilyName.
+  // in TERARKDB_NAMESPACE::kDefaultColumnFamilyName.
   // If everything is OK, handles will on return be the same size
   // as column_families --- handles[i] will be a handle that you
   // will use to operate on column family column_family[i].
@@ -1310,4 +1311,4 @@ Status RepairDB(const std::string& dbname, const Options& options);
 
 #endif
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -13,7 +13,8 @@
 #include "utilities/merge_operators.h"
 #include "utilities/cassandra/format.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace cassandra {
 
 // Implementation for the merge operation (merges two Cassandra values)
@@ -79,4 +80,4 @@ const char* CassandraValueMergeOperator::Name() const  {
 
 } // namespace cassandra
 
-} // namespace rocksdb
+} // namespace TERARKDB_NAMESPACE

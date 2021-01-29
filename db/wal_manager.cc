@@ -38,7 +38,8 @@
 #include "util/string_util.h"
 #include "util/sync_point.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE
 
@@ -507,4 +508,4 @@ void WalManager::PurgeObsoleteWALFilesImpl(uint64_t now_seconds) {
 }
 
 #endif  // ROCKSDB_LITE
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

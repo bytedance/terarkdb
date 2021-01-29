@@ -8,7 +8,8 @@
 #include <algorithm>
 #include <string>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 std::shared_ptr<MergeOperator> MergeOperators::CreateBytesXOROperator() {
   return std::make_shared<BytesXOROperator>();
@@ -61,4 +62,4 @@ static MergeOperator* NewBytesXOROperator(const std::string& /*options*/) {
 TERARK_FACTORY_REGISTER(BytesXOROperator, &NewBytesXOROperator);
 TERARK_FACTORY_REGISTER_EX(BytesXOROperator, "bytesxor", &NewBytesXOROperator);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

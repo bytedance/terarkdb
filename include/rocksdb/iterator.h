@@ -23,7 +23,8 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Iterator : public Cleanable {
  public:
@@ -117,4 +118,4 @@ extern Iterator* NewEmptyIterator();
 // Return an empty iterator with the specified status.
 extern Iterator* NewErrorIterator(const Status& status);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

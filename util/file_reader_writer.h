@@ -17,7 +17,8 @@
 #include "util/aligned_buffer.h"
 #include "util/sync_point.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Statistics;
 class HistogramImpl;
@@ -294,4 +295,4 @@ extern Status NewWritableFile(Env* env, const std::string& fname,
 bool ReadOneLine(std::istringstream* iss, SequentialFile* seq_file,
                  std::string* output, bool* has_data, Status* result);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

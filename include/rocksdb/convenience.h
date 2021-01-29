@@ -14,7 +14,8 @@
 #include "rocksdb/table.h"
 #include "table/terark_zip_table.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE
 // The following set of functions provide a way to construct RocksDB Options
@@ -373,4 +374,4 @@ Status VerifySstFileChecksum(const Options& options,
                              const std::string& file_path);
 #endif  // ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

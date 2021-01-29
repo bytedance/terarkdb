@@ -15,12 +15,12 @@ inline const char* build_key(terark::fstring user_key, uint64_t tag,
   buffer->resize(0);
   buffer->reserve(user_key.size() + 8);
   buffer->append(user_key.data(), user_key.size());
-  if (rocksdb::port::kLittleEndian) {
+  if (TERARKDB_NAMESPACE::port::kLittleEndian) {
     buffer->append(const_cast<const char*>(reinterpret_cast<char*>(&tag)),
                    sizeof(tag));
   } else {
     char buf[sizeof(tag)];
-    rocksdb::EncodeFixed64(buf, tag);
+    TERARKDB_NAMESPACE::EncodeFixed64(buf, tag);
     buffer->append(buf, sizeof(buf));
   }
   return buffer->data();
@@ -31,13 +31,14 @@ inline const char* build_key(terark::fstring user_key, uint64_t tag,
   buffer->resize(0);
   buffer->reserve(user_key.size() + 8);
   buffer->append(user_key.data(), user_key.size());
-  rocksdb::PutFixed64(buffer, tag);
+  TERARKDB_NAMESPACE::PutFixed64(buffer, tag);
   return buffer->data();
 }
 
 }  // namespace
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 namespace details = terark_memtable_details;
 
@@ -893,4 +894,4 @@ MemTableRepFactory* NewPatriciaTrieRepFactory(
                                       patricia_key_type, write_buffer_size);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -15,7 +15,8 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class TerarkZipTableDBTest : public testing::Test {
  private:
@@ -602,19 +603,19 @@ TEST_F(TerarkZipTableDBTest, EmptyTable) {
   Random rnd(301);
   int len = 32;
 
-  dbfull()->CompactRange(rocksdb::CompactRangeOptions(), nullptr, nullptr);
-  dbfull()->Flush(rocksdb::FlushOptions());
+  dbfull()->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(), nullptr, nullptr);
+  dbfull()->Flush(TERARKDB_NAMESPACE::FlushOptions());
 
-  dbfull()->CompactRange(rocksdb::CompactRangeOptions(), nullptr, nullptr);
-  dbfull()->Flush(rocksdb::FlushOptions());
-  dbfull()->CompactRange(rocksdb::CompactRangeOptions(), nullptr, nullptr);
+  dbfull()->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(), nullptr, nullptr);
+  dbfull()->Flush(TERARKDB_NAMESPACE::FlushOptions());
+  dbfull()->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(), nullptr, nullptr);
   ASSERT_OK(Put(RandomString(&rnd, len), Key(0)));
   ASSERT_OK(Delete(RandomString(&rnd, len)));
-  dbfull()->CompactRange(rocksdb::CompactRangeOptions(), nullptr, nullptr);
+  dbfull()->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(), nullptr, nullptr);
   ASSERT_OK(Put(RandomString(&rnd, len), Key(0)));
   ASSERT_OK(Delete(RandomString(&rnd, len)));
-  dbfull()->Flush(rocksdb::FlushOptions());
-  dbfull()->CompactRange(rocksdb::CompactRangeOptions(), nullptr, nullptr);
+  dbfull()->Flush(TERARKDB_NAMESPACE::FlushOptions());
+  dbfull()->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(), nullptr, nullptr);
 }
 
 TEST_F(TerarkZipTableDBTest, FirstKVHuge) {
@@ -632,10 +633,10 @@ TEST_F(TerarkZipTableDBTest, FirstKVHuge) {
 
   ASSERT_OK(Put(RandomString(&rnd, huge), RandomString(&rnd, huge)));
   ASSERT_OK(Put(RandomString(&rnd, len), RandomString(&rnd, len)));
-  dbfull()->Flush(rocksdb::FlushOptions());
+  dbfull()->Flush(TERARKDB_NAMESPACE::FlushOptions());
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

@@ -17,12 +17,13 @@
 #include <table/terark_zip_internal.h>
 #include <table/terark_zip_table.h>
 
-using namespace rocksdb;
+using namespace TERARKDB_NAMESPACE;
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 extern const uint64_t kPlainTableMagicNumber;
 extern const uint64_t kLegacyPlainTableMagicNumber;
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 namespace terark {
 
@@ -49,10 +50,10 @@ class DeleteRange {
     } else if (magic_number == kLegacyBlockBasedTableMagicNumber) {
       std::cout << "Magic Number Table Type: "
                 << "kLegacyBlockBasedTableMagicNumber" << std::endl;
-    } else if (magic_number == rocksdb::kPlainTableMagicNumber) {
+    } else if (magic_number == TERARKDB_NAMESPACE::kPlainTableMagicNumber) {
       std::cout << "Magic Number Table Type: "
                 << "kPlainTableMagicNumber" << std::endl;
-    } else if (magic_number == rocksdb::kLegacyPlainTableMagicNumber) {
+    } else if (magic_number == TERARKDB_NAMESPACE::kLegacyPlainTableMagicNumber) {
       std::cout << "Magic Number Table Type: "
                 << "kLegacyPlainTableMagicNumber" << std::endl;
     } else {
@@ -108,7 +109,7 @@ class DeleteRange {
     auto s = options_.env->GetFileSize(sst_fname, &file_size);
     std::cout << "Try ReadTableProperties, file_size = " << file_size
               << std::endl;
-    s = rocksdb::ReadTableProperties(file_reader_.get(), file_size,
+    s = TERARKDB_NAMESPACE::ReadTableProperties(file_reader_.get(), file_size,
                                      magic_number, ioptions_,
                                      &table_properties);
     if (s.ok()) {
@@ -135,7 +136,7 @@ class DeleteRange {
     }
 
     // auto ts_it =
-    //     table_reader_->NewRangeTombstoneIterator(rocksdb::ReadOptions());
+    //     table_reader_->NewRangeTombstoneIterator(TERARKDB_NAMESPACE::ReadOptions());
     // if (ts_it && ts_it->Valid()) {
     //   ts_it->SeekToFirst();
     //   while (ts_it) {

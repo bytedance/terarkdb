@@ -28,7 +28,8 @@
 #include "rocksdb/status.h"
 #include "utilities/util/factory.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // -- Block-based Table
 class FlushBlockPolicyFactory;
@@ -554,4 +555,4 @@ bool IsCompactionWorkerNode();
 
 #endif  // ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

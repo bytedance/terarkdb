@@ -16,7 +16,8 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 std::map<uint64_t, Slice> slices;
 
@@ -85,7 +86,7 @@ class PartitionedFilterBlockTest
   uint64_t MaxFilterSize() {
     uint32_t dont_care1, dont_care2;
     int num_keys = sizeof(keys) / sizeof(*keys);
-    auto filter_bits_reader = dynamic_cast<rocksdb::FullFilterBitsBuilder*>(
+    auto filter_bits_reader = dynamic_cast<TERARKDB_NAMESPACE::FullFilterBitsBuilder*>(
         table_options_.filter_policy->GetFilterBitsBuilder());
     assert(filter_bits_reader);
     auto partition_size =
@@ -317,7 +318,7 @@ TEST_P(PartitionedFilterBlockTest, SamePrefixInMultipleBlocks) {
   // some small number to cause partition cuts
   table_options_.metadata_block_size = 1;
   std::unique_ptr<const SliceTransform> prefix_extractor
-      (rocksdb::NewFixedPrefixTransform(1));
+      (TERARKDB_NAMESPACE::NewFixedPrefixTransform(1));
   std::unique_ptr<PartitionedIndexBuilder> pib(NewIndexBuilder());
   std::unique_ptr<PartitionedFilterBlockBuilder> builder(
       NewBuilder(pib.get(), prefix_extractor.get()));
@@ -359,7 +360,7 @@ TEST_P(PartitionedFilterBlockTest, PartitionCount) {
   ASSERT_EQ(partitions, num_keys - 1 /* last two keys make one flush */);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

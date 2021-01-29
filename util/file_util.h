@@ -11,7 +11,8 @@
 #include "rocksdb/status.h"
 #include "rocksdb/types.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 // use_fsync maps to options.use_fsync, which determines the way that
 // the file is synced after copying.
 extern Status CopyFile(Env* env, const std::string& source,
@@ -38,4 +39,4 @@ enum SchedClass {
 
 extern int SetThreadSched(SchedClass sched_class, int nice = 0);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

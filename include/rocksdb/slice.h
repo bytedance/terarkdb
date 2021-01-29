@@ -31,7 +31,8 @@
 
 #include "rocksdb/cleanable.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Slice {
  public:
@@ -199,4 +200,4 @@ inline size_t Slice::difference_offset(const Slice& b) const {
   return off;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

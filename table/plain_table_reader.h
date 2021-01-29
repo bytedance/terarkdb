@@ -25,7 +25,8 @@
 #include "util/dynamic_bloom.h"
 #include "util/file_reader_writer.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Block;
 struct BlockContents;
@@ -246,5 +247,5 @@ class PlainTableReader : public TableReader {
   explicit PlainTableReader(const TableReader&) = delete;
   void operator=(const TableReader&) = delete;
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

@@ -10,7 +10,8 @@
 #include "table/internal_iterator.h"
 #include "port/port.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 class ScopedArenaIterator {
 
   void reset(InternalIterator* iter) ROCKSDB_NOEXCEPT {
@@ -58,4 +59,4 @@ class ScopedArenaIterator {
  private:
   InternalIterator* iter_;
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -4,7 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 // This file implements the "bridge" between Java and C++ and enables
-// calling c++ rocksdb::WriteBatch methods from Java side.
+// calling c++ TERARKDB_NAMESPACE::WriteBatch methods from Java side.
 #include <memory>
 
 #include "db/memtable.h"
@@ -30,7 +30,7 @@
 jlong Java_org_rocksdb_WriteBatch_newWriteBatch__I(JNIEnv* /*env*/,
                                                    jclass /*jcls*/,
                                                    jint jreserved_bytes) {
-  auto* wb = new rocksdb::WriteBatch(static_cast<size_t>(jreserved_bytes));
+  auto* wb = new TERARKDB_NAMESPACE::WriteBatch(static_cast<size_t>(jreserved_bytes));
   return reinterpret_cast<jlong>(wb);
 }
 
@@ -44,7 +44,7 @@ jlong Java_org_rocksdb_WriteBatch_newWriteBatch___3BI(JNIEnv* env,
                                                       jbyteArray jserialized,
                                                       jint jserialized_length) {
   jboolean has_exception = JNI_FALSE;
-  std::string serialized = rocksdb::JniUtil::byteString<std::string>(
+  std::string serialized = TERARKDB_NAMESPACE::JniUtil::byteString<std::string>(
       env, jserialized, jserialized_length,
       [](const char* str, const size_t len) { return std::string(str, len); },
       &has_exception);
@@ -53,7 +53,7 @@ jlong Java_org_rocksdb_WriteBatch_newWriteBatch___3BI(JNIEnv* env,
     return 0;
   }
 
-  auto* wb = new rocksdb::WriteBatch(serialized);
+  auto* wb = new TERARKDB_NAMESPACE::WriteBatch(serialized);
   return reinterpret_cast<jlong>(wb);
 }
 
@@ -64,7 +64,7 @@ jlong Java_org_rocksdb_WriteBatch_newWriteBatch___3BI(JNIEnv* env,
  */
 jint Java_org_rocksdb_WriteBatch_count0(JNIEnv* /*env*/, jobject /*jobj*/,
                                         jlong jwb_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
 
   return static_cast<jint>(wb->Count());
@@ -77,7 +77,7 @@ jint Java_org_rocksdb_WriteBatch_count0(JNIEnv* /*env*/, jobject /*jobj*/,
  */
 void Java_org_rocksdb_WriteBatch_clear0(JNIEnv* /*env*/, jobject /*jobj*/,
                                         jlong jwb_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
 
   wb->Clear();
@@ -91,7 +91,7 @@ void Java_org_rocksdb_WriteBatch_clear0(JNIEnv* /*env*/, jobject /*jobj*/,
 void Java_org_rocksdb_WriteBatch_setSavePoint0(JNIEnv* /*env*/,
                                                jobject /*jobj*/,
                                                jlong jwb_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
 
   wb->SetSavePoint();
@@ -105,7 +105,7 @@ void Java_org_rocksdb_WriteBatch_setSavePoint0(JNIEnv* /*env*/,
 void Java_org_rocksdb_WriteBatch_rollbackToSavePoint0(JNIEnv* env,
                                                       jobject /*jobj*/,
                                                       jlong jwb_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
 
   auto s = wb->RollbackToSavePoint();
@@ -113,7 +113,7 @@ void Java_org_rocksdb_WriteBatch_rollbackToSavePoint0(JNIEnv* env,
   if (s.ok()) {
     return;
   }
-  rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
 }
 
 /*
@@ -123,7 +123,7 @@ void Java_org_rocksdb_WriteBatch_rollbackToSavePoint0(JNIEnv* env,
  */
 void Java_org_rocksdb_WriteBatch_popSavePoint(JNIEnv* env, jobject /*jobj*/,
                                               jlong jwb_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
 
   auto s = wb->PopSavePoint();
@@ -131,7 +131,7 @@ void Java_org_rocksdb_WriteBatch_popSavePoint(JNIEnv* env, jobject /*jobj*/,
   if (s.ok()) {
     return;
   }
-  rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
 }
 
 /*
@@ -142,7 +142,7 @@ void Java_org_rocksdb_WriteBatch_popSavePoint(JNIEnv* env, jobject /*jobj*/,
 void Java_org_rocksdb_WriteBatch_setMaxBytes(JNIEnv* /*env*/, jobject /*jobj*/,
                                              jlong jwb_handle,
                                              jlong jmax_bytes) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
 
   wb->SetMaxBytes(static_cast<size_t>(jmax_bytes));
@@ -158,15 +158,15 @@ void Java_org_rocksdb_WriteBatch_put__J_3BI_3BI(JNIEnv* env, jobject jobj,
                                                 jbyteArray jkey, jint jkey_len,
                                                 jbyteArray jentry_value,
                                                 jint jentry_value_len) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
-  auto put = [&wb](rocksdb::Slice key, rocksdb::Slice value) {
+  auto put = [&wb](TERARKDB_NAMESPACE::Slice key, TERARKDB_NAMESPACE::Slice value) {
     return wb->Put(key, value);
   };
-  std::unique_ptr<rocksdb::Status> status = rocksdb::JniUtil::kv_op(
+  std::unique_ptr<TERARKDB_NAMESPACE::Status> status = TERARKDB_NAMESPACE::JniUtil::kv_op(
       put, env, jobj, jkey, jkey_len, jentry_value, jentry_value_len);
   if (status != nullptr && !status->ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, status);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, status);
   }
 }
 
@@ -178,17 +178,17 @@ void Java_org_rocksdb_WriteBatch_put__J_3BI_3BI(JNIEnv* env, jobject jobj,
 void Java_org_rocksdb_WriteBatch_put__J_3BI_3BIJ(
     JNIEnv* env, jobject jobj, jlong jwb_handle, jbyteArray jkey, jint jkey_len,
     jbyteArray jentry_value, jint jentry_value_len, jlong jcf_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   assert(cf_handle != nullptr);
-  auto put = [&wb, &cf_handle](rocksdb::Slice key, rocksdb::Slice value) {
+  auto put = [&wb, &cf_handle](TERARKDB_NAMESPACE::Slice key, TERARKDB_NAMESPACE::Slice value) {
     return wb->Put(cf_handle, key, value);
   };
-  std::unique_ptr<rocksdb::Status> status = rocksdb::JniUtil::kv_op(
+  std::unique_ptr<TERARKDB_NAMESPACE::Status> status = TERARKDB_NAMESPACE::JniUtil::kv_op(
       put, env, jobj, jkey, jkey_len, jentry_value, jentry_value_len);
   if (status != nullptr && !status->ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, status);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, status);
   }
 }
 
@@ -200,15 +200,15 @@ void Java_org_rocksdb_WriteBatch_put__J_3BI_3BIJ(
 void Java_org_rocksdb_WriteBatch_merge__J_3BI_3BI(
     JNIEnv* env, jobject jobj, jlong jwb_handle, jbyteArray jkey, jint jkey_len,
     jbyteArray jentry_value, jint jentry_value_len) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
-  auto merge = [&wb](rocksdb::Slice key, rocksdb::Slice value) {
+  auto merge = [&wb](TERARKDB_NAMESPACE::Slice key, TERARKDB_NAMESPACE::Slice value) {
     return wb->Merge(key, value);
   };
-  std::unique_ptr<rocksdb::Status> status = rocksdb::JniUtil::kv_op(
+  std::unique_ptr<TERARKDB_NAMESPACE::Status> status = TERARKDB_NAMESPACE::JniUtil::kv_op(
       merge, env, jobj, jkey, jkey_len, jentry_value, jentry_value_len);
   if (status != nullptr && !status->ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, status);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, status);
   }
 }
 
@@ -220,17 +220,17 @@ void Java_org_rocksdb_WriteBatch_merge__J_3BI_3BI(
 void Java_org_rocksdb_WriteBatch_merge__J_3BI_3BIJ(
     JNIEnv* env, jobject jobj, jlong jwb_handle, jbyteArray jkey, jint jkey_len,
     jbyteArray jentry_value, jint jentry_value_len, jlong jcf_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   assert(cf_handle != nullptr);
-  auto merge = [&wb, &cf_handle](rocksdb::Slice key, rocksdb::Slice value) {
+  auto merge = [&wb, &cf_handle](TERARKDB_NAMESPACE::Slice key, TERARKDB_NAMESPACE::Slice value) {
     return wb->Merge(cf_handle, key, value);
   };
-  std::unique_ptr<rocksdb::Status> status = rocksdb::JniUtil::kv_op(
+  std::unique_ptr<TERARKDB_NAMESPACE::Status> status = TERARKDB_NAMESPACE::JniUtil::kv_op(
       merge, env, jobj, jkey, jkey_len, jentry_value, jentry_value_len);
   if (status != nullptr && !status->ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, status);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, status);
   }
 }
 
@@ -242,13 +242,13 @@ void Java_org_rocksdb_WriteBatch_merge__J_3BI_3BIJ(
 void Java_org_rocksdb_WriteBatch_delete__J_3BI(JNIEnv* env, jobject jobj,
                                                jlong jwb_handle,
                                                jbyteArray jkey, jint jkey_len) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
-  auto remove = [&wb](rocksdb::Slice key) { return wb->Delete(key); };
-  std::unique_ptr<rocksdb::Status> status =
-      rocksdb::JniUtil::k_op(remove, env, jobj, jkey, jkey_len);
+  auto remove = [&wb](TERARKDB_NAMESPACE::Slice key) { return wb->Delete(key); };
+  std::unique_ptr<TERARKDB_NAMESPACE::Status> status =
+      TERARKDB_NAMESPACE::JniUtil::k_op(remove, env, jobj, jkey, jkey_len);
   if (status != nullptr && !status->ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, status);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, status);
   }
 }
 
@@ -261,17 +261,17 @@ void Java_org_rocksdb_WriteBatch_delete__J_3BIJ(JNIEnv* env, jobject jobj,
                                                 jlong jwb_handle,
                                                 jbyteArray jkey, jint jkey_len,
                                                 jlong jcf_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   assert(cf_handle != nullptr);
-  auto remove = [&wb, &cf_handle](rocksdb::Slice key) {
+  auto remove = [&wb, &cf_handle](TERARKDB_NAMESPACE::Slice key) {
     return wb->Delete(cf_handle, key);
   };
-  std::unique_ptr<rocksdb::Status> status =
-      rocksdb::JniUtil::k_op(remove, env, jobj, jkey, jkey_len);
+  std::unique_ptr<TERARKDB_NAMESPACE::Status> status =
+      TERARKDB_NAMESPACE::JniUtil::k_op(remove, env, jobj, jkey, jkey_len);
   if (status != nullptr && !status->ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, status);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, status);
   }
 }
 
@@ -284,15 +284,15 @@ void Java_org_rocksdb_WriteBatch_singleDelete__J_3BI(JNIEnv* env, jobject jobj,
                                                      jlong jwb_handle,
                                                      jbyteArray jkey,
                                                      jint jkey_len) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
-  auto single_delete = [&wb](rocksdb::Slice key) {
+  auto single_delete = [&wb](TERARKDB_NAMESPACE::Slice key) {
     return wb->SingleDelete(key);
   };
-  std::unique_ptr<rocksdb::Status> status =
-      rocksdb::JniUtil::k_op(single_delete, env, jobj, jkey, jkey_len);
+  std::unique_ptr<TERARKDB_NAMESPACE::Status> status =
+      TERARKDB_NAMESPACE::JniUtil::k_op(single_delete, env, jobj, jkey, jkey_len);
   if (status != nullptr && !status->ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, status);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, status);
   }
 }
 
@@ -306,17 +306,17 @@ void Java_org_rocksdb_WriteBatch_singleDelete__J_3BIJ(JNIEnv* env, jobject jobj,
                                                       jbyteArray jkey,
                                                       jint jkey_len,
                                                       jlong jcf_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   assert(cf_handle != nullptr);
-  auto single_delete = [&wb, &cf_handle](rocksdb::Slice key) {
+  auto single_delete = [&wb, &cf_handle](TERARKDB_NAMESPACE::Slice key) {
     return wb->SingleDelete(cf_handle, key);
   };
-  std::unique_ptr<rocksdb::Status> status =
-      rocksdb::JniUtil::k_op(single_delete, env, jobj, jkey, jkey_len);
+  std::unique_ptr<TERARKDB_NAMESPACE::Status> status =
+      TERARKDB_NAMESPACE::JniUtil::k_op(single_delete, env, jobj, jkey, jkey_len);
   if (status != nullptr && !status->ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, status);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, status);
   }
 }
 
@@ -328,16 +328,16 @@ void Java_org_rocksdb_WriteBatch_singleDelete__J_3BIJ(JNIEnv* env, jobject jobj,
 void Java_org_rocksdb_WriteBatch_deleteRange__J_3BI_3BI(
     JNIEnv* env, jobject jobj, jlong jwb_handle, jbyteArray jbegin_key,
     jint jbegin_key_len, jbyteArray jend_key, jint jend_key_len) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
-  auto deleteRange = [&wb](rocksdb::Slice beginKey, rocksdb::Slice endKey) {
+  auto deleteRange = [&wb](TERARKDB_NAMESPACE::Slice beginKey, TERARKDB_NAMESPACE::Slice endKey) {
     return wb->DeleteRange(beginKey, endKey);
   };
-  std::unique_ptr<rocksdb::Status> status =
-      rocksdb::JniUtil::kv_op(deleteRange, env, jobj, jbegin_key,
+  std::unique_ptr<TERARKDB_NAMESPACE::Status> status =
+      TERARKDB_NAMESPACE::JniUtil::kv_op(deleteRange, env, jobj, jbegin_key,
                               jbegin_key_len, jend_key, jend_key_len);
   if (status != nullptr && !status->ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, status);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, status);
   }
 }
 
@@ -350,19 +350,19 @@ void Java_org_rocksdb_WriteBatch_deleteRange__J_3BI_3BIJ(
     JNIEnv* env, jobject jobj, jlong jwb_handle, jbyteArray jbegin_key,
     jint jbegin_key_len, jbyteArray jend_key, jint jend_key_len,
     jlong jcf_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   assert(cf_handle != nullptr);
-  auto deleteRange = [&wb, &cf_handle](rocksdb::Slice beginKey,
-                                       rocksdb::Slice endKey) {
+  auto deleteRange = [&wb, &cf_handle](TERARKDB_NAMESPACE::Slice beginKey,
+                                       TERARKDB_NAMESPACE::Slice endKey) {
     return wb->DeleteRange(cf_handle, beginKey, endKey);
   };
-  std::unique_ptr<rocksdb::Status> status =
-      rocksdb::JniUtil::kv_op(deleteRange, env, jobj, jbegin_key,
+  std::unique_ptr<TERARKDB_NAMESPACE::Status> status =
+      TERARKDB_NAMESPACE::JniUtil::kv_op(deleteRange, env, jobj, jbegin_key,
                               jbegin_key_len, jend_key, jend_key_len);
   if (status != nullptr && !status->ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, status);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, status);
   }
 }
 
@@ -374,13 +374,13 @@ void Java_org_rocksdb_WriteBatch_deleteRange__J_3BI_3BIJ(
 void Java_org_rocksdb_WriteBatch_putLogData(JNIEnv* env, jobject jobj,
                                             jlong jwb_handle, jbyteArray jblob,
                                             jint jblob_len) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
-  auto putLogData = [&wb](rocksdb::Slice blob) { return wb->PutLogData(blob); };
-  std::unique_ptr<rocksdb::Status> status =
-      rocksdb::JniUtil::k_op(putLogData, env, jobj, jblob, jblob_len);
+  auto putLogData = [&wb](TERARKDB_NAMESPACE::Slice blob) { return wb->PutLogData(blob); };
+  std::unique_ptr<TERARKDB_NAMESPACE::Status> status =
+      TERARKDB_NAMESPACE::JniUtil::k_op(putLogData, env, jobj, jblob, jblob_len);
   if (status != nullptr && !status->ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, status);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, status);
   }
 }
 
@@ -392,16 +392,16 @@ void Java_org_rocksdb_WriteBatch_putLogData(JNIEnv* env, jobject jobj,
 void Java_org_rocksdb_WriteBatch_iterate(JNIEnv* env, jobject /*jobj*/,
                                          jlong jwb_handle,
                                          jlong handlerHandle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
 
-  rocksdb::Status s = wb->Iterate(
-      reinterpret_cast<rocksdb::WriteBatchHandlerJniCallback*>(handlerHandle));
+  TERARKDB_NAMESPACE::Status s = wb->Iterate(
+      reinterpret_cast<TERARKDB_NAMESPACE::WriteBatchHandlerJniCallback*>(handlerHandle));
 
   if (s.ok()) {
     return;
   }
-  rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
 }
 
 /*
@@ -411,11 +411,11 @@ void Java_org_rocksdb_WriteBatch_iterate(JNIEnv* env, jobject /*jobj*/,
  */
 jbyteArray Java_org_rocksdb_WriteBatch_data(JNIEnv* env, jobject /*jobj*/,
                                             jlong jwb_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
 
   auto data = wb->Data();
-  return rocksdb::JniUtil::copyBytes(env, data);
+  return TERARKDB_NAMESPACE::JniUtil::copyBytes(env, data);
 }
 
 /*
@@ -425,7 +425,7 @@ jbyteArray Java_org_rocksdb_WriteBatch_data(JNIEnv* env, jobject /*jobj*/,
  */
 jlong Java_org_rocksdb_WriteBatch_getDataSize(JNIEnv* /*env*/, jobject /*jobj*/,
                                               jlong jwb_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
 
   auto data_size = wb->GetDataSize();
@@ -439,7 +439,7 @@ jlong Java_org_rocksdb_WriteBatch_getDataSize(JNIEnv* /*env*/, jobject /*jobj*/,
  */
 jboolean Java_org_rocksdb_WriteBatch_hasPut(JNIEnv* /*env*/, jobject /*jobj*/,
                                             jlong jwb_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
 
   return wb->HasPut();
@@ -453,7 +453,7 @@ jboolean Java_org_rocksdb_WriteBatch_hasPut(JNIEnv* /*env*/, jobject /*jobj*/,
 jboolean Java_org_rocksdb_WriteBatch_hasDelete(JNIEnv* /*env*/,
                                                jobject /*jobj*/,
                                                jlong jwb_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
 
   return wb->HasDelete();
@@ -466,7 +466,7 @@ jboolean Java_org_rocksdb_WriteBatch_hasDelete(JNIEnv* /*env*/,
  */
 JNIEXPORT jboolean JNICALL Java_org_rocksdb_WriteBatch_hasSingleDelete(
     JNIEnv* /*env*/, jobject /*jobj*/, jlong jwb_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
 
   return wb->HasSingleDelete();
@@ -479,7 +479,7 @@ JNIEXPORT jboolean JNICALL Java_org_rocksdb_WriteBatch_hasSingleDelete(
  */
 JNIEXPORT jboolean JNICALL Java_org_rocksdb_WriteBatch_hasDeleteRange(
     JNIEnv* /*env*/, jobject /*jobj*/, jlong jwb_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
 
   return wb->HasDeleteRange();
@@ -492,7 +492,7 @@ JNIEXPORT jboolean JNICALL Java_org_rocksdb_WriteBatch_hasDeleteRange(
  */
 JNIEXPORT jboolean JNICALL Java_org_rocksdb_WriteBatch_hasMerge(
     JNIEnv* /*env*/, jobject /*jobj*/, jlong jwb_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
 
   return wb->HasMerge();
@@ -505,7 +505,7 @@ JNIEXPORT jboolean JNICALL Java_org_rocksdb_WriteBatch_hasMerge(
  */
 JNIEXPORT jboolean JNICALL Java_org_rocksdb_WriteBatch_hasBeginPrepare(
     JNIEnv* /*env*/, jobject /*jobj*/, jlong jwb_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
 
   return wb->HasBeginPrepare();
@@ -518,7 +518,7 @@ JNIEXPORT jboolean JNICALL Java_org_rocksdb_WriteBatch_hasBeginPrepare(
  */
 JNIEXPORT jboolean JNICALL Java_org_rocksdb_WriteBatch_hasEndPrepare(
     JNIEnv* /*env*/, jobject /*jobj*/, jlong jwb_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
 
   return wb->HasEndPrepare();
@@ -531,7 +531,7 @@ JNIEXPORT jboolean JNICALL Java_org_rocksdb_WriteBatch_hasEndPrepare(
  */
 JNIEXPORT jboolean JNICALL Java_org_rocksdb_WriteBatch_hasCommit(
     JNIEnv* /*env*/, jobject /*jobj*/, jlong jwb_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
 
   return wb->HasCommit();
@@ -544,7 +544,7 @@ JNIEXPORT jboolean JNICALL Java_org_rocksdb_WriteBatch_hasCommit(
  */
 JNIEXPORT jboolean JNICALL Java_org_rocksdb_WriteBatch_hasRollback(
     JNIEnv* /*env*/, jobject /*jobj*/, jlong jwb_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
 
   return wb->HasRollback();
@@ -558,7 +558,7 @@ JNIEXPORT jboolean JNICALL Java_org_rocksdb_WriteBatch_hasRollback(
 void Java_org_rocksdb_WriteBatch_markWalTerminationPoint(JNIEnv* /*env*/,
                                                          jobject /*jobj*/,
                                                          jlong jwb_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
 
   wb->MarkWalTerminationPoint();
@@ -572,11 +572,11 @@ void Java_org_rocksdb_WriteBatch_markWalTerminationPoint(JNIEnv* /*env*/,
 jobject Java_org_rocksdb_WriteBatch_getWalTerminationPoint(JNIEnv* env,
                                                            jobject /*jobj*/,
                                                            jlong jwb_handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
   assert(wb != nullptr);
 
   auto save_point = wb->GetWalTerminationPoint();
-  return rocksdb::WriteBatchSavePointJni::construct(env, save_point);
+  return TERARKDB_NAMESPACE::WriteBatchSavePointJni::construct(env, save_point);
 }
 
 /*
@@ -587,7 +587,7 @@ jobject Java_org_rocksdb_WriteBatch_getWalTerminationPoint(JNIEnv* env,
 void Java_org_rocksdb_WriteBatch_disposeInternal(JNIEnv* /*env*/,
                                                  jobject /*jobj*/,
                                                  jlong handle) {
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(handle);
   assert(wb != nullptr);
   delete wb;
 }
@@ -599,6 +599,6 @@ void Java_org_rocksdb_WriteBatch_disposeInternal(JNIEnv* /*env*/,
  */
 jlong Java_org_rocksdb_WriteBatch_00024Handler_createNewHandler0(JNIEnv* env,
                                                                  jobject jobj) {
-  auto* wbjnic = new rocksdb::WriteBatchHandlerJniCallback(env, jobj);
+  auto* wbjnic = new TERARKDB_NAMESPACE::WriteBatchHandlerJniCallback(env, jobj);
   return reinterpret_cast<jlong>(wbjnic);
 }

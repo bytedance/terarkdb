@@ -7,7 +7,8 @@
 #include "rocksdb/perf_level.h"
 #include "port/port.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 #ifdef ROCKSDB_SUPPORT_THREAD_LOCAL
 extern __thread PerfLevel perf_level;
@@ -15,4 +16,4 @@ extern __thread PerfLevel perf_level;
 extern PerfLevel perf_level;
 #endif
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

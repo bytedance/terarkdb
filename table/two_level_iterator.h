@@ -13,7 +13,8 @@
 #include "table/iterator_wrapper.h"
 #include "util/iterator_cache.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 struct ReadOptions;
 class InternalKeyComparator;
@@ -50,4 +51,4 @@ extern InternalIterator* NewMapSstIterator(
     void* callback_arg, const IteratorCache::CreateIterCallback& create_iter,
     Arena* arena = nullptr);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

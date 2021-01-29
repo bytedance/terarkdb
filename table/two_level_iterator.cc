@@ -18,7 +18,8 @@
 #include "util/heap.h"
 #include "utilities/util/function.hpp"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 
@@ -569,4 +570,4 @@ InternalIterator* NewMapSstIterator(
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

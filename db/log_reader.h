@@ -16,7 +16,8 @@
 #include "rocksdb/status.h"
 #include "rocksdb/options.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class SequentialFileReader;
 class Logger;
@@ -150,4 +151,4 @@ class Reader {
 };
 
 }  // namespace log
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -12,7 +12,8 @@
 #include "util/coding.h"
 #include "util/murmurhash.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace stl_wrappers {
 
 struct LessOfComparator {

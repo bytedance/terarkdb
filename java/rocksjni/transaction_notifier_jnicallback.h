@@ -4,7 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 // This file implements the callback "bridge" between Java and C++ for
-// rocksdb::TransactionNotifier.
+// TERARKDB_NAMESPACE::TransactionNotifier.
 
 #ifndef JAVA_ROCKSJNI_TRANSACTION_NOTIFIER_JNICALLBACK_H_
 #define JAVA_ROCKSJNI_TRANSACTION_NOTIFIER_JNICALLBACK_H_
@@ -14,7 +14,8 @@
 #include "rocksdb/utilities/transaction.h"
 #include "rocksjni/jnicallback.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 /**
  * This class acts as a bridge between C++
@@ -37,6 +38,6 @@ class TransactionNotifierJniCallback: public JniCallback,
  private:
   jmethodID m_jsnapshot_created_methodID;
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // JAVA_ROCKSJNI_TRANSACTION_NOTIFIER_JNICALLBACK_H_

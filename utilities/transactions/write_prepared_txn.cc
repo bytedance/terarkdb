@@ -24,7 +24,8 @@
 #include "utilities/transactions/pessimistic_transaction.h"
 #include "utilities/transactions/write_prepared_txn_db.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 struct WriteOptions;
 
@@ -436,6 +437,6 @@ Status WritePreparedTxn::RebuildFromWriteBatch(WriteBatch* src_batch) {
   return ret;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

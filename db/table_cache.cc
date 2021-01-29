@@ -27,7 +27,8 @@
 #include "util/stop_watch.h"
 #include "util/sync_point.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 
@@ -637,4 +638,4 @@ void TableCache::TEST_AddMockTableReader(TableReader* table_reader,
   s = cache_->Insert(key, table_reader, 1, &DeleteEntry<TableReader>);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

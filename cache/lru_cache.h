@@ -15,7 +15,8 @@
 #include "port/port.h"
 #include "util/autovector.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // LRU cache implementation
 
@@ -300,4 +301,4 @@ class LRUCache : public ShardedCache {
   int num_shards_ = 0;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

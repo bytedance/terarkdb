@@ -29,7 +29,8 @@
 #include <terark/util/throw.hpp>
 #include <terark/zbs/abstract_blob_store.hpp>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 using terark::ContextBuffer;
 using terark::TerarkContext;
@@ -293,6 +294,6 @@ class TerarkZipTableMultiReader : public TerarkZipTableReaderBase {
   bool isReverseBytewiseOrder_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif /* TERARK_ZIP_TABLE_READER_H_ */

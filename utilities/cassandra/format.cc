@@ -12,7 +12,8 @@
 #include "utilities/cassandra/serialize.h"
 #include "utilities/util/valvec.hpp"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace cassandra {
 namespace {
 const int32_t kDefaultLocalDeletionTime = std::numeric_limits<int32_t>::max();
@@ -29,13 +30,13 @@ int8_t ColumnBase::Mask() const { return mask_; }
 int8_t ColumnBase::Index() const { return index_; }
 
 void ColumnBase::Serialize(std::string* dest) const {
-  rocksdb::cassandra::Serialize<int8_t>(mask_, dest);
-  rocksdb::cassandra::Serialize<int8_t>(index_, dest);
+  TERARKDB_NAMESPACE::cassandra::Serialize<int8_t>(mask_, dest);
+  TERARKDB_NAMESPACE::cassandra::Serialize<int8_t>(index_, dest);
 }
 
 std::shared_ptr<ColumnBase> ColumnBase::Deserialize(const char* src,
                                                     std::size_t offset) {
-  int8_t mask = rocksdb::cassandra::Deserialize<int8_t>(src, offset);
+  int8_t mask = TERARKDB_NAMESPACE::cassandra::Deserialize<int8_t>(src, offset);
   if ((mask & ColumnTypeMask::DELETION_MASK) != 0) {
     return Tombstone::Deserialize(src, offset);
   } else if ((mask & ColumnTypeMask::EXPIRATION_MASK) != 0) {
@@ -61,20 +62,20 @@ std::size_t Column::Size() const {
 
 void Column::Serialize(std::string* dest) const {
   ColumnBase::Serialize(dest);
-  rocksdb::cassandra::Serialize<int64_t>(timestamp_, dest);
-  rocksdb::cassandra::Serialize<int32_t>(value_size_, dest);
+  TERARKDB_NAMESPACE::cassandra::Serialize<int64_t>(timestamp_, dest);
+  TERARKDB_NAMESPACE::cassandra::Serialize<int32_t>(value_size_, dest);
   dest->append(value_, value_size_);
 }
 
 std::shared_ptr<Column> Column::Deserialize(const char* src,
                                             std::size_t offset) {
-  int8_t mask = rocksdb::cassandra::Deserialize<int8_t>(src, offset);
+  int8_t mask = TERARKDB_NAMESPACE::cassandra::Deserialize<int8_t>(src, offset);
   offset += sizeof(mask);
-  int8_t index = rocksdb::cassandra::Deserialize<int8_t>(src, offset);
+  int8_t index = TERARKDB_NAMESPACE::cassandra::Deserialize<int8_t>(src, offset);
   offset += sizeof(index);
-  int64_t timestamp = rocksdb::cassandra::Deserialize<int64_t>(src, offset);
+  int64_t timestamp = TERARKDB_NAMESPACE::cassandra::Deserialize<int64_t>(src, offset);
   offset += sizeof(timestamp);
-  int32_t value_size = rocksdb::cassandra::Deserialize<int32_t>(src, offset);
+  int32_t value_size = TERARKDB_NAMESPACE::cassandra::Deserialize<int32_t>(src, offset);
   offset += sizeof(value_size);
   return std::make_shared<Column>(mask, index, timestamp, value_size,
                                   src + offset);
@@ -91,7 +92,7 @@ std::size_t ExpiringColumn::Size() const {
 
 void ExpiringColumn::Serialize(std::string* dest) const {
   Column::Serialize(dest);
-  rocksdb::cassandra::Serialize<int32_t>(ttl_, dest);
+  TERARKDB_NAMESPACE::cassandra::Serialize<int32_t>(ttl_, dest);
 }
 
 std::chrono::time_point<std::chrono::system_clock> ExpiringColumn::TimePoint()
@@ -121,17 +122,17 @@ std::shared_ptr<Tombstone> ExpiringColumn::ToTombstone() const {
 
 std::shared_ptr<ExpiringColumn> ExpiringColumn::Deserialize(
     const char* src, std::size_t offset) {
-  int8_t mask = rocksdb::cassandra::Deserialize<int8_t>(src, offset);
+  int8_t mask = TERARKDB_NAMESPACE::cassandra::Deserialize<int8_t>(src, offset);
   offset += sizeof(mask);
-  int8_t index = rocksdb::cassandra::Deserialize<int8_t>(src, offset);
+  int8_t index = TERARKDB_NAMESPACE::cassandra::Deserialize<int8_t>(src, offset);
   offset += sizeof(index);
-  int64_t timestamp = rocksdb::cassandra::Deserialize<int64_t>(src, offset);
+  int64_t timestamp = TERARKDB_NAMESPACE::cassandra::Deserialize<int64_t>(src, offset);
   offset += sizeof(timestamp);
-  int32_t value_size = rocksdb::cassandra::Deserialize<int32_t>(src, offset);
+  int32_t value_size = TERARKDB_NAMESPACE::cassandra::Deserialize<int32_t>(src, offset);
   offset += sizeof(value_size);
   const char* value = src + offset;
   offset += value_size;
-  int32_t ttl = rocksdb::cassandra::Deserialize<int32_t>(src, offset);
+  int32_t ttl = TERARKDB_NAMESPACE::cassandra::Deserialize<int32_t>(src, offset);
   return std::make_shared<ExpiringColumn>(mask, index, timestamp, value_size,
                                           value, ttl);
 }
@@ -151,8 +152,8 @@ std::size_t Tombstone::Size() const {
 
 void Tombstone::Serialize(std::string* dest) const {
   ColumnBase::Serialize(dest);
-  rocksdb::cassandra::Serialize<int32_t>(local_deletion_time_, dest);
-  rocksdb::cassandra::Serialize<int64_t>(marked_for_delete_at_, dest);
+  TERARKDB_NAMESPACE::cassandra::Serialize<int32_t>(local_deletion_time_, dest);
+  TERARKDB_NAMESPACE::cassandra::Serialize<int64_t>(marked_for_delete_at_, dest);
 }
 
 bool Tombstone::Collectable(int32_t gc_grace_period_in_seconds) const {
@@ -164,15 +165,15 @@ bool Tombstone::Collectable(int32_t gc_grace_period_in_seconds) const {
 
 std::shared_ptr<Tombstone> Tombstone::Deserialize(const char* src,
                                                   std::size_t offset) {
-  int8_t mask = rocksdb::cassandra::Deserialize<int8_t>(src, offset);
+  int8_t mask = TERARKDB_NAMESPACE::cassandra::Deserialize<int8_t>(src, offset);
   offset += sizeof(mask);
-  int8_t index = rocksdb::cassandra::Deserialize<int8_t>(src, offset);
+  int8_t index = TERARKDB_NAMESPACE::cassandra::Deserialize<int8_t>(src, offset);
   offset += sizeof(index);
   int32_t local_deletion_time =
-      rocksdb::cassandra::Deserialize<int32_t>(src, offset);
+      TERARKDB_NAMESPACE::cassandra::Deserialize<int32_t>(src, offset);
   offset += sizeof(int32_t);
   int64_t marked_for_delete_at =
-      rocksdb::cassandra::Deserialize<int64_t>(src, offset);
+      TERARKDB_NAMESPACE::cassandra::Deserialize<int64_t>(src, offset);
   return std::make_shared<Tombstone>(mask, index, local_deletion_time,
                                      marked_for_delete_at);
 }
@@ -211,8 +212,8 @@ bool RowValue::IsTombstone() const {
 }
 
 void RowValue::Serialize(std::string* dest) const {
-  rocksdb::cassandra::Serialize<int32_t>(local_deletion_time_, dest);
-  rocksdb::cassandra::Serialize<int64_t>(marked_for_delete_at_, dest);
+  TERARKDB_NAMESPACE::cassandra::Serialize<int32_t>(local_deletion_time_, dest);
+  TERARKDB_NAMESPACE::cassandra::Serialize<int64_t>(marked_for_delete_at_, dest);
   for (const auto& column : columns_) {
     column->Serialize(dest);
   }
@@ -280,10 +281,10 @@ RowValue RowValue::Deserialize(const char* src, std::size_t size) {
   std::size_t offset = 0;
   assert(size >= sizeof(local_deletion_time_) + sizeof(marked_for_delete_at_));
   int32_t local_deletion_time =
-      rocksdb::cassandra::Deserialize<int32_t>(src, offset);
+      TERARKDB_NAMESPACE::cassandra::Deserialize<int32_t>(src, offset);
   offset += sizeof(int32_t);
   int64_t marked_for_delete_at =
-      rocksdb::cassandra::Deserialize<int64_t>(src, offset);
+      TERARKDB_NAMESPACE::cassandra::Deserialize<int64_t>(src, offset);
   offset += sizeof(int64_t);
   if (offset == size) {
     return RowValue(local_deletion_time, marked_for_delete_at);
@@ -358,4 +359,4 @@ RowValue RowValue::Merge(std::vector<RowValue>&& values) {
 }
 
 }  // namespace cassandra
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

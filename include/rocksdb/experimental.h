@@ -8,7 +8,8 @@
 #include "rocksdb/db.h"
 #include "rocksdb/status.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace experimental {
 
 // Supported only for Leveled compaction
@@ -26,4 +27,4 @@ Status PromoteL0(DB* db, ColumnFamilyHandle* column_family,
                  int target_level = 1);
 
 }  // namespace experimental
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

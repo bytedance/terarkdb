@@ -41,7 +41,8 @@
 #include "port/port.h"
 #include "util/thread_operation.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class ColumnFamilyHandle;
 
@@ -230,4 +231,4 @@ class ThreadStatusUpdater {
 #endif  // ROCKSDB_USING_THREAD_STATUS
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

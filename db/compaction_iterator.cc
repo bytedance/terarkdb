@@ -10,7 +10,8 @@
 #include "rocksdb/listener.h"
 #include "table/internal_iterator.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class CompactionIteratorToInternalIterator : public InternalIterator {
   CompactionIterator* (*new_compaction_iter_callback_)(void*);
@@ -36,7 +37,7 @@ class CompactionIteratorToInternalIterator : public InternalIterator {
     }
   }
   virtual void SeekToLast() override { assert(false); }
-  virtual void SeekForPrev(const rocksdb::Slice&) override { assert(false); }
+  virtual void SeekForPrev(const TERARKDB_NAMESPACE::Slice&) override { assert(false); }
   virtual void Seek(const Slice& target) override;
   virtual void Next() override { c_iter_->Next(); }
   virtual void Prev() override { abort(); }  // do not support
@@ -828,4 +829,4 @@ inline bool CompactionIterator::ikeyNotNeededForIncrementalSnapshot() {
          (ikey_.sequence < preserve_deletes_seqnum_);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

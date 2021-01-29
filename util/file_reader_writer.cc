@@ -23,7 +23,8 @@
 
 #undef min
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 #ifndef NDEBUG
 namespace {
@@ -993,4 +994,4 @@ bool ReadOneLine(std::istringstream* iss, SequentialFile* seq_file,
   return *has_data || has_complete_line;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

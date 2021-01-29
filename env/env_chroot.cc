@@ -18,7 +18,8 @@
 
 #include "rocksdb/status.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class ChrootEnv : public EnvWrapper {
  public:
@@ -319,6 +320,6 @@ Env* NewChrootEnv(Env* base_env, const std::string& chroot_dir) {
   return new ChrootEnv(base_env, chroot_dir);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // !defined(ROCKSDB_LITE) && !defined(OS_WIN)

@@ -16,7 +16,8 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // For testing: emit an array with one hash value per key
 class TestHashFilter : public FilterPolicy {
@@ -242,7 +243,7 @@ TEST_F(BlockBasedFilterBlockTest, BlockBasedMultiChunk) {
   delete reader;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

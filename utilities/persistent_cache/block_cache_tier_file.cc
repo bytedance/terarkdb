@@ -17,7 +17,8 @@
 #include "util/crc32c.h"
 #include "util/logging.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 //
 // File creation factories
@@ -589,6 +590,6 @@ void ThreadedWriter::DispatchIO(const IO& io) {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif

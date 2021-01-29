@@ -24,7 +24,8 @@
 #include "rocksdb/utilities/db_ttl.h"
 #include "rocksdb/utilities/ldb_cmd_execute_result.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class LDBCommand {
  public:
@@ -255,6 +256,6 @@ class LDBCommandRunner {
       const std::vector<ColumnFamilyDescriptor>* column_families);
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

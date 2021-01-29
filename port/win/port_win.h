@@ -74,7 +74,8 @@ typedef SSIZE_T ssize_t;
 #define PLATFORM_IS_LITTLE_ENDIAN (__BYTE_ORDER == __LITTLE_ENDIAN)
 #endif
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 #define PREFETCH(addr, rw, locality)
 
@@ -339,8 +340,8 @@ std::wstring utf8_to_utf16(const std::string& utf8);
 #ifdef ROCKSDB_WINDOWS_UTF8_FILENAMES
 
 #define RX_FILESTRING std::wstring
-#define RX_FN(a) rocksdb::port::utf8_to_utf16(a)
-#define FN_TO_RX(a) rocksdb::port::utf16_to_utf8(a)
+#define RX_FN(a) TERARKDB_NAMESPACE::port::utf8_to_utf16(a)
+#define FN_TO_RX(a) TERARKDB_NAMESPACE::port::utf16_to_utf8(a)
 #define RX_FNLEN(a) ::wcslen(a)
 
 #define RX_DeleteFile DeleteFileW
@@ -390,4 +391,4 @@ using port::pthread_setspecific;
 using port::pthread_getspecific;
 using port::truncate;
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

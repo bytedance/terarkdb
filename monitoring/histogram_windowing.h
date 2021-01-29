@@ -12,7 +12,8 @@
 #include "monitoring/histogram.h"
 #include "rocksdb/env.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class HistogramWindowingImpl : public Histogram
 {
@@ -77,4 +78,4 @@ private:
   uint64_t min_num_per_window_ = 0;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

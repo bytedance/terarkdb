@@ -31,7 +31,8 @@
 #include "util/sync_point.h"
 #include "utilities/util/function.hpp"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace {
 // Used in universal compaction when trivial move is enabled.
 // This structure is used for the construction of min heap
@@ -1442,6 +1443,6 @@ Compaction* UniversalCompactionPicker::PickCompactionToReduceSortedRuns(
   return new Compaction(std::move(params));
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // !ROCKSDB_LITE

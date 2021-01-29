@@ -12,7 +12,8 @@
 #include "util/arena.h"
 #include "util/mutexlock.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 //
 // CacheWriteBuffer
@@ -124,4 +125,4 @@ class CacheWriteBufferAllocator {
   std::list<CacheWriteBuffer*> bufs_;  // Buffer stash
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

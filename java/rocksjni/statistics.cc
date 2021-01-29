@@ -4,7 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 // This file implements the "bridge" between Java and C++ and enables
-// calling c++ rocksdb::Statistics methods from Java side.
+// calling c++ TERARKDB_NAMESPACE::Statistics methods from Java side.
 
 #include <jni.h>
 #include <memory>
@@ -54,10 +54,10 @@ jlong Java_org_rocksdb_Statistics_newStatistics___3B(JNIEnv* env, jclass jcls,
 jlong Java_org_rocksdb_Statistics_newStatistics___3BJ(
     JNIEnv* env, jclass /*jcls*/, jbyteArray jhistograms,
     jlong jother_statistics_handle) {
-  std::shared_ptr<rocksdb::Statistics>* pSptr_other_statistics = nullptr;
+  std::shared_ptr<TERARKDB_NAMESPACE::Statistics>* pSptr_other_statistics = nullptr;
   if (jother_statistics_handle > 0) {
     pSptr_other_statistics =
-        reinterpret_cast<std::shared_ptr<rocksdb::Statistics>*>(
+        reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::Statistics>*>(
             jother_statistics_handle);
   }
 
@@ -72,8 +72,8 @@ jlong Java_org_rocksdb_Statistics_newStatistics___3BJ(
       }
 
       for (jsize i = 0; i < len; i++) {
-        const rocksdb::Histograms histogram =
-            rocksdb::HistogramTypeJni::toCppHistograms(jhistogram[i]);
+        const TERARKDB_NAMESPACE::Histograms histogram =
+            TERARKDB_NAMESPACE::HistogramTypeJni::toCppHistograms(jhistogram[i]);
         histograms.emplace(histogram);
       }
 
@@ -81,13 +81,13 @@ jlong Java_org_rocksdb_Statistics_newStatistics___3BJ(
     }
   }
 
-  std::shared_ptr<rocksdb::Statistics> sptr_other_statistics = nullptr;
+  std::shared_ptr<TERARKDB_NAMESPACE::Statistics> sptr_other_statistics = nullptr;
   if (pSptr_other_statistics != nullptr) {
     sptr_other_statistics = *pSptr_other_statistics;
   }
 
-  auto* pSptr_statistics = new std::shared_ptr<rocksdb::StatisticsJni>(
-      new rocksdb::StatisticsJni(sptr_other_statistics, histograms));
+  auto* pSptr_statistics = new std::shared_ptr<TERARKDB_NAMESPACE::StatisticsJni>(
+      new TERARKDB_NAMESPACE::StatisticsJni(sptr_other_statistics, histograms));
 
   return reinterpret_cast<jlong>(pSptr_statistics);
 }
@@ -102,7 +102,7 @@ void Java_org_rocksdb_Statistics_disposeInternal(JNIEnv* /*env*/,
                                                  jlong jhandle) {
   if (jhandle > 0) {
     auto* pSptr_statistics =
-        reinterpret_cast<std::shared_ptr<rocksdb::Statistics>*>(jhandle);
+        reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::Statistics>*>(jhandle);
     delete pSptr_statistics;
   }
 }
@@ -115,9 +115,9 @@ void Java_org_rocksdb_Statistics_disposeInternal(JNIEnv* /*env*/,
 jbyte Java_org_rocksdb_Statistics_statsLevel(JNIEnv* /*env*/, jobject /*jobj*/,
                                              jlong jhandle) {
   auto* pSptr_statistics =
-      reinterpret_cast<std::shared_ptr<rocksdb::Statistics>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::Statistics>*>(jhandle);
   assert(pSptr_statistics != nullptr);
-  return rocksdb::StatsLevelJni::toJavaStatsLevel(
+  return TERARKDB_NAMESPACE::StatsLevelJni::toJavaStatsLevel(
       pSptr_statistics->get()->stats_level_);
 }
 
@@ -130,9 +130,9 @@ void Java_org_rocksdb_Statistics_setStatsLevel(JNIEnv* /*env*/,
                                                jobject /*jobj*/, jlong jhandle,
                                                jbyte jstats_level) {
   auto* pSptr_statistics =
-      reinterpret_cast<std::shared_ptr<rocksdb::Statistics>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::Statistics>*>(jhandle);
   assert(pSptr_statistics != nullptr);
-  auto stats_level = rocksdb::StatsLevelJni::toCppStatsLevel(jstats_level);
+  auto stats_level = TERARKDB_NAMESPACE::StatsLevelJni::toCppStatsLevel(jstats_level);
   pSptr_statistics->get()->stats_level_ = stats_level;
 }
 
@@ -146,9 +146,9 @@ jlong Java_org_rocksdb_Statistics_getTickerCount(JNIEnv* /*env*/,
                                                  jlong jhandle,
                                                  jbyte jticker_type) {
   auto* pSptr_statistics =
-      reinterpret_cast<std::shared_ptr<rocksdb::Statistics>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::Statistics>*>(jhandle);
   assert(pSptr_statistics != nullptr);
-  auto ticker = rocksdb::TickerTypeJni::toCppTickers(jticker_type);
+  auto ticker = TERARKDB_NAMESPACE::TickerTypeJni::toCppTickers(jticker_type);
   return pSptr_statistics->get()->getTickerCount(ticker);
 }
 
@@ -162,9 +162,9 @@ jlong Java_org_rocksdb_Statistics_getAndResetTickerCount(JNIEnv* /*env*/,
                                                          jlong jhandle,
                                                          jbyte jticker_type) {
   auto* pSptr_statistics =
-      reinterpret_cast<std::shared_ptr<rocksdb::Statistics>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::Statistics>*>(jhandle);
   assert(pSptr_statistics != nullptr);
-  auto ticker = rocksdb::TickerTypeJni::toCppTickers(jticker_type);
+  auto ticker = TERARKDB_NAMESPACE::TickerTypeJni::toCppTickers(jticker_type);
   return pSptr_statistics->get()->getAndResetTickerCount(ticker);
 }
 
@@ -178,23 +178,23 @@ jobject Java_org_rocksdb_Statistics_getHistogramData(JNIEnv* env,
                                                      jlong jhandle,
                                                      jbyte jhistogram_type) {
   auto* pSptr_statistics =
-      reinterpret_cast<std::shared_ptr<rocksdb::Statistics>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::Statistics>*>(jhandle);
   assert(pSptr_statistics != nullptr);
 
-  rocksdb::HistogramData
+  TERARKDB_NAMESPACE::HistogramData
       data;  // TODO(AR) perhaps better to construct a Java Object Wrapper that
              // uses ptr to C++ `new HistogramData`
-  auto histogram = rocksdb::HistogramTypeJni::toCppHistograms(jhistogram_type);
+  auto histogram = TERARKDB_NAMESPACE::HistogramTypeJni::toCppHistograms(jhistogram_type);
   pSptr_statistics->get()->histogramData(
-      static_cast<rocksdb::Histograms>(histogram), &data);
+      static_cast<TERARKDB_NAMESPACE::Histograms>(histogram), &data);
 
-  jclass jclazz = rocksdb::HistogramDataJni::getJClass(env);
+  jclass jclazz = TERARKDB_NAMESPACE::HistogramDataJni::getJClass(env);
   if (jclazz == nullptr) {
     // exception occurred accessing class
     return nullptr;
   }
 
-  jmethodID mid = rocksdb::HistogramDataJni::getConstructorMethodId(env);
+  jmethodID mid = TERARKDB_NAMESPACE::HistogramDataJni::getConstructorMethodId(env);
   if (mid == nullptr) {
     // exception occurred accessing method
     return nullptr;
@@ -215,9 +215,9 @@ jstring Java_org_rocksdb_Statistics_getHistogramString(JNIEnv* env,
                                                        jlong jhandle,
                                                        jbyte jhistogram_type) {
   auto* pSptr_statistics =
-      reinterpret_cast<std::shared_ptr<rocksdb::Statistics>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::Statistics>*>(jhandle);
   assert(pSptr_statistics != nullptr);
-  auto histogram = rocksdb::HistogramTypeJni::toCppHistograms(jhistogram_type);
+  auto histogram = TERARKDB_NAMESPACE::HistogramTypeJni::toCppHistograms(jhistogram_type);
   auto str = pSptr_statistics->get()->getHistogramString(histogram);
   return env->NewStringUTF(str.c_str());
 }
@@ -230,11 +230,11 @@ jstring Java_org_rocksdb_Statistics_getHistogramString(JNIEnv* env,
 void Java_org_rocksdb_Statistics_reset(JNIEnv* env, jobject /*jobj*/,
                                        jlong jhandle) {
   auto* pSptr_statistics =
-      reinterpret_cast<std::shared_ptr<rocksdb::Statistics>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::Statistics>*>(jhandle);
   assert(pSptr_statistics != nullptr);
-  rocksdb::Status s = pSptr_statistics->get()->Reset();
+  TERARKDB_NAMESPACE::Status s = pSptr_statistics->get()->Reset();
   if (!s.ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   }
 }
 
@@ -246,7 +246,7 @@ void Java_org_rocksdb_Statistics_reset(JNIEnv* env, jobject /*jobj*/,
 jstring Java_org_rocksdb_Statistics_toString(JNIEnv* env, jobject /*jobj*/,
                                              jlong jhandle) {
   auto* pSptr_statistics =
-      reinterpret_cast<std::shared_ptr<rocksdb::Statistics>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::Statistics>*>(jhandle);
   assert(pSptr_statistics != nullptr);
   auto str = pSptr_statistics->get()->ToString();
   return env->NewStringUTF(str.c_str());

@@ -14,7 +14,8 @@
 #include "rocksdb/utilities/stackable_db.h"
 #include "rocksdb/utilities/write_batch_with_index.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Transaction;
 
@@ -32,7 +33,7 @@ struct OptimisticTransactionOptions {
   const Comparator* cmp = BytewiseComparator();
 
   // Set index factory for WriteBatchWithIndex
-  const rocksdb::WriteBatchEntryIndexFactory* index_type = nullptr;
+  const TERARKDB_NAMESPACE::WriteBatchEntryIndexFactory* index_type = nullptr;
 };
 
 class OptimisticTransactionDB : public StackableDB {
@@ -70,6 +71,6 @@ class OptimisticTransactionDB : public StackableDB {
   explicit OptimisticTransactionDB(DB* db) : StackableDB(db) {}
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

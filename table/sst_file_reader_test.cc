@@ -13,7 +13,8 @@
 #include "util/testutil.h"
 #include "utilities/merge_operators.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 std::string EncodeAsString(uint64_t v) {
   char buf[16];
@@ -88,7 +89,7 @@ TEST_F(SstFileReaderTest, Uint64Comparator) {
   CreateFileAndCheck(keys);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

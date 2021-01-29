@@ -22,7 +22,8 @@
 #include "util/sync_point.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class DBOptionsTest : public DBTestBase {
  public:
@@ -135,7 +136,7 @@ TEST_F(DBOptionsTest, SetBytesPerSync) {
   int i = 0;
   const std::string kValue(kValueSize, 'v');
   ASSERT_EQ(options.bytes_per_sync, dbfull()->GetDBOptions().bytes_per_sync);
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "WritableFileWriter::RangeSync:0", [&](void* /*arg*/) {
         counter++;
       });
@@ -145,9 +146,9 @@ TEST_F(DBOptionsTest, SetBytesPerSync) {
   for (i = 0; i < 40; i++) {
     Put(Key(i), kValue, write_opts);
   }
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
   ASSERT_OK(dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr));
-  rocksdb::SyncPoint::GetInstance()->DisableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
   low_bytes_per_sync = counter;
   ASSERT_GT(low_bytes_per_sync, 35);
   ASSERT_LT(low_bytes_per_sync, 45);
@@ -161,7 +162,7 @@ TEST_F(DBOptionsTest, SetBytesPerSync) {
   for (i = 0; i < 40; i++) {
     Put(Key(i), kValue, write_opts);
   }
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
   ASSERT_OK(dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr));
   ASSERT_GT(counter, 5);
   ASSERT_LT(counter, 15);
@@ -187,11 +188,11 @@ TEST_F(DBOptionsTest, SetWalBytesPerSync) {
   ASSERT_EQ(512, dbfull()->GetDBOptions().wal_bytes_per_sync);
   int counter = 0;
   int low_bytes_per_sync = 0;
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "WritableFileWriter::RangeSync:0", [&](void* /*arg*/) {
         counter++;
       });
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
   const std::string kValue(kValueSize, 'v');
   int i = 0;
   for (; i < 10; i++) {
@@ -229,7 +230,7 @@ TEST_F(DBOptionsTest, WritableFileMaxBufferSize) {
 
   std::atomic<int> match_cnt(0);
   std::atomic<int> unmatch_cnt(0);
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "WritableFileWriter::WritableFileWriter:0", [&](void* arg) {
         int value = static_cast<int>(reinterpret_cast<uintptr_t>(arg));
         if (value == buffer_size) {
@@ -238,7 +239,7 @@ TEST_F(DBOptionsTest, WritableFileMaxBufferSize) {
           unmatch_cnt++;
         }
       });
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
   int i = 0;
   for (; i < 3; i++) {
     ASSERT_OK(Put("foo", ToString(i)));
@@ -541,16 +542,16 @@ TEST_F(DBOptionsTest, RunStatsDumpPeriodSec) {
   options.stats_dump_period_sec = 5;
   options.enable_lazy_compaction = false;
   options.blob_size = -1;
-  std::unique_ptr<rocksdb::MockTimeEnv> mock_env;
-  mock_env.reset(new rocksdb::MockTimeEnv(env_));
+  std::unique_ptr<TERARKDB_NAMESPACE::MockTimeEnv> mock_env;
+  mock_env.reset(new TERARKDB_NAMESPACE::MockTimeEnv(env_));
   mock_env->set_current_time(0); // in seconds
   options.env = mock_env.get();
   int counter = 0;
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "DBImpl::DumpStats:1", [&](void* /*arg*/) {
         counter++;
       });
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
   Reopen(options);
   ASSERT_EQ(5, dbfull()->GetDBOptions().stats_dump_period_sec);
   dbfull()->TEST_WaitForTimedTaskRun([&] { mock_env->set_current_time(5); });
@@ -787,10 +788,10 @@ TEST_F(DBOptionsTest, CompactionReadaheadSizeChange) {
 }
 #endif  // ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

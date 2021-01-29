@@ -8,7 +8,8 @@
 #include "rocksdb/env.h"
 #include "util/stop_watch.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class PerfStepTimer {
  public:
@@ -66,4 +67,4 @@ class PerfStepTimer {
   uint32_t ticker_type_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

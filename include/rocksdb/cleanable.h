@@ -18,7 +18,8 @@
 
 #pragma once
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Cleanable {
  public:
@@ -82,4 +83,4 @@ class Cleanable {
   }
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

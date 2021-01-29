@@ -9,7 +9,8 @@
 #include <unordered_map>
 
 #ifndef ROCKSDB_LITE
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 // This enum defines the RocksDB options sanity level.
 enum OptionsSanityCheckLevel : unsigned char {
   // Performs no sanity check at all.
@@ -43,6 +44,6 @@ OptionsSanityCheckLevel CFOptionSanityCheckLevel(
 OptionsSanityCheckLevel BBTOptionSanityCheckLevel(
     const std::string& options_name);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // !ROCKSDB_LITE

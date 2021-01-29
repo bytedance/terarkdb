@@ -8,7 +8,8 @@
 #include <string>
 #include "port/port.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 ColBufDecoder::~ColBufDecoder() {}
 
@@ -237,4 +238,4 @@ size_t VariableChunkColBufDecoder::Decode(const char* src, char** dest) {
   return src - orig_src;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

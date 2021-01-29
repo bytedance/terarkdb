@@ -24,7 +24,8 @@
 #include "utilities/transactions/transaction_base.h"
 #include "utilities/transactions/transaction_util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class OptimisticTransaction : public TransactionBaseImpl {
  public:
@@ -93,6 +94,6 @@ class OptimisticTransactionCallback : public WriteCallback {
   OptimisticTransaction* txn_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

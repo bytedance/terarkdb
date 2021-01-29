@@ -8,9 +8,10 @@
 #include "rocksdb/iostats_context.h"
 
 #ifdef ROCKSDB_SUPPORT_THREAD_LOCAL
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 extern __thread IOStatsContext iostats_context;
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 // increment a specific counter by the specified value
 #define IOSTATS_ADD(metric, value) (iostats_context.metric += value)

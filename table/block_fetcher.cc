@@ -29,7 +29,8 @@
 #include "util/string_util.h"
 #include "util/xxhash.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 inline
 void BlockFetcher::CheckBlockChecksum() {
@@ -271,4 +272,4 @@ Status BlockFetcher::ReadBlockContents() {
   return status_;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

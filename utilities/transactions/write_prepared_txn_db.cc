@@ -28,7 +28,8 @@
 #include "utilities/transactions/pessimistic_transaction.h"
 #include "utilities/transactions/transaction_db_mutex_impl.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 Status WritePreparedTxnDB::Initialize(
     const std::vector<size_t>& compaction_enabled_cf_indices,
@@ -794,5 +795,5 @@ void SubBatchCounter::AddKey(const uint32_t cf, const Slice& key) {
   }
 }
 
-}  //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

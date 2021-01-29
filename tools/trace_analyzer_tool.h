@@ -18,7 +18,8 @@
 #include "rocksdb/write_batch.h"
 #include "util/trace_replay.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class DBImpl;
 class WriteBatch;
@@ -117,17 +118,17 @@ struct TraceStats {
   std::vector<std::pair<uint64_t, uint64_t>> correlation_output;
   std::map<uint32_t, uint64_t> uni_key_num;
 
-  std::unique_ptr<rocksdb::WritableFile> time_series_f;
-  std::unique_ptr<rocksdb::WritableFile> a_key_f;
-  std::unique_ptr<rocksdb::WritableFile> a_count_dist_f;
-  std::unique_ptr<rocksdb::WritableFile> a_prefix_cut_f;
-  std::unique_ptr<rocksdb::WritableFile> a_value_size_f;
-  std::unique_ptr<rocksdb::WritableFile> a_key_size_f;
-  std::unique_ptr<rocksdb::WritableFile> a_key_num_f;
-  std::unique_ptr<rocksdb::WritableFile> a_qps_f;
-  std::unique_ptr<rocksdb::WritableFile> a_top_qps_prefix_f;
-  std::unique_ptr<rocksdb::WritableFile> w_key_f;
-  std::unique_ptr<rocksdb::WritableFile> w_prefix_cut_f;
+  std::unique_ptr<TERARKDB_NAMESPACE::WritableFile> time_series_f;
+  std::unique_ptr<TERARKDB_NAMESPACE::WritableFile> a_key_f;
+  std::unique_ptr<TERARKDB_NAMESPACE::WritableFile> a_count_dist_f;
+  std::unique_ptr<TERARKDB_NAMESPACE::WritableFile> a_prefix_cut_f;
+  std::unique_ptr<TERARKDB_NAMESPACE::WritableFile> a_value_size_f;
+  std::unique_ptr<TERARKDB_NAMESPACE::WritableFile> a_key_size_f;
+  std::unique_ptr<TERARKDB_NAMESPACE::WritableFile> a_key_num_f;
+  std::unique_ptr<TERARKDB_NAMESPACE::WritableFile> a_qps_f;
+  std::unique_ptr<TERARKDB_NAMESPACE::WritableFile> a_top_qps_prefix_f;
+  std::unique_ptr<TERARKDB_NAMESPACE::WritableFile> w_key_f;
+  std::unique_ptr<TERARKDB_NAMESPACE::WritableFile> w_prefix_cut_f;
 
   TraceStats();
   ~TraceStats();
@@ -196,7 +197,7 @@ class TraceAnalyzer {
   std::vector<TypeUnit>& GetTaVector() { return ta_; }
 
  private:
-  rocksdb::Env* env_;
+  TERARKDB_NAMESPACE::Env* env_;
   EnvOptions env_options_;
   std::unique_ptr<TraceReader> trace_reader_;
   size_t offset_;
@@ -215,10 +216,10 @@ class TraceAnalyzer {
   uint64_t time_series_start_;
   uint32_t sample_max_;
   uint32_t cur_time_sec_;
-  std::unique_ptr<rocksdb::WritableFile> trace_sequence_f_;  // readable trace
-  std::unique_ptr<rocksdb::WritableFile> qps_f_;             // overall qps
-  std::unique_ptr<rocksdb::WritableFile> cf_qps_f_;  // The qps of each CF>
-  std::unique_ptr<rocksdb::SequentialFile> wkey_input_f_;
+  std::unique_ptr<TERARKDB_NAMESPACE::WritableFile> trace_sequence_f_;  // readable trace
+  std::unique_ptr<TERARKDB_NAMESPACE::WritableFile> qps_f_;             // overall qps
+  std::unique_ptr<TERARKDB_NAMESPACE::WritableFile> cf_qps_f_;  // The qps of each CF>
+  std::unique_ptr<TERARKDB_NAMESPACE::SequentialFile> wkey_input_f_;
   std::vector<TypeUnit> ta_;  // The main statistic collecting data structure
   std::map<uint32_t, CfUnit> cfs_;  // All the cf_id appears in this trace;
   std::vector<uint32_t> qps_peak_;
@@ -235,11 +236,11 @@ class TraceAnalyzer {
   Status OpenStatsOutputFiles(const std::string& type, TraceStats& new_stats);
   Status CreateOutputFile(const std::string& type, const std::string& cf_name,
                           const std::string& ending,
-                          std::unique_ptr<rocksdb::WritableFile>* f_ptr);
+                          std::unique_ptr<TERARKDB_NAMESPACE::WritableFile>* f_ptr);
   void CloseOutputFiles();
 
   void PrintStatistics();
-  Status TraceUnitWriter(std::unique_ptr<rocksdb::WritableFile>& f_ptr,
+  Status TraceUnitWriter(std::unique_ptr<TERARKDB_NAMESPACE::WritableFile>& f_ptr,
                          TraceUnit& unit);
   Status WriteTraceSequence(const uint32_t& type, const uint32_t& cf_id,
                             const std::string& key, const size_t value_size,
@@ -285,6 +286,6 @@ class TraceWriteHandler : public WriteBatch::Handler {
 
 int trace_analyzer_tool(int argc, char** argv);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

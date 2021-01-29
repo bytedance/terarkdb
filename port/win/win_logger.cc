@@ -24,7 +24,8 @@
 #include "monitoring/iostats_context_imp.h"
 #include "port/sys_time.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 namespace port {
 
@@ -189,4 +190,4 @@ size_t WinLogger::GetLogFileSize() const { return log_size_; }
 
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -19,7 +19,8 @@
 #include "util/autovector.h"
 #include "utilities/util/factory.h"
 #include "utilities/util/function.hpp"
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 Env::~Env() {}
 
@@ -434,4 +435,4 @@ void EnvOptions::InitFromEnvVar() {
   FROM_ENV_bool(use_aio_reads);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

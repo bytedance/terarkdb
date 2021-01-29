@@ -4,7 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 // This file implements the callback "bridge" between Java and C++ for
-// rocksdb::Logger
+// TERARKDB_NAMESPACE::Logger
 
 #ifndef JAVA_ROCKSJNI_LOGGERJNICALLBACK_H_
 #define JAVA_ROCKSJNI_LOGGERJNICALLBACK_H_
@@ -16,7 +16,8 @@
 #include "port/port.h"
 #include "rocksdb/env.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
   class LoggerJniCallback : public JniCallback, public Logger {
    public:
@@ -44,6 +45,6 @@ namespace rocksdb {
      jobject m_jheader_level;
      std::unique_ptr<char[]> format_str(const char* format, va_list ap) const;
   };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // JAVA_ROCKSJNI_LOGGERJNICALLBACK_H_

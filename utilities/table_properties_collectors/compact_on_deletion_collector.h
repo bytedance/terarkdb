@@ -7,7 +7,8 @@
 
 #ifndef ROCKSDB_LITE
 #include "rocksdb/utilities/table_properties_collectors.h"
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class CompactOnDeletionCollector : public TablePropertiesCollector {
  public:
@@ -68,5 +69,5 @@ class CompactOnDeletionCollector : public TablePropertiesCollector {
   bool need_compaction_;
   bool finished_;
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // !ROCKSDB_LITE

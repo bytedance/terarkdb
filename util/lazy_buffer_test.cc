@@ -12,7 +12,8 @@
 #include "util/random.h"
 #include "util/testharness.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class LazyBufferTest : public testing::Test {
  protected:
@@ -423,7 +424,7 @@ TEST_F(LazyBufferTest, DumpToString) {
 
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

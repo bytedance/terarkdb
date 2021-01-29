@@ -17,7 +17,8 @@
 using std::cout;
 using std::endl;
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class AutoVectorTest : public testing::Test {};
 const unsigned long kSize = 8;
@@ -208,7 +209,7 @@ std::vector<std::string> GetTestKeys(size_t size) {
 
   int index = 0;
   for (auto& key : keys) {
-    key = "item-" + rocksdb::ToString(index++);
+    key = "item-" + TERARKDB_NAMESPACE::ToString(index++);
   }
   return keys;
 }
@@ -322,7 +323,7 @@ TEST_F(AutoVectorTest, PerfBench) {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

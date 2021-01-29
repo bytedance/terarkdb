@@ -28,7 +28,8 @@
 #include "util/file_reader_writer.h"
 #include "util/memory_allocator.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class RandomAccessFile;
 struct ReadOptions;
@@ -301,4 +302,4 @@ inline BlockHandle::BlockHandle()
 inline BlockHandle::BlockHandle(uint64_t _offset, uint64_t _size)
     : offset_(_offset), size_(_size) {}
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

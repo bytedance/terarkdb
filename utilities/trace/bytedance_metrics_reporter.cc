@@ -9,7 +9,8 @@
 
 #include "util/logging.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 #ifdef TERARKDB_ENABLE_METRICS
 static std::mutex metrics_mtx;
 static std::atomic<bool> metrics_init{false};
@@ -231,4 +232,4 @@ ByteDanceMetricsReporterFactory::BuildCountReporter(const std::string& /*name*/,
   return &dummy_count_;
 }
 #endif
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

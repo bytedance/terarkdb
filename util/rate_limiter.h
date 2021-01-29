@@ -19,7 +19,8 @@
 #include "util/mutexlock.h"
 #include "util/random.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class GenericRateLimiter : public RateLimiter {
  public:
@@ -110,4 +111,4 @@ class GenericRateLimiter : public RateLimiter {
   std::chrono::microseconds tuned_time_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

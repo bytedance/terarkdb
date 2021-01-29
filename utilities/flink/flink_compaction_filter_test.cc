@@ -7,7 +7,8 @@
 #include <random>
 #include "util/testharness.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace flink {
 
 #define DISABLED FlinkCompactionFilter::StateType::Disabled
@@ -217,7 +218,7 @@ TEST(FlinkListStateTtlTest, HalfExpired) {  // NOLINT
 // }
 
 }  // namespace flink
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

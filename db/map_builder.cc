@@ -33,7 +33,8 @@
 #include "util/sst_file_manager_impl.h"
 #include "version_set.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 struct FileMetaDataBoundBuilder {
   const InternalKeyComparator* icomp;
@@ -1295,7 +1296,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     prop_ptr->swap(prop);
   }
   return s;
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
                          const std::vector<Range>& push_range, int output_level,
@@ -1994,4 +1995,4 @@ struct PartitionRangeTest {
 static PartitionRangeTest init_test;
 #endif
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

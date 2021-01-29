@@ -13,7 +13,8 @@
 
 #include "rocksdb/types.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 struct ColumnFamilyMetaData;
 struct LevelMetaData;
 struct SstFileMetaData;
@@ -109,4 +110,4 @@ struct LiveFileMetaData : SstFileMetaData {
   int level;               // Level at which this file resides.
   LiveFileMetaData() : column_family_name(), level(0) {}
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

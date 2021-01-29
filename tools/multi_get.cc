@@ -47,8 +47,8 @@ int main(int argc, char* argv[]) {
   size_t bench_report = 0;
   size_t cnt1 = 0;
 
-  rocksdb::Options dopt;
-  rocksdb::ReadOptions ropt;
+  TERARKDB_NAMESPACE::Options dopt;
+  TERARKDB_NAMESPACE::ReadOptions ropt;
   dopt.use_aio_reads = true;
   dopt.use_direct_reads = true;
   ropt.aio_concurrency = 16;
@@ -89,16 +89,16 @@ GetoptDone:
     usage(argv[0]);
     return 1;
   }
-  rocksdb::DB* db = nullptr;
+  TERARKDB_NAMESPACE::DB* db = nullptr;
   std::string path = argv[optind];
-  rocksdb::Status s = rocksdb::DB::OpenForReadOnly(dopt, path, &db);
+  TERARKDB_NAMESPACE::Status s = TERARKDB_NAMESPACE::DB::OpenForReadOnly(dopt, path, &db);
   if (!s.ok()) {
     fprintf(stderr, "ERROR: Open(%s) = %s\n", path.c_str(), s.ToString().c_str());
     return 1;
   }
   using namespace terark;
   profiling pf;
-  std::vector<rocksdb::Slice> keys;
+  std::vector<TERARKDB_NAMESPACE::Slice> keys;
   std::vector<std::string> values;
   std::string keystore;
   LineBuf line;

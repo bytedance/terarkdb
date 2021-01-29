@@ -14,7 +14,8 @@
 #include "util/sync_point.h"
 #endif
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class DBBasicTest : public DBTestBase {
  public:
@@ -24,8 +25,8 @@ class DBBasicTest : public DBTestBase {
 TEST_F(DBBasicTest, OpenWhenOpen) {
   Options options = CurrentOptions();
   options.env = env_;
-  rocksdb::DB* db2 = nullptr;
-  rocksdb::Status s = DB::Open(options, dbname_, &db2);
+  TERARKDB_NAMESPACE::DB* db2 = nullptr;
+  TERARKDB_NAMESPACE::Status s = DB::Open(options, dbname_, &db2);
 
   ASSERT_EQ(Status::Code::kIOError, s.code());
   ASSERT_EQ(Status::SubCode::kNone, s.subcode());
@@ -964,10 +965,10 @@ TEST_F(DBBasicTest, DBCloseFlushError) {
   Destroy(options);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

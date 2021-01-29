@@ -50,7 +50,8 @@
 #include "utilities/ttl/db_ttl_impl.h"
 #include "utilities/util/function.hpp"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 const std::string LDBCommand::ARG_DB = "db";
 const std::string LDBCommand::ARG_PATH = "path";
@@ -1617,7 +1618,7 @@ std::vector<std::string> ReduceDBLevelsCommand::PrepareArgs(
   std::vector<std::string> ret;
   ret.push_back("reduce_levels");
   ret.push_back("--" + ARG_DB + "=" + db_path);
-  ret.push_back("--" + ARG_NEW_LEVELS + "=" + rocksdb::ToString(new_levels));
+  ret.push_back("--" + ARG_NEW_LEVELS + "=" + TERARKDB_NAMESPACE::ToString(new_levels));
   if (print_old_level) {
     ret.push_back("--" + ARG_PRINT_OLD_LEVELS);
   }
@@ -2847,7 +2848,7 @@ void DumpSstFile(std::string filename, bool output_hex, bool show_properties) {
     return;
   }
   // no verification
-  rocksdb::SstFileDumper dumper(filename, false, output_hex);
+  TERARKDB_NAMESPACE::SstFileDumper dumper(filename, false, output_hex);
   Status st = dumper.ReadSequential(true, std::numeric_limits<uint64_t>::max(),
                                     false,            // has_from
                                     from_key, false,  // has_to
@@ -2859,9 +2860,9 @@ void DumpSstFile(std::string filename, bool output_hex, bool show_properties) {
   }
 
   if (show_properties) {
-    const rocksdb::TableProperties* table_properties;
+    const TERARKDB_NAMESPACE::TableProperties* table_properties;
 
-    std::shared_ptr<const rocksdb::TableProperties>
+    std::shared_ptr<const TERARKDB_NAMESPACE::TableProperties>
         table_properties_from_reader;
     st = dumper.ReadTableProperties(&table_properties_from_reader);
     if (!st.ok()) {
@@ -2931,7 +2932,7 @@ void DBFileDumperCommand::DoCommand() {
 
   std::cout << "Write Ahead Log Files" << std::endl;
   std::cout << "==============================" << std::endl;
-  rocksdb::VectorLogPtr wal_files;
+  TERARKDB_NAMESPACE::VectorLogPtr wal_files;
   s = db_->GetSortedWalFiles(wal_files);
   if (!s.ok()) {
     std::cerr << "Error when getting WAL files" << std::endl;
@@ -3145,5 +3146,5 @@ Options IngestExternalSstFilesCommand::PrepareOptionsForOpenDB() {
   return opt;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

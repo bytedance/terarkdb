@@ -17,7 +17,8 @@
 #include "util/logging.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 
 EventLoggerStream::EventLoggerStream(Logger* logger)
@@ -50,7 +51,7 @@ void EventLogger::Log(Logger* logger, const JSONWriter& jwriter) {
 #ifdef ROCKSDB_PRINT_EVENTS_TO_STDOUT
   printf("%s\n", jwriter.Get().c_str());
 #else
-  rocksdb::Log(logger, "%s %s", Prefix(), jwriter.Get().c_str());
+  TERARKDB_NAMESPACE::Log(logger, "%s %s", Prefix(), jwriter.Get().c_str());
 #endif
 }
 
@@ -60,8 +61,8 @@ void EventLogger::LogToBuffer(
   printf("%s\n", jwriter.Get().c_str());
 #else
   assert(log_buffer);
-  rocksdb::LogToBuffer(log_buffer, "%s %s", Prefix(), jwriter.Get().c_str());
+  TERARKDB_NAMESPACE::LogToBuffer(log_buffer, "%s %s", Prefix(), jwriter.Get().c_str());
 #endif
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

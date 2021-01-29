@@ -17,7 +17,8 @@
 #include "port/port.h"
 #include "util/mutexlock.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class MemFile;
 class MockEnv : public EnvWrapper {
@@ -111,4 +112,4 @@ class MockEnv : public EnvWrapper {
   std::atomic<int64_t> fake_sleep_micros_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -24,7 +24,8 @@
 #include "util/string_util.h"
 #include "utilities/util/valvec.hpp"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace {
 
 // the default maximum size of the cuckoo path searching queue
@@ -693,5 +694,5 @@ static MemTableRepFactory* NewHashCuckooRepFactory(
 
 ROCKSDB_REGISTER_MEM_TABLE("cuckoo", HashCuckooRepFactory);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

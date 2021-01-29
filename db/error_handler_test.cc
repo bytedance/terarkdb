@@ -17,7 +17,8 @@
 #include "util/sync_point.h"
 #endif
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class DBErrorHandlingTest : public DBTestBase {
  public:
@@ -150,7 +151,7 @@ TEST_F(DBErrorHandlingTest, FLushWriteError) {
   });
   SyncPoint::GetInstance()->EnableProcessing();
   s = Flush();
-  ASSERT_EQ(s.severity(), rocksdb::Status::Severity::kHardError);
+  ASSERT_EQ(s.severity(), TERARKDB_NAMESPACE::Status::Severity::kHardError);
   SyncPoint::GetInstance()->DisableProcessing();
   fault_env->SetFilesystemActive(true);
   s = dbfull()->Resume();
@@ -182,20 +183,20 @@ TEST_F(DBErrorHandlingTest, CompactionWriteError) {
       Status(Status::NoSpace(), Status::Severity::kHardError)
       );
   listener->EnableAutoRecovery(false);
-  rocksdb::SyncPoint::GetInstance()->LoadDependency(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->LoadDependency(
       {{"FlushMemTableFinished", "BackgroundCallCompaction:0"}});
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "BackgroundCallCompaction:0", [&](void *) {
       fault_env->SetFilesystemActive(false, Status::NoSpace("Out of space"));
       });
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
 
   Put(Key(1), "val");
   s = Flush();
   ASSERT_EQ(s, Status::OK());
 
   s = dbfull()->TEST_WaitForCompact();
-  ASSERT_EQ(s.severity(), rocksdb::Status::Severity::kHardError);
+  ASSERT_EQ(s.severity(), TERARKDB_NAMESPACE::Status::Severity::kHardError);
 
   fault_env->SetFilesystemActive(true);
   s = dbfull()->Resume();
@@ -218,20 +219,20 @@ TEST_F(DBErrorHandlingTest, CorruptionError) {
   s = Flush();
   ASSERT_EQ(s, Status::OK());
 
-  rocksdb::SyncPoint::GetInstance()->LoadDependency(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->LoadDependency(
       {{"FlushMemTableFinished", "BackgroundCallCompaction:0"}});
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "BackgroundCallCompaction:0", [&](void *) {
       fault_env->SetFilesystemActive(false, Status::Corruption("Corruption"));
       });
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
 
   Put(Key(1), "val");
   s = Flush();
   ASSERT_EQ(s, Status::OK());
 
   s = dbfull()->TEST_WaitForCompact();
-  ASSERT_EQ(s.severity(), rocksdb::Status::Severity::kUnrecoverableError);
+  ASSERT_EQ(s.severity(), TERARKDB_NAMESPACE::Status::Severity::kUnrecoverableError);
 
   fault_env->SetFilesystemActive(true);
   s = dbfull()->Resume();
@@ -258,7 +259,7 @@ TEST_F(DBErrorHandlingTest, AutoRecoverFlushError) {
   });
   SyncPoint::GetInstance()->EnableProcessing();
   s = Flush();
-  ASSERT_EQ(s.severity(), rocksdb::Status::Severity::kHardError);
+  ASSERT_EQ(s.severity(), TERARKDB_NAMESPACE::Status::Severity::kHardError);
   SyncPoint::GetInstance()->DisableProcessing();
   fault_env->SetFilesystemActive(true);
   ASSERT_EQ(listener->WaitForRecovery(5000000), true);
@@ -291,7 +292,7 @@ TEST_F(DBErrorHandlingTest, FailRecoverFlushError) {
   });
   SyncPoint::GetInstance()->EnableProcessing();
   s = Flush();
-  ASSERT_EQ(s.severity(), rocksdb::Status::Severity::kHardError);
+  ASSERT_EQ(s.severity(), TERARKDB_NAMESPACE::Status::Severity::kHardError);
   // We should be able to shutdown the database while auto recovery is going
   // on in the background
   Close();
@@ -672,10 +673,10 @@ TEST_F(DBErrorHandlingTest, MultiDBVariousErrors) {
   delete def_env;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

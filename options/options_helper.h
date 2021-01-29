@@ -18,7 +18,8 @@
 #include "rocksdb/universal_compaction.h"
 #include "table/terark_zip_table.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
                          const MutableDBOptions& mutable_db_options);
@@ -237,4 +238,4 @@ static auto& info_log_level_string_map =
     OptionsHelper::info_log_level_string_map;
 #endif  // !ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

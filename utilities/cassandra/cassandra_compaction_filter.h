@@ -8,7 +8,8 @@
 #include "rocksdb/compaction_filter.h"
 #include "rocksdb/slice.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace cassandra {
 
 /**
@@ -41,4 +42,4 @@ private:
   int32_t gc_grace_period_in_seconds_;
 };
 }  // namespace cassandra
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

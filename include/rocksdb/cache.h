@@ -32,7 +32,8 @@
 #include "rocksdb/statistics.h"
 #include "rocksdb/status.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Cache;
 
@@ -277,4 +278,4 @@ class Cache {
   std::shared_ptr<MemoryAllocator> memory_allocator_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

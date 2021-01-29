@@ -29,7 +29,8 @@ using GFLAGS_NAMESPACE::ParseCommandLineFlags;
 
 DEFINE_int32(bits_per_key, 10, "");
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 static const int kVerbose = 1;
 
@@ -309,7 +310,7 @@ TEST_F(FullBloomTest, FullVaryingLengths) {
   ASSERT_LE(mediocre_filters, good_filters/5);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

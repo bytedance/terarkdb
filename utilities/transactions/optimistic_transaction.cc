@@ -19,7 +19,8 @@
 #include "util/string_util.h"
 #include "utilities/transactions/transaction_util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 struct WriteOptions;
 
@@ -127,6 +128,6 @@ Status OptimisticTransaction::SetName(const TransactionName& /* unused */) {
   return Status::InvalidArgument("Optimistic transactions cannot be named.");
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

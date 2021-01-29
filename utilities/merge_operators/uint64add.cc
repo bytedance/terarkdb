@@ -12,7 +12,7 @@
 #include "util/logging.h"
 #include "utilities/merge_operators.h"
 
-using namespace rocksdb;
+using namespace TERARKDB_NAMESPACE;
 
 namespace {  // anonymous namespace
 
@@ -60,7 +60,8 @@ class UInt64AddOperator : public AssociativeMergeOperator {
 
 }  // namespace
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 std::shared_ptr<MergeOperator> MergeOperators::CreateUInt64AddOperator() {
   return std::make_shared<UInt64AddOperator>();
@@ -74,4 +75,4 @@ TERARK_FACTORY_REGISTER(UInt64AddOperator, &NewUInt64AddOperator);
 TERARK_FACTORY_REGISTER_EX(UInt64AddOperator, "uint64add",
                            &NewUInt64AddOperator);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

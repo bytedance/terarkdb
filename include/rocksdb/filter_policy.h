@@ -25,7 +25,8 @@
 #include <string>
 #include <vector>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Slice;
 

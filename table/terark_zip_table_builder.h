@@ -40,7 +40,8 @@
 #include <terark/zbs/dict_zip_blob_store.hpp>
 #include <terark/zbs/zip_reorder_map.hpp>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 template <typename T>
 class AsyncTask;
@@ -278,6 +279,6 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
   double compaction_load_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif /* TERARK_ZIP_TABLE_BUILDER_H_ */

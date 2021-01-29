@@ -32,7 +32,8 @@
 #include "util/sync_point.h"
 #include "utilities/util/function.hpp"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 
@@ -2995,4 +2996,4 @@ Compaction* LevelCompactionPicker::PickCompaction(
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

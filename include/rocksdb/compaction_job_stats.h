@@ -8,7 +8,8 @@
 #include <stdint.h>
 #include <string>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 struct CompactionJobStats {
   CompactionJobStats() { Reset(); }
   void Reset();
@@ -88,4 +89,4 @@ struct CompactionJobStats {
   // number of single-deletes which meet something other than a put
   uint64_t num_single_del_mismatch;
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

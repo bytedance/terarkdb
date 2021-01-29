@@ -3,7 +3,8 @@
 
 #include "util/string_util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 void MemTableRep::InsertConcurrently(KeyHandle /*handle*/) {
 #ifndef ROCKSDB_LITE
@@ -143,4 +144,4 @@ MemTableRepFactory* CreateMemTableRepFactory(
   return NULL;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

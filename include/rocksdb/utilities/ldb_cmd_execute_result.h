@@ -9,7 +9,8 @@
 #undef FAILED
 #endif
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class LDBCommandExecuteResult {
 public:

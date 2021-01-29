@@ -17,7 +17,8 @@
 #include "rocksdb/status.h"
 #include "rocksdb/types.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 struct TransactionKeyMapInfo {
   // Earliest sequence number that is relevant to this transaction for this key
@@ -77,6 +78,6 @@ class TransactionUtil {
                          ReadCallback* snap_checker = nullptr);
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

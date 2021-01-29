@@ -14,7 +14,8 @@
 #include "rocksdb/types.h"
 #include "utilities/util/factory.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // -- Table Properties
 // Other than basic table properties, each table may also have the user
@@ -191,7 +192,7 @@ struct TablePropertiesBase {
   // ID of column family for this SST file, corresponding to the CF identified
   // by column_family_name.
   uint64_t column_family_id =
-      rocksdb::TablePropertiesCollectorFactory::Context::kUnknownColumnFamily;
+      TERARKDB_NAMESPACE::TablePropertiesCollectorFactory::Context::kUnknownColumnFamily;
   // The time when the SST file was created.
   // Since SST files are immutable, this is equivalent to last modified time.
   uint64_t creation_time = 0;
@@ -276,4 +277,4 @@ extern uint64_t GetDeletedKeys(const UserCollectedProperties& props);
 extern uint64_t GetMergeOperands(const UserCollectedProperties& props,
                                  bool* property_present);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

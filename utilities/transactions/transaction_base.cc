@@ -14,11 +14,12 @@
 #include "rocksdb/status.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 TransactionBaseImpl::TransactionBaseImpl(
     DB* db, const WriteOptions& write_options,
-    const rocksdb::WriteBatchEntryIndexFactory* index_factory)
+    const TERARKDB_NAMESPACE::WriteBatchEntryIndexFactory* index_factory)
     : db_(db),
       dbimpl_(reinterpret_cast<DBImpl*>(db)),
       write_options_(write_options),
@@ -720,6 +721,6 @@ Status TransactionBaseImpl::RebuildFromWriteBatch(WriteBatch* src_batch) {
 WriteBatch* TransactionBaseImpl::GetCommitTimeWriteBatch() {
   return &commit_time_batch_;
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

@@ -12,7 +12,8 @@ extern "C" {
 
 #include "rocksdb/compaction_filter.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace lua {
 
 const std::string kFilterFunctionName = "Filter";
@@ -238,5 +239,5 @@ const char* RocksLuaCompactionFilterFactory::Name() const {
 }
 
 }  // namespace lua
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // defined(LUA) && !defined(ROCKSDB_LITE)

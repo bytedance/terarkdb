@@ -22,7 +22,8 @@
 #include "table/table_builder.h"
 #include "util/compression.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class BlockBuilder;
 class BlockHandle;
@@ -129,4 +130,4 @@ Slice CompressBlock(const Slice& raw, const CompressionContext& compression_ctx,
                     CompressionType* type, uint32_t format_version,
                     std::string* compressed_output);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

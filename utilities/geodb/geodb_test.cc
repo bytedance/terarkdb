@@ -9,7 +9,8 @@
 #include <cctype>
 #include "util/testharness.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class GeoDBTest : public testing::Test {
  public:
@@ -183,7 +184,7 @@ TEST_F(GeoDBTest, DifferentPosInSameQuadkey) {
   ASSERT_EQ(obj.value, value2);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char* argv[]) {
   ::testing::InitGoogleTest(&argc, argv);

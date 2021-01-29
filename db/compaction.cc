@@ -24,7 +24,8 @@
 #include "util/sync_point.h"
 #include "utilities/util/factory.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 const uint64_t kRangeTombstoneSentinel =
     PackSequenceAndType(kMaxSequenceNumber, kTypeRangeDeletion);
@@ -540,9 +541,9 @@ int Compaction::GetInputBaseLevel() const {
   return input_vstorage_->base_level();
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
-using namespace rocksdb;
+using namespace TERARKDB_NAMESPACE;
 TERARK_FACTORY_INSTANTIATE_GNS(CompactionFilter*, Slice,
                                CompactionFilterContext);
 TERARK_FACTORY_INSTANTIATE_GNS(CompactionFilterFactory*, Slice);

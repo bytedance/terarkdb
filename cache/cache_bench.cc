@@ -48,7 +48,8 @@ DEFINE_int32(erase_percent, 10,
 
 DEFINE_bool(use_clock_cache, false, "");
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class CacheBench;
 namespace {
@@ -157,7 +158,7 @@ class CacheBench {
   }
 
   bool Run() {
-    rocksdb::Env* env = rocksdb::Env::Default();
+    TERARKDB_NAMESPACE::Env* env = TERARKDB_NAMESPACE::Env::Default();
 
     PrintEnv();
     SharedState shared(this);
@@ -260,7 +261,7 @@ class CacheBench {
     printf("----------------------------\n");
   }
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ParseCommandLineFlags(&argc, &argv, true);
@@ -270,7 +271,7 @@ int main(int argc, char** argv) {
     exit(1);
   }
 
-  rocksdb::CacheBench bench;
+  TERARKDB_NAMESPACE::CacheBench bench;
   if (FLAGS_populate_cache) {
     bench.PopulateCache();
   }

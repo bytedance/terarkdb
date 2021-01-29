@@ -163,20 +163,20 @@ DEFINE_bool(verbose, false, "Verbose");
 DEFINE_bool(progress_reports, true,
             "If true, db_stress will report number of finished operations");
 
-DEFINE_uint64(db_write_buffer_size, rocksdb::Options().db_write_buffer_size,
+DEFINE_uint64(db_write_buffer_size, TERARKDB_NAMESPACE::Options().db_write_buffer_size,
               "Number of bytes to buffer in all memtables before compacting");
 
 DEFINE_int32(write_buffer_size,
-             static_cast<int32_t>(rocksdb::Options().write_buffer_size),
+             static_cast<int32_t>(TERARKDB_NAMESPACE::Options().write_buffer_size),
              "Number of bytes to buffer in memtable before compacting");
 
 DEFINE_int32(max_write_buffer_number,
-             rocksdb::Options().max_write_buffer_number,
+             TERARKDB_NAMESPACE::Options().max_write_buffer_number,
              "The number of in-memory memtables. "
              "Each memtable is of size FLAGS_write_buffer_size.");
 
 DEFINE_int32(min_write_buffer_number_to_merge,
-             rocksdb::Options().min_write_buffer_number_to_merge,
+             TERARKDB_NAMESPACE::Options().min_write_buffer_number_to_merge,
              "The minimum number of write buffers that will be merged together "
              "before writing to storage. This is cheap because it is an "
              "in-memory merge. If this feature is not enabled, then all these "
@@ -187,7 +187,7 @@ DEFINE_int32(min_write_buffer_number_to_merge,
              " each of these individual write buffers.");
 
 DEFINE_int32(max_write_buffer_number_to_maintain,
-             rocksdb::Options().max_write_buffer_number_to_maintain,
+             TERARKDB_NAMESPACE::Options().max_write_buffer_number_to_maintain,
              "The total maximum number of write buffers to maintain in memory "
              "including copies of buffers that have already been flushed. "
              "Unlike max_write_buffer_number, this parameter does not affect "
@@ -201,11 +201,11 @@ DEFINE_int32(max_write_buffer_number_to_maintain,
              "'max_write_buffer_number' will be used.");
 
 DEFINE_double(memtable_prefix_bloom_size_ratio,
-              rocksdb::Options().memtable_prefix_bloom_size_ratio,
+              TERARKDB_NAMESPACE::Options().memtable_prefix_bloom_size_ratio,
               "creates prefix blooms for memtables, each with size "
               "`write_buffer_size * memtable_prefix_bloom_size_ratio`.");
 
-DEFINE_int32(open_files, rocksdb::Options().max_open_files,
+DEFINE_int32(open_files, TERARKDB_NAMESPACE::Options().max_open_files,
              "Maximum number of files to keep open at the same time "
              "(use default if == 0)");
 
@@ -213,36 +213,36 @@ DEFINE_int64(compressed_cache_size, -1,
              "Number of bytes to use as a cache of compressed data."
              " Negative means use default settings.");
 
-DEFINE_int32(compaction_style, rocksdb::Options().compaction_style, "");
+DEFINE_int32(compaction_style, TERARKDB_NAMESPACE::Options().compaction_style, "");
 
 DEFINE_int32(level0_file_num_compaction_trigger,
-             rocksdb::Options().level0_file_num_compaction_trigger,
+             TERARKDB_NAMESPACE::Options().level0_file_num_compaction_trigger,
              "Level0 compaction start trigger");
 
 DEFINE_int32(level0_slowdown_writes_trigger,
-             rocksdb::Options().level0_slowdown_writes_trigger,
+             TERARKDB_NAMESPACE::Options().level0_slowdown_writes_trigger,
              "Number of files in level-0 that will slow down writes");
 
 DEFINE_int32(level0_stop_writes_trigger,
-             rocksdb::Options().level0_stop_writes_trigger,
+             TERARKDB_NAMESPACE::Options().level0_stop_writes_trigger,
              "Number of files in level-0 that will trigger put stop.");
 
 DEFINE_int32(block_size,
-             static_cast<int32_t>(rocksdb::BlockBasedTableOptions().block_size),
+             static_cast<int32_t>(TERARKDB_NAMESPACE::BlockBasedTableOptions().block_size),
              "Number of bytes in a block.");
 
 DEFINE_int32(
     format_version,
-    static_cast<int32_t>(rocksdb::BlockBasedTableOptions().format_version),
+    static_cast<int32_t>(TERARKDB_NAMESPACE::BlockBasedTableOptions().format_version),
     "Format version of SST files.");
 
 DEFINE_int32(index_block_restart_interval,
-             rocksdb::BlockBasedTableOptions().index_block_restart_interval,
+             TERARKDB_NAMESPACE::BlockBasedTableOptions().index_block_restart_interval,
              "Number of keys between restart points "
              "for delta encoding of keys in index block.");
 
 DEFINE_int32(max_background_compactions,
-             rocksdb::Options().max_background_compactions,
+             TERARKDB_NAMESPACE::Options().max_background_compactions,
              "The maximum number of concurrent background compactions "
              "that can occur in parallel.");
 
@@ -258,7 +258,7 @@ DEFINE_int32(compaction_thread_pool_variations, 2,
              "Range of background thread pool size variations when adjusted "
              "periodically.");
 
-DEFINE_int32(max_background_flushes, rocksdb::Options().max_background_flushes,
+DEFINE_int32(max_background_flushes, TERARKDB_NAMESPACE::Options().max_background_flushes,
              "The maximum number of concurrent background flushes "
              "that can occur in parallel.");
 
@@ -340,24 +340,24 @@ DEFINE_string(
 DEFINE_bool(verify_checksum, false,
             "Verify checksum for every block read from storage");
 
-DEFINE_bool(mmap_read, rocksdb::Options().allow_mmap_reads,
+DEFINE_bool(mmap_read, TERARKDB_NAMESPACE::Options().allow_mmap_reads,
             "Allow reads to occur via mmap-ing files");
 
-DEFINE_bool(mmap_write, rocksdb::Options().allow_mmap_writes,
+DEFINE_bool(mmap_write, TERARKDB_NAMESPACE::Options().allow_mmap_writes,
             "Allow writes to occur via mmap-ing files");
 
-DEFINE_bool(use_direct_reads, rocksdb::Options().use_direct_reads,
+DEFINE_bool(use_direct_reads, TERARKDB_NAMESPACE::Options().use_direct_reads,
             "Use O_DIRECT for reading data");
 
 DEFINE_bool(use_direct_io_for_flush_and_compaction,
-            rocksdb::Options().use_direct_io_for_flush_and_compaction,
+            TERARKDB_NAMESPACE::Options().use_direct_io_for_flush_and_compaction,
             "Use O_DIRECT for writing data");
 
-DEFINE_bool(use_aio_reads, rocksdb::Options().use_aio_reads,
+DEFINE_bool(use_aio_reads, TERARKDB_NAMESPACE::Options().use_aio_reads,
             "Use aio for reading data");
 
 // Database statistics
-static std::shared_ptr<rocksdb::Statistics> dbstats;
+static std::shared_ptr<TERARKDB_NAMESPACE::Statistics> dbstats;
 DEFINE_bool(statistics, false, "Create database statistics");
 
 DEFINE_bool(sync, false, "Sync all writes to disk");
@@ -378,14 +378,14 @@ extern std::vector<std::string> rocksdb_kill_prefix_blacklist;
 
 DEFINE_bool(disable_wal, false, "If true, do not write WAL for write.");
 
-DEFINE_int64(target_file_size_base, rocksdb::Options().target_file_size_base,
+DEFINE_int64(target_file_size_base, TERARKDB_NAMESPACE::Options().target_file_size_base,
              "Target level-1 file size for compaction");
 
 DEFINE_int32(target_file_size_multiplier, 1,
              "A multiplier to compute target level-N file size (N >= 2)");
 
 DEFINE_uint64(max_bytes_for_level_base,
-              rocksdb::Options().max_bytes_for_level_base,
+              TERARKDB_NAMESPACE::Options().max_bytes_for_level_base,
               "Max bytes for level-1");
 
 DEFINE_double(max_bytes_for_level_multiplier, 2,
@@ -501,46 +501,46 @@ static const bool FLAGS_num_iterations_dummy __attribute__((__unused__)) =
     RegisterFlagValidator(&FLAGS_num_iterations, &ValidateUint32Range);
 
 namespace {
-enum rocksdb::CompressionType StringToCompressionType(const char* ctype) {
+enum TERARKDB_NAMESPACE::CompressionType StringToCompressionType(const char* ctype) {
   assert(ctype);
 
   if (!strcasecmp(ctype, "none"))
-    return rocksdb::kNoCompression;
+    return TERARKDB_NAMESPACE::kNoCompression;
   else if (!strcasecmp(ctype, "snappy"))
-    return rocksdb::kSnappyCompression;
+    return TERARKDB_NAMESPACE::kSnappyCompression;
   else if (!strcasecmp(ctype, "zlib"))
-    return rocksdb::kZlibCompression;
+    return TERARKDB_NAMESPACE::kZlibCompression;
   else if (!strcasecmp(ctype, "bzip2"))
-    return rocksdb::kBZip2Compression;
+    return TERARKDB_NAMESPACE::kBZip2Compression;
   else if (!strcasecmp(ctype, "lz4"))
-    return rocksdb::kLZ4Compression;
+    return TERARKDB_NAMESPACE::kLZ4Compression;
   else if (!strcasecmp(ctype, "lz4hc"))
-    return rocksdb::kLZ4HCCompression;
+    return TERARKDB_NAMESPACE::kLZ4HCCompression;
   else if (!strcasecmp(ctype, "xpress"))
-    return rocksdb::kXpressCompression;
+    return TERARKDB_NAMESPACE::kXpressCompression;
   else if (!strcasecmp(ctype, "zstd"))
-    return rocksdb::kZSTD;
+    return TERARKDB_NAMESPACE::kZSTD;
 
   fprintf(stderr, "Cannot parse compression type '%s'\n", ctype);
-  return rocksdb::kSnappyCompression;  // default value
+  return TERARKDB_NAMESPACE::kSnappyCompression;  // default value
 }
 
-enum rocksdb::ChecksumType StringToChecksumType(const char* ctype) {
+enum TERARKDB_NAMESPACE::ChecksumType StringToChecksumType(const char* ctype) {
   assert(ctype);
-  auto iter = rocksdb::checksum_type_string_map.find(ctype);
-  if (iter != rocksdb::checksum_type_string_map.end()) {
+  auto iter = TERARKDB_NAMESPACE::checksum_type_string_map.find(ctype);
+  if (iter != TERARKDB_NAMESPACE::checksum_type_string_map.end()) {
     return iter->second;
   }
   fprintf(stderr, "Cannot parse checksum type '%s'\n", ctype);
-  return rocksdb::kCRC32c;
+  return TERARKDB_NAMESPACE::kCRC32c;
 }
 
-std::string ChecksumTypeToString(rocksdb::ChecksumType ctype) {
-  auto iter = std::find_if(rocksdb::checksum_type_string_map.begin(),
-                           rocksdb::checksum_type_string_map.end(),
+std::string ChecksumTypeToString(TERARKDB_NAMESPACE::ChecksumType ctype) {
+  auto iter = std::find_if(TERARKDB_NAMESPACE::checksum_type_string_map.begin(),
+                           TERARKDB_NAMESPACE::checksum_type_string_map.end(),
                            TERARK_GET(.second) == ctype);
 
-  assert(iter != rocksdb::checksum_type_string_map.end());
+  assert(iter != TERARKDB_NAMESPACE::checksum_type_string_map.end());
   return iter->first;
 }
 
@@ -562,8 +562,8 @@ std::vector<std::string> SplitString(std::string src) {
 
 DEFINE_string(compression_type, "snappy",
               "Algorithm to use to compress the database");
-static enum rocksdb::CompressionType FLAGS_compression_type_e =
-    rocksdb::kSnappyCompression;
+static enum TERARKDB_NAMESPACE::CompressionType FLAGS_compression_type_e =
+    TERARKDB_NAMESPACE::kSnappyCompression;
 
 DEFINE_int32(compression_max_dict_bytes, 0,
              "Maximum size of dictionary used to prime the compression "
@@ -574,11 +574,11 @@ DEFINE_int32(compression_zstd_max_train_bytes, 0,
              "trainer.");
 
 DEFINE_string(checksum_type, "kCRC32c", "Algorithm to use to checksum blocks");
-static enum rocksdb::ChecksumType FLAGS_checksum_type_e = rocksdb::kCRC32c;
+static enum TERARKDB_NAMESPACE::ChecksumType FLAGS_checksum_type_e = TERARKDB_NAMESPACE::kCRC32c;
 
 DEFINE_string(hdfs, "", "Name of hdfs environment");
 // posix or hdfs environment
-static rocksdb::Env* FLAGS_env = rocksdb::Env::Default();
+static TERARKDB_NAMESPACE::Env* FLAGS_env = TERARKDB_NAMESPACE::Env::Default();
 
 DEFINE_uint64(ops_per_thread, 1200000, "Number of operations per thread.");
 static const bool FLAGS_ops_per_thread_dummy __attribute__((__unused__)) =
@@ -614,7 +614,7 @@ enum RepFactory StringToRepFactory(const char* ctype) {
 // truncation of constant value on static_cast
 #pragma warning(disable : 4309)
 #endif
-bool GetNextPrefix(const rocksdb::Slice& src, std::string* v) {
+bool GetNextPrefix(const TERARKDB_NAMESPACE::Slice& src, std::string* v) {
   std::string ret = src.ToString();
   for (int i = static_cast<int>(ret.size()) - 1; i >= 0; i--) {
     if (ret[i] != static_cast<char>(255)) {
@@ -658,7 +658,8 @@ DEFINE_bool(use_full_merge_v1, false,
             "On true, use a merge operator that implement the deprecated "
             "version of FullMerge");
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // convert long to a big-endian slice key
 static std::string Key(int64_t val) {
@@ -1870,7 +1871,7 @@ class StressTest {
           thread->rand.Uniform(FLAGS_compact_files_one_in) == 0) {
         auto* random_cf =
             column_families_[thread->rand.Next() % FLAGS_column_families];
-        rocksdb::ColumnFamilyMetaData cf_meta_data;
+        TERARKDB_NAMESPACE::ColumnFamilyMetaData cf_meta_data;
         db_->GetColumnFamilyMetaData(random_cf, &cf_meta_data);
 
         // Randomly compact up to three consecutive files from a level
@@ -2390,7 +2391,7 @@ class StressTest {
       options_.max_background_compactions = FLAGS_max_background_compactions;
       options_.max_background_flushes = FLAGS_max_background_flushes;
       options_.compaction_style =
-          static_cast<rocksdb::CompactionStyle>(FLAGS_compaction_style);
+          static_cast<TERARKDB_NAMESPACE::CompactionStyle>(FLAGS_compaction_style);
       options_.prefix_extractor.reset(
           NewFixedPrefixTransform(FLAGS_prefix_size));
       options_.max_open_files = FLAGS_open_files;
@@ -3665,7 +3666,7 @@ class AtomicFlushStressTest : public StressTest {
   std::atomic<int64_t> batch_id_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   SetUsageMessage(std::string("\nUSAGE:\n") + std::string(argv[0]) +
@@ -3673,13 +3674,13 @@ int main(int argc, char** argv) {
   ParseCommandLineFlags(&argc, &argv, true);
 
   if (FLAGS_statistics) {
-    dbstats = rocksdb::CreateDBStatistics();
+    dbstats = TERARKDB_NAMESPACE::CreateDBStatistics();
   }
   FLAGS_compression_type_e =
       StringToCompressionType(FLAGS_compression_type.c_str());
   FLAGS_checksum_type_e = StringToChecksumType(FLAGS_checksum_type.c_str());
   if (!FLAGS_hdfs.empty()) {
-    FLAGS_env = new rocksdb::HdfsEnv(FLAGS_hdfs);
+    FLAGS_env = new TERARKDB_NAMESPACE::HdfsEnv(FLAGS_hdfs);
   }
   FLAGS_rep_factory = StringToRepFactory(FLAGS_memtablerep.c_str());
 
@@ -3687,7 +3688,7 @@ int main(int argc, char** argv) {
   // max number of concurrent compactions.
   FLAGS_env->SetBackgroundThreads(FLAGS_max_background_compactions);
   FLAGS_env->SetBackgroundThreads(FLAGS_num_bottom_pri_threads,
-                                  rocksdb::Env::Priority::BOTTOM);
+                                  TERARKDB_NAMESPACE::Env::Priority::BOTTOM);
   if (FLAGS_prefixpercent > 0 && FLAGS_prefix_size <= 0) {
     fprintf(stderr,
             "Error: prefixpercent is non-zero while prefix_size is "
@@ -3761,7 +3762,7 @@ int main(int argc, char** argv) {
   // Choose a location for the test database if none given with --db=<path>
   if (FLAGS_db.empty()) {
     std::string default_db_path;
-    rocksdb::Env::Default()->GetTestDirectory(&default_db_path);
+    TERARKDB_NAMESPACE::Env::Default()->GetTestDirectory(&default_db_path);
     default_db_path += "/dbstress";
     FLAGS_db = default_db_path;
   }
@@ -3769,13 +3770,13 @@ int main(int argc, char** argv) {
   rocksdb_kill_odds = FLAGS_kill_random_test;
   rocksdb_kill_prefix_blacklist = SplitString(FLAGS_kill_prefix_blacklist);
 
-  std::unique_ptr<rocksdb::StressTest> stress;
+  std::unique_ptr<TERARKDB_NAMESPACE::StressTest> stress;
   if (FLAGS_atomic_flush) {
-    stress.reset(new rocksdb::AtomicFlushStressTest());
+    stress.reset(new TERARKDB_NAMESPACE::AtomicFlushStressTest());
   } else if (FLAGS_test_batches_snapshots) {
-    stress.reset(new rocksdb::BatchedOpsStressTest());
+    stress.reset(new TERARKDB_NAMESPACE::BatchedOpsStressTest());
   } else {
-    stress.reset(new rocksdb::NonBatchedOpsStressTest());
+    stress.reset(new TERARKDB_NAMESPACE::NonBatchedOpsStressTest());
   }
   if (stress->Run()) {
     return 0;

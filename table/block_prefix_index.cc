@@ -14,10 +14,11 @@
 #include "util/coding.h"
 #include "util/hash.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 inline uint32_t Hash(const Slice& s) {
-  return rocksdb::Hash(s.data(), s.size(), 0);
+  return TERARKDB_NAMESPACE::Hash(s.data(), s.size(), 0);
 }
 
 inline uint32_t PrefixToBucket(const Slice& prefix, uint32_t num_buckets) {
@@ -234,4 +235,4 @@ uint32_t BlockPrefixIndex::GetBlocks(const Slice& key,
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

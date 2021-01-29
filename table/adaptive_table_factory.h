@@ -10,7 +10,8 @@
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 struct EnvOptions;
 
@@ -62,5 +63,5 @@ class AdaptiveTableFactory : public TableFactory {
   std::shared_ptr<TableFactory> cuckoo_table_factory_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

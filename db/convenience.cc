@@ -11,7 +11,8 @@
 #include "db/db_impl.h"
 #include "util/cast_util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 void CancelAllBackgroundWork(DB* db, bool wait) {
   (static_cast_with_check<DBImpl, DB>(db->GetRootDB()))
@@ -62,6 +63,6 @@ Status VerifySstFileChecksum(const Options& options,
   return s;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

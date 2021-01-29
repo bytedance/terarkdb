@@ -13,7 +13,8 @@
 #include "rocksdb/status.h"
 #include "table/format.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class InternalIteratorCommon : public Cleanable {
  public:
@@ -116,4 +117,4 @@ template <class TValue = LazyBuffer>
 extern InternalIteratorBase<TValue>* NewErrorInternalIterator(
     const Status& status, Arena* arena = nullptr);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

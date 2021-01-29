@@ -14,7 +14,8 @@
 #include "util/testutil.h"
 #include "utilities/merge_operators.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // Expects no merging attempts.
 class NoMergingMergeOp : public MergeOperator {
@@ -506,7 +507,7 @@ TEST_P(CompactionIteratorTest, ShuttingDownInFilter) {
   compaction_proxy_->key_not_exists_beyond_output_level = true;
 
   std::atomic<bool> seek_done{false};
-  rocksdb::port::Thread compaction_thread([&] {
+  TERARKDB_NAMESPACE::port::Thread compaction_thread([&] {
     c_iter_->SeekToFirst();
     EXPECT_FALSE(c_iter_->Valid());
     EXPECT_TRUE(c_iter_->status().IsShutdownInProgress());
@@ -543,7 +544,7 @@ TEST_P(CompactionIteratorTest, ShuttingDownInMerge) {
   compaction_proxy_->key_not_exists_beyond_output_level = true;
 
   std::atomic<bool> seek_done{false};
-  rocksdb::port::Thread compaction_thread([&] {
+  TERARKDB_NAMESPACE::port::Thread compaction_thread([&] {
     c_iter_->SeekToFirst();
     ASSERT_FALSE(c_iter_->Valid());
     ASSERT_TRUE(c_iter_->status().IsShutdownInProgress());
@@ -973,7 +974,7 @@ TEST_F(CompactionIteratorWithSnapshotCheckerTest, CompactionFilter_FullMerge) {
       compaction_filter.get());
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

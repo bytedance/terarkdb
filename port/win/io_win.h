@@ -18,7 +18,8 @@
 #include "rocksdb/status.h"
 #include "util/aligned_buffer.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 namespace port {
 
 std::string GetWindowsErrSz(DWORD err);
@@ -458,4 +459,4 @@ class WinFileLock : public FileLock {
   HANDLE hFile_;
 };
 }  // namespace port
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

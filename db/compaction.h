@@ -17,7 +17,8 @@
 #include "util/arena.h"
 #include "util/autovector.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // Utility for comparing sstable boundary keys. Returns -1 if either a or b is
 // null which provides the property that a==null indicates a key that is less
@@ -530,4 +531,4 @@ extern uint64_t TotalFileSize(const std::vector<FileMetaData*>& files);
 
 extern const char* CompactionTypeName(CompactionType type);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

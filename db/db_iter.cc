@@ -32,7 +32,8 @@
 #include "util/trace_replay.h"
 #include "util/util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 #if 0
 static void DumpInternalIter(Iterator* iter) {
@@ -1522,4 +1523,4 @@ ArenaWrappedDBIter* NewArenaWrappedDbIterator(
   return iter;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -10,7 +10,8 @@
 #include "table/internal_iterator.h"
 #include "util/arena.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 struct FileMetaData;
 class RangeDelAggregator;
@@ -59,4 +60,4 @@ class IteratorCache {
   std::unordered_map<uint64_t, CacheItem> iterator_map_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

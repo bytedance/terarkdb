@@ -8,7 +8,8 @@
 #include "rocksdb/utilities/object_registry.h"
 #include "util/testharness.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class EnvRegistryTest : public testing::Test {
  public:
@@ -55,7 +56,7 @@ TEST_F(EnvRegistryTest, Basics) {
   ASSERT_EQ(1, num_b);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

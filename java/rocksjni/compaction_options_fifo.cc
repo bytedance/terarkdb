@@ -4,7 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 // This file implements the "bridge" between Java and C++ for
-// rocksdb::CompactionOptionsFIFO.
+// TERARKDB_NAMESPACE::CompactionOptionsFIFO.
 
 #include <jni.h>
 
@@ -18,7 +18,7 @@
  */
 jlong Java_org_rocksdb_CompactionOptionsFIFO_newCompactionOptionsFIFO(
     JNIEnv* /*env*/, jclass /*jcls*/) {
-  const auto* opt = new rocksdb::CompactionOptionsFIFO();
+  const auto* opt = new TERARKDB_NAMESPACE::CompactionOptionsFIFO();
   return reinterpret_cast<jlong>(opt);
 }
 
@@ -30,7 +30,7 @@ jlong Java_org_rocksdb_CompactionOptionsFIFO_newCompactionOptionsFIFO(
 void Java_org_rocksdb_CompactionOptionsFIFO_setMaxTableFilesSize(
     JNIEnv* /*env*/, jobject /*jobj*/, jlong jhandle,
     jlong jmax_table_files_size) {
-  auto* opt = reinterpret_cast<rocksdb::CompactionOptionsFIFO*>(jhandle);
+  auto* opt = reinterpret_cast<TERARKDB_NAMESPACE::CompactionOptionsFIFO*>(jhandle);
   opt->max_table_files_size = static_cast<uint64_t>(jmax_table_files_size);
 }
 
@@ -42,7 +42,7 @@ void Java_org_rocksdb_CompactionOptionsFIFO_setMaxTableFilesSize(
 jlong Java_org_rocksdb_CompactionOptionsFIFO_maxTableFilesSize(JNIEnv* /*env*/,
                                                                jobject /*jobj*/,
                                                                jlong jhandle) {
-  auto* opt = reinterpret_cast<rocksdb::CompactionOptionsFIFO*>(jhandle);
+  auto* opt = reinterpret_cast<TERARKDB_NAMESPACE::CompactionOptionsFIFO*>(jhandle);
   return static_cast<jlong>(opt->max_table_files_size);
 }
 
@@ -54,7 +54,7 @@ jlong Java_org_rocksdb_CompactionOptionsFIFO_maxTableFilesSize(JNIEnv* /*env*/,
 void Java_org_rocksdb_CompactionOptionsFIFO_setTtl(JNIEnv* /*env*/,
                                                    jobject /*jobj*/,
                                                    jlong jhandle, jlong ttl) {
-  auto* opt = reinterpret_cast<rocksdb::CompactionOptionsFIFO*>(jhandle);
+  auto* opt = reinterpret_cast<TERARKDB_NAMESPACE::CompactionOptionsFIFO*>(jhandle);
   opt->ttl = static_cast<uint64_t>(ttl);
 }
 
@@ -66,7 +66,7 @@ void Java_org_rocksdb_CompactionOptionsFIFO_setTtl(JNIEnv* /*env*/,
 jlong Java_org_rocksdb_CompactionOptionsFIFO_ttl(JNIEnv* /*env*/,
                                                  jobject /*jobj*/,
                                                  jlong jhandle) {
-  auto* opt = reinterpret_cast<rocksdb::CompactionOptionsFIFO*>(jhandle);
+  auto* opt = reinterpret_cast<TERARKDB_NAMESPACE::CompactionOptionsFIFO*>(jhandle);
   return static_cast<jlong>(opt->ttl);
 }
 
@@ -78,7 +78,7 @@ jlong Java_org_rocksdb_CompactionOptionsFIFO_ttl(JNIEnv* /*env*/,
 void Java_org_rocksdb_CompactionOptionsFIFO_setAllowCompaction(
     JNIEnv* /*env*/, jobject /*jobj*/, jlong jhandle,
     jboolean allow_compaction) {
-  auto* opt = reinterpret_cast<rocksdb::CompactionOptionsFIFO*>(jhandle);
+  auto* opt = reinterpret_cast<TERARKDB_NAMESPACE::CompactionOptionsFIFO*>(jhandle);
   opt->allow_compaction = static_cast<bool>(allow_compaction);
 }
 
@@ -89,7 +89,7 @@ void Java_org_rocksdb_CompactionOptionsFIFO_setAllowCompaction(
  */
 jboolean Java_org_rocksdb_CompactionOptionsFIFO_allowCompaction(
     JNIEnv* /*env*/, jobject /*jobj*/, jlong jhandle) {
-  auto* opt = reinterpret_cast<rocksdb::CompactionOptionsFIFO*>(jhandle);
+  auto* opt = reinterpret_cast<TERARKDB_NAMESPACE::CompactionOptionsFIFO*>(jhandle);
   return static_cast<jboolean>(opt->allow_compaction);
 }
 
@@ -101,5 +101,5 @@ jboolean Java_org_rocksdb_CompactionOptionsFIFO_allowCompaction(
 void Java_org_rocksdb_CompactionOptionsFIFO_disposeInternal(JNIEnv* /*env*/,
                                                             jobject /*jobj*/,
                                                             jlong jhandle) {
-  delete reinterpret_cast<rocksdb::CompactionOptionsFIFO*>(jhandle);
+  delete reinterpret_cast<TERARKDB_NAMESPACE::CompactionOptionsFIFO*>(jhandle);
 }

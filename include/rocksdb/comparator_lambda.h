@@ -2,7 +2,8 @@
 // This source code is licensed under Apache 2.0 License.
 #pragma once
 #include "utilities/util/function.hpp"
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 template <class Comp>
 struct StdComparareLessType {
@@ -126,4 +127,4 @@ auto operator>(const char (&)[1], const Cmp3& cmp)
   return Cmp3_to_Equal<Cmp3>{&cmp};
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

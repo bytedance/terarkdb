@@ -15,7 +15,8 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class CuckooTableDBTest : public testing::Test {
  private:
@@ -321,10 +322,10 @@ TEST_F(CuckooTableDBTest, AdaptiveTable) {
   ASSERT_EQ("v4", Get("key4"));
   ASSERT_EQ("v6", Get("key5"));
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  if (rocksdb::port::kLittleEndian) {
+  if (TERARKDB_NAMESPACE::port::kLittleEndian) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
   }

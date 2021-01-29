@@ -31,7 +31,8 @@
 // third party
 #include <zstd/zstd.h>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 using namespace terark;
 
@@ -78,7 +79,7 @@ static std::string GetTimestamp() {
 
 ///////////////////////////////////////////////////////////////////
 // hack MyRocks Rdb_tbl_prop_coll
-rocksdb::Status MyRocksTablePropertiesCollectorHack(
+TERARKDB_NAMESPACE::Status MyRocksTablePropertiesCollectorHack(
     IntTblPropCollector* collector, const TerarkZipMultiOffsetInfo& offset_info,
     UserCollectedProperties& user_collected_properties,
     bool is_reverse_bytewise_order) {
@@ -353,7 +354,7 @@ void TerarkZipTableBuilder::RangeStatus::AddValueBit() {
 }
 
 TerarkZipTableBuilder::KeyValueStatus::KeyValueStatus(
-    rocksdb::TerarkZipTableBuilder::RangeStatus&& s, freq_hist_o1&& f) {
+    TERARKDB_NAMESPACE::TerarkZipTableBuilder::RangeStatus&& s, freq_hist_o1&& f) {
   status = std::move(s);
   valueFreq = std::move(f);
   isFullValue = true;
@@ -389,8 +390,8 @@ Status TerarkZipTableBuilder::Add(const Slice& key,
   }
   const Slice& value = lazy_value.slice();
   if (table_options_.debugLevel == 3) {
-    rocksdb::ParsedInternalKey ikey;
-    rocksdb::ParseInternalKey(key, &ikey);
+    TERARKDB_NAMESPACE::ParsedInternalKey ikey;
+    TERARKDB_NAMESPACE::ParseInternalKey(key, &ikey);
     fprintf(tmpDumpFile_, "DEBUG: 1st pass => %s / %s \n",
             ikey.DebugString(true).c_str(), value.ToString(true).c_str());
   }
@@ -551,8 +552,8 @@ Status TerarkZipTableBuilder::AddTombstone(const Slice& key,
   }
   const Slice& value = lazy_value.slice();
   if (table_options_.debugLevel == 3) {
-    rocksdb::ParsedInternalKey ikey;
-    rocksdb::ParseInternalKey(key, &ikey);
+    TERARKDB_NAMESPACE::ParsedInternalKey ikey;
+    TERARKDB_NAMESPACE::ParseInternalKey(key, &ikey);
     fprintf(tmpDumpFile_, "DEBUG: 1st pass => %s / %s \n",
             ikey.DebugString(true).c_str(), value.ToString(true).c_str());
   }
@@ -800,9 +801,9 @@ Status TerarkZipTableBuilder::Finish(
   return AbortFinish(ex);
 }
 
-std::unique_ptr<rocksdb::AsyncTask<rocksdb::Status>>
+std::unique_ptr<TERARKDB_NAMESPACE::AsyncTask<TERARKDB_NAMESPACE::Status>>
 TerarkZipTableBuilder::Async(std::function<Status()> func, void* tag) {
-  auto task = std::unique_ptr<rocksdb::AsyncTask<rocksdb::Status>>(
+  auto task = std::unique_ptr<TERARKDB_NAMESPACE::AsyncTask<TERARKDB_NAMESPACE::Status>>(
       new AsyncTask<Status>([func]() {
         try {
           return func();
@@ -811,7 +812,7 @@ TerarkZipTableBuilder::Async(std::function<Status()> func, void* tag) {
         }
       }));
   ioptions_.env->Schedule(c_style_callback(*task), task.get(),
-                          rocksdb::Env::Priority::LOW, tag,
+                          TERARKDB_NAMESPACE::Env::Priority::LOW, tag,
                           c_style_callback(*task));
   return task;
 }
@@ -1046,7 +1047,7 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
   return Status::OK();
 }
 
-std::unique_ptr<rocksdb::AsyncTask<rocksdb::Status>>
+std::unique_ptr<TERARKDB_NAMESPACE::AsyncTask<TERARKDB_NAMESPACE::Status>>
 TerarkZipTableBuilder::CompressDict(fstring tmpDictFile, fstring dict,
                                     std::string* info, long long* td) {
   if (table_options_.disableCompressDict) {
@@ -1083,7 +1084,7 @@ TerarkZipTableBuilder::CompressDict(fstring tmpDictFile, fstring dict,
 }
 
 Status TerarkZipTableBuilder::WaitBuildIndex() {
-  ioptions_.env->UnSchedule(&indexTag, rocksdb::Env::Priority::LOW);
+  ioptions_.env->UnSchedule(&indexTag, TERARKDB_NAMESPACE::Env::Priority::LOW);
   Status result = Status::OK();
   for (auto& kvs : prefixBuildInfos_) {
     assert(kvs);
@@ -1098,7 +1099,7 @@ Status TerarkZipTableBuilder::WaitBuildIndex() {
 }
 
 Status TerarkZipTableBuilder::WaitBuildStore() {
-  ioptions_.env->UnSchedule(&storeTag, rocksdb::Env::Priority::LOW);
+  ioptions_.env->UnSchedule(&storeTag, TERARKDB_NAMESPACE::Env::Priority::LOW);
   Status result = Status::OK();
   for (auto& kvs : prefixBuildInfos_) {
     assert(kvs);
@@ -1393,7 +1394,7 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
   if (zbuilder) {
     zbuilder->freeDict();
     t4 = g_pf.now();
-    ioptions_.env->UnSchedule(&dictTag, rocksdb::Env::Priority::LOW);
+    ioptions_.env->UnSchedule(&dictTag, TERARKDB_NAMESPACE::Env::Priority::LOW);
     assert(dictWait->valid());
     s = dictWait->get();
     if (!s.ok()) {
@@ -2355,9 +2356,9 @@ Status TerarkZipTableBuilder::WriteMetaData(
 
 void TerarkZipTableBuilder::Abandon() {
   closed_ = true;
-  ioptions_.env->UnSchedule(&indexTag, rocksdb::Env::Priority::LOW);
-  ioptions_.env->UnSchedule(&storeTag, rocksdb::Env::Priority::LOW);
-  ioptions_.env->UnSchedule(&dictTag, rocksdb::Env::Priority::LOW);
+  ioptions_.env->UnSchedule(&indexTag, TERARKDB_NAMESPACE::Env::Priority::LOW);
+  ioptions_.env->UnSchedule(&storeTag, TERARKDB_NAMESPACE::Env::Priority::LOW);
+  ioptions_.env->UnSchedule(&dictTag, TERARKDB_NAMESPACE::Env::Priority::LOW);
   for (auto& kvs : prefixBuildInfos_) {
     if (!kvs) {
       continue;
@@ -2567,4 +2568,4 @@ Status GetTerarkZipTableOptionsFromString(
                                          new_table_options);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

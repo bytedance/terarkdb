@@ -31,7 +31,8 @@
 #include <thread>
 #include <vector>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 void ThreadPoolImpl::PthreadCall(const char* label, int result) {
   if (result != 0) {
@@ -474,4 +475,4 @@ ThreadPool* NewThreadPool(int num_threads) {
   return thread_pool;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

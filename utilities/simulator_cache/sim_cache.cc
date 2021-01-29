@@ -12,7 +12,8 @@
 #include "util/mutexlock.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 
@@ -341,4 +342,4 @@ std::shared_ptr<SimCache> NewSimCache(std::shared_ptr<Cache> cache,
   return std::make_shared<SimCacheImpl>(cache, sim_capacity, num_shard_bits);
 }
 
-}  // end namespace rocksdb
+}  // end namespace TERARKDB_NAMESPACE

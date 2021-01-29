@@ -12,7 +12,8 @@
 #include "port/port.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 #ifdef ROCKSDB_JEMALLOC_NODUMP_ALLOCATOR
 
@@ -203,4 +204,4 @@ Status NewJemallocNodumpAllocator(
 #endif  // ROCKSDB_JEMALLOC_NODUMP_ALLOCATOR
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

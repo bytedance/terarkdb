@@ -27,7 +27,8 @@
 #include "rocksdb/options.h"
 #include "util/thread_local.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Version;
 class VersionSet;
@@ -657,4 +658,4 @@ extern uint32_t GetColumnFamilyID(ColumnFamilyHandle* column_family);
 extern const Comparator* GetColumnFamilyUserComparator(
     ColumnFamilyHandle* column_family);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

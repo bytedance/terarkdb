@@ -11,7 +11,8 @@
 #include "rocksdb/slice.h"
 #include "table/internal_iterator.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // The merge context for merging a user key.
 // When doing a Get(), DB will create such a class and pass it when
@@ -96,4 +97,4 @@ class MergeContext {
   bool operands_reversed_ = true;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

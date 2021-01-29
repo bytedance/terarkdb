@@ -26,7 +26,8 @@
   #define PLATFORM_UNALIGNED_ACCESS_NOT_ALLOWED
 #endif
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // The maximum length of a varint in bytes for 64-bit.
 const unsigned int kMaxVarint64Length = 10;
@@ -460,4 +461,4 @@ inline void GetUnaligned(const T *memory, T *value) {
 #endif
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

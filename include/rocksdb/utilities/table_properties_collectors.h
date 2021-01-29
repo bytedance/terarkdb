@@ -10,7 +10,8 @@
 
 #include "rocksdb/table_properties.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // A factory of a table property collector that marks a SST
 // file as need-compaction when it observe at least "D" deletion
@@ -72,6 +73,6 @@ extern std::shared_ptr<CompactOnDeletionCollectorFactory>
     NewCompactOnDeletionCollectorFactory(
         size_t sliding_window_size,
         size_t deletion_trigger);
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // !ROCKSDB_LITE

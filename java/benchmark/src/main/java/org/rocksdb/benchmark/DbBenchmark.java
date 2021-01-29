@@ -1402,13 +1402,13 @@ public class DbBenchmark {
       }
     },
     /* TODO(yhchiang): enable the following
-    direct_reads(rocksdb::EnvOptions().use_direct_reads,
+    direct_reads(TERARKDB_NAMESPACE::EnvOptions().use_direct_reads,
         "Allow direct I/O reads.") {
       @Override public Object parseValue(String value) {
         return parseBoolean(value);
       }
       },
-    direct_writes(rocksdb::EnvOptions().use_direct_reads,
+    direct_writes(TERARKDB_NAMESPACE::EnvOptions().use_direct_reads,
       "Allow direct I/O reads.") {
       @Override public Object parseValue(String value) {
       return parseBoolean(value);

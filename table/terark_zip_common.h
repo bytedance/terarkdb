@@ -5,7 +5,8 @@
 #include <terark/io/FileStream.hpp>
 #include <terark/io/StreamBuffer.hpp>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 #if (defined(IOS_CROSS_COMPILE) || defined(__DARWIN_C_LEVEL)) && 0
 #define MY_THREAD_LOCAL(Type, Var) Type Var
@@ -91,4 +92,4 @@ inline std::string ClassName(const T& x) {
   return demangle(typeid(x).name());
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -19,7 +19,8 @@
 #include "util/coding.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 class Env;
 class Logger;
@@ -377,6 +378,6 @@ const WriteBatchEntryIndexFactory* GetWriteBatchEntryIndexFactory(
 
 ROCKSDB_REGISTER_WRITE_BATCH_WITH_INDEX(skip_list);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // !ROCKSDB_LITE

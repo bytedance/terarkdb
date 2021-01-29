@@ -4,7 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 // This file implements the callback "bridge" between Java and C++ for
-// rocksdb::Comparator and rocksdb::DirectComparator.
+// TERARKDB_NAMESPACE::Comparator and TERARKDB_NAMESPACE::DirectComparator.
 
 #ifndef JAVA_ROCKSJNI_COMPARATORJNICALLBACK_H_
 #define JAVA_ROCKSJNI_COMPARATORJNICALLBACK_H_
@@ -17,7 +17,8 @@
 #include "rocksdb/slice.h"
 #include "port/port.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 struct ComparatorJniCallbackOptions {
   // Use adaptive mutex, which spins in the user space before resorting
@@ -88,6 +89,6 @@ class DirectComparatorJniCallback : public BaseComparatorJniCallback {
         const ComparatorJniCallbackOptions* copt);
       ~DirectComparatorJniCallback();
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // JAVA_ROCKSJNI_COMPARATORJNICALLBACK_H_
