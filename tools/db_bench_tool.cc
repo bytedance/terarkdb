@@ -3281,6 +3281,7 @@ class Benchmark {
         exit(1);
 #endif  // ROCKSDB_LITE
     }
+    std::vector<std::shared_ptr<TableFactory>> factory;
     if (FLAGS_use_plain_table) {
 #ifndef ROCKSDB_LITE
       if (FLAGS_rep_factory != kPrefixHash &&
@@ -3423,6 +3424,8 @@ class Benchmark {
 
 #endif
       }
+      // options.table_factory = std::shared_ptr<TableFactory>(
+      //     NewBlockBasedTableFactory(block_based_options));
     }
 
 #ifdef WITH_TERARK_ZIP
@@ -3433,10 +3436,16 @@ class Benchmark {
       tzto.cbtEntryPerTrie = FLAGS_cbt_entry_per_trie;
       rocksdb::TerarkZipDeleteTempFiles(tzto.localTempDir);
       FLAGS_env->CreateDir(FLAGS_db);
-      options.table_factory.reset(
-          rocksdb::NewTerarkZipTableFactory(tzto, options.table_factory));
+      factory.emplace_back(std::shared_ptr<TableFactory>(
+          rocksdb::NewTerarkZipTableFactory(tzto, options.table_factory)));
     }
 #endif
+    factory.emplace_back(options.table_factory);
+    if (!!strncmp(options.table_factory->Name(), "AdaptiveTableFactory", 20)) {
+      options.table_factory = std::shared_ptr<TableFactory>(
+          rocksdb::NewAdaptiveTableFactory(factory));
+    }
+    // printf("factory finish!\n");
 
     if (FLAGS_max_bytes_for_level_multiplier_additional_v.size() > 0) {
       if (FLAGS_max_bytes_for_level_multiplier_additional_v.size() !=
@@ -3551,6 +3560,8 @@ class Benchmark {
   }
 
   void InitializeOptionsGeneral(Options* opts) {
+    printf("Initializing RocksDB Options from general\n");
+
     Options& options = *opts;
 
     options.create_missing_column_families = FLAGS_num_column_families > 1;
@@ -3566,7 +3577,9 @@ class Benchmark {
     options.compression_opts.zstd_max_train_bytes =
         FLAGS_compression_zstd_max_train_bytes;
     // If this is a block based table, set some related options
-    if (options.table_factory->Name() == BlockBasedTableFactory::kName &&
+    if ((options.table_factory->Name() == BlockBasedTableFactory::kName ||
+         !!strncmp(options.table_factory->Name(), "AdaptiveTableFactory",
+                   20)) &&
         options.table_factory->GetOptions() != nullptr) {
       BlockBasedTableOptions* table_options =
           reinterpret_cast<BlockBasedTableOptions*>(

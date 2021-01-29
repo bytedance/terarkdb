@@ -222,18 +222,20 @@ inline static size_t GetFixedPrefixLen(const SliceTransform* tr) {
   }
   return terark::lcast(trName.substr(namePrefix.size()));
 }
-
 TerarkZipTableFactory::TerarkZipTableFactory(
     const TerarkZipTableOptions& tzto, std::shared_ptr<TableFactory> fallback)
     : table_options_(tzto), fallback_factory_(fallback) {
-  adaptive_factory_ = NewAdaptiveTableFactory();
   if (tzto.warmUpIndexOnOpen) {
     // turn off warmUpIndexOnOpen if forceMetaInMemory
     table_options_.warmUpIndexOnOpen = !tzto.forceMetaInMemory;
   }
 }
 
-TerarkZipTableFactory::~TerarkZipTableFactory() { delete adaptive_factory_; }
+TerarkZipTableFactory::~TerarkZipTableFactory() {
+  // if (adaptive_factory_ != nullptr) {
+  //   delete adaptive_factory_;
+  // }
+}
 
 Status TerarkZipTableFactory::NewTableReader(
     const TableReaderOptions& table_reader_options,
@@ -265,12 +267,12 @@ Status TerarkZipTableFactory::NewTableReader(
     return s;
   }
   if (footer.table_magic_number() != kTerarkZipTableMagicNumber) {
-    if (adaptive_factory_) {
-      // just for open table
-      return adaptive_factory_->NewTableReader(
-          table_reader_options, std::move(file), file_size, table,
-          prefetch_index_and_filter_in_cache);
-    }
+    // if (adaptive_factory_) {
+    //   // just for open table
+    //   return adaptive_factory_->NewTableReader(
+    //       table_reader_options, std::move(file), file_size, table,
+    //       prefetch_index_and_filter_in_cache);
+    // }
     if (fallback_factory_) {
       return fallback_factory_->NewTableReader(
           table_reader_options, std::move(file), file_size, table,

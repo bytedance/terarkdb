@@ -334,7 +334,6 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo,
   MyOverrideBool(tzo, forceMetaInMemory);
   MyOverrideBool(tzo, enableEntropyStore);
 
-
   MyOverrideDouble(tzo, sampleRatio);
   MyOverrideDouble(tzo, indexCacheRatio);
   MyOverrideDouble(tzo, cbtMinKeyRatio);
@@ -342,7 +341,6 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo,
   MyOverrideInt(tzo, minDictZipValueSize);
   MyOverrideInt(tzo, minPreadLen);
   MyOverrideInt(tzo, cbtHashBits);
-
 
   MyOverrideXiB(tzo, softZipWorkingMemLimit);
   MyOverrideXiB(tzo, hardZipWorkingMemLimit);
@@ -365,9 +363,10 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo,
     }
   }
   if (use_terark_zip_table) {
+    std::vector<std::shared_ptr<TableFactory>> factory;
+    factory.emplace_back(cfo.table_factory);
     cfo.table_factory.reset(NewTerarkZipTableFactory(
-        tzo, std::shared_ptr<TableFactory>(
-                 NewAdaptiveTableFactory(cfo.table_factory))));
+        tzo, std::shared_ptr<TableFactory>(NewAdaptiveTableFactory(factory))));
   }
   if (const char* env = getenv("TerarkZipTable_compaction_style")) {
     if (strcasecmp(env, "Level") == 0) {

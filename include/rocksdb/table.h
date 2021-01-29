@@ -434,8 +434,7 @@ class RandomAccessFileReader;
 
 // A base class for table factories.
 class TableFactory
-    : public terark::Factoryable<TableFactory*, const std::string&,
-                                           Status*> {
+    : public terark::Factoryable<TableFactory*, const std::string&, Status*> {
  public:
   virtual ~TableFactory() {}
 
@@ -545,10 +544,8 @@ class TableFactory
 // @cuckoo_table_factory: cuckoo table factory to use. If NULL, use a default
 // one.
 extern TableFactory* NewAdaptiveTableFactory(
-    std::shared_ptr<TableFactory> table_factory_to_write = nullptr,
-    std::shared_ptr<TableFactory> block_based_table_factory = nullptr,
-    std::shared_ptr<TableFactory> plain_table_factory = nullptr,
-    std::shared_ptr<TableFactory> cuckoo_table_factory = nullptr);
+    std::vector<std::shared_ptr<TableFactory>> table_factory =
+        std::vector<std::shared_ptr<TableFactory>>());
 
 bool IsCompactionWorkerNode();
 

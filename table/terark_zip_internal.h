@@ -165,7 +165,9 @@ struct TerarkZipMultiOffsetInfo {
   void risk_release_ownership();
 };
 
-class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
+class TerarkZipTableFactory : public TableFactory
+// , boost::noncopyable
+{
  public:
   explicit TerarkZipTableFactory(const TerarkZipTableOptions& tzto,
                                  std::shared_ptr<class TableFactory> fallback);
@@ -203,7 +205,7 @@ class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
  private:
   TerarkZipTableOptions table_options_;
   std::shared_ptr<class TableFactory> fallback_factory_;
-  TableFactory* adaptive_factory_;  // just for open table
+  // TableFactory* adaptive_factory_;  // just for open table
   mutable std::mutex cache_create_mutex_;
   mutable boost::intrusive_ptr<LruReadonlyCache> cache_;
   mutable size_t nth_new_terark_table_ = 0;
