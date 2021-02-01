@@ -552,15 +552,17 @@ Options LDBCommand::PrepareOptionsForOpenDB() {
           LDBCommandExecuteResult::Failed(ARG_BLOCK_SIZE + " must be > 0.");
     }
   }
-
+  std::vector<std::shared_ptr<TableFactory>> factory;
   if (use_table_options) {
     cf_opts->table_factory.reset(
         NewBlockBasedTableFactory(block_based_table_options));
   }
   if (use_terark_table) {
-    cf_opts->table_factory.reset(NewTerarkZipTableFactory(
-        terark_zip_table_options, cf_opts->table_factory));
+    factory.emplace_back(NewTerarkZipTableFactory(terark_zip_table_options,
+                                                  cf_opts->table_factory));
   }
+  factory.emplace_back(cf_opts->table_factory);
+  cf_opts->table_factory.reset(NewAdaptiveTableFactory(factory));
 
   itr = option_map_.find(ARG_AUTO_COMPACTION);
   if (itr != option_map_.end()) {
@@ -657,6 +659,7 @@ Options LDBCommand::PrepareOptionsForOpenDB() {
   if (itr != option_map_.end()) {
     db_opts->wal_dir = itr->second;
   }
+  // cf_opts->enable_lazy_compaction = true;
   // TODO(ajkr): this return value doesn't reflect the CF options changed, so
   // subcommands that rely on this won't see the effect of CF-related CLI args.
   // Such subcommands need to be changed to properly support CFs.

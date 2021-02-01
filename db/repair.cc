@@ -587,6 +587,12 @@ class Repairer {
                                                 &props);
     }
     if (status.ok()) {
+      if (!props->dependence.empty() || !props->inheritance_chain.empty()) {
+        status = rocksdb::Status::NotSupported(
+            "Don't support map sstable or blob table");
+      }
+    }
+    if (status.ok()) {
       t->column_family_id = static_cast<uint32_t>(props->column_family_id);
       if (t->column_family_id ==
           TablePropertiesCollectorFactory::Context::kUnknownColumnFamily) {
