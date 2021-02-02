@@ -30,16 +30,18 @@ class VersionBuilder {
   VersionBuilder(const EnvOptions& env_options, TableCache* table_cache,
                  VersionStorageInfo* base_vstorage, Logger* info_log = nullptr);
   ~VersionBuilder();
-  void CheckConsistency(VersionStorageInfo* vstorage);
+  void CheckConsistency(VersionStorageInfo* vstorage,
+                        bool strict_sequence = true);
   void CheckConsistencyForDeletes(VersionEdit* edit, uint64_t number,
                                   int level);
   bool CheckConsistencyForNumLevels();
   void Apply(VersionEdit* edit);
-  void SaveTo(VersionStorageInfo* vstorage);
+  void SaveTo(VersionStorageInfo* vstorage, bool strict_sequence = true);
   void LoadTableHandlers(InternalStats* internal_stats,
                          bool prefetch_index_and_filter_in_cache,
                          const SliceTransform* prefix_extractor,
-                         bool load_essence_sst, int max_threads = 1);
+                         bool load_essence_sst, int max_threads = 1,
+                         bool strict_sequence = true);
   void UpgradeFileMetaData(const SliceTransform* prefix_extractor,
                            int max_threads = 1);
 

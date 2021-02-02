@@ -385,8 +385,9 @@ class VersionBuilder::Rep {
     }
   }
 
-  void CheckConsistency(VersionStorageInfo* vstorage, bool check_dependence) {
-    Init();
+  void CheckConsistency(VersionStorageInfo* vstorage, bool check_dependence,
+                        bool strict_sequence = true) {
+    Init(strict_sequence);
 #ifdef NDEBUG
     if (!vstorage->force_consistency_checks()) {
       // Dont run consistency checks in release mode except if
@@ -425,7 +426,8 @@ class VersionBuilder::Rep {
                       external_file_seqno);
               abort();
             }
-          } else if (f1->fd.smallest_seqno <= f2->fd.smallest_seqno) {
+          } else if (strict_sequence &&
+                     f1->fd.smallest_seqno <= f2->fd.smallest_seqno) {
             fprintf(stderr,
                     "L0 files seqno %" PRIu64 " %" PRIu64 " vs. %" PRIu64
                     " %" PRIu64 "\n",
@@ -515,7 +517,7 @@ class VersionBuilder::Rep {
     return true;
   }
 
-  void Init() {
+  void Init(bool strict_sequence = true) {
     if (levels_ != nullptr) {
       return;
     }
@@ -531,16 +533,16 @@ class VersionBuilder::Rep {
         PutSst(f, level);
       }
     }
-    CheckConsistency(base_vstorage_, true);
+    CheckConsistency(base_vstorage_, true, strict_sequence);
     if (debugger_) {
       debugger_->PushVersion(base_vstorage_);
     }
   }
 
   // Apply all of the edits in *edit to the current state.
-  void Apply(VersionEdit* edit) {
-    Init();
-    CheckConsistency(base_vstorage_, false);
+  void Apply(VersionEdit* edit, bool strict_sequence = true) {
+    Init(strict_sequence);
+    CheckConsistency(base_vstorage_, false, strict_sequence);
     if (debugger_) {
       debugger_->PushEdit(edit);
     }
@@ -591,9 +593,9 @@ class VersionBuilder::Rep {
 
   // Save the current state in *v.
   // WARNING: this func will call out of mutex
-  void SaveTo(VersionStorageInfo* vstorage) {
-    Init();
-    CheckConsistency(vstorage, true);
+  void SaveTo(VersionStorageInfo* vstorage, bool strict_sequence = true) {
+    Init(strict_sequence);
+    CheckConsistency(vstorage, true, strict_sequence);
     CalculateDependence(true);
     auto exists = [&](uint64_t file_number) {
       auto find = inheritance_counter_.find(file_number);
@@ -675,7 +677,7 @@ class VersionBuilder::Rep {
     vstorage->set_read_amplification(read_amp);
     vstorage->oldest_snapshot_seqnum(base_vstorage_->oldest_snapshot_seqnum());
 
-    CheckConsistency(vstorage, true);
+    CheckConsistency(vstorage, true, strict_sequence);
     if (debugger_) {
       debugger_->Verify(this, vstorage);
     }
@@ -684,12 +686,13 @@ class VersionBuilder::Rep {
   void LoadTableHandlers(InternalStats* internal_stats,
                          bool prefetch_index_and_filter_in_cache,
                          const SliceTransform* prefix_extractor,
-                         bool load_essence_sst, int max_threads) {
-    Init();
+                         bool load_essence_sst, int max_threads,
+                         bool strict_sequence = true) {
+    Init(strict_sequence);
     assert(table_cache_ != nullptr);
     // <file metadata, level>
     std::vector<std::pair<FileMetaData*, int>> files_meta;
-    Init();
+    Init(strict_sequence);
     for (int level = 0; level < num_levels_; level++) {
       for (auto& file_meta_pair : levels_[level]) {
         auto* file_meta = file_meta_pair.second;
@@ -744,8 +747,8 @@ class VersionBuilder::Rep {
   }
 
   void UpgradeFileMetaData(const SliceTransform* prefix_extractor,
-                           int max_threads) {
-    Init();
+                           int max_threads, bool strict_sequence = true) {
+    Init(strict_sequence);
     assert(table_cache_ != nullptr);
     std::vector<FileMetaData*> files_meta;
     for (auto& pair : dependence_map_) {
@@ -800,8 +803,9 @@ VersionBuilder::VersionBuilder(const EnvOptions& env_options,
 
 VersionBuilder::~VersionBuilder() { delete rep_; }
 
-void VersionBuilder::CheckConsistency(VersionStorageInfo* vstorage) {
-  rep_->CheckConsistency(vstorage, true);
+void VersionBuilder::CheckConsistency(VersionStorageInfo* vstorage,
+                                      bool strict_sequence) {
+  rep_->CheckConsistency(vstorage, true, strict_sequence);
 }
 
 void VersionBuilder::CheckConsistencyForDeletes(VersionEdit* edit,
@@ -815,16 +819,19 @@ bool VersionBuilder::CheckConsistencyForNumLevels() {
 
 void VersionBuilder::Apply(VersionEdit* edit) { rep_->Apply(edit); }
 
-void VersionBuilder::SaveTo(VersionStorageInfo* vstorage) {
-  rep_->SaveTo(vstorage);
+void VersionBuilder::SaveTo(VersionStorageInfo* vstorage,
+                            bool strict_sequence) {
+  rep_->SaveTo(vstorage, strict_sequence);
 }
 
 void VersionBuilder::LoadTableHandlers(InternalStats* internal_stats,
                                        bool prefetch_index_and_filter_in_cache,
                                        const SliceTransform* prefix_extractor,
-                                       bool load_essence_sst, int max_threads) {
+                                       bool load_essence_sst, int max_threads,
+                                       bool strict_sequence) {
   rep_->LoadTableHandlers(internal_stats, prefetch_index_and_filter_in_cache,
-                          prefix_extractor, load_essence_sst, max_threads);
+                          prefix_extractor, load_essence_sst, max_threads,
+                          strict_sequence);
 }
 
 void VersionBuilder::UpgradeFileMetaData(const SliceTransform* prefix_extractor,

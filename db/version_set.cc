@@ -703,11 +703,12 @@ class BaseReferencedVersionBuilder {
     versions->LogAndApplyHelper(version_->cfd(), version_builder_, version_,
                                 edit, mu, false);
   }
-  void DoApplyAndSaveTo(VersionStorageInfo* vstorage) {
+  void DoApplyAndSaveTo(VersionStorageInfo* vstorage,
+                        bool strict_sequence = true) {
     for (auto edit : edit_list_) {
       version_builder_->Apply(edit);
     }
-    version_builder_->SaveTo(vstorage);
+    version_builder_->SaveTo(vstorage, strict_sequence);
   }
 
  private:
@@ -2958,7 +2959,7 @@ void VersionSet::AppendVersion(ColumnFamilyData* column_family_data,
 Status VersionSet::ProcessManifestWrites(
     std::deque<ManifestWriter>& writers, InstrumentedMutex* mu,
     Directory* db_directory, bool new_descriptor_log,
-    const ColumnFamilyOptions* new_cf_options) {
+    const ColumnFamilyOptions* new_cf_options, bool strict_sequence) {
   assert(!writers.empty());
   ManifestWriter& first_writer = writers.front();
   ManifestWriter* last_writer = &first_writer;
@@ -3126,7 +3127,8 @@ Status VersionSet::ProcessManifestWrites(
       for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
         assert(!builder_guards.empty() &&
                builder_guards.size() == versions.size());
-        builder_guards[i]->DoApplyAndSaveTo(versions[i]->storage_info());
+        builder_guards[i]->DoApplyAndSaveTo(versions[i]->storage_info(),
+                                            strict_sequence);
       }
     }
 
@@ -3153,6 +3155,8 @@ Status VersionSet::ProcessManifestWrites(
     // only one thread can be here at the same time
     if (new_descriptor_log) {
       // create new manifest file
+      Header(db_options_->info_log, "Creating manifest %" PRIu64 "\n",
+             pending_manifest_file_number_);
       ROCKS_LOG_INFO(db_options_->info_log, "Creating manifest %" PRIu64 "\n",
                      pending_manifest_file_number_);
       std::string descriptor_fname =
@@ -3351,7 +3355,7 @@ Status VersionSet::LogAndApply(
     const autovector<const MutableCFOptions*>& mutable_cf_options_list,
     const autovector<autovector<VersionEdit*>>& edit_lists,
     InstrumentedMutex* mu, Directory* db_directory, bool new_descriptor_log,
-    const ColumnFamilyOptions* new_cf_options) {
+    const ColumnFamilyOptions* new_cf_options, bool strict_sequence) {
   mu->AssertHeld();
   int num_edits = 0;
   for (const auto& elist : edit_lists) {
@@ -3423,7 +3427,7 @@ Status VersionSet::LogAndApply(
   }
 
   return ProcessManifestWrites(writers, mu, db_directory, new_descriptor_log,
-                               new_cf_options);
+                               new_cf_options, strict_sequence);
 }
 
 void VersionSet::LogAndApplyCFHelper(VersionEdit* edit) {

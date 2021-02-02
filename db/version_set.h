@@ -852,12 +852,13 @@ class VersionSet {
   // column_family_options has to be set if edit is column family add
   // REQUIRES: *mu is held on entry.
   // REQUIRES: no other thread concurrently calls LogAndApply()
-  Status LogAndApply(
-      ColumnFamilyData* column_family_data,
-      const MutableCFOptions& mutable_cf_options, VersionEdit* edit,
-      InstrumentedMutex* mu, Directory* db_directory = nullptr,
-      bool new_descriptor_log = false,
-      const ColumnFamilyOptions* column_family_options = nullptr) {
+  Status LogAndApply(ColumnFamilyData* column_family_data,
+                     const MutableCFOptions& mutable_cf_options,
+                     VersionEdit* edit, InstrumentedMutex* mu,
+                     Directory* db_directory = nullptr,
+                     bool new_descriptor_log = false,
+                     const ColumnFamilyOptions* column_family_options = nullptr,
+                     bool strict_sequence = true) {
     autovector<ColumnFamilyData*> cfds;
     cfds.emplace_back(column_family_data);
     autovector<const MutableCFOptions*> mutable_cf_options_list;
@@ -867,16 +868,18 @@ class VersionSet {
     edit_list.emplace_back(edit);
     edit_lists.emplace_back(edit_list);
     return LogAndApply(cfds, mutable_cf_options_list, edit_lists, mu,
-                       db_directory, new_descriptor_log, column_family_options);
+                       db_directory, new_descriptor_log, column_family_options,
+                       strict_sequence);
   }
   // The batch version. If edit_list.size() > 1, caller must ensure that
   // no edit in the list column family add or drop
-  Status LogAndApply(
-      ColumnFamilyData* column_family_data,
-      const MutableCFOptions& mutable_cf_options,
-      const autovector<VersionEdit*>& edit_list, InstrumentedMutex* mu,
-      Directory* db_directory = nullptr, bool new_descriptor_log = false,
-      const ColumnFamilyOptions* column_family_options = nullptr) {
+  Status LogAndApply(ColumnFamilyData* column_family_data,
+                     const MutableCFOptions& mutable_cf_options,
+                     const autovector<VersionEdit*>& edit_list,
+                     InstrumentedMutex* mu, Directory* db_directory = nullptr,
+                     bool new_descriptor_log = false,
+                     const ColumnFamilyOptions* column_family_options = nullptr,
+                     bool strict_sequence = true) {
     autovector<ColumnFamilyData*> cfds;
     cfds.emplace_back(column_family_data);
     autovector<const MutableCFOptions*> mutable_cf_options_list;
@@ -884,7 +887,8 @@ class VersionSet {
     autovector<autovector<VersionEdit*>> edit_lists;
     edit_lists.emplace_back(edit_list);
     return LogAndApply(cfds, mutable_cf_options_list, edit_lists, mu,
-                       db_directory, new_descriptor_log, column_family_options);
+                       db_directory, new_descriptor_log, column_family_options,
+                       strict_sequence);
   }
 
   // The across-multi-cf batch version. If edit_lists contain more than
@@ -896,7 +900,8 @@ class VersionSet {
       const autovector<autovector<VersionEdit*>>& edit_lists,
       InstrumentedMutex* mu, Directory* db_directory = nullptr,
       bool new_descriptor_log = false,
-      const ColumnFamilyOptions* new_cf_options = nullptr);
+      const ColumnFamilyOptions* new_cf_options = nullptr,
+      bool strict_sequence = true);
 
   // Recover the last saved descriptor from persistent storage.
   // If read_only == true, Recover() will not complain if some column families
@@ -1124,7 +1129,8 @@ class VersionSet {
   Status ProcessManifestWrites(std::deque<ManifestWriter>& writers,
                                InstrumentedMutex* mu, Directory* db_directory,
                                bool new_descriptor_log,
-                               const ColumnFamilyOptions* new_cf_options);
+                               const ColumnFamilyOptions* new_cf_options,
+                               bool strict_sequence = true);
 
   std::unique_ptr<ColumnFamilySet> column_family_set_;
 
