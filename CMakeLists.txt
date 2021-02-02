@@ -991,7 +991,6 @@ if(WITH_TESTS)
         env/mock_env_test.cc
         memtable/inlineskiplist_test.cc
         memtable/skiplist_test.cc
-        memtable/terark_zip_memtable_test.cc
         memtable/write_buffer_manager_test.cc
         monitoring/histogram_test.cc
         monitoring/iostats_context_test.cc
@@ -1063,6 +1062,12 @@ if(WITH_TESTS)
         utilities/ttl/ttl_test.cc
         utilities/write_batch_with_index/write_batch_with_index_test.cc
   )
+  
+IF(WITH_TERARK_ZIP)
+  LIST(APPEND TESTS memtable/terark_zip_memtable_test.cc)
+ENDIF()
+
+
 
   if(WITH_LIBRADOS)
     list(APPEND TESTS utilities/env_librados_test.cc)
@@ -1147,7 +1152,9 @@ if(WITH_TOOLS)
     target_link_libraries(${exename}${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
   endforeach(sourcefile ${BENCHMARKS})
 
-  add_subdirectory(tools)
+if(WITH_TERARK_ZIP)
   add_subdirectory(terark-tools/terark-test)
+endif()
+  add_subdirectory(tools)
   add_subdirectory(terark-tools/batch-write-bench)
 endif()

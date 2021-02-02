@@ -42,7 +42,12 @@ class ChaosTest {
   ~ChaosTest() {}
 
   void DumpCacheStatistics() {
-    auto dcache = dynamic_cast<DiagnosableLRUCache *>(bbto.block_cache.get());
+    auto dcache =
+#ifdef WITH_TERARK_ZIP
+        dynamic_cast<DiagnosableLRUCache *>(bbto.block_cache.get());
+#else
+        dynamic_cast<LRUCache *>(bbto.block_cache.get());
+#endif
     if (dcache == nullptr) {
       return;
     }
@@ -128,9 +133,12 @@ class ChaosTest {
     bbto.pin_top_level_index_and_filter = true;
     bbto.pin_l0_filter_and_index_blocks_in_cache = true;
     bbto.filter_policy.reset(NewBloomFilterPolicy(10, true));
-    // bbto.block_cache = NewLRUCache(4ULL << 30, 6, false);
+#ifdef WITH_TERARK_ZIP
     bbto.block_cache =
         NewDiagnosableLRUCache(4ULL << 30, 3, false, 0.2, nullptr, 10);
+#else
+    bbto.block_cache = NewLRUCache(4ULL << 30, 6, false);
+#endif
 
     options.compaction_pri = kMinOverlappingRatio;
     options.compression = kZSTD;

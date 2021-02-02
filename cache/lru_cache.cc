@@ -487,6 +487,7 @@ std::string LRUCacheShardTemplate<CacheMonitor>::GetPrintableOptions() const {
   return std::string(buffer);
 }
 
+#ifdef WITH_TERARK_ZIP
 template <>
 LRUCacheBase<LRUCacheDiagnosableShard>::LRUCacheBase(
     size_t capacity, int num_shard_bits, bool strict_capacity_limit,
@@ -505,6 +506,7 @@ LRUCacheBase<LRUCacheDiagnosableShard>::LRUCacheBase(
                                                high_pri_pool_ratio, options);
   }
 }
+#endif
 
 template <class LRUCacheShardType>
 LRUCacheBase<LRUCacheShardType>::LRUCacheBase(
@@ -538,10 +540,12 @@ std::string LRUCacheBase<LRUCacheShardType>::DumpLRUCacheStatistics() {
   return res;
 }
 
+#ifdef WITH_TERARK_ZIP
 template <>
 const char* LRUCacheBase<LRUCacheDiagnosableShard>::Name() const {
   return "DiagnosableLRUCache";
 }
+#endif
 
 template <class LRUCacheShardType>
 const char* LRUCacheBase<LRUCacheShardType>::Name() const {
@@ -638,6 +642,7 @@ std::shared_ptr<Cache> NewLRUCache(
       LRUCacheShard::MonitorOptions{}, std::move(memory_allocator));
 }
 
+#ifdef WITH_TERARK_ZIP
 std::shared_ptr<Cache> NewDiagnosableLRUCache(
     const LRUCacheOptions& cache_opts) {
   assert(cache_opts.is_diagnose);
@@ -666,10 +671,11 @@ std::shared_ptr<Cache> NewDiagnosableLRUCache(
       LRUCacheDiagnosableShard::MonitorOptions{topk},
       std::move(memory_allocator));
 }
+template class LRUCacheShardTemplate<LRUCacheDiagnosableMonitor>;
+template class LRUCacheBase<LRUCacheDiagnosableShard>;
+#endif
 
 template class LRUCacheShardTemplate<LRUCacheNoMonitor>;
-template class LRUCacheShardTemplate<LRUCacheDiagnosableMonitor>;
 template class LRUCacheBase<LRUCacheShard>;
-template class LRUCacheBase<LRUCacheDiagnosableShard>;
 
 }  // namespace rocksdb

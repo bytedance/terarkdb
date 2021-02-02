@@ -579,9 +579,13 @@ int main(int argc, char** argv) {
   if (FLAGS_memtablerep == "skiplist") {
     factory.reset(new rocksdb::SkipListFactory);
 #ifndef ROCKSDB_LITE
-  } else if (FLAGS_memtablerep == "patricia_trie") {
+  }
+#ifdef WITH_TERARK_ZIP
+  else if (FLAGS_memtablerep == "patricia_trie") {
     factory.reset(rocksdb::NewPatriciaTrieRepFactory());
-  } else if (FLAGS_memtablerep == "vector") {
+  }
+#endif
+  else if (FLAGS_memtablerep == "vector") {
     factory.reset(new rocksdb::VectorRepFactory);
   } else if (FLAGS_memtablerep == "hashskiplist") {
     factory.reset(rocksdb::NewHashSkipListRepFactory(

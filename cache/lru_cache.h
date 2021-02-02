@@ -14,7 +14,9 @@
 #include <set>
 #include <sstream>
 #include <string>
+#ifdef WITH_TERARK_ZIP
 #include <terark/heap_ext.hpp>
+#endif  // !NDEBUG
 #include <unordered_map>
 
 #include "cache/sharded_cache.h"
@@ -323,6 +325,7 @@ class LRUCacheNoMonitor {
   size_t lru_usage_;
 };
 
+#ifdef WITH_TERARK_ZIP
 class LRUCacheDiagnosableMonitor {
  public:
   struct Options {
@@ -465,8 +468,8 @@ class LRUCacheDiagnosableMonitor {
       size_t length = data_heap_.size();
       for (size_t i = 0; i < k_ && i < data_heap_.size(); i++) {
         assert(VerifyIdx());
-        terark::pop_heap_keep_top(data_heap_.begin(), length -i,
-                                  charge_cmp_, sync_idx_);
+        terark::pop_heap_keep_top(data_heap_.begin(), length - i, charge_cmp_,
+                                  sync_idx_);
         assert(VerifyIdx());
         size_t last_idx = length - i - 1;
         auto& e = data_storage_[data_heap_[last_idx]];
@@ -650,6 +653,7 @@ class LRUCacheDiagnosableMonitor {
   TopSet topk_in_lru_;
   TopSet topk_pinned_;
 };
+#endif  // !NDEBUG
 
 template <class LRUCacheShardType>
 class LRUCacheBase : public ShardedCache {
@@ -686,10 +690,12 @@ class LRUCacheBase : public ShardedCache {
 };
 
 using LRUCacheShard = LRUCacheShardTemplate<LRUCacheNoMonitor>;
+using LRUCache = LRUCacheBase<LRUCacheShard>;
+
+#ifdef WITH_TERARK_ZIP
 using LRUCacheDiagnosableShard =
     LRUCacheShardTemplate<LRUCacheDiagnosableMonitor>;
-
-using LRUCache = LRUCacheBase<LRUCacheShard>;
 using DiagnosableLRUCache = LRUCacheBase<LRUCacheDiagnosableShard>;
+#endif
 
 }  // namespace rocksdb

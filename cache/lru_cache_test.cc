@@ -6,8 +6,10 @@
 #include "cache/lru_cache.h"
 
 #include <string>
-#include <vector>
+#ifdef WITH_TERARK_ZIP
 #include <terark/heap_ext.hpp>
+#endif
+#include <vector>
 
 #include "port/port.h"
 #include "util/testharness.h"
@@ -32,6 +34,8 @@ class LRUCacheTest : public testing::Test,
 
   void NewCache(size_t capacity, double high_pri_pool_ratio = 0.0) {
     DeleteCache();
+#ifdef WITH_TERARK_ZIP
+
     if (is_diagnose_) {
       cache_ = reinterpret_cast<LRUCacheDiagnosableShard*>(
           port::cacheline_aligned_alloc(sizeof(LRUCacheDiagnosableShard)));
@@ -39,7 +43,9 @@ class LRUCacheTest : public testing::Test,
       mo.top_k = 10;
       new (cache_) LRUCacheDiagnosableShard(
           capacity, false /*strict_capcity_limit*/, high_pri_pool_ratio, mo);
-    } else {
+    } else
+#endif
+    {
       cache_ = reinterpret_cast<LRUCacheShard*>(
           port::cacheline_aligned_alloc(sizeof(LRUCacheShard)));
       new (cache_) LRUCacheShard(capacity, false /*strict_capcity_limit*/,
@@ -84,10 +90,13 @@ class LRUCacheTest : public testing::Test,
                        size_t num_high_pri_pool_keys = 0) {
     LRUHandle* lru;
     LRUHandle* lru_low_pri;
+#ifdef WITH_TERARK_ZIP
     if (is_diagnose_) {
       reinterpret_cast<LRUCacheDiagnosableShard*>(cache_)->TEST_GetLRUList(
           &lru, &lru_low_pri);
-    } else {
+    } else
+#endif
+    {
       reinterpret_cast<LRUCacheShard*>(cache_)->TEST_GetLRUList(&lru,
                                                                 &lru_low_pri);
     }
@@ -115,6 +124,8 @@ class LRUCacheTest : public testing::Test,
     ASSERT_TRUE(in_high_pri_pool);
     ASSERT_EQ(num_high_pri_pool_keys, high_pri_pool_keys);
   }
+
+#ifdef WITH_TERARK_ZIP
   using DataElement = LRUCacheDiagnosableMonitor::TopSet::DataElement;
   void ValidatePinnedElements(const std::vector<DataElement>& elements) {
     LRUCacheDiagnosableShard* monitor_cache =
@@ -131,6 +142,7 @@ class LRUCacheTest : public testing::Test,
       ASSERT_TRUE(_elements[data_idx].total_charge == e.total_charge);
     }
   }
+#endif
 
   CacheShard* cache() { return cache_; }
 
@@ -242,6 +254,8 @@ TEST_P(LRUCacheTest, EntriesWithPriority) {
   ASSERT_TRUE(Lookup("d"));
   ValidateLRUList({"e", "f", "g", "Z", "d"}, 2);
 }
+
+#ifdef WITH_TERARK_ZIP
 
 TEST_F(LRUCacheTest, LRUCacheDiagnosableMonitor) {
   SetDiagnose(true);
@@ -400,23 +414,23 @@ TEST_F(LRUCacheTest, TopSetAdd) {
   ASSERT_EQ(storage.size(), 5);
   ASSERT_EQ(heap.size(), 5);
 
-  ASSERT_EQ(storage[0].key.substr(0,8), "handle-1");
+  ASSERT_EQ(storage[0].key.substr(0, 8), "handle-1");
   ASSERT_EQ(storage[0].total_charge, 1);
   ASSERT_EQ(storage[0].count, 1);
 
-  ASSERT_EQ(storage[1].key.substr(0,8), "handle-2");
+  ASSERT_EQ(storage[1].key.substr(0, 8), "handle-2");
   ASSERT_EQ(storage[1].total_charge, 7);
   ASSERT_EQ(storage[1].count, 2);
 
-  ASSERT_EQ(storage[2].key.substr(0,8), "handle-3");
+  ASSERT_EQ(storage[2].key.substr(0, 8), "handle-3");
   ASSERT_EQ(storage[2].total_charge, 10);
   ASSERT_EQ(storage[2].count, 1);
 
-  ASSERT_EQ(storage[3].key.substr(0,8), "handle-4");
+  ASSERT_EQ(storage[3].key.substr(0, 8), "handle-4");
   ASSERT_EQ(storage[3].total_charge, 1);
   ASSERT_EQ(storage[3].count, 1);
 
-  ASSERT_EQ(storage[4].key.substr(0,8), "handle-5");
+  ASSERT_EQ(storage[4].key.substr(0, 8), "handle-5");
   ASSERT_EQ(storage[4].total_charge, 9);
   ASSERT_EQ(storage[4].count, 1);
 
@@ -470,35 +484,35 @@ TEST_F(LRUCacheTest, TopSetSub) {
   ASSERT_EQ(storage.size(), 5);
   ASSERT_EQ(heap.size(), 5);
 
-  ASSERT_EQ(storage[0].key.substr(0,8), "handle-1");
+  ASSERT_EQ(storage[0].key.substr(0, 8), "handle-1");
   ASSERT_EQ(storage[0].total_charge, 1);
   ASSERT_EQ(storage[0].count, 1);
 
-  ASSERT_EQ(storage[1].key.substr(0,8), "handle-2");
+  ASSERT_EQ(storage[1].key.substr(0, 8), "handle-2");
   ASSERT_EQ(storage[1].total_charge, 7);
   ASSERT_EQ(storage[1].count, 2);
 
-  ASSERT_EQ(storage[2].key.substr(0,8), "handle-3");
+  ASSERT_EQ(storage[2].key.substr(0, 8), "handle-3");
   ASSERT_EQ(storage[2].total_charge, 10);
   ASSERT_EQ(storage[2].count, 1);
 
-  ASSERT_EQ(storage[3].key.substr(0,8), "handle-4");
+  ASSERT_EQ(storage[3].key.substr(0, 8), "handle-4");
   ASSERT_EQ(storage[3].total_charge, 1);
   ASSERT_EQ(storage[3].count, 1);
 
-  ASSERT_EQ(storage[4].key.substr(0,8), "handle-5");
+  ASSERT_EQ(storage[4].key.substr(0, 8), "handle-5");
   ASSERT_EQ(storage[4].total_charge, 9);
   ASSERT_EQ(storage[4].count, 1);
 
   ts.Sub(h5);
 
-  ASSERT_EQ(storage[1].key.substr(0,8), "handle-2");
+  ASSERT_EQ(storage[1].key.substr(0, 8), "handle-2");
   ASSERT_EQ(storage[1].total_charge, 4);
   ASSERT_EQ(storage[1].count, 1);
 
   ts.Sub(h6);
 
-  ASSERT_EQ(storage[4].key.substr(0,8), "handle-5");
+  ASSERT_EQ(storage[4].key.substr(0, 8), "handle-5");
   ASSERT_EQ(storage[4].total_charge, 0);
   ASSERT_EQ(storage[4].count, 0);
 
@@ -522,6 +536,7 @@ TEST_F(LRUCacheTest, TopSetSub) {
     ASSERT_LE(storage[cur_top_idx].total_charge, storage[top_idx].total_charge);
   }
 }
+#endif
 }  // namespace rocksdb
 
 int main(int argc, char** argv) {

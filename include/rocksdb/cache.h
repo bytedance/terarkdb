@@ -117,6 +117,7 @@ extern std::shared_ptr<Cache> NewLRUCache(
 
 extern std::shared_ptr<Cache> NewLRUCache(const LRUCacheOptions& cache_opts);
 
+#ifdef WITH_TERARK_ZIP
 std::shared_ptr<Cache> NewDiagnosableLRUCache(
     const LRUCacheOptions& cache_opts);
 
@@ -124,6 +125,7 @@ std::shared_ptr<Cache> NewDiagnosableLRUCache(
     size_t capacity, int num_shard_bits, bool strict_capacity_limit,
     double high_pri_pool_ratio,
     std::shared_ptr<MemoryAllocator> memory_allocator, size_t topk);
+#endif
 
 extern std::shared_ptr<Cache> NewLIRSCache(
     size_t capacity, int num_shard_bits = -1,
