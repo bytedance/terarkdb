@@ -44,7 +44,12 @@ class ChaosTest {
   ~ChaosTest() {}
 
   void DumpCacheStatistics() {
-    auto dcache = dynamic_cast<DiagnosableLRUCache *>(bbto.block_cache.get());
+    auto dcache =
+#ifdef WITH_TERARK_ZIP
+        dynamic_cast<DiagnosableLRUCache *>(bbto.block_cache.get());
+#else
+        dynamic_cast<LRUCache *>(bbto.block_cache.get());
+#endif
     if (dcache == nullptr) {
       return;
     }
@@ -130,9 +135,12 @@ class ChaosTest {
     bbto.pin_top_level_index_and_filter = true;
     bbto.pin_l0_filter_and_index_blocks_in_cache = true;
     bbto.filter_policy.reset(NewBloomFilterPolicy(10, true));
-    // bbto.block_cache = NewLRUCache(4ULL << 30, 6, false);
+#ifdef WITH_TERARK_ZIP
     bbto.block_cache =
         NewDiagnosableLRUCache(4ULL << 30, 3, false, 0.2, nullptr, 10);
+#else
+    bbto.block_cache = NewLRUCache(4ULL << 30, 6, false);
+#endif
 
     options.compaction_pri = kMinOverlappingRatio;
     options.compression = kZSTD;
@@ -319,7 +327,6 @@ class ChaosTest {
     mutex_.Lock();
     EventLogger event_logger(db_options_.info_log.get());
     SnapshotChecker *snapshot_checker = nullptr;
-    std::shared_ptr<Cache> table_cache(dbfull->TEST_table_cache());
     CompactionJob compaction_job(0, &compaction, db_options_, env_options_,
                                  cfd->current()->version_set(), &shutting_down_,
                                  preserve_deletes_seqnum_, &log_buffer, nullptr,
@@ -796,7 +803,6 @@ class ChaosTest {
     delete db;
     db = nullptr;
   }
-
   void Open(int cf_num) {
     set_options();
     exit_ = false;
@@ -814,7 +820,7 @@ class ChaosTest {
       options.write_buffer_size = size_t(file_size_base / 1.1);
       options.enable_lazy_compaction = true;
       //bbto.block_cache = NewLRUCache(4ULL << 30, 6, false);
-      options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(bbto));
+      options.table_factory.reset(TERARKDB_NAMESPACE::NewBlockBasedTableFactory(bbto));
       cfDescriptors.emplace_back("level" + std::to_string(i), options);
     }
     if (flags_ & TestWorker) {

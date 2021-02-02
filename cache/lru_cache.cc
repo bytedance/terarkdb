@@ -540,10 +540,12 @@ std::string LRUCacheBase<LRUCacheShardType>::DumpLRUCacheStatistics() {
   return res;
 }
 
+#ifdef WITH_TERARK_ZIP
 template <>
 const char* LRUCacheBase<LRUCacheDiagnosableShard>::Name() const {
   return "DiagnosableLRUCache";
 }
+#endif
 
 template <class LRUCacheShardType>
 const char* LRUCacheBase<LRUCacheShardType>::Name() const {
@@ -640,6 +642,7 @@ std::shared_ptr<Cache> NewLRUCache(
       LRUCacheShard::MonitorOptions{}, std::move(memory_allocator));
 }
 
+#ifdef WITH_TERARK_ZIP
 std::shared_ptr<Cache> NewDiagnosableLRUCache(
     const LRUCacheOptions& cache_opts) {
   assert(cache_opts.is_diagnose);
@@ -669,9 +672,27 @@ std::shared_ptr<Cache> NewDiagnosableLRUCache(
       std::move(memory_allocator));
 }
 
-template class LRUCacheShardTemplate<LRUCacheNoMonitor>;
 template class LRUCacheShardTemplate<LRUCacheDiagnosableMonitor>;
-template class LRUCacheBase<LRUCacheShard>;
 template class LRUCacheBase<LRUCacheDiagnosableShard>;
+#else
+std::shared_ptr<Cache> NewDiagnosableLRUCache(
+    const LRUCacheOptions& cache_opts) {
+  return NewLRUCache(cache_opts.capacity, cache_opts.num_shard_bits,
+                     cache_opts.strict_capacity_limit,
+                     cache_opts.high_pri_pool_ratio,
+                     cache_opts.memory_allocator);
+}
+
+std::shared_ptr<Cache> NewDiagnosableLRUCache(
+    size_t capacity, int num_shard_bits, bool strict_capacity_limit,
+    double high_pri_pool_ratio,
+    std::shared_ptr<MemoryAllocator> memory_allocator, size_t /* topk */) {
+  return NewLRUCache(capacity, num_shard_bits, strict_capacity_limit,
+                     high_pri_pool_ratio, memory_allocator);
+}
+#endif
+
+template class LRUCacheShardTemplate<LRUCacheNoMonitor>;
+template class LRUCacheBase<LRUCacheShard>;
 
 }  // namespace TERARKDB_NAMESPACE

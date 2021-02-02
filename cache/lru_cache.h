@@ -14,7 +14,9 @@
 #include <set>
 #include <sstream>
 #include <string>
+#ifdef WITH_TERARK_ZIP
 #include <terark/heap_ext.hpp>
+#endif  // !NDEBUG
 #include <unordered_map>
 
 #include "cache/sharded_cache.h"
@@ -324,6 +326,7 @@ class LRUCacheNoMonitor {
   size_t lru_usage_;
 };
 
+#ifdef WITH_TERARK_ZIP
 class LRUCacheDiagnosableMonitor {
  public:
   struct Options {
@@ -651,6 +654,9 @@ class LRUCacheDiagnosableMonitor {
   TopSet topk_in_lru_;
   TopSet topk_pinned_;
 };
+#else
+using LRUCacheDiagnosableMonitor = LRUCacheNoMonitor;
+#endif
 
 template <class LRUCacheShardType>
 class LRUCacheBase : public ShardedCache {

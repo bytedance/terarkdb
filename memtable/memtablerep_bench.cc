@@ -581,9 +581,13 @@ int main(int argc, char** argv) {
   if (FLAGS_memtablerep == "skiplist") {
     factory.reset(new TERARKDB_NAMESPACE::SkipListFactory);
 #ifndef ROCKSDB_LITE
-#ifdef WITH_TERARK_ZIP
   } else if (FLAGS_memtablerep == "patricia_trie") {
+#ifdef WITH_TERARK_ZIP
     factory.reset(TERARKDB_NAMESPACE::NewPatriciaTrieRepFactory());
+#else
+    fprintf(stderr,
+            "ERROR: NewPatriciaTrieRepFactory only works WITH_TERARK_ZIP=ON\n");
+    return -1;
 #endif
   } else if (FLAGS_memtablerep == "vector") {
     factory.reset(new TERARKDB_NAMESPACE::VectorRepFactory);

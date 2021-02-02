@@ -6,8 +6,11 @@
 #include "cache/lru_cache.h"
 
 #include <string>
-#include <terark/heap_ext.hpp>
 #include <vector>
+
+#ifdef WITH_TERARK_ZIP
+#include <terark/heap_ext.hpp>
+#endif
 
 #include "port/port.h"
 #include "rocksdb/terark_namespace.h"
@@ -37,13 +40,15 @@ class LRUCacheTest : public testing::Test,
       cache_ = reinterpret_cast<LRUCacheDiagnosableShard*>(
           port::cacheline_aligned_alloc(sizeof(LRUCacheDiagnosableShard)));
       LRUCacheDiagnosableMonitor::Options mo;
+#ifdef WITH_TERARK_ZIP
       mo.top_k = 10;
+#endif
       new (cache_) LRUCacheDiagnosableShard(
-          capacity, false /*strict_capcity_limit*/, high_pri_pool_ratio, mo);
+          capacity, false /* strict_capcity_limit */, high_pri_pool_ratio, mo);
     } else {
       cache_ = reinterpret_cast<LRUCacheShard*>(
           port::cacheline_aligned_alloc(sizeof(LRUCacheShard)));
-      new (cache_) LRUCacheShard(capacity, false /*strict_capcity_limit*/,
+      new (cache_) LRUCacheShard(capacity, false /* strict_capcity_limit */,
                                  high_pri_pool_ratio, {});
     }
   }
@@ -116,6 +121,8 @@ class LRUCacheTest : public testing::Test,
     ASSERT_TRUE(in_high_pri_pool);
     ASSERT_EQ(num_high_pri_pool_keys, high_pri_pool_keys);
   }
+
+#ifdef WITH_TERARK_ZIP
   using DataElement = LRUCacheDiagnosableMonitor::TopSet::DataElement;
   void ValidatePinnedElements(const std::vector<DataElement>& elements) {
     LRUCacheDiagnosableShard* monitor_cache =
@@ -132,6 +139,7 @@ class LRUCacheTest : public testing::Test,
       ASSERT_TRUE(_elements[data_idx].total_charge == e.total_charge);
     }
   }
+#endif
 
   CacheShard* cache() { return cache_; }
 
@@ -140,7 +148,11 @@ class LRUCacheTest : public testing::Test,
   bool is_diagnose_;
 };
 
+#ifdef WITH_TERARK_ZIP
 INSTANTIATE_TEST_CASE_P(LRUCacheTest, LRUCacheTest, ::testing::Bool());
+#else
+INSTANTIATE_TEST_CASE_P(LRUCacheTest, LRUCacheTest, ::testing::Values(false));
+#endif
 
 TEST_P(LRUCacheTest, BasicLRU) {
   SetDiagnose(GetParam());
@@ -243,6 +255,8 @@ TEST_P(LRUCacheTest, EntriesWithPriority) {
   ASSERT_TRUE(Lookup("d"));
   ValidateLRUList({"e", "f", "g", "Z", "d"}, 2);
 }
+
+#ifdef WITH_TERARK_ZIP
 
 TEST_F(LRUCacheTest, LRUCacheDiagnosableMonitor) {
   SetDiagnose(true);
@@ -523,6 +537,7 @@ TEST_F(LRUCacheTest, TopSetSub) {
     ASSERT_LE(storage[cur_top_idx].total_charge, storage[top_idx].total_charge);
   }
 }
+#endif
 }  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
