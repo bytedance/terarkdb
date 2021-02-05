@@ -1694,10 +1694,6 @@ class DBImpl : public DB {
   // Only to be set during initialization
   std::unique_ptr<PreReleaseCallback> recoverable_state_pre_release_callback_;
 
-  // handle for scheduling jobs at fixed intervals
-  // REQUIRES: mutex locked
-  std::unique_ptr<TERARKDB_NAMESPACE::RepeatableThread> thread_dump_stats_;
-
   // No copying allowed
   DBImpl(const DBImpl&);
   void operator=(const DBImpl&);

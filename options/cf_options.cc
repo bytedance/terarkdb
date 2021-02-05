@@ -84,7 +84,16 @@ ImmutableCFOptions::ImmutableCFOptions(const ImmutableDBOptions& db_options,
       row_cache(db_options.row_cache),
       memtable_insert_with_hint_prefix_extractor(
           cf_options.memtable_insert_with_hint_prefix_extractor.get()),
-      cf_paths(cf_options.cf_paths) {}
+      cf_paths(cf_options.cf_paths) {
+  if (ttl_extractor_factory != nullptr) {
+    int_tbl_prop_collector_factories_for_blob = std::make_shared<
+        std::vector<std::unique_ptr<IntTblPropCollectorFactory>>>();
+    for (auto& f : table_properties_collector_factories) {
+      int_tbl_prop_collector_factories_for_blob->emplace_back(
+          new UserKeyTablePropertiesCollectorFactory(f));
+    }
+  }
+}
 
 // Multiple two operands. If they overflow, return op1.
 uint64_t MultiplyCheckOverflow(uint64_t op1, double op2) {
@@ -241,7 +250,63 @@ void MutableCFOptions::Dump(Logger* log) const {
                  compaction_options_fifo.allow_compaction);
 }
 
+MutableCFOptions::MutableCFOptions(const ColumnFamilyOptions& options, Env* env)
+    : write_buffer_size(options.write_buffer_size),
+      max_write_buffer_number(options.max_write_buffer_number),
+      arena_block_size(options.arena_block_size),
+      memtable_factory(options.memtable_factory),
+      memtable_prefix_bloom_size_ratio(
+          options.memtable_prefix_bloom_size_ratio),
+      memtable_huge_page_size(options.memtable_huge_page_size),
+      max_successive_merges(options.max_successive_merges),
+      inplace_update_num_locks(options.inplace_update_num_locks),
+      prefix_extractor(options.prefix_extractor),
+      disable_auto_compactions(options.disable_auto_compactions),
+      max_subcompactions(options.max_subcompactions),
+      blob_size(options.blob_size),
+      blob_large_key_ratio(options.blob_large_key_ratio),
+      blob_gc_ratio(options.blob_gc_ratio),
+      soft_pending_compaction_bytes_limit(
+          options.soft_pending_compaction_bytes_limit),
+      hard_pending_compaction_bytes_limit(
+          options.hard_pending_compaction_bytes_limit),
+      level0_file_num_compaction_trigger(
+          options.level0_file_num_compaction_trigger),
+      level0_slowdown_writes_trigger(options.level0_slowdown_writes_trigger),
+      level0_stop_writes_trigger(options.level0_stop_writes_trigger),
+      max_compaction_bytes(options.max_compaction_bytes),
+      target_file_size_base(options.target_file_size_base),
+      target_file_size_multiplier(options.target_file_size_multiplier),
+      max_bytes_for_level_base(options.max_bytes_for_level_base),
+      max_bytes_for_level_multiplier(options.max_bytes_for_level_multiplier),
+      ttl(options.ttl),
+      max_bytes_for_level_multiplier_additional(
+          options.max_bytes_for_level_multiplier_additional),
+      compaction_options_fifo(options.compaction_options_fifo),
+      compaction_options_universal(options.compaction_options_universal),
+      max_sequential_skip_in_iterations(
+          options.max_sequential_skip_in_iterations),
+      paranoid_file_checks(options.paranoid_file_checks),
+      report_bg_io_stats(options.report_bg_io_stats),
+      compression(options.compression),
+      ttl_gc_ratio(options.ttl_gc_ratio),
+      ttl_max_scan_gap(options.ttl_max_scan_gap) {
+  RefreshDerivedOptions(options.num_levels);
+
+  int_tbl_prop_collector_factories = std::make_shared<
+      std::vector<std::unique_ptr<IntTblPropCollectorFactory>>>();
+  for (auto& f : options.table_properties_collector_factories) {
+    int_tbl_prop_collector_factories->emplace_back(
+        new UserKeyTablePropertiesCollectorFactory(f));
+  }
+  if (options.ttl_extractor_factory != nullptr) {
+    int_tbl_prop_collector_factories->emplace_back(
+        NewTtlIntTblPropCollectorFactory(options.ttl_extractor_factory.get(),
+                                         env, ttl_gc_ratio, ttl_max_scan_gap));
+  }
+}
+
 MutableCFOptions::MutableCFOptions(const Options& options)
-    : MutableCFOptions(ColumnFamilyOptions(options)) {}
+    : MutableCFOptions(ColumnFamilyOptions(options), options.env) {}
 
 }  // namespace TERARKDB_NAMESPACE

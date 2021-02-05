@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "db/dbformat.h"
+#include "db/table_properties_collector.h"
 #include "options/db_options.h"
 #include "rocksdb/options.h"
 #include "rocksdb/terark_namespace.h"
@@ -131,6 +132,9 @@ struct ImmutableCFOptions {
   const SliceTransform* memtable_insert_with_hint_prefix_extractor;
 
   std::vector<DbPath> cf_paths;
+
+  std::shared_ptr<std::vector<std::unique_ptr<IntTblPropCollectorFactory>>>
+      int_tbl_prop_collector_factories_for_blob;
 };
 
 struct BlobConfig {
@@ -139,49 +143,7 @@ struct BlobConfig {
 };
 
 struct MutableCFOptions {
-  explicit MutableCFOptions(const ColumnFamilyOptions& options)
-      : write_buffer_size(options.write_buffer_size),
-        max_write_buffer_number(options.max_write_buffer_number),
-        arena_block_size(options.arena_block_size),
-        memtable_factory(options.memtable_factory),
-        memtable_prefix_bloom_size_ratio(
-            options.memtable_prefix_bloom_size_ratio),
-        memtable_huge_page_size(options.memtable_huge_page_size),
-        max_successive_merges(options.max_successive_merges),
-        inplace_update_num_locks(options.inplace_update_num_locks),
-        prefix_extractor(options.prefix_extractor),
-        disable_auto_compactions(options.disable_auto_compactions),
-        max_subcompactions(options.max_subcompactions),
-        blob_size(options.blob_size),
-        blob_large_key_ratio(options.blob_large_key_ratio),
-        blob_gc_ratio(options.blob_gc_ratio),
-        soft_pending_compaction_bytes_limit(
-            options.soft_pending_compaction_bytes_limit),
-        hard_pending_compaction_bytes_limit(
-            options.hard_pending_compaction_bytes_limit),
-        level0_file_num_compaction_trigger(
-            options.level0_file_num_compaction_trigger),
-        level0_slowdown_writes_trigger(options.level0_slowdown_writes_trigger),
-        level0_stop_writes_trigger(options.level0_stop_writes_trigger),
-        max_compaction_bytes(options.max_compaction_bytes),
-        target_file_size_base(options.target_file_size_base),
-        target_file_size_multiplier(options.target_file_size_multiplier),
-        max_bytes_for_level_base(options.max_bytes_for_level_base),
-        max_bytes_for_level_multiplier(options.max_bytes_for_level_multiplier),
-        ttl(options.ttl),
-        max_bytes_for_level_multiplier_additional(
-            options.max_bytes_for_level_multiplier_additional),
-        compaction_options_fifo(options.compaction_options_fifo),
-        compaction_options_universal(options.compaction_options_universal),
-        max_sequential_skip_in_iterations(
-            options.max_sequential_skip_in_iterations),
-        paranoid_file_checks(options.paranoid_file_checks),
-        report_bg_io_stats(options.report_bg_io_stats),
-        compression(options.compression),
-        ttl_gc_ratio(options.ttl_gc_ratio),
-        ttl_max_scan_gap(options.ttl_max_scan_gap) {
-    RefreshDerivedOptions(options.num_levels);
-  }
+  explicit MutableCFOptions(const ColumnFamilyOptions& options, Env* env);
 
   MutableCFOptions()
       : write_buffer_size(0),
@@ -283,6 +245,9 @@ struct MutableCFOptions {
 
   double ttl_gc_ratio;
   size_t ttl_max_scan_gap;
+
+  std::shared_ptr<std::vector<std::unique_ptr<IntTblPropCollectorFactory>>>
+      int_tbl_prop_collector_factories;
 };
 
 uint64_t MultiplyCheckOverflow(uint64_t op1, double op2);

@@ -147,14 +147,6 @@ extern Status CheckCFPathsSupported(const DBOptions& db_options,
 
 extern ColumnFamilyOptions SanitizeOptions(const ImmutableDBOptions& db_options,
                                            const ColumnFamilyOptions& src);
-// Wrap user defined table proproties collector factories `from cf_options`
-// into internal ones in int_tbl_prop_collector_factories. Add a system internal
-// one too.
-extern void GetIntTblPropCollectorFactory(
-    const ImmutableCFOptions& ioptions, const MutableCFOptions& moptions,
-    std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
-        int_tbl_prop_collector_factories,
-    bool with_ttl_extractor);
 
 class ColumnFamilySet;
 
@@ -328,14 +320,15 @@ class ColumnFamilyData {
   }
 
   const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
-  int_tbl_prop_collector_factories() const {
-    return &int_tbl_prop_collector_factories_;
+  int_tbl_prop_collector_factories(const MutableCFOptions& moptions) const {
+    return moptions.int_tbl_prop_collector_factories.get();
   }
   const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
-  int_tbl_prop_collector_factories_for_blob() const {
-    return int_tbl_prop_collector_factories_for_blob_.empty()
-               ? &int_tbl_prop_collector_factories_
-               : &int_tbl_prop_collector_factories_for_blob_;
+  int_tbl_prop_collector_factories_for_blob(
+      const MutableCFOptions& moptions) const {
+    return ioptions_.int_tbl_prop_collector_factories_for_blob == nullptr
+               ? moptions.int_tbl_prop_collector_factories.get()
+               : ioptions_.int_tbl_prop_collector_factories_for_blob.get();
   }
 
   SuperVersion* GetSuperVersion() { return super_version_; }
@@ -439,11 +432,6 @@ class ColumnFamilyData {
   std::atomic<bool> dropped_;  // true if client dropped it
 
   const InternalKeyComparator internal_comparator_;
-  std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
-      int_tbl_prop_collector_factories_;
-  std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
-      int_tbl_prop_collector_factories_for_blob_;
-
   const ColumnFamilyOptions initial_cf_options_;
   const ImmutableCFOptions ioptions_;
   MutableCFOptions mutable_cf_options_;

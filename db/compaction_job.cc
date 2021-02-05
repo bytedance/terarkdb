@@ -793,7 +793,8 @@ Status CompactionJob::Run() {
       context.compaction_filter_context.column_family_id;
   collector_context.smallest_user_key = context.smallest_user_key;
   collector_context.largest_user_key = context.largest_user_key;
-  for (auto& collector : *cfd->int_tbl_prop_collector_factories()) {
+  for (auto& collector :
+       *cfd->int_tbl_prop_collector_factories(*c->mutable_cf_options())) {
     std::string param;
     if (collector->NeedSerialize()) {
       collector->Serialize(&param, collector_context);
@@ -1026,10 +1027,8 @@ Status CompactionJob::VerifyFiles() {
       // Verify that the table is usable
       // We set for_compaction to false and don't OptimizeForCompactionTableRead
       // here because this is a special case after we finish the table building
-      // No matter whether use_direct_io_for_flush_and_compaction is true,
-      // we
-      // will regard this verification as user reads since the goal is
-      // to cache
+      // No matter whether use_direct_io_for_flush_and_compaction is true, we
+      // will regard this verification as user reads since the goal is to cache
       // it here for further user reads
       auto output_level = compact_->compaction->output_level();
       InternalIterator* iter = cfd->table_cache()->NewIterator(
@@ -2619,10 +2618,12 @@ Status CompactionJob::OpenCompactionOutputFile(
   }
 
   auto c = sub_compact->compaction;
+  auto& moptions = *c->mutable_cf_options();
   sub_compact->builder.reset(NewTableBuilder(
-      *cfd->ioptions(), *c->mutable_cf_options(), cfd->internal_comparator(),
-      cfd->int_tbl_prop_collector_factories(), cfd->GetID(), cfd->GetName(),
-      sub_compact->outfile.get(), sub_compact->compaction->output_compression(),
+      *cfd->ioptions(), moptions, cfd->internal_comparator(),
+      cfd->int_tbl_prop_collector_factories(moptions), cfd->GetID(),
+      cfd->GetName(), sub_compact->outfile.get(),
+      sub_compact->compaction->output_compression(),
       sub_compact->compaction->output_compression_opts(),
       sub_compact->compaction->output_level(), c->compaction_load(),
       &sub_compact->compression_dict, skip_filters, output_file_creation_time,
@@ -2706,10 +2707,11 @@ Status CompactionJob::OpenCompactionOutputBlob(
   }
 
   auto c = sub_compact->compaction;
+  auto& moptions = *c->mutable_cf_options();
   // skip_filters always false, Blob all hits
   sub_compact->blob_builder.reset(NewTableBuilder(
-      *cfd->ioptions(), *c->mutable_cf_options(), cfd->internal_comparator(),
-      cfd->int_tbl_prop_collector_factories_for_blob(), cfd->GetID(),
+      *cfd->ioptions(), moptions, cfd->internal_comparator(),
+      cfd->int_tbl_prop_collector_factories_for_blob(moptions), cfd->GetID(),
       cfd->GetName(), sub_compact->blob_outfile.get(),
       sub_compact->compaction->output_compression(),
       sub_compact->compaction->output_compression_opts(), -1 /* level */,

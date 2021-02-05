@@ -255,18 +255,21 @@ void TestCustomizedTablePropertiesCollector(
   std::unique_ptr<WritableFileWriter> writer;
   const ImmutableCFOptions ioptions(options);
   const MutableCFOptions moptions(options);
-  std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
+  std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
       int_tbl_prop_collector_factories;
+  std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
+      int_tbl_prop_collector_factories_storage;
   if (test_int_tbl_prop_collector) {
-    int_tbl_prop_collector_factories.emplace_back(
+    int_tbl_prop_collector_factories =
+        &int_tbl_prop_collector_factories_storage;
+    int_tbl_prop_collector_factories->emplace_back(
         new RegularKeysStartWithAFactory(backward_mode));
   } else {
-    GetIntTblPropCollectorFactory(ioptions, moptions,
-                                  &int_tbl_prop_collector_factories,
-                                  false /* with_ttl_extractor */);
+    int_tbl_prop_collector_factories =
+        moptions.int_tbl_prop_collector_factories.get();
   }
   MakeBuilder(options, ioptions, moptions, internal_comparator,
-              &int_tbl_prop_collector_factories, &writer, &builder);
+              int_tbl_prop_collector_factories, &writer, &builder);
 
   SequenceNumber seqNum = 0U;
   for (const auto& kv : kvs) {
@@ -385,7 +388,7 @@ void TestInternalKeyPropertiesCollector(
   Options options;
   test::PlainInternalKeyComparator pikc(options.comparator);
 
-  std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
+  std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
       int_tbl_prop_collector_factories;
   options.table_factory = table_factory;
   if (sanitized) {
@@ -401,9 +404,8 @@ void TestInternalKeyPropertiesCollector(
                               options);
     ImmutableCFOptions ioptions(options);
     MutableCFOptions moptions(options);
-    GetIntTblPropCollectorFactory(ioptions, moptions,
-                                  &int_tbl_prop_collector_factories,
-                                  false /* with_ttl_extractor */);
+    int_tbl_prop_collector_factories =
+        moptions.int_tbl_prop_collector_factories.get();
     options.comparator = comparator;
   }
   const ImmutableCFOptions ioptions(options);
@@ -411,7 +413,7 @@ void TestInternalKeyPropertiesCollector(
 
   for (int iter = 0; iter < 2; ++iter) {
     MakeBuilder(options, ioptions, moptions, pikc,
-                &int_tbl_prop_collector_factories, &writable, &builder);
+                int_tbl_prop_collector_factories, &writable, &builder);
     for (const auto& k : keys) {
       ASSERT_OK(builder->Add(k.Encode(), LazyBuffer("val")));
     }

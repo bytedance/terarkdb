@@ -2147,8 +2147,8 @@ Status DBImpl::CreateColumnFamilyImpl(const ColumnFamilyOptions& cf_options,
       write_thread_.EnterUnbatched(&w, &mutex_);
       // LogAndApply will both write the creation in MANIFEST and create
       // ColumnFamilyData object
-      s = versions_->LogAndApply(nullptr, MutableCFOptions(cf_options), &edit,
-                                 &mutex_, directories_.GetDbDir(), false,
+      s = versions_->LogAndApply(nullptr, MutableCFOptions(cf_options, env_),
+                                 &edit, &mutex_, directories_.GetDbDir(), false,
                                  &cf_options);
       write_thread_.ExitUnbatched(&w);
     }

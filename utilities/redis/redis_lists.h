@@ -12,6 +12,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "redis_list_exception.h"
 #include "redis_list_iterator.h"
