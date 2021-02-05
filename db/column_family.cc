@@ -104,26 +104,6 @@ const Comparator* ColumnFamilyHandleImpl::GetComparator() const {
   return cfd()->user_comparator();
 }
 
-void GetIntTblPropCollectorFactory(
-    const ImmutableCFOptions& ioptions, const MutableCFOptions& moptions,
-    std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
-        int_tbl_prop_collector_factories,
-    bool with_ttl_extractor) {
-  auto& collector_factories = ioptions.table_properties_collector_factories;
-  for (size_t i = 0; i < ioptions.table_properties_collector_factories.size();
-       ++i) {
-    assert(collector_factories[i]);
-    int_tbl_prop_collector_factories->emplace_back(
-        new UserKeyTablePropertiesCollectorFactory(collector_factories[i]));
-  }
-  if (with_ttl_extractor && ioptions.ttl_extractor_factory != nullptr) {
-    int_tbl_prop_collector_factories->emplace_back(
-        NewTtlIntTblPropCollectorFactory(ioptions.ttl_extractor_factory,
-                                         ioptions.env, moptions.ttl_gc_ratio,
-                                         moptions.ttl_max_scan_gap));
-  }
-}
-
 Status CheckCompressionSupported(const ColumnFamilyOptions& cf_options) {
   if (!cf_options.compression_per_level.empty()) {
     for (size_t level = 0; level < cf_options.compression_per_level.size();
@@ -447,7 +427,7 @@ ColumnFamilyData::ColumnFamilyData(
       internal_comparator_(cf_options.comparator),
       initial_cf_options_(SanitizeOptions(db_options, cf_options)),
       ioptions_(db_options, initial_cf_options_),
-      mutable_cf_options_(initial_cf_options_),
+      mutable_cf_options_(initial_cf_options_, db_options.env),
       is_delete_range_supported_(
           cf_options.table_factory->IsDeleteRangeSupported()),
       write_buffer_manager_(write_buffer_manager),
@@ -469,16 +449,6 @@ ColumnFamilyData::ColumnFamilyData(
       allow_2pc_(db_options.allow_2pc),
       last_memtable_id_(0) {
   Ref();
-
-  // Convert user defined table properties collector factories to internal ones.
-  GetIntTblPropCollectorFactory(ioptions_, mutable_cf_options_,
-                                &int_tbl_prop_collector_factories_,
-                                true /* with_ttl_extractor */);
-  if (ioptions_.ttl_extractor_factory != nullptr) {
-    GetIntTblPropCollectorFactory(ioptions_, mutable_cf_options_,
-                                  &int_tbl_prop_collector_factories_for_blob_,
-                                  false /* with_ttl_extractor */);
-  }
 
   // if _dummy_versions is nullptr, then this is a dummy column family.
   if (_dummy_versions != nullptr) {

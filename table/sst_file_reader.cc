@@ -29,7 +29,7 @@ struct SstFileReader::Rep {
       : options(opts),
         soptions(options),
         ioptions(options),
-        moptions(ColumnFamilyOptions(options)) {}
+        moptions(options) {}
 };
 
 SstFileReader::SstFileReader(const Options& options) : rep_(new Rep(options)) {}

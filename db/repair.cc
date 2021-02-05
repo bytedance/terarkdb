@@ -434,15 +434,16 @@ class Repairer {
         }
         return range_del_iters;
       };
+      auto& moptions = *cfd->GetLatestMutableCFOptions();
       status = BuildTable(
-          dbname_, &vset_, env_, *cfd->ioptions(),
-          *cfd->GetLatestMutableCFOptions(), env_options_, table_cache_,
-          c_style_callback(get_arena_input_iter), &get_arena_input_iter,
-          c_style_callback(get_range_del_iters), &get_range_del_iters, &meta,
-          cfd->internal_comparator(), cfd->int_tbl_prop_collector_factories(),
-          cfd->int_tbl_prop_collector_factories_for_blob(), cfd->GetID(),
-          cfd->GetName(), {}, kMaxSequenceNumber, snapshot_checker,
-          kNoCompression, CompressionOptions(), false,
+          dbname_, &vset_, env_, *cfd->ioptions(), moptions, env_options_,
+          table_cache_, c_style_callback(get_arena_input_iter),
+          &get_arena_input_iter, c_style_callback(get_range_del_iters),
+          &get_range_del_iters, &meta, cfd->internal_comparator(),
+          cfd->int_tbl_prop_collector_factories(moptions),
+          cfd->int_tbl_prop_collector_factories_for_blob(moptions),
+          cfd->GetID(), cfd->GetName(), {}, kMaxSequenceNumber,
+          snapshot_checker, kNoCompression, CompressionOptions(), false,
           nullptr /* internal_stats */, TableFileCreationReason::kRecovery,
           nullptr /* event_logger */, 0 /* job_id */, Env::IO_HIGH,
           nullptr /* table_properties */, -1 /* level */, current_time,

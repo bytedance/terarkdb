@@ -59,7 +59,7 @@ SstFileDumper::SstFileDumper(const std::string& file_path, bool verify_checksum,
       verify_checksum_(verify_checksum),
       output_hex_(output_hex),
       ioptions_(options_),
-      moptions_(ColumnFamilyOptions(options_)),
+      moptions_(options_),
       internal_comparator_(BytewiseComparator()) {
   fprintf(stdout, "Process %s\n", file_path.c_str());
   init_result_ = GetTableReader(file_name_);
@@ -215,7 +215,7 @@ int SstFileDumper::ShowAllCompressionSizes(
   Options opts;
   const ImmutableCFOptions imoptions(opts);
   const ColumnFamilyOptions cfo(opts);
-  const MutableCFOptions moptions(cfo);
+  const MutableCFOptions moptions(opts);
   TERARKDB_NAMESPACE::InternalKeyComparator ikc(opts.comparator);
   std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
       block_based_table_factories;
