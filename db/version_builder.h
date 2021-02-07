@@ -35,7 +35,7 @@ class VersionBuilder {
   void CheckConsistencyForDeletes(VersionEdit* edit, uint64_t number,
                                   int level);
   bool CheckConsistencyForNumLevels();
-  void Apply(VersionEdit* edit);
+  void Apply(VersionEdit* edit, bool strict_sequence = true);
   void SaveTo(VersionStorageInfo* vstorage, bool strict_sequence = true);
   void LoadTableHandlers(InternalStats* internal_stats,
                          bool prefetch_index_and_filter_in_cache,

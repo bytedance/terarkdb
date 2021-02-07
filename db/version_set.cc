@@ -706,7 +706,7 @@ class BaseReferencedVersionBuilder {
   void DoApplyAndSaveTo(VersionStorageInfo* vstorage,
                         bool strict_sequence = true) {
     for (auto edit : edit_list_) {
-      version_builder_->Apply(edit);
+      version_builder_->Apply(edit, strict_sequence);
     }
     version_builder_->SaveTo(vstorage, strict_sequence);
   }
@@ -2845,6 +2845,10 @@ std::string Version::DebugString(bool hex, bool print_stats) const {
       AppendNumberTo(&r, files[i]->fd.GetNumber());
       r.push_back(':');
       AppendNumberTo(&r, files[i]->fd.GetFileSize());
+      r.append("|smallest_seq:");
+      AppendNumberTo(&r, files[i]->fd.smallest_seqno);
+      r.append("|largest_seq:");
+      AppendNumberTo(&r, files[i]->fd.largest_seqno);
       r.append("[");
       r.append(files[i]->smallest.DebugString(hex));
       r.append(" .. ");

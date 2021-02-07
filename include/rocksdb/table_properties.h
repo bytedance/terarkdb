@@ -248,8 +248,6 @@ struct TablePropertiesBase {
   // Inheritance chain
   std::vector<uint64_t> inheritance_chain;
 
-  bool is_independed_sst() const { return dependence.empty(); }
-
   // convert this object to a human readable form
   //   @prop_delim: delimiter for each property.
   std::string ToString(const std::string& prop_delim = "; ",

@@ -67,10 +67,12 @@
 #include <inttypes.h>
 
 #include "db/builder.h"
+// #include "db/compaction_job.h"
 #include "db/db_impl.h"
 #include "db/dbformat.h"
 #include "db/log_reader.h"
 #include "db/log_writer.h"
+#include "db/map_builder.h"
 #include "db/memtable.h"
 #include "db/table_cache.h"
 #include "db/version_edit.h"
@@ -101,7 +103,7 @@ class Repairer {
            const ColumnFamilyOptions& unknown_cf_opts, bool create_unknown_cfs)
       : dbname_(dbname),
         env_(db_options.env),
-        env_options_(),
+        env_options_(db_options),
         db_options_(SanitizeOptions(dbname_, db_options)),
         immutable_db_options_(ImmutableDBOptions(db_options_)),
         icmp_(default_cf_opts.comparator),
@@ -124,7 +126,10 @@ class Repairer {
               /* seq_per_batch */ false, raw_table_cache_.get(), &wb_, &wc_),
         next_file_number_(1),
         db_lock_(nullptr),
-        bg_compaction_scheduled_(0) {
+        stat_(nullptr)
+  /* bg_compaction_scheduled_(0),
+   shutting_down_(false) */
+  {
     for (const auto& cfd : column_families) {
       cf_name_to_opts_[cfd.name] = cfd.options;
     }
@@ -228,6 +233,8 @@ class Repairer {
                      "Some data may have been lost. "
                      "****",
                      dbname_.c_str(), tables_.size(), bytes);
+    } else {
+      Header(db_options_.info_log, "%s", status.ToString().c_str());
     }
     return status;
   }
@@ -267,153 +274,47 @@ class Repairer {
   // Lock over the persistent DB state. Non-nullptr iff successfully
   // acquired.
   FileLock* db_lock_;
+  // for global map
   std::vector<std::string> sstable_name_;
-  int bg_compaction_scheduled_;
-
+  // int bg_compaction_scheduled_;
+  // std::atomic<bool> shutting_down_;
+  // SnapshotList snapshots_;
+  // std::unique_ptr<SnapshotChecker> snapshot_checker_;
+  // ErrorHandler error_handler_;
+  Statistics* stat_;
   // another way
-  Status DBOpenAndMap() {
-    DB* db = nullptr;
-    ColumnFamilyOptions cf_options(default_cf_opts_);
-    cf_options.enable_lazy_compaction = true;
-    cf_options.disable_auto_compactions = true;
-    std::vector<ColumnFamilyDescriptor> column_families;
-    column_families.push_back(
-        ColumnFamilyDescriptor(kDefaultColumnFamilyName, cf_options));
-    std::vector<ColumnFamilyHandle*> handles;
-    Status status =
-        DB::Open(db_options_, dbname_, column_families, &handles, &db);
-    if (status.ok()) {
-      // const CompactionOptions compact_options();
-      for (auto cfh : handles) {
-        if (!sstable_name_.empty()) {
-          status = db->CompactFiles(CompactionOptions(), cfh, sstable_name_, 1);
-        }
-      }
-    }
-    if (status.ok()) {
-      status = db->Close();
-    }
-    return status;
-  }
-
   Status GenerateMapSstable() {
-    CompactionOptions compact_options;
+    SstPurpose sst_purpose = kRepairSst;
     for (auto* cfd : *vset_.GetColumnFamilySet()) {
       if (!cfd->initialized()) {
         continue;
       }
-      JobContext job_context(0, true);
-      LogBuffer log_buffer(InfoLogLevel::INFO_LEVEL,
-                           immutable_db_options_.info_log.get());
+      VersionStorageInfo* vstorage = cfd->current()->storage_info();
+      assert(cfd->ioptions()->enable_lazy_compaction);
       {
-        InstrumentedMutexLock l(&mutex_);
-        auto* current = cfd->current();
-        current->Ref();
-        std::unordered_set<uint64_t> input_set;
-        for (const auto& file_name : sstable_name_) {
-          input_set.insert(TableFileNameToNumber(file_name));
+        MapBuilder map_builder(0, immutable_db_options_, env_options_, &vset_,
+                               stat_, dbname_);
+
+        std::vector<Range> deleted_range;
+        std::vector<FileMetaData*> added_files;
+        std::unique_ptr<FileMetaData> output_file(new FileMetaData);
+        VersionEdit edit;
+        std::string debugstring = cfd->current()->DebugString(true, false);
+        //  Header(immutable_db_options_.info_log, "%s", debugstring.c_str());
+        Status status = map_builder.Build(
+            {CompactionInputFiles{0, vstorage->LevelFiles(0)}}, deleted_range,
+            added_files, 1, 0, cfd, cfd->current(), &edit, output_file.get(),
+            nullptr, nullptr, sst_purpose);
+        if (status.ok()) {
+          mutex_.Lock();
+          status =
+              vset_.LogAndApply(cfd, *cfd->GetLatestMutableCFOptions(), &edit,
+                                &mutex_, nullptr, false, nullptr, false);
+          mutex_.Unlock();
         }
-        ColumnFamilyMetaData cf_meta;
-        current->GetColumnFamilyMetaData(&cf_meta);
-        assert(cfd->ioptions()->cf_paths.size() == 1U);
-
-        Status s = cfd->compaction_picker()->SanitizeCompactionInputFiles(
-            &input_set, cf_meta, 1);
-        if (!s.ok()) {
-          return s;
-        }
-
-        std::vector<CompactionInputFiles> input_files;
-        s = cfd->compaction_picker()->GetCompactionInputsFromFileNumbers(
-            &input_files, &input_set, current->storage_info(), compact_options);
-        if (!s.ok()) {
-          return s;
-        }
-
-        for (const auto& inputs : input_files) {
-          if (cfd->compaction_picker()->AreFilesInCompaction(inputs.files)) {
-            return Status::Aborted(
-                "Some of the necessary compaction input "
-                "files are already being compacted");
-          }
-        }
-
-        bool sfm_reserved_compact_space = false;
-        // First check if we have enough room to do the compaction
-        bool enough_room = EnoughRoomForCompaction(
-            cfd, input_files, &sfm_reserved_compact_space, &log_buffer);
-
-        if (!enough_room) {
-          // m's vars will get set properly at the end of this function,
-          // as long as status == CompactionTooLarge
-          return Status::CompactionTooLarge();
-        }
-
-        bg_compaction_scheduled_++;
-
-        std::unique_ptr<Compaction> c;
-        assert(cfd->compaction_picker());
-        c.reset(cfd->compaction_picker()->CompactFiles(
-            compact_options, input_files, 1, current->storage_info(),
-            *cfd->GetLatestMutableCFOptions(), 0));
-        assert(c != nullptr);
-
-        c->SetInputVersion(current);
-        // deletion compaction currently not allowed in CompactFiles.
-        assert(!c->deletion_compaction());
-
-        SequenceNumber earliest_write_conflict_snapshot;
-
-        CompactionJob compaction_job(
-            job_context.job_id, c.get(), immutable_db_options_,
-            env_options_for_compaction_, versions_.get(), &shutting_down_,
-            preserve_deletes_seqnum_.load(), log_buffer,
-            directories_.GetDbDir(),
-            GetDataDir(c->column_family_data(), c->output_path_id()), stats_,
-            &mutex_, &error_handler_, snapshot_seqs,
-            earliest_write_conflict_snapshot, snapshot_checker, table_cache_,
-            &event_logger_, c->mutable_cf_options()->paranoid_file_checks,
-            c->mutable_cf_options()->report_bg_io_stats, dbname_,
-            nullptr /* compaction_job_stats */);
-
-        current->Unref();
       }
     }
     return Status::OK();
-  }
-  bool EnoughRoomForCompaction(ColumnFamilyData* cfd,
-                               const std::vector<CompactionInputFiles>& inputs,
-                               bool* sfm_reserved_compact_space,
-                               LogBuffer* log_buffer) {
-    // Check if we have enough room to do the compaction
-    bool enough_room = true;
-#ifndef ROCKSDB_LITE
-    auto sfm = static_cast<SstFileManagerImpl*>(
-        immutable_db_options_.sst_file_manager.get());
-    if (sfm) {
-      // Pass the current bg_error_ to SFM so it can decide what checks to
-      // perform. If this DB instance hasn't seen any error yet, the SFM can be
-      // optimistic and not do disk space checks
-      enough_room = sfm->EnoughRoomForCompaction(cfd, inputs, Status::OK());
-      //  error_handler_.GetBGError());
-      if (enough_room) {
-        *sfm_reserved_compact_space = true;
-      }
-    }
-#else
-    (void)cfd;
-    (void)inputs;
-    (void)sfm_reserved_compact_space;
-#endif  // ROCKSDB_LITE
-    if (!enough_room) {
-      // Just in case tests want to change the value of enough_room
-      TEST_SYNC_POINT_CALLBACK(
-          "DBImpl::BackgroundCompaction():CancelledCompaction", &enough_room);
-      ROCKS_LOG_BUFFER(log_buffer,
-                       "Cancelled compaction because not enough room");
-      // RecordTick(stats_, COMPACTION_CANCELLED, 1);
-    }
-    return enough_room;
   }
 
   Status FindFiles() {
@@ -740,11 +641,16 @@ class Repairer {
       status = table_cache_->GetTableProperties(env_options_, icmp_, t->meta,
                                                 &props);
     }
+    t->meta.prop.purpose = props->purpose;
     if (status.ok()) {
-      if (!props->is_independed_sst()) {
-        status = rocksdb::Status::NotSupported(
-            "ignore map sstable or blob sstable because they are not "
-            "independent.");
+      if (t->meta.prop.is_map_sst()) {
+        char* output = new char[100];
+        sprintf(output,
+                "ignore map sstables because they are not "
+                "independent:%d",
+                t->meta.prop.purpose);
+        status = rocksdb::Status::NotSupported(output);
+        delete[] output;
       }
     }
     if (status.ok()) {
@@ -821,8 +727,8 @@ class Repairer {
       }
       delete iter;
 
-      Header(db_options_.info_log, "Table #%" PRIu64 ": %d entries %s",
-             t->meta.fd.GetNumber(), counter, status.ToString().c_str());
+      // Header(db_options_.info_log, "Table #%" PRIu64 ": %d entries %s",
+      //        t->meta.fd.GetNumber(), counter, status.ToString().c_str());
       ROCKS_LOG_INFO(db_options_.info_log, "Table #%" PRIu64 ": %d entries %s",
                      t->meta.fd.GetNumber(), counter,
                      status.ToString().c_str());
@@ -836,7 +742,7 @@ class Repairer {
                                 : TablePropertyCache::kNoRangeDeletions;
       t->meta.prop.flags |=
           props->snapshots.empty() ? 0 : TablePropertyCache::kHasSnapshots;
-      t->meta.prop.purpose = props->purpose;
+      // t->meta.prop.purpose = props->purpose;
       t->meta.prop.max_read_amp = props->max_read_amp;
       t->meta.prop.read_amp = props->read_amp;
       t->meta.prop.dependence = props->dependence;
@@ -884,9 +790,9 @@ class Repairer {
           assert(false);
           level = -1;
         }
-        // if (table->max_sequence == 0) {
-        //   level = cfd->NumberLevels() - 1;
-        // }
+        if (table->max_sequence == 0) {
+          level = cfd->NumberLevels() - 1;
+        }
         edit.AddFile(level, table->meta.fd.GetNumber(),
                      table->meta.fd.GetPathId(), table->meta.fd.GetFileSize(),
                      table->meta.smallest, table->meta.largest,
@@ -929,7 +835,7 @@ class Repairer {
     ROCKS_LOG_INFO(db_options_.info_log, "Archiving %s to %s: %s\n",
                    fname.c_str(), new_file.c_str(), s.ToString().c_str());
   }
-};
+};  // namespace
 
 Status GetDefaultCFOptions(
     const std::vector<ColumnFamilyDescriptor>& column_families,
@@ -945,13 +851,12 @@ Status GetDefaultCFOptions(
   *res = iter->options;
   return Status::OK();
 }
-}  // anonymous namespace
+}  // namespace
 
 Status RepairDB(const std::string& dbname, const DBOptions& db_options,
                 const std::vector<ColumnFamilyDescriptor>& column_families) {
   ColumnFamilyOptions default_cf_opts;
   Status status = GetDefaultCFOptions(column_families, &default_cf_opts);
-  default_cf_opts.enable_lazy_compaction = true;
   if (status.ok()) {
     Repairer repairer(dbname, db_options, column_families, default_cf_opts,
                       ColumnFamilyOptions() /* unknown_cf_opts */,
@@ -966,7 +871,6 @@ Status RepairDB(const std::string& dbname, const DBOptions& db_options,
                 const ColumnFamilyOptions& unknown_cf_opts) {
   ColumnFamilyOptions default_cf_opts;
   Status status = GetDefaultCFOptions(column_families, &default_cf_opts);
-  default_cf_opts.enable_lazy_compaction = true;
   if (status.ok()) {
     Repairer repairer(dbname, db_options, column_families, default_cf_opts,
                       unknown_cf_opts, true /* create_unknown_cfs */);
@@ -978,7 +882,6 @@ Status RepairDB(const std::string& dbname, const DBOptions& db_options,
 Status RepairDB(const std::string& dbname, const Options& options) {
   DBOptions db_options(options);
   ColumnFamilyOptions cf_options(options);
-  cf_options.enable_lazy_compaction = true;
   Repairer repairer(dbname, db_options, {}, cf_options /* default_cf_opts */,
                     cf_options /* unknown_cf_opts */,
                     true /* create_unknown_cfs */);

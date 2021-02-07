@@ -817,7 +817,9 @@ bool VersionBuilder::CheckConsistencyForNumLevels() {
   return rep_->CheckConsistencyForNumLevels();
 }
 
-void VersionBuilder::Apply(VersionEdit* edit) { rep_->Apply(edit); }
+void VersionBuilder::Apply(VersionEdit* edit, bool strict_sequence) {
+  rep_->Apply(edit, strict_sequence);
+}
 
 void VersionBuilder::SaveTo(VersionStorageInfo* vstorage,
                             bool strict_sequence) {

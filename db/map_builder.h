@@ -62,8 +62,9 @@ class MapBuilder {
                const std::vector<FileMetaData*>& added_files, int output_level,
                uint32_t output_path_id, ColumnFamilyData* cfd, Version* version,
                VersionEdit* edit, FileMetaData* file_meta = nullptr,
-               std::unique_ptr<TableProperties>* porp = nullptr,
-               std::set<FileMetaData*>* deleted_files = nullptr);
+               std::unique_ptr<TableProperties>* prop_ptr = nullptr,
+               std::set<FileMetaData*>* deleted_files = nullptr,
+               SstPurpose sst_purpose = kMapSst);
 
   // All params are references or pointers
   // push_range use user key
@@ -71,7 +72,8 @@ class MapBuilder {
                const std::vector<Range>& push_range, int output_level,
                uint32_t output_path_id, ColumnFamilyData* cfd, Version* version,
                VersionEdit* edit,
-               std::vector<MapBuilderOutput>* output = nullptr);
+               std::vector<MapBuilderOutput>* output = nullptr,
+               SstPurpose sst_purpose = kMapSst);
 
  private:
   Status WriteOutputFile(const FileMetaDataBoundBuilder& bound_builder,
@@ -80,7 +82,9 @@ class MapBuilder {
                          uint32_t output_path_id, ColumnFamilyData* cfd,
                          const MutableCFOptions& mutable_cf_options,
                          FileMetaData* file_meta,
-                         std::unique_ptr<TableProperties>* porp);
+                         std::unique_ptr<TableProperties>* porp,
+                         SstPurpose sst_purpose = kMapSst);
+  SstPurpose ScanInputFile(const std::vector<CompactionInputFiles>& inputs);
 
   int job_id_;
 

@@ -957,9 +957,13 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
                          ColumnFamilyData* cfd, Version* version,
                          VersionEdit* edit, FileMetaData* file_meta_ptr,
                          std::unique_ptr<TableProperties>* prop_ptr,
-                         std::set<FileMetaData*>* deleted_files) {
+                         std::set<FileMetaData*>* deleted_files,
+                         SstPurpose sst_purpose) {
   assert(output_level != 0 || inputs.front().level == 0);
   assert(!inputs.front().files.empty());
+  if (sst_purpose != kRepairSst) {
+    sst_purpose = ScanInputFile(inputs);
+  }
   auto vstorage = version->storage_info();
   auto& icomp = cfd->internal_comparator();
   IteratorCacheContext iterator_cache_ctx = {
@@ -1273,7 +1277,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
 
   s = WriteOutputFile(bound_builder, &output_iter, tombstone_iter.get(),
                       output_path_id, cfd, version->GetMutableCFOptions(),
-                      &file_meta, &prop);
+                      &file_meta, &prop, sst_purpose);
 
   if (s.ok()) {
     for (auto& input_level : inputs) {
@@ -1301,8 +1305,12 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
                          const std::vector<Range>& push_range, int output_level,
                          uint32_t output_path_id, ColumnFamilyData* cfd,
                          Version* version, VersionEdit* edit,
-                         std::vector<MapBuilderOutput>* output) {
+                         std::vector<MapBuilderOutput>* output,
+                         SstPurpose sst_purpose) {
   assert(output_level > 0);
+  if (sst_purpose != kRepairSst) {
+    sst_purpose = ScanInputFile(inputs);
+  }
   auto vstorage = version->storage_info();
   auto& icomp = cfd->internal_comparator();
   IteratorCacheContext iterator_cache_ctx = {
@@ -1546,7 +1554,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     s = WriteOutputFile(level_ranges.bound_builder, &output_iter,
                         tombstone_iter.get(), output_path_id, cfd,
                         version->GetMutableCFOptions(), &output_item.file_meta,
-                        &output_item.prop);
+                        &output_item.prop, sst_purpose);
 
     if (!s.ok()) {
       return s;
@@ -1572,7 +1580,7 @@ Status MapBuilder::WriteOutputFile(
     MapSstRangeIterator* range_iter, InternalIterator* tombstone_iter,
     uint32_t output_path_id, ColumnFamilyData* cfd,
     const MutableCFOptions& mutable_cf_options, FileMetaData* file_meta,
-    std::unique_ptr<TableProperties>* prop) {
+    std::unique_ptr<TableProperties>* prop, SstPurpose sst_purpose) {
   std::vector<std::unique_ptr<IntTblPropCollectorFactory>> collectors;
 
   // no need to lock because VersionSet::next_file_number_ is atomic
@@ -1633,7 +1641,8 @@ Status MapBuilder::WriteOutputFile(
       &collectors, cfd->GetID(), cfd->GetName(), outfile.get(), kNoCompression,
       CompressionOptions(), -1 /* level */, 0 /* compaction_load */,
       nullptr /* compression_dict */, true /* skip_filters */,
-      output_file_creation_time, 0 /* oldest_key_time */, kMapSst));
+      output_file_creation_time, 0 /* oldest_key_time */,
+      /* kMapSst*/ sst_purpose));
   LogFlush(db_options_.info_log);
 
   // Update boundaries
@@ -1663,7 +1672,7 @@ Status MapBuilder::WriteOutputFile(
 
   // Prepare prop
   file_meta->prop.num_entries = builder->NumEntries();
-  file_meta->prop.purpose = kMapSst;
+  file_meta->prop.purpose = sst_purpose;  // kMapSst;
   file_meta->prop.flags |= TablePropertyCache::kMapHandleRangeDeletions;
   file_meta->prop.flags |=
       has_range_deletions ? 0 : TablePropertyCache::kNoRangeDeletions;
@@ -1733,6 +1742,19 @@ Status MapBuilder::WriteOutputFile(
 
   builder.reset();
   return s;
+}
+
+SstPurpose MapBuilder::ScanInputFile(
+    const std::vector<CompactionInputFiles>& inputs) {
+  // May be not effective
+  for (auto input_files : inputs) {
+    for (auto f : input_files.files) {
+      if (f->prop.is_repair_sst()) {
+        return kRepairSst;
+      }
+    }
+  }
+  return kMapSst;
 }
 
 struct MapElementIterator : public InternalIterator {

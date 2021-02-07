@@ -86,6 +86,7 @@ enum SstPurpose {
   kEssenceSst,  // Actual data storage sst
   kLogSst,      // Log as sst
   kMapSst,      // Dummy sst
+  kRepairSst,   // Repair sst
 };
 
 struct Options;

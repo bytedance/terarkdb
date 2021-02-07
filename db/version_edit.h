@@ -102,7 +102,10 @@ struct TablePropertyCache {
   std::vector<Dependence> dependence;       // make these sst hidden
   std::vector<uint64_t> inheritance_chain;  // inheritance chain
 
-  bool is_map_sst() const { return purpose == kMapSst; }
+  bool is_map_sst() const {
+    return purpose == kMapSst || purpose == kRepairSst;
+  }
+  bool is_repair_sst() const { return purpose == kRepairSst; }
   bool has_range_deletions() const { return (flags & kNoRangeDeletions) == 0; }
   bool map_handle_range_deletions() const {
     return (flags & kMapHandleRangeDeletions) != 0;
