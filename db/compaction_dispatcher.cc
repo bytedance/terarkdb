@@ -477,7 +477,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
     }
   }
   ImmutableCFOptions immutable_cf_options(immutable_db_options, cf_options);
-  MutableCFOptions mutable_cf_options(cf_options,rep_->env);
+  MutableCFOptions mutable_cf_options(cf_options, rep_->env);
 
   struct CollectorFactoriesHolder {
     std::vector<std::unique_ptr<IntTblPropCollectorFactory>> data;

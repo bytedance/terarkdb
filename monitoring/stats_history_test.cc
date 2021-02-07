@@ -32,8 +32,7 @@ namespace TERARKDB_NAMESPACE {
 #ifndef ROCKSDB_LITE
 class StatsHistoryTest : public DBTestBase {
  public:
-  StatsHistoryTest()
-      : DBTestBase("/stats_history_test") {
+  StatsHistoryTest() : DBTestBase("/stats_history_test") {
     mock_env_.reset(new MockTimeEnv(env_));
   }
 
