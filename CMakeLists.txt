@@ -1005,7 +1005,6 @@ if(WITH_TESTS)
         env/mock_env_test.cc
         memtable/inlineskiplist_test.cc
         memtable/skiplist_test.cc
-        memtable/terark_zip_memtable_test.cc
         memtable/write_buffer_manager_test.cc
         monitoring/histogram_test.cc
         monitoring/iostats_context_test.cc
@@ -1024,7 +1023,6 @@ if(WITH_TESTS)
         table/merger_test.cc
         table/sst_file_reader_test.cc
         table/table_test.cc
-        table/terark_zip_table_row_ttl_test.cc
         tools/ldb_cmd_test.cc
         tools/reduce_levels_test.cc
         tools/sst_dump_test.cc
@@ -1081,6 +1079,12 @@ if(WITH_TESTS)
         utilities/ttl/ttl_test.cc
         utilities/write_batch_with_index/write_batch_with_index_test.cc
   )
+  if(WITH_TERARK_ZIP)
+    set(TESTS ${TESTS}
+            memtable/terark_zip_memtable_test.cc
+            table/terark_zip_table_row_ttl_test.cc
+            )
+  endif()
   if(WITH_LIBRADOS)
     list(APPEND TESTS utilities/env_librados_test.cc)
   endif()

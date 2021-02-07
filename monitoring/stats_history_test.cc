@@ -33,7 +33,7 @@ namespace TERARKDB_NAMESPACE {
 class StatsHistoryTest : public DBTestBase {
  public:
   StatsHistoryTest()
-      : DBTestBase("/stats_history_test", /*env_do_fsync=*/true) {
+      : DBTestBase("/stats_history_test") {
     mock_env_.reset(new MockTimeEnv(env_));
   }
 
@@ -646,7 +646,7 @@ TEST_F(StatsHistoryTest, ForceManualFlushStatsCF) {
 }  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  ROCKSDB_NAMESPACE::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

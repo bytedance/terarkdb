@@ -617,7 +617,7 @@ class VersionSetTestBase {
       : env_(Env::Default()),
         dbname_(test::PerThreadDBPath("version_set_test")),
         db_options_(),
-        mutable_cf_options_(cf_options_),
+        mutable_cf_options_(cf_options_,env_),
         table_cache_(NewLRUCache(50000, 16)),
         write_buffer_manager_(db_options_.db_write_buffer_size),
         versions_(new VersionSet(dbname_, &db_options_, env_options_,

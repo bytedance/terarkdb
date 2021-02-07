@@ -55,7 +55,7 @@ class MapBuilderTest : public testing::Test {
       : env_(Env::Default()),
         dbname_(test::PerThreadDBPath("map_builder_test")),
         db_options_(),
-        mutable_cf_options_(cf_options_),
+        mutable_cf_options_(cf_options_,env_),
         ioptions_(db_options_, cf_options_),
         table_cache_(NewLRUCache(50000, 16)),
         write_buffer_manager_(db_options_.db_write_buffer_size),
