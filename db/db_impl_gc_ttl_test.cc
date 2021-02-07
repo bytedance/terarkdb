@@ -100,6 +100,7 @@ TEST_F(DBImplGCTTL_Test, BlockBasedTableTest) {
   run();
   read();
 }
+#ifdef TERARK_ZIP
 TEST_F(DBImplGCTTL_Test, TerarkTableTest) {
   init();
   TerarkZipTableOptions terarkziptableoptions;
@@ -108,6 +109,7 @@ TEST_F(DBImplGCTTL_Test, TerarkTableTest) {
   run();
   read();
 }
+#endif
 
 }  // namespace TERARKDB_NAMESPACE
 int main(int argc, char** argv) {
