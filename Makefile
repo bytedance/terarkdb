@@ -518,12 +518,11 @@ ALL_SOURCES += $(TEST_MAIN_SOURCES) $(TOOL_MAIN_SOURCES) $(BENCH_MAIN_SOURCES)
 TESTS = $(patsubst %.cc, %, $(notdir $(TEST_MAIN_SOURCES)))
 TESTS += $(patsubst %.c, %, $(notdir $(TEST_MAIN_SOURCES_C)))
 
-<<<<<<< HEAD
 ifeq ($(USE_FOLLY_DISTRIBUTED_MUTEX),1)
 	TESTS += folly_synchronization_distributed_mutex_test
 	ALL_SOURCES += third-party/folly/folly/synchronization/test/DistributedMutexTest.cc
 endif
-=======
+
 TESTS = \
 	db_basic_test \
 	db_encryption_test \
@@ -671,7 +670,6 @@ TESTS = \
 	db_secondary_test \
 	block_cache_tracer_test \
 	block_cache_trace_analyzer_test \
->>>>>>> 671d15cbd... Persistent Stats: persist stats history to disk (#5046)
 
 PARALLEL_TEST = \
 	backupable_db_test \
@@ -1931,14 +1929,12 @@ blob_db_test: $(OBJ_DIR)/utilities/blob_db/blob_db_test.o $(TEST_LIBRARY) $(LIBR
 repeatable_thread_test: $(OBJ_DIR)/util/repeatable_thread_test.o $(TEST_LIBRARY) $(LIBRARY)
 	$(AM_LINK)
 
-<<<<<<< HEAD
 range_tombstone_fragmenter_test: $(OBJ_DIR)/db/range_tombstone_fragmenter_test.o $(TEST_LIBRARY) $(LIBRARY)
-=======
+
 stats_history_test: monitoring/stats_history_test.o db/db_test_util.o $(LIBOBJECTS) $(TESTHARNESS)
 	$(AM_LINK)
 
 lru_cache_test: cache/lru_cache_test.o $(LIBOBJECTS) $(TESTHARNESS)
->>>>>>> 671d15cbd... Persistent Stats: persist stats history to disk (#5046)
 	$(AM_LINK)
 
 sst_file_reader_test: $(OBJ_DIR)/table/sst_file_reader_test.o $(TEST_LIBRARY) $(LIBRARY)
