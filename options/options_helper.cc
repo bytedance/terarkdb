@@ -191,6 +191,7 @@ ColumnFamilyOptions BuildColumnFamilyOptions(
   cf_opts.ttl = mutable_cf_options.ttl;
   cf_opts.ttl_gc_ratio = mutable_cf_options.ttl_gc_ratio;
   cf_opts.ttl_max_scan_gap = mutable_cf_options.ttl_max_scan_gap;
+  cf_opts.sst_ttl_seconds = mutable_cf_options.sst_ttl_seconds;
 
   cf_opts.max_bytes_for_level_multiplier_additional.clear();
   for (auto value :
@@ -2075,7 +2076,11 @@ std::unordered_map<std::string, OptionTypeInfo>
         {"ttl_max_scan_gap",
          {offset_of(&ColumnFamilyOptions::ttl_max_scan_gap), OptionType::kSizeT,
           OptionVerificationType::kNormal, true,
-          offsetof(struct MutableCFOptions, ttl_max_scan_gap)}}};
+          offsetof(struct MutableCFOptions, ttl_max_scan_gap)}},
+        {"sst_ttl_seconds",
+         {offset_of(&ColumnFamilyOptions::sst_ttl_seconds), OptionType::kSizeT,
+          OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, sst_ttl_seconds)}}};
 
 std::unordered_map<std::string, OptionTypeInfo>
     OptionsHelper::fifo_compaction_options_type_info = {

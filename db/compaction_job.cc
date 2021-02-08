@@ -821,6 +821,7 @@ Status CompactionJob::Run() {
     results_fn.emplace_back(dispatcher->StartCompaction(context));
   }
   Status status = Status::Corruption();
+  size_t sst_ttl_seconds = c->mutable_cf_options()->sst_ttl_seconds;
   for (size_t i = 0; i < compact_->sub_compact_states.size(); ++i) {
     auto& sub_compact = compact_->sub_compact_states[i];
     CompactionWorkerResult result;
@@ -892,6 +893,11 @@ Status CompactionJob::Run() {
                 ", latest_time_end_compact = %" PRIu64,
                 output.meta.prop.earliest_time_begin_compact,
                 output.meta.prop.latest_time_end_compact);
+          }
+          if (sst_ttl_seconds > 0 && tp->creation_time > 0) {
+            output.meta.prop.earliest_time_begin_compact =
+                std::min(output.meta.prop.earliest_time_begin_compact,
+                         tp->creation_time + sst_ttl_seconds);
           }
           output.finished = true;
           c->AddOutputTableFileNumber(file_number);
@@ -2130,6 +2136,13 @@ Status CompactionJob::FinishCompactionOutputFile(
                      ", latest_time_end_compact = %" PRIu64,
                      meta->prop.earliest_time_begin_compact,
                      meta->prop.latest_time_end_compact);
+    }
+    size_t sst_ttl_seconds =
+        compact_->compaction->mutable_cf_options()->sst_ttl_seconds;
+    if (sst_ttl_seconds > 0 && tp.creation_time > 0) {
+      meta->prop.earliest_time_begin_compact =
+          std::min(meta->prop.earliest_time_begin_compact,
+                   tp.creation_time + sst_ttl_seconds);
     }
   }
 

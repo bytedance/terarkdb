@@ -257,22 +257,38 @@ uint64_t GetMergeOperands(const UserCollectedProperties& props,
 void GetCompactionTimePoint(const UserCollectedProperties& props,
                             uint64_t* earliest_time_begin_compact,
                             uint64_t* latest_time_end_compact) {
-  assert(earliest_time_begin_compact != nullptr);
-  assert(latest_time_end_compact != nullptr);
-
-  bool property_present;
-
-  *earliest_time_begin_compact =
-      GetUint64Property(props, TablePropertiesNames::kEarliestTimeBeginCompact,
-                        &property_present);
-  if (!property_present) {
-    *earliest_time_begin_compact = port::kMaxUint64;
+  bool property_present = false;
+  if (earliest_time_begin_compact != nullptr) {
+    *earliest_time_begin_compact = GetUint64Property(
+        props, TablePropertiesNames::kEarliestTimeBeginCompact,
+        &property_present);
+    if (!property_present) {
+      *earliest_time_begin_compact = port::kMaxUint64;
+    }
   }
+  if (latest_time_end_compact != nullptr) {
+    *latest_time_end_compact = GetUint64Property(
+        props, TablePropertiesNames::kLatestTimeEndCompact, &property_present);
+    if (!property_present) {
+      *latest_time_end_compact = port::kMaxUint64;
+    }
+  }
+}
 
-  *latest_time_end_compact = GetUint64Property(
-      props, TablePropertiesNames::kLatestTimeEndCompact, &property_present);
-  if (!property_present) {
-    *latest_time_end_compact = port::kMaxUint64;
+void SetCompactionTimeOut(UserCollectedProperties* properties,
+                          uint64_t earliest_time_begin_compact,
+                          uint64_t latest_time_end_compact) {
+  if (earliest_time_begin_compact > 0) {
+    properties->erase(TablePropertiesNames::kEarliestTimeBeginCompact);
+    TtlIntTblPropCollector::PushItem(
+        properties, TablePropertiesNames::kEarliestTimeBeginCompact,
+        earliest_time_begin_compact);
+  }
+  if (latest_time_end_compact > 0) {
+    properties->erase(TablePropertiesNames::kLatestTimeEndCompact);
+    TtlIntTblPropCollector::PushItem(
+        properties, TablePropertiesNames::kLatestTimeEndCompact,
+        latest_time_end_compact);
   }
 }
 

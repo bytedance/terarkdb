@@ -473,6 +473,7 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
       "ttl=60;"
       "ttl_gc_ratio=3.000;"
       "ttl_max_scan_gap=1;"
+      "sst_ttl_seconds=3;"
       "compaction_options_fifo={max_table_files_size=3;ttl=100;allow_"
       "compaction=false;};",
       new_options));
@@ -482,6 +483,7 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
                           kColumnFamilyOptionsBlacklist));
   EXPECT_EQ(new_options->ttl_gc_ratio, 3.000);
   EXPECT_EQ(new_options->ttl_max_scan_gap, 1);
+  EXPECT_EQ(new_options->sst_ttl_seconds, 3);
   options->~ColumnFamilyOptions();
   new_options->~ColumnFamilyOptions();
 

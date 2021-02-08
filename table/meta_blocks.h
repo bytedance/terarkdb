@@ -100,7 +100,8 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
                       const ImmutableCFOptions& ioptions,
                       TableProperties** table_properties,
                       bool compression_type_missing = false,
-                      MemoryAllocator* memory_allocator = nullptr);
+                      MemoryAllocator* memory_allocator = nullptr,
+                      size_t sst_ttl_seconds = 0);
 
 // Directly read the properties from the properties block of a plain table.
 // @returns a status to indicate if the operation succeeded. On success,
@@ -115,7 +116,8 @@ Status ReadTableProperties(RandomAccessFileReader* file, uint64_t file_size,
                            const ImmutableCFOptions& ioptions,
                            TableProperties** properties,
                            bool compression_type_missing = false,
-                           MemoryAllocator* memory_allocator = nullptr);
+                           MemoryAllocator* memory_allocator = nullptr,
+                           size_t sst_ttl_seconds = 0);
 
 // Find the meta block from the meta index block.
 Status FindMetaBlock(InternalIteratorBase<Slice>* meta_index_iter,

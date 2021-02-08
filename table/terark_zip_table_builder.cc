@@ -211,6 +211,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
     properties_.prefix_extractor_name =
         tbo.moptions.prefix_extractor ? tbo.moptions.prefix_extractor->Name()
                                       : "nullptr";
+    properties_.creation_time = tbo.creation_time;
 
     isReverseBytewiseOrder_ =
         IsBackwardBytewiseComparator(properties_.comparator_name);

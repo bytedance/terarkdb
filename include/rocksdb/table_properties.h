@@ -286,5 +286,8 @@ extern uint64_t GetMergeOperands(const UserCollectedProperties& props,
 extern void GetCompactionTimePoint(const UserCollectedProperties& props,
                                    uint64_t* earliest_time_begin_compact,
                                    uint64_t* latest_time_end_compact);
+extern void SetCompactionTimeOut(UserCollectedProperties* properties,
+                                 uint64_t earliest_time_begin_compact = 0,
+                                 uint64_t latest_time_end_compact = 0);
 
 }  // namespace TERARKDB_NAMESPACE

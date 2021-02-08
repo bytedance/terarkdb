@@ -421,6 +421,11 @@ Status BuildTable(
             &sst_meta()->prop.earliest_time_begin_compact,
             &sst_meta()->prop.latest_time_end_compact);
       }
+      if (mutable_cf_options.sst_ttl_seconds > 0 && creation_time > 0) {
+        sst_meta()->prop.earliest_time_begin_compact =
+            std::min(sst_meta()->prop.earliest_time_begin_compact,
+                     creation_time + mutable_cf_options.sst_ttl_seconds);
+      }
     }
 
     if (s.ok() && !empty) {

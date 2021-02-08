@@ -4,20 +4,22 @@
 #include "db/table_properties_collector.h"
 #include "rocksdb/terark_namespace.h"
 #include "table/block_based_table_builder.h"
-#include "util/string_util.h"
 #include "util/coding.h"
+#include "util/string_util.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
 namespace TERARKDB_NAMESPACE {
 
 struct params {
-  params(double ratio = 1.000, size_t scan = port::kMaxUint64) {
+  params(double ratio = 1.000, size_t scan = 0, size_t sst = 0) {
     ttl_ratio = ratio;
     ttl_scan = scan;
+    ttl_sst = sst;
   }
   double ttl_ratio;
   size_t ttl_scan;
+  size_t ttl_sst;
 };
 class TestEnv : public EnvWrapper {
  public:
@@ -62,8 +64,9 @@ class TestEnv : public EnvWrapper {
 
 class BlockBasedTableBuilderTest : public ::testing::TestWithParam<params> {};
 
-params ttl_param[] = {{0.50, 2},     {1.280, 5}, {0.800, 0}, {1.280, 0},
-                      {1.000, 1000}, {0.000, 1}, {-10, 0}};
+params ttl_param[] = {{0.50, 2},     {1.280, 5},  {0.800, 0}, {1.280, 0},
+                      {1.000, 1000}, {0.000, 1},  {-10, 0},   {2, 0, 10},
+                      {1.0, 0, 20},  {1.0, 0, 40}};
 // INSTANTIATE_TEST_CASE_P(TrueReturn, BlockBasedTableBuilderTest,
 //                         testing::Values(ttl_param[0], ttl_param[1],
 //                                         ttl_param[2], ttl_param[3],
@@ -72,7 +75,6 @@ INSTANTIATE_TEST_CASE_P(CorrectnessTest, BlockBasedTableBuilderTest,
                         testing::ValuesIn(ttl_param));
 
 TEST_F(BlockBasedTableBuilderTest, FunctionTest) {
-
   BlockBasedTableOptions blockbasedtableoptions;
   BlockBasedTableFactory factory(blockbasedtableoptions);
   test::StringSink sink;
@@ -125,7 +127,7 @@ TEST_F(BlockBasedTableBuilderTest, FunctionTest) {
   TableProperties* props = nullptr;
   s = ReadTableProperties(file_reader.get(), ss->contents().size(),
                           kBlockBasedTableMagicNumber, ioptions, &props,
-                          true /* compression_type_missing */);
+                          true /* compression_type_missing */, nullptr);
   std::unique_ptr<TableProperties> props_guard(props);
 
   ASSERT_OK(s);
@@ -163,6 +165,7 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
   auto n = GetParam();
   options.ttl_gc_ratio = n.ttl_ratio;
   options.ttl_max_scan_gap = n.ttl_scan;
+  options.sst_ttl_seconds = n.ttl_sst;
   options.ttl_extractor_factory.reset(new test::TestTtlExtractorFactory());
   Status s = DB::Open(options, dbname, &db);
   ASSERT_OK(s);
@@ -170,6 +173,7 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
   s = db->Close();
   delete db;
 
+  uint64_t nowseconds = env->NowMicros() / 1000000ul;
   const ImmutableCFOptions ioptions(options);
   const MutableCFOptions moptions(options);
   InternalKeyComparator ikc(options.comparator);
@@ -177,9 +181,9 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
       int_tbl_prop_collector_factories;
 
   int_tbl_prop_collector_factories.emplace_back(
-      NewTtlIntTblPropCollectorFactory(
-          options.ttl_extractor_factory.get(), env,
-          moptions.ttl_gc_ratio, moptions.ttl_max_scan_gap));
+      NewTtlIntTblPropCollectorFactory(options.ttl_extractor_factory.get(), env,
+                                       moptions.ttl_gc_ratio,
+                                       moptions.ttl_max_scan_gap));
   std::string column_family_name;
   int unknown_level = -1;
   std::unique_ptr<TableBuilder> builder(factory.NewTableBuilder(
@@ -187,7 +191,7 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
                           &int_tbl_prop_collector_factories, kNoCompression,
                           CompressionOptions(), nullptr /* compression_dict */,
                           false /* skip_filters */, column_family_name,
-                          unknown_level, 0 /* compaction_load */),
+                          unknown_level, 0 /* compaction_load */, nowseconds),
       TablePropertiesCollectorFactory::Context::kUnknownColumnFamily,
       file_writer.get()));
 
@@ -196,7 +200,8 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
     key_ttl[i] = i + 1;
   }
   int min_ttl = *std::min_element(key_ttl.begin(), key_ttl.end());
-  uint64_t nowseconds = env->NowMicros() / 1000000ul;
+  int max_ttl = *std::max_element(key_ttl.begin(), key_ttl.end());
+
   std::random_device rd;
   std::mt19937 g(rd());
   std::shuffle(key_ttl.begin(), key_ttl.end(), g);
@@ -226,7 +231,8 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
   TableProperties* props = nullptr;
   s = ReadTableProperties(file_reader.get(), ss->contents().size(),
                           kBlockBasedTableMagicNumber, ioptions, &props,
-                          true /* compression_type_missing */);
+                          true /* compression_type_missing */, nullptr,
+                          moptions.sst_ttl_seconds);
   std::unique_ptr<TableProperties> props_guard(props);
 
   ASSERT_OK(s);
@@ -239,35 +245,49 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
       TablePropertiesNames::kEarliestTimeBeginCompact);
   auto answer2 = props->user_collected_properties.find(
       TablePropertiesNames::kLatestTimeEndCompact);
+  auto it_end = props->user_collected_properties.end();
   // auto answer3 = props->user_collected_properties.end();
   auto get_varint64 = [](const std::string& v) {
     Slice s(v);
     uint64_t r;
-    auto assert_true = [](bool b) {
-      ASSERT_TRUE(b);
-    };
+    auto assert_true = [](bool b) { ASSERT_TRUE(b); };
     assert_true(GetVarint64(&s, &r));
     return r;
   };
-  uint64_t act_answer1 = get_varint64(answer1->second);
-  uint64_t act_answer2 = get_varint64(answer2->second);
+  uint64_t act_answer1 =
+      answer1 != it_end ? get_varint64(answer1->second) : port::kMaxUint64;
+  // if (moptions.sst_ttl_seconds > 0) {
+  //   act_answer1 = std::min(act_answer1, nowseconds +
+  //   moptions.sst_ttl_seconds);
+  // }
+  uint64_t act_answer2 =
+      answer2 != it_end ? get_varint64(answer2->second) : port::kMaxUint64;
   if (n.ttl_ratio > 1.000) {
     // ASSERT_EQ(std::numeric_limits<uint64_t>::max(),
     // props->ratio_expire_time);
-    ASSERT_EQ(act_answer1, std::numeric_limits<uint64_t>::max());
+    if (n.ttl_sst > 0) {
+      ASSERT_EQ(act_answer1, nowseconds + n.ttl_sst);
+    } else {
+      ASSERT_EQ(act_answer1, std::numeric_limits<uint64_t>::max());
+    }
   } else {
     // ASSERT_NE(answer1, answer3);
-
     if (n.ttl_ratio <= 0.0) {
       // EXPECT_EQ(nowseconds + min_ttl, props->ratio_expire_time);
       ASSERT_EQ(act_answer1, nowseconds + min_ttl);
+    } else if (n.ttl_ratio == 1.0) {
+      if (n.ttl_sst > 0 && n.ttl_sst < 26) {
+        ASSERT_EQ(act_answer1, nowseconds + n.ttl_sst);
+      } else {
+        ASSERT_EQ(act_answer1, nowseconds + max_ttl);
+      }
     } else {
       std::cout << "[==========]  ratio_ttl:";
       // std::cout << props->ratio_expire_time - nowseconds << "s" << std::endl;
       std::cout << act_answer1 - nowseconds << "s" << std::endl;
     }
   }
-  if (n.ttl_scan == 0) {
+  if (n.ttl_scan == 0 || n.ttl_scan > 26) {
     ASSERT_EQ(act_answer2, std::numeric_limits<uint64_t>::max());
     // ASSERT_EQ(std::numeric_limits<uint64_t>::max(),
     //           props->scan_gap_expire_time);
@@ -281,6 +301,7 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
              [](const int& val) -> void { std::cout << val << "-"; });
     std::cout << std::endl;
   }
+
   delete options.env;
 }
 }  // namespace TERARKDB_NAMESPACE
