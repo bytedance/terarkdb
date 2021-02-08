@@ -1425,7 +1425,7 @@ Status DBImpl::RunManualCompaction(
   TEST_SYNC_POINT_CALLBACK("DBImpl::RunManualCompaction:NotScheduled", &mutex_);
   if (exclusive) {
     while (bg_bottom_compaction_scheduled_ > 0 ||
-           bg_compaction_scheduled_ > 0) {
+           bg_compaction_scheduled_ > bg_garbage_collection_scheduled_) {
       TEST_SYNC_POINT("DBImpl::RunManualCompaction:WaitScheduled");
       ROCKS_LOG_INFO(
           immutable_db_options_.info_log,
