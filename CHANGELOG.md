@@ -1,21 +1,35 @@
 ## CHANGELOG
 
+### 2020-02-08
+- v1.4.0
+- Release Note
+  - [Feature] Better TTL Support
+    - Support `TtlExtractor`
+    - add cf opt `ttl_gc_ratio` & `ttl_max_scan_gap`
+  - [Feature] CompactionFilter adds `is_bottommost_level`
+  - [Feature] Add `Comparator::IsAlias` for compatibility
+  - [Feature] Add `DiagnosableLRUCache` for debugging
+  - [Stats] Disable LazyCompaction by default
+  - [Bug Fix] Fix DeleteFile multiple deletion bug
+  - [Bug Fix] Fix TransactionDB Open infinity loop bug
+  - [Bug Fix] Fix manual compaction bug when enable LazyCompaction
+  - [Bug Fix] Fix Patricia Trie memtable crash when doing cocurrent writes
+  - [Bug Fix] Fix exclusive manual compaction wait gc bug
+
 ### 2020-12-11
 - v1.3.2
 - Release Note
-  - Release TerarkDB as a public project
-  - Code refine & docs improvement etc.
+  - [Stats] Release TerarkDB as a public project
+  - [Stats] Code refine & docs improvement etc.
 
 ### 2020-09-18
 - v1.2.12
 - Release Note
-  - Add `DBOptions::max_wal_size` for WAL size control
-  - Add DisableTruncate/EnableTruncate API for SstFileManager
+  - [Feature] Add `DBOptions::max_wal_size` for WAL size control
+  - [Feature] Add DisableTruncate/EnableTruncate API for SstFileManager
     - Allow users disablng `DeleteScheduler`'s `Truncate` function
-  - Fix the calculation of used space in `SstFileManager`(not accurate) after enabling KV separetion
-  - Fix memory usage problem uder multi-CF
-- Known Issues:
-  - Use of `LazyUniversalCompaction` may have a extremely low probability trigger write stop.
+  - [Bug Fix] Fix the calculation of used space in `SstFileManager`(not accurate) after enabling KV separetion
+  - [Bug Fix] Fix memory usage problem uder multi-CF
 
 ### 2020-08-28
 - v1.2.11
@@ -23,8 +37,6 @@
   - [Bug Fix] Large WAL deletion triggers latency spike due to IO content
   - [Bug Fix] Move lots of code outside db mutex lock for better performance when SST file number is huge.
   - [Bug Fix] DumpStats cost too much time inside mutex when there are too many CFs
-- Known Issues：
-  - Use of `LazyUniversalCompaction` may have a extremely low probability trigger write stop.
 
 ### 2020-08-07
 - v1.2.10
@@ -32,8 +44,6 @@
   - [Bug Fix] WAL may corruput when enabling prepare_log_writer_num 
   - [Bug Fix] WalManager::GetUpdatesSince
   - [Bug Fix] Dirty Read problem after enabling `MemTable InplaceUpdate`
-- Known Issues：
-  - Use of `LazyUniversalCompaction` may have a extremely low probability trigger write stop.
 
 ### 2020-07-24
 - v1.2.9
@@ -48,12 +58,10 @@
   - [Bug Fix] Reduce mutex cost in `VersionBuilder` which triggers latency spike
   - [Bug Fix] Deletion of `Iterators` trigger latency spike in some cases
   - [Bug Fix] Mutex costs too much during background directory scanning
-  - [Bug Fix] Bad pointer ReadOptions::tailing  true 导致野指针访问的 BUG
+  - [Bug Fix] Bad pointer ReadOptions::tailing true BUG
   - [Bug Fix] Lifcycle management of `Promise` may crash application in some cases
   - [Bug Fix] WAL creation in background may trigger write stop
   - [Bug Fix] Empty Value reading may fail in some cases
-- Know issues：
-  - Use of `LazyUniversalCompaction` may have a extremely low probability trigger write stop.
 
 ### 2020-06-04
 - 版本号：v1.2.8
@@ -69,8 +77,6 @@
     - TerarkZipTable 开启 SecondPassIter 支持
     - 开启 Key Value 分离
     - 在 CompactionFilter 中改变了 Value 或 MergeOperator 结果不稳定
-- 已知问题：
-  - 使用 LazyUniversalCompaction 有极低概率触发无效 TrivialMove 导致写阻塞
 
 - 版本号：v1.2.7
 - 日期：2020-05-15
@@ -83,8 +89,6 @@
   - GetPropertiesOfTablesInRange 增加 include_blob 参数
 - 修复问题：
   - 修复 BlockBasedTable 工作在 mmap 模式下有潜在的 OOM Kill 风险的问题
-- 已知问题：
-  - 使用 LazyUniversalCompaction 有极低概率触发无效 TrivialMove 导致写阻塞
 
 - 版本号：v1.2.6
 - 日期：2020-04-29
@@ -104,7 +108,6 @@
   - 修复继承原版 RocksDB 数据后开启 Key Value 分离后空间泄露的问题
   - 修复 Metrics 汇报长尾错误的问题
 - 已知问题：
-  - 使用 LazyUniversalCompaction 有极低概率触发无效 TrivialMove 导致写阻塞 
   - BlockBasedTable 工作在 mmap 模式下有潜在的 OOM Kill 风险
 
 - 版本号：v1.2.5
@@ -124,8 +127,6 @@
   - 修复后台 Domain Socket 退出问题导致 DB 关闭卡住的问题
   - 修复后台 GC 任务导致排他性手动 Compact 被阻塞的问题
   - 修复 AdaptiveTableFactory 输出配置被截断的问题
-- 已知问题：
-  - 暂无
 
 - 版本号：v1.2.4
 - 日期：2020-03-26
