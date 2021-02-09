@@ -939,6 +939,8 @@ void DBImpl::ScheduleTtlGC() {
       continue;
     }
     VersionStorageInfo* vstorage = cfd->current()->storage_info();
+    uint64_t sst_ttl = static_cast<uint64_t>(
+        cfd->GetLatestMutableCFOptions()->sst_ttl_seconds);
     for (int l = 0; l < vstorage->num_non_empty_levels(); l++) {
       for (auto meta : vstorage->LevelFiles(l)) {
         if (meta->being_compacted) {
@@ -947,9 +949,15 @@ void DBImpl::ScheduleTtlGC() {
         ++total_cnt;
         marked_count += meta->marked_for_compaction;
         TEST_SYNC_POINT("DBImpl:Exist-SST");
+        uint64_t earliest_time_begin_compact =
+            meta->prop.earliest_time_begin_compact;
+        if (meta->prop.creation_time > 0 && sst_ttl > 0) {
+          earliest_time_begin_compact = std::min(
+              earliest_time_begin_compact, meta->prop.creation_time + sst_ttl);
+        }
         if (!meta->marked_for_compaction &&
             should_marked_for_compacted(
-                l, meta->fd.GetNumber(), meta->prop.earliest_time_begin_compact,
+                l, meta->fd.GetNumber(), earliest_time_begin_compact,
                 meta->prop.latest_time_end_compact, nowSeconds)) {
           meta->marked_for_compaction = true;
           vstorage->AddFilesMarkedForCompaction(l, meta);

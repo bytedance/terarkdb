@@ -882,23 +882,21 @@ Status CompactionJob::Run() {
           output.meta.prop.read_amp = tp->read_amp;
           output.meta.prop.dependence = tp->dependence;
           output.meta.prop.inheritance_chain = tp->inheritance_chain;
+          output.meta.prop.creation_time = tp->creation_time;
           if (iopt->ttl_extractor_factory != nullptr) {
             GetCompactionTimePoint(
                 tp->user_collected_properties,
                 &output.meta.prop.earliest_time_begin_compact,
                 &output.meta.prop.latest_time_end_compact);
-            ROCKS_LOG_INFO(
-                db_options_.info_log,
-                "CompactionOutput earliest_time_begin_compact = %" PRIu64
-                ", latest_time_end_compact = %" PRIu64,
-                output.meta.prop.earliest_time_begin_compact,
-                output.meta.prop.latest_time_end_compact);
           }
-          if (sst_ttl_seconds > 0 && tp->creation_time > 0) {
-            output.meta.prop.earliest_time_begin_compact =
-                std::min(output.meta.prop.earliest_time_begin_compact,
-                         tp->creation_time + sst_ttl_seconds);
-          }
+          ROCKS_LOG_INFO(
+              db_options_.info_log,
+              "CompactionOutput earliest_time_begin_compact = %" PRIu64
+              ", latest_time_end_compact = %" PRIu64
+              ", creation_time = %" PRIu64,
+              output.meta.prop.earliest_time_begin_compact,
+              output.meta.prop.latest_time_end_compact,
+              output.meta.prop.creation_time);
           output.finished = true;
           c->AddOutputTableFileNumber(file_number);
         }
@@ -2131,19 +2129,14 @@ Status CompactionJob::FinishCompactionOutputFile(
       GetCompactionTimePoint(tp.user_collected_properties,
                              &meta->prop.earliest_time_begin_compact,
                              &meta->prop.latest_time_end_compact);
-      ROCKS_LOG_INFO(db_options_.info_log,
-                     "CompactionOutput earliest_time_begin_compact = %" PRIu64
-                     ", latest_time_end_compact = %" PRIu64,
-                     meta->prop.earliest_time_begin_compact,
-                     meta->prop.latest_time_end_compact);
     }
-    size_t sst_ttl_seconds =
-        compact_->compaction->mutable_cf_options()->sst_ttl_seconds;
-    if (sst_ttl_seconds > 0 && tp.creation_time > 0) {
-      meta->prop.earliest_time_begin_compact =
-          std::min(meta->prop.earliest_time_begin_compact,
-                   tp.creation_time + sst_ttl_seconds);
-    }
+    meta->prop.creation_time = tp.creation_time;
+    ROCKS_LOG_INFO(
+        db_options_.info_log,
+        "CompactionOutput earliest_time_begin_compact = %" PRIu64
+        ", latest_time_end_compact = %" PRIu64 ", creation_time = %" PRIu64,
+        meta->prop.earliest_time_begin_compact,
+        meta->prop.latest_time_end_compact, meta->prop.creation_time);
   }
 
   if (s.ok() && tp.num_entries == 0 && tp.num_range_deletions == 0) {

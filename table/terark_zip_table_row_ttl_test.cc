@@ -238,6 +238,7 @@ TEST_P(TerarkZipTableBuilderTest, BoundaryTest) {
   ASSERT_EQ(36ul * 26, props->raw_value_size);
   ASSERT_EQ(26ul, props->num_entries);
   ASSERT_EQ(26ul, props->num_data_blocks);
+  ASSERT_EQ(props->creation_time, nowseconds);
   auto answer1 = props->user_collected_properties.find(
       TablePropertiesNames::kEarliestTimeBeginCompact);
   auto answer2 = props->user_collected_properties.find(
@@ -253,10 +254,10 @@ TEST_P(TerarkZipTableBuilderTest, BoundaryTest) {
   };
   uint64_t act_answer1 =
       answer1 != it_end ? get_varint64(answer1->second) : port::kMaxUint64;
-  // if (moptions.sst_ttl_seconds > 0) {
-  //   act_answer1 = std::min(act_answer1, nowseconds +
-  //   moptions.sst_ttl_seconds);
-  // }
+  if (moptions.sst_ttl_seconds > 0) {
+    act_answer1 =
+        std::min(act_answer1, props->creation_time + moptions.sst_ttl_seconds);
+  }
   uint64_t act_answer2 =
       answer2 != it_end ? get_varint64(answer2->second) : port::kMaxUint64;
   if (n.ttl_ratio > 1.000) {

@@ -386,13 +386,13 @@ Status FlushJob::WriteLevel0Table() {
           TableFileCreationReason::kFlush, event_logger_, job_context_->job_id,
           Env::IO_HIGH, &table_properties_, 0 /* level */, flush_load_,
           current_time, oldest_key_time, write_hint);
-      if (s.ok() && cfd_->ioptions()->ttl_extractor_factory != nullptr) {
-        ROCKS_LOG_INFO(db_options_.info_log,
-                       "FlushOutput earliest_time_begin_compact = %" PRIu64
-                       ", latest_time_end_compact = %" PRIu64,
-                       meta_[0].prop.earliest_time_begin_compact,
-                       meta_[0].prop.latest_time_end_compact);
-      }
+
+      ROCKS_LOG_INFO(
+          db_options_.info_log,
+          "FlushOutput earliest_time_begin_compact = %" PRIu64
+          ", latest_time_end_compact = %" PRIu64 ", creation_time = %" PRIu64,
+          meta_[0].prop.earliest_time_begin_compact,
+          meta_[0].prop.latest_time_end_compact, meta_[0].prop.creation_time);
 
       LogFlush(db_options_.info_log);
     }

@@ -422,18 +422,6 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
           {key, raw_val.ToString()});
     }
   }
-  if (s.ok() && sst_ttl_seconds > 0 &&
-      new_table_properties->creation_time > 0) {
-    uint64_t earliest_time_begin_compact = 0;
-    GetCompactionTimePoint(new_table_properties->user_collected_properties,
-                           &earliest_time_begin_compact, nullptr);
-    uint64_t sst_begin_compact =
-        new_table_properties->creation_time + sst_ttl_seconds;
-    if (sst_begin_compact < earliest_time_begin_compact) {
-      SetCompactionTimeOut(&new_table_properties->user_collected_properties,
-                           sst_begin_compact, 0);
-    }
-  }
   if (s.ok()) {
     *table_properties = new_table_properties;
   } else {

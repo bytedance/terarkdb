@@ -101,6 +101,7 @@ struct TableBuilderOptions {
         creation_time(_creation_time),
         oldest_key_time(_oldest_key_time),
         sst_purpose(_sst_purpose) {}
+
   const ImmutableCFOptions& ioptions;
   const MutableCFOptions& moptions;
   const InternalKeyComparator& internal_comparator;
@@ -134,8 +135,12 @@ struct TableBuilderOptions {
     ctx.smallest_user_key = smallest_user_key;
     ctx.largest_user_key = largest_user_key;
     for (auto& collector_factories : *int_tbl_prop_collector_factories) {
-      collectors->emplace_back(
-          collector_factories->CreateIntTblPropCollector(ctx));
+      if (collector_factories != nullptr) {
+        auto factory = collector_factories->CreateIntTblPropCollector(ctx);
+        if (factory != nullptr) {
+          collectors->emplace_back(factory);
+        }
+      }
     }
   }
 };

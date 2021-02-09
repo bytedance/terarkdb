@@ -275,23 +275,6 @@ void GetCompactionTimePoint(const UserCollectedProperties& props,
   }
 }
 
-void SetCompactionTimeOut(UserCollectedProperties* properties,
-                          uint64_t earliest_time_begin_compact,
-                          uint64_t latest_time_end_compact) {
-  if (earliest_time_begin_compact > 0) {
-    properties->erase(TablePropertiesNames::kEarliestTimeBeginCompact);
-    TtlIntTblPropCollector::PushItem(
-        properties, TablePropertiesNames::kEarliestTimeBeginCompact,
-        earliest_time_begin_compact);
-  }
-  if (latest_time_end_compact > 0) {
-    properties->erase(TablePropertiesNames::kLatestTimeEndCompact);
-    TtlIntTblPropCollector::PushItem(
-        properties, TablePropertiesNames::kLatestTimeEndCompact,
-        latest_time_end_compact);
-  }
-}
-
 }  // namespace TERARKDB_NAMESPACE
 
 TERARK_FACTORY_INSTANTIATE_GNS(
