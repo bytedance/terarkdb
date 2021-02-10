@@ -17,7 +17,8 @@ PeriodicWorkScheduler::PeriodicWorkScheduler(Env* env) {
 
 void PeriodicWorkScheduler::Register(DBImpl* dbi,
                                      unsigned int stats_dump_period_sec,
-                                     unsigned int stats_persist_period_sec) {
+                                     unsigned int stats_persist_period_sec,
+                                     unsigned int ttl_gc_period_sec) {
   static std::atomic<uint64_t> initial_delay(0);
   timer->Start();
   if (stats_dump_period_sec > 0) {
@@ -34,16 +35,19 @@ void PeriodicWorkScheduler::Register(DBImpl* dbi,
             static_cast<uint64_t>(stats_persist_period_sec) * kMicrosInSecond,
         static_cast<uint64_t>(stats_persist_period_sec) * kMicrosInSecond);
   }
+  if (ttl_gc_period_sec > 0) {
+    timer->Add([dbi]() { dbi->ScheduleTtlGC(); },
+               GetTaskName(dbi, "schedule_gc_ttl"),
+               initial_delay.fetch_add(1) %
+                   static_cast<uint64_t>(ttl_gc_period_sec) * kMicrosInSecond,
+               static_cast<uint64_t>(ttl_gc_period_sec) * kMicrosInSecond);
+  }
+
   timer->Add([dbi]() { dbi->FlushInfoLog(); },
              GetTaskName(dbi, "flush_info_log"),
              initial_delay.fetch_add(1) % kDefaultFlushInfoLogPeriodSec *
                  kMicrosInSecond,
              kDefaultFlushInfoLogPeriodSec * kMicrosInSecond);
-  timer->Add([dbi]() { dbi->ScheduleTtlGC(); },
-             GetTaskName(dbi, "schedule_gc_ttl"),
-             initial_delay.fetch_add(1) % kDefaultScheduleGCTTLPeriodSec *
-                 kMicrosInSecond,
-             kDefaultScheduleGCTTLPeriodSec * kMicrosInSecond);
 }
 
 void PeriodicWorkScheduler::Unregister(DBImpl* dbi) {

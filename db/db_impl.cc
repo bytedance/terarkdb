@@ -766,7 +766,8 @@ void DBImpl::StartPeriodicWorkScheduler() {
 
   periodic_work_scheduler_->Register(
       this, mutable_db_options_.stats_dump_period_sec,
-      mutable_db_options_.stats_persist_period_sec);
+      mutable_db_options_.stats_persist_period_sec,
+      mutable_db_options_.ttl_gc_period_sec);
 #endif  // !ROCKSDB_LITE
 }
 
@@ -1200,12 +1201,15 @@ Status DBImpl::SetDBOptions(
       if (new_options.stats_dump_period_sec !=
               mutable_db_options_.stats_dump_period_sec ||
           new_options.stats_persist_period_sec !=
-              mutable_db_options_.stats_persist_period_sec) {
+              mutable_db_options_.stats_persist_period_sec ||
+          new_options.ttl_gc_period_sec !=
+              mutable_db_options_.ttl_gc_period_sec) {
         mutex_.Unlock();
         periodic_work_scheduler_->Unregister(this);
-        periodic_work_scheduler_->Register(
-            this, new_options.stats_dump_period_sec,
-            new_options.stats_persist_period_sec);
+        periodic_work_scheduler_->Register(this,
+                                           new_options.stats_dump_period_sec,
+                                           new_options.stats_persist_period_sec,
+                                           new_options.ttl_gc_period_sec);
         mutex_.Lock();
       }
       write_controller_.set_max_delayed_write_rate(

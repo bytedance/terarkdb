@@ -740,6 +740,8 @@ struct DBOptions {
   // Default: 600
   unsigned int stats_persist_period_sec = 600;
 
+  unsigned int ttl_gc_period_sec = 10;
+
   // If true, automatically persist stats to a hidden column family (column
   // family name: ___rocksdb_stats_history___) every
   // stats_persist_period_sec seconds; otherwise, write to an in-memory

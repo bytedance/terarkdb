@@ -369,6 +369,7 @@ TEST_F(DBSSTTest, RateLimitedDelete) {
   // incorrect.
   options.stats_dump_period_sec = 0;
   options.stats_persist_period_sec = 0;
+  options.ttl_gc_ratio = 0;
 
   options.env = env_;
 
