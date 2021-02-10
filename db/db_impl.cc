@@ -794,7 +794,7 @@ void DBImpl::PersistStats() {
     return;
   }
   TEST_SYNC_POINT("DBImpl::PersistStats:StartRunning");
-  uint64_t now_seconds = env_->NowMicros() / 1000 * 1000;
+  uint64_t now_seconds = env_->NowMicros() / kMicrosInSecond;
   Statistics* statistics = immutable_db_options_.statistics.get();
   if (!statistics) {
     return;

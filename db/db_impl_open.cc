@@ -1332,6 +1332,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
   impl->mutex_.Lock();
   auto write_hint = impl->CalculateWALWriteHint();
   // Handles create_if_missing, error_if_exists
+//  uint64_t recovered_seq(kMaxSequenceNumber);
   s = impl->Recover(column_families);
   if (s.ok()) {
     uint64_t new_log_number = impl->versions_->NewFileNumber();
@@ -1412,6 +1413,32 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
       impl->DeleteObsoleteFiles();
       s = impl->directories_.GetDbDir()->Fsync();
     }
+//    if (s.ok()) {
+//      // In WritePrepared there could be gap in sequence numbers. This breaks
+//      // the trick we use in kPointInTimeRecovery which assumes the first seq in
+//      // the log right after the corrupted log is one larger than the last seq
+//      // we read from the wals. To let this trick keep working, we add a dummy
+//      // entry with the expected sequence to the first log right after recovery.
+//      // In non-WritePrepared case also the new log after recovery could be
+//      // empty, and thus missing the consecutive seq hint to distinguish
+//      // middle-log corruption to corrupted-log-remained-after-recovery. This
+//      // case also will be addressed by a dummy write.
+//      if (recovered_seq != kMaxSequenceNumber) {
+//        WriteBatch empty_batch;
+//        WriteBatchInternal::SetSequence(&empty_batch, recovered_seq);
+//        WriteOptions write_options;
+//        uint64_t log_used, log_size;
+//        log::Writer* log_writer = impl->logs_.back().writer;
+//        s = impl->WriteToWAL(empty_batch, log_writer, &log_used, &log_size);
+//        if (s.ok()) {
+//          // Need to fsync, otherwise it might get lost after a power reset.
+//          s = impl->FlushWAL(false);
+//          if (s.ok()) {
+//            s = log_writer->file()->Sync(impl->immutable_db_options_.use_fsync);
+//          }
+//        }
+//      }
+//    }
   }
   if (s.ok() && impl->immutable_db_options_.persist_stats_to_disk) {
     // try to read format version but no need to fail Open() even if it fails
