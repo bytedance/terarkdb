@@ -345,6 +345,7 @@ struct BlockBasedTableBuilder::Rep {
       verify_ctx.reset(new UncompressionContext(UncompressionContext::NoCache(),
                                                 compression_ctx.type()));
     }
+    props.creation_time = creation_time;
   }
 
   Rep(const Rep&) = delete;

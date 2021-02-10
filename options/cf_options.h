@@ -176,7 +176,8 @@ struct MutableCFOptions {
         report_bg_io_stats(false),
         compression(Snappy_Supported() ? kSnappyCompression : kNoCompression),
         ttl_gc_ratio(1.000),
-        ttl_max_scan_gap(0) {}
+        ttl_max_scan_gap(0),
+        sst_ttl_seconds(0) {}
 
   explicit MutableCFOptions(const Options& options);
 
@@ -245,6 +246,7 @@ struct MutableCFOptions {
 
   double ttl_gc_ratio;
   size_t ttl_max_scan_gap;
+  size_t sst_ttl_seconds;
 
   std::shared_ptr<std::vector<std::unique_ptr<IntTblPropCollectorFactory>>>
       int_tbl_prop_collector_factories;

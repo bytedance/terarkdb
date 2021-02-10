@@ -415,6 +415,7 @@ Status BuildTable(
                                     : TablePropertyCache::kNoRangeDeletions;
       sst_meta()->prop.flags |=
           tp.snapshots.empty() ? 0 : TablePropertyCache::kHasSnapshots;
+      sst_meta()->prop.creation_time = tp.creation_time;
       if (ioptions.ttl_extractor_factory != nullptr) {
         GetCompactionTimePoint(
             builder->GetTableProperties().user_collected_properties,

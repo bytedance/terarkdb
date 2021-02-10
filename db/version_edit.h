@@ -104,6 +104,7 @@ struct TablePropertyCache {
   std::vector<uint64_t> inheritance_chain;  // inheritance chain
   uint64_t earliest_time_begin_compact = port::kMaxUint64;
   uint64_t latest_time_end_compact = port::kMaxUint64;
+  uint64_t creation_time = port::kMaxUint64;
 
   bool is_map_sst() const { return purpose == kMapSst; }
   bool has_range_deletions() const { return (flags & kNoRangeDeletions) == 0; }

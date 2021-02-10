@@ -218,7 +218,8 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
                       const ImmutableCFOptions& ioptions,
                       TableProperties** table_properties,
                       bool /*compression_type_missing*/,
-                      MemoryAllocator* memory_allocator) {
+                      MemoryAllocator* memory_allocator,
+                      size_t sst_ttl_seconds) {
   assert(table_properties);
 
   Slice v = handle_value;
@@ -338,9 +339,7 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
 
     if (pos != predefined_uint64_properties.end()) {
       if (key == TablePropertiesNames::kDeletedKeys ||
-          key == TablePropertiesNames::kMergeOperands ||
-          key == TablePropertiesNames::kLatestTimeEndCompact ||
-          key == TablePropertiesNames::kEarliestTimeBeginCompact) {
+          key == TablePropertiesNames::kMergeOperands) {
         // Insert in user-collected properties for API backwards compatibility
         new_table_properties->user_collected_properties.insert(
             {key, raw_val.ToString()});
@@ -417,6 +416,7 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
     } else if (key == TablePropertiesNames::kInheritanceChain) {
       GetUint64Vector(key, &raw_val, new_table_properties->inheritance_chain);
     } else {
+      // kLatestTimeEndCompact || kEarliestTimeBeginCompact
       // handle user-collected properties
       new_table_properties->user_collected_properties.insert(
           {key, raw_val.ToString()});
@@ -436,7 +436,8 @@ Status ReadTableProperties(RandomAccessFileReader* file, uint64_t file_size,
                            const ImmutableCFOptions& ioptions,
                            TableProperties** properties,
                            bool compression_type_missing,
-                           MemoryAllocator* memory_allocator) {
+                           MemoryAllocator* memory_allocator,
+                           size_t sst_ttl_seconds) {
   // -- Read metaindex block
   Footer footer;
   auto s = ReadFooterFromFile(file, nullptr /* prefetch_buffer */, file_size,
@@ -480,7 +481,7 @@ Status ReadTableProperties(RandomAccessFileReader* file, uint64_t file_size,
   if (found_properties_block == true) {
     s = ReadProperties(meta_iter->value(), file, nullptr /* prefetch_buffer */,
                        footer, ioptions, properties, compression_type_missing,
-                       memory_allocator);
+                       memory_allocator, sst_ttl_seconds);
   } else {
     s = Status::NotFound();
   }

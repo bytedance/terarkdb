@@ -17,12 +17,13 @@ class DBImplGCTTL_Test : public DBTestBase {
       : DBTestBase("./db_GC_ttl_test"),
         mock_env_(new MockTimeEnv(Env::Default())) {}
   ~DBImplGCTTL_Test() override { Close(); }
-  void init() {
+  void init(size_t sst_ttl = 0) {
     dbname = test::PerThreadDBPath("ttl_gc_test");
     DestroyDB(dbname, options);
     options.create_if_missing = true;
     options.ttl_gc_ratio = 0.50;
     options.ttl_max_scan_gap = 10;
+    options.sst_ttl_seconds = sst_ttl;
     options.ttl_extractor_factory.reset(
         new test::TestTtlExtractorFactory(mock_env_.get()));
     options.level0_file_num_compaction_trigger = 8;
@@ -31,7 +32,8 @@ class DBImplGCTTL_Test : public DBTestBase {
         new BlockBasedTableFactory(BlockBasedTableOptions()));
   }
 
-  void run() {
+  void run(size_t min_ttl = 200) {
+    mock_env_->set_current_time(10);
     int L0FilesNums = 4;
     options.env = mock_env_.get();
     SetUp();
@@ -51,7 +53,7 @@ class DBImplGCTTL_Test : public DBTestBase {
       dbfull()->Flush(FlushOptions());
     }
     dbfull()->TEST_WaitForStatsDumpRun(
-        [&] { mock_env_->set_current_time(ttl); });
+        [&] { mock_env_->set_current_time(10 + min_ttl); });
     ASSERT_TRUE(flag);
     ASSERT_EQ(L0FilesNums, mark);
     dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr);
@@ -61,7 +63,7 @@ class DBImplGCTTL_Test : public DBTestBase {
     mark = 0;
     cnt = 0;
     dbfull()->TEST_WaitForStatsDumpRun(
-        [&] { mock_env_->set_current_time(ttl + ttl); });
+        [&] { mock_env_->set_current_time(10 + ttl + ttl); });
     ASSERT_EQ(mark, cnt);
   }
 
@@ -72,7 +74,7 @@ class DBImplGCTTL_Test : public DBTestBase {
   bool flag = false;
   int mark = 0;
   int cnt = 0;
-  uint64_t ttl = 200;
+  size_t ttl = 200;
 
   void SetUp() override {
     mock_env_->InstallTimedWaitFixCallback();
@@ -95,18 +97,44 @@ class DBImplGCTTL_Test : public DBTestBase {
   }
 };
 
-TEST_F(DBImplGCTTL_Test, BlockBasedTableTest) {
+TEST_F(DBImplGCTTL_Test, BlockBasedTableTest1) {
   init();
-  run();
+  run(ttl);
   read();
 }
-#ifdef TERARK_ZIP
-TEST_F(DBImplGCTTL_Test, TerarkTableTest) {
+TEST_F(DBImplGCTTL_Test, BlockBasedTableTest2) {
+  init(100);
+  run(100);
+  read();
+}
+TEST_F(DBImplGCTTL_Test, BlockBasedTableTest3) {
+  init(300);
+  run(ttl);
+  read();
+}
+#ifdef WITH_TERARK_ZIP
+TEST_F(DBImplGCTTL_Test, TerarkTableTest1) {
   init();
   TerarkZipTableOptions terarkziptableoptions;
   options.table_factory.reset(TERARKDB_NAMESPACE::NewTerarkZipTableFactory(
       terarkziptableoptions, options.table_factory));
-  run();
+  run(ttl);
+  read();
+}
+TEST_F(DBImplGCTTL_Test, TerarkTableTest2) {
+  init(100);
+  TerarkZipTableOptions terarkziptableoptions;
+  options.table_factory.reset(TERARKDB_NAMESPACE::NewTerarkZipTableFactory(
+      terarkziptableoptions, options.table_factory));
+  run(100);
+  read();
+}
+TEST_F(DBImplGCTTL_Test, TerarkTableTest3) {
+  init(300);
+  TerarkZipTableOptions terarkziptableoptions;
+  options.table_factory.reset(TERARKDB_NAMESPACE::NewTerarkZipTableFactory(
+      terarkziptableoptions, options.table_factory));
+  run(ttl);
   read();
 }
 #endif

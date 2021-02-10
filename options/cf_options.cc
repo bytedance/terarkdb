@@ -199,6 +199,8 @@ void MutableCFOptions::Dump(Logger* log) const {
                  ttl_gc_ratio);
   ROCKS_LOG_INFO(log, "                         ttl_max_scan_gap: %zd",
                  ttl_max_scan_gap);
+  ROCKS_LOG_INFO(log, "                          sst_ttl_seconds: %zd",
+                 sst_ttl_seconds);
   std::string result;
   char buf[10];
   for (const auto m : max_bytes_for_level_multiplier_additional) {
@@ -290,7 +292,8 @@ MutableCFOptions::MutableCFOptions(const ColumnFamilyOptions& options, Env* env)
       report_bg_io_stats(options.report_bg_io_stats),
       compression(options.compression),
       ttl_gc_ratio(options.ttl_gc_ratio),
-      ttl_max_scan_gap(options.ttl_max_scan_gap) {
+      ttl_max_scan_gap(options.ttl_max_scan_gap),
+      sst_ttl_seconds(options.sst_ttl_seconds) {
   RefreshDerivedOptions(options.num_levels);
 
   int_tbl_prop_collector_factories = std::make_shared<
