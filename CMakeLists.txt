@@ -1013,7 +1013,6 @@ if(WITH_TESTS)
         options/options_settable_test.cc
         options/options_test.cc
         table/block_based_filter_block_test.cc
-        table/block_based_table_row_ttl_test.cc
         table/block_test.cc
         table/cleanable_test.cc
         table/cuckoo_table_builder_test.cc
@@ -1021,6 +1020,7 @@ if(WITH_TESTS)
         table/data_block_hash_index_test.cc
         table/full_filter_block_test.cc
         table/merger_test.cc
+        table/row_ttl_test.cc
         table/sst_file_reader_test.cc
         table/table_test.cc
         tools/ldb_cmd_test.cc
@@ -1082,7 +1082,6 @@ if(WITH_TESTS)
   if(WITH_TERARK_ZIP)
     list(APPEND TESTS
         memtable/terark_zip_memtable_test.cc
-        table/terark_zip_table_row_ttl_test.cc
     )
   endif()
   if(WITH_LIBRADOS)
