@@ -83,12 +83,14 @@ class Writer {
 
   uint64_t get_log_number() const { return log_number_; }
 
+  std::function<Status()> get_defer_sync_func();
+
   Status WriteBuffer();
 
   bool TEST_BufferIsEmpty();
 
  private:
-  std::unique_ptr<WritableFileWriter> dest_;
+  std::shared_ptr<WritableFileWriter> dest_;
   size_t block_offset_;       // Current offset in block
   uint64_t log_number_;
   bool recycle_log_files_;

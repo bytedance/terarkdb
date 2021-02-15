@@ -976,6 +976,17 @@ class VersionSet {
     last_sequence_.store(s, std::memory_order_release);
   }
 
+  // same as `SetLastSequence` but thread-safe via CAS
+  // Only seq that is larger than current `last_sequence_` is stored
+  void SetLastSequenceConcurrently(uint64_t s) {
+    uint64_t curr = last_sequence_.load(std::memory_order_acquire);
+    while (curr < s) {
+      if (last_sequence_.compare_exchange_weak(curr, s)) {
+        break;
+      }
+    }
+  }
+
   // Note: memory_order_release must be sufficient
   void SetLastPublishedSequence(uint64_t s) {
     assert(s >= last_published_sequence_);

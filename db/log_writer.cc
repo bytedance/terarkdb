@@ -10,6 +10,7 @@
 #include "db/log_writer.h"
 
 #include <stdint.h>
+
 #include "rocksdb/env.h"
 #include "util/coding.h"
 #include "util/crc32c.h"
@@ -20,7 +21,7 @@ namespace log {
 
 Writer::Writer(std::unique_ptr<WritableFileWriter>&& dest, uint64_t log_number,
                bool recycle_log_files, bool manual_flush)
-    : dest_(std::move(dest)),
+    : dest_(dest.release()),
       block_offset_(0),
       log_number_(log_number),
       recycle_log_files_(recycle_log_files),
@@ -32,6 +33,11 @@ Writer::Writer(std::unique_ptr<WritableFileWriter>&& dest, uint64_t log_number,
 }
 
 Writer::~Writer() { WriteBuffer(); }
+
+std::function<Status()> Writer::get_defer_sync_func() {
+  dest_->Flush();
+  return [f{dest_}]() { return f->SyncWithoutFlush(true); };
+}
 
 Status Writer::WriteBuffer() { return dest_->Flush(); }
 
