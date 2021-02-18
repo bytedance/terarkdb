@@ -14,8 +14,8 @@
 //  (4) Items are never deleted.
 // The liberal use of assertions is encouraged to enforce (1).
 //
-// The factory will be passed an MemTableAllocator object when a new MemTableRep
-// is requested.
+// The factory will be passed an Allocator object when a new MemTableRep
+// requested.
 //
 // Users can implement their own memtable representations. We include three
 // types built in:
@@ -432,6 +432,29 @@ extern MemTableRepFactory* NewPatriciaTrieRepFactory(
 extern MemTableRepFactory* NewPatriciaTrieRepFactory(
     const std::unordered_map<std::string, std::string>& options,
     class Status* s);
+
+// The factory is to create memtables based on a hash table:
+// it contains a fixed array of buckets, each pointing to a
+// dualinked list. It also support concurrent updated
+//
+// @bucket_count: number of fixed array buckets
+// @huge_page_tlb_size: if <=0, allocate the hash table bytes from malloc.
+//                      Otherwise from huge page TLB. The user needs to reserve
+//                      huge pages for it to be allocated, like:
+//                          sysctl -w vm.nr_hugepages=20
+//                      See linux doc Documentation/vm/hugetlbpage.txt
+// @bucket_entries_logging_threshold: if number of entries in one bucket
+//                                    exceeds this number, log about it.
+// @num_hash_buckets_preallocated: the number of hash buckets preallocate.
+//                                 Allocate huge hash bucket and initialize
+//                                 may cost many time.
+// @if_log_bucket_dist_when_flush: if true, log distribution of number of
+//                                 entries when flushing.
+extern MemTableRepFactory* NewConcurrentHashDualListReqFactory(
+    size_t bucket_count = 50000, size_t huge_page_tlb_size = 0,
+    int bucket_entries_logging_threshold = 4096,
+    size_t num_hash_buckets_preallocated = 0,
+    bool if_log_bucket_dist_when_flush = true);
 
 #endif  // ROCKSDB_LITE
 

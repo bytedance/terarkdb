@@ -54,6 +54,7 @@ struct ImmutableMemTableOptions {
   Statistics* statistics;
   MergeOperator* merge_operator;
   Logger* info_log;
+  MemTableRepFactory* memtable_factory;
 };
 
 // Batched counters to updated when inserting keys in one write batch.
@@ -398,8 +399,10 @@ class MemTable {
  private:
   enum FlushStateEnum { FLUSH_NOT_REQUESTED, FLUSH_REQUESTED, FLUSH_SCHEDULED };
 
-  template <class TValue>
-  friend class MemTableIteratorBase;
+  friend InternalIteratorBase<Slice>* NewMemTableTombstoneIterator(
+      MemTable&, const ReadOptions&, Arena*);
+  friend InternalIterator* NewMemTableIterator(MemTable&, const ReadOptions&,
+                                               Arena*);
   friend class MemTableBackwardIterator;
   friend class MemTableList;
 
