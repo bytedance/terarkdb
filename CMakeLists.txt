@@ -596,6 +596,7 @@ set(SOURCES
         env/env_io_prof.cc
         env/mock_env.cc
         memtable/alloc_tracker.cc
+        memtable/concurrent_hashduallist_rep.cc
         memtable/hash_cuckoo_rep.cc
         memtable/hash_linklist_rep.cc
         memtable/hash_skiplist_rep.cc
