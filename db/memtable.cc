@@ -56,8 +56,7 @@ ImmutableMemTableOptions::ImmutableMemTableOptions(
       max_successive_merges(mutable_cf_options.max_successive_merges),
       statistics(ioptions.statistics),
       merge_operator(ioptions.merge_operator),
-      info_log(ioptions.info_log),
-      memtable_factory(ioptions.memtable_factory) {}
+      info_log(ioptions.info_log) {}
 
 MemTable::MemTable(const InternalKeyComparator& cmp,
                    const ImmutableCFOptions& ioptions,
@@ -512,6 +511,10 @@ InternalIterator* NewMemTableIterator(MemTable& mem,
   if (mem.prefix_extractor_ != nullptr && !read_options.total_order_seek) {
     bloom = mem.prefix_bloom_.get();
     iter = mem.table_->GetDynamicPrefixIterator(arena);
+  } else {
+    iter = mem.table_->GetIterator(arena);
+  }
+  if (bloom != nullptr) {
     using IteratorType = MemTableIterator<true>;
     if (arena == nullptr) {
       return new IteratorType(mem, bloom, prefix_extractor, icmp, iter,
@@ -522,7 +525,6 @@ InternalIterator* NewMemTableIterator(MemTable& mem,
                                        read_options, arena);
     }
   } else {
-    iter = mem.table_->GetIterator(arena);
     using IteratorType = MemTableIterator<false>;
     if (arena == nullptr) {
       return new IteratorType(mem, bloom, prefix_extractor, icmp, iter,

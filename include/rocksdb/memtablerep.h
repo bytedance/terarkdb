@@ -14,7 +14,7 @@
 //  (4) Items are never deleted.
 // The liberal use of assertions is encouraged to enforce (1).
 //
-// The factory will be passed an Allocator object when a new MemTableRep
+// The factory will be passed an Allocator object when a new MemTableRep is
 // requested.
 //
 // Users can implement their own memtable representations. We include three
@@ -307,6 +307,8 @@ class MemTableRepFactory {
   // false when if the <key,seq> already exists.
   // Default: false
   virtual bool CanHandleDuplicatedKey() const { return false; }
+
+  virtual bool IsPrefixExtractorRequired() const { return false; }
 };
 
 // This uses a skip list to store keys. It is the default.
