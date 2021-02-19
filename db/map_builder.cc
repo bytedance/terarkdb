@@ -287,8 +287,8 @@ class MapSstElementIterator : public MapSstRangeIterator {
         } else {
           sst_read_amp_ratio_ /= sst_read_amp_size_;
         }
-        assert(sst_read_amp_ratio_ >= 1);
-        assert(sst_read_amp_ratio_ <= sst_read_amp_);
+//        assert(sst_read_amp_ratio_ >= 1);
+//        assert(sst_read_amp_ratio_ <= sst_read_amp_);
         for (auto& pair : dependence_build_) {
           auto f = iterator_cache_.GetFileMetaData(pair.first);
           assert(f != nullptr);
@@ -353,26 +353,30 @@ class MapSstElementIterator : public MapSstRangeIterator {
               return;
             }
             do {
-//              iter->Seek(start);
-//              if (!iter->Valid()) {
-//                CheckIter(iter);
-//                break;
-//              }
-//              temp_start_.DecodeFrom(iter->key());
-//              iter->SeekForPrev(end);
-//              if (!iter->Valid()) {
-//                CheckIter(iter);
-//                break;
-//              }
-//              temp_end_.DecodeFrom(iter->key());
-              if (icomp_.Compare(start , end) <= 0) {
-                uint64_t start_offset =
-                    reader->ApproximateOffsetOf(start);
-                uint64_t end_offset =
-                    reader->ApproximateOffsetOf(end);
+              iter->Seek(start);
+              if (!iter->Valid()) {
+                CheckIter(iter);
+                break;
+              }
+              temp_start_.DecodeFrom(iter->key());
+              iter->SeekForPrev(end);
+              if (!iter->Valid()) {
+                CheckIter(iter);
+                break;
+              }
+              temp_end_.DecodeFrom(iter->key());
+              if (icomp_.Compare(temp_start_, temp_end_) <= 0) {
+                uint64_t start_offset = reader->ApproximateOffsetOf(temp_start_.Encode());
+                uint64_t end_offset = reader->ApproximateOffsetOf(temp_end_.Encode());
                 link.size = end_offset - start_offset;
                 range_size += link.size;
               }
+//              if (icomp_.Compare(start, end) <= 0) {
+//                uint64_t start_offset = reader->ApproximateOffsetOf(start);
+//                uint64_t end_offset = reader->ApproximateOffsetOf(end);
+//                link.size = end_offset - start_offset;
+//                range_size += link.size;
+//              }
             } while (false);
             if (!status_.ok()) {
               buffer_.clear();
@@ -1567,7 +1571,119 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   }
   return s;
 }
+Status MapBuilder::BuildGlobalMap(uint32_t output_path_id,
+                                  ColumnFamilyData* cfd, Version* version,
+                                  FileMetaData* file_meta_ptr,
+                                  std::unique_ptr<TableProperties>* prop_ptr) {
+  auto vstorage = version->storage_info();
+  auto& icomp = cfd->internal_comparator();
+  IteratorCacheContext iterator_cache_ctx = {
+      cfd, &version->GetMutableCFOptions(), version, &env_options_};
+  IteratorCache iterator_cache(vstorage->dependence_map(), &iterator_cache_ctx,
+                               IteratorCacheContext::CreateIter);
+  Arena* arena = iterator_cache.GetArena();
+  LazyInternalIteratorWrapper version_iter(
+      IteratorCacheContext::CreateVersionIter, &iterator_cache_ctx, nullptr,
+      nullptr, arena);
 
+  std::vector<MapBuilderRangesItem> range_items;
+  MapSstElement map_element;
+  Status s;
+  int n = vstorage->num_levels();
+  FileMetaDataBoundBuilder bound_builder(&cfd->internal_comparator());
+  std::vector<std::unique_ptr<TruncatedRangeDelIterator>> range_del_iter_vec;
+  std::list<std::vector<RangeWithDepend>> level_ranges;
+  std::vector<MapBuilderRangesItem::TombstonsItem> tombstones;
+  for (int i = 1; i < n; i++) {
+    auto level_files = vstorage->LevelFiles(i);
+    if (level_files.empty()) continue;
+    for (auto f : level_files) {
+      s = LoadDeleteRangeIter(f, icomp, iterator_cache, &range_del_iter_vec);
+      if (!s.ok()) {
+        return s;
+      }
+    }
+    std::vector<RangeWithDepend> ranges;
+    s = LoadRangeWithDepend(ranges, arena, &bound_builder, iterator_cache,
+                            level_files.data(), level_files.size());
+    if (!s.ok()) {
+      return s;
+    }
+    assert(std::is_sorted(ranges.begin(), ranges.end(),
+                          TERARK_FIELD(point[1]) < icomp));
+    level_ranges.emplace_back(std::move(ranges));
+  }
+  while (level_ranges.size() > 1) {
+    auto union_a = level_ranges.begin();
+    auto union_b = std::next(union_a);
+    size_t min_sum = union_a->size() + union_b->size();
+    for (auto next = std::next(union_b); next != level_ranges.end();
+         ++union_b, ++next) {
+      size_t sum = union_b->size() + next->size();
+      if (sum < min_sum) {
+        min_sum = sum;
+        union_a = union_b;
+      }
+    }
+    union_b = std::next(union_a);
+    level_ranges.insert(
+        union_a,
+        PartitionRangeWithDepend(*union_a, *union_b, cfd->internal_comparator(),
+                                 PartitionType::kMerge));
+    level_ranges.erase(union_a);
+    level_ranges.erase(union_b);
+  }
+
+  if (!level_ranges.empty() && !range_del_iter_vec.empty()) {
+    tombstones.emplace_back(std::shared_ptr<FragmentedRangeTombstoneList>(
+        new FragmentedRangeTombstoneList(
+            std::unique_ptr<InternalIteratorBase<Slice>>(
+                NewTruncatedRangeDelMergingIter(&icomp, range_del_iter_vec)),
+            icomp)));
+    s = AdjustRange(&icomp, &version_iter, arena, bound_builder.largest,
+                    level_ranges.front());
+    if (!s.ok()) {
+      return s;
+    }
+    tombstones.back().SetRanges(level_ranges.front());
+  }
+
+  ScopedArenaIterator tombstone_iter;
+  if (!tombstones.empty()) {
+    MergeIteratorBuilder builder(&icomp, iterator_cache.GetArena());
+    for (auto& item : tombstones) {
+      builder.AddIterator(
+          new (iterator_cache.GetArena()->AllocateAligned(
+              sizeof(MapSstTombstoneIterator)))
+              MapSstTombstoneIterator(item, cfd->internal_comparator()));
+    }
+    tombstone_iter.set(builder.Finish());
+  }
+  std::vector<RangeWithDepend> ranges;
+  if (!level_ranges.empty()) {
+    s = AdjustRange(&icomp, &version_iter, arena, bound_builder.largest,
+                    level_ranges.front());
+    if (!s.ok()) {
+      return s;
+    }
+    ranges = std::move(level_ranges.front());
+    level_ranges.clear();
+  }
+  MapSstElementIterator output_iter(ranges, iterator_cache,
+                                    cfd->internal_comparator());
+  FileMetaData file_meta;
+  std::unique_ptr<TableProperties> prop;
+  s = WriteOutputFile(bound_builder, &output_iter, tombstone_iter.get(),
+                      output_path_id, cfd, version->GetMutableCFOptions(),
+                      &file_meta, &prop);
+  if (file_meta_ptr != nullptr) {
+    *file_meta_ptr = std::move(file_meta);
+  }
+  if (prop_ptr != nullptr) {
+    prop_ptr->swap(prop);
+  }
+  return s;
+}
 Status MapBuilder::WriteOutputFile(
     const FileMetaDataBoundBuilder& bound_builder,
     MapSstRangeIterator* range_iter, InternalIterator* tombstone_iter,

@@ -1090,6 +1090,32 @@ Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
   if (status.ok()) {
     status = InstallCompactionResults(mutable_cf_options);
   }
+  if (status.ok()) {
+    ROCKS_LOG_INFO(db_options_.info_log, "[JOB %d] start build global map",
+                   job_id_);
+    MapBuilder map_builder(job_id_, db_options_, env_options_, versions_,
+                           stats_, dbname_);
+    std::unique_ptr<TableProperties> prop;
+    FileMetaData file_meta;
+    Version* version = cfd->current();
+    version->Ref();
+    cfd->Ref();
+    db_mutex_->Unlock();
+    status = map_builder.BuildGlobalMap(compact_->compaction->output_path_id(),
+                                        cfd, version, &file_meta, &prop);
+    db_mutex_->Lock();
+    version->Unref();
+    cfd->Unref();
+    ROCKS_LOG_INFO(db_options_.info_log,
+                   "[JOB %d] finished build global map, num_entries= "
+                   "%d,data_size=%d,index_size=%d",
+                   job_id_, prop->num_entries, prop->data_size,
+                   prop->index_size);
+    if (!status.ok()) {
+      ROCKS_LOG_INFO(db_options_.info_log, "[JOB %d] %s", job_id_,
+                     status.ToString().c_str());
+    }
+  }
   VersionStorageInfo::LevelSummaryStorage tmp;
   auto vstorage = cfd->current()->storage_info();
   const auto& stats = compaction_stats_;
