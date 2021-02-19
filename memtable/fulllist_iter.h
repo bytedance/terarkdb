@@ -4,8 +4,9 @@
 
 #include "db/memtable.h"
 #include "memtable/skiplist.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace {
 
 using Key = const char*;
@@ -79,5 +80,5 @@ class FullListIterator : public MemTableRep::Iterator {
 };
 
 }  // namespace
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif

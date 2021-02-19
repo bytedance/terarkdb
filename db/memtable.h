@@ -54,7 +54,6 @@ struct ImmutableMemTableOptions {
   Statistics* statistics;
   MergeOperator* merge_operator;
   Logger* info_log;
-  MemTableRepFactory* memtable_factory;
 };
 
 // Batched counters to updated when inserting keys in one write batch.

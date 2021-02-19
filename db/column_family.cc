@@ -226,13 +226,10 @@ ColumnFamilyOptions SanitizeOptions(const ImmutableDBOptions& db_options,
     result.memtable_prefix_bloom_size_ratio = 0;
   }
 
-  if (!result.prefix_extractor) {
-    assert(result.memtable_factory);
-    Slice name = result.memtable_factory->Name();
-    if (name.compare("HashSkipListRepFactory") == 0 ||
-        name.compare("HashLinkListRepFactory") == 0) {
-      result.memtable_factory = std::make_shared<SkipListFactory>();
-    }
+  assert(result.prefix_extractor || result.memtable_factory);
+  if (!result.prefix_extractor &&
+      result.memtable_factory->IsPrefixExtractorRequired()) {
+    result.memtable_factory = std::make_shared<SkipListFactory>();
   }
 
   if (result.compaction_style == kCompactionStyleFIFO) {

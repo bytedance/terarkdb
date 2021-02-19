@@ -37,6 +37,8 @@ class HashLinkListRepFactory : public MemTableRepFactory {
 
   virtual const char* Name() const override { return "HashLinkListRepFactory"; }
 
+  virtual bool IsPrefixExtractorRequired() const override { return true; }
+
  private:
   const size_t bucket_count_;
   const uint32_t threshold_use_skiplist_;

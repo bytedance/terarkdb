@@ -11,11 +11,12 @@
 #include "rocksdb/memtablerep.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/slice_transform.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/arena.h"
 #include "util/murmurhash.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace {
 
 class ConcurrentHashDualListRep : public MemTableRep {
@@ -292,7 +293,7 @@ class ConcurrentHashDualListRep : public MemTableRep {
  private:
   void InsertImpl(KeyHandle handle, bool concurrent) {
     Node *x = static_cast<Node *>(handle);
-    assert(x && !Contains(x->key));
+    assert(x && !Contains(GetLengthPrefixedSlice(x->key)));
     auto internal_key = GetLengthPrefixedSlice(x->key);
     Pointer &bucket = GetBucket(internal_key);
     Node *prev = nullptr;
@@ -605,6 +606,6 @@ MemTableRepFactory *NewConcurrentHashDualListReqFactory(
 ROCKSDB_REGISTER_MEM_TABLE("dualhash_linklist",
                            ConcurrentHashDualListReqFactory);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

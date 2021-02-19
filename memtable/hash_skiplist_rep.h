@@ -32,6 +32,8 @@ class HashSkipListRepFactory : public MemTableRepFactory {
 
   virtual const char* Name() const override { return "HashSkipListRepFactory"; }
 
+  virtual bool IsPrefixExtractorRequired() const override { return true; }
+
  private:
   const size_t bucket_count_;
   const int32_t skiplist_height_;

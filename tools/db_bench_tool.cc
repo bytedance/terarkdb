@@ -1098,7 +1098,8 @@ enum RepFactory {
   kVectorRep,
   kHashLinkedList,
   kCuckoo,
-  kPatriciaTrie
+  kPatriciaTrie,
+  kHashDuaLinkedList
 };
 
 static enum RepFactory StringToRepFactory(const char* ctype) {
@@ -1116,6 +1117,8 @@ static enum RepFactory StringToRepFactory(const char* ctype) {
     return kCuckoo;
   else if (!strcasecmp(ctype, "patricia_trie"))
     return kPatriciaTrie;
+  else if (!strcasecmp(ctype, "hash_dualinkedlist"))
+    return kHashDuaLinkedList;
 
   fprintf(stdout, "Cannot parse memreptable %s\n", ctype);
   return kSkipList;
@@ -2195,6 +2198,9 @@ class Benchmark {
       case kPatriciaTrie:
         fprintf(stdout, "Memtablerep: patricia_trie\n");
         break;
+      case kHashDuaLinkedList:
+        fprintf(stdout, "Memtablerep: hash_dualinkedlist\n");
+        break;
     }
     fprintf(stdout, "Perf Level: %d\n", FLAGS_perf_level);
 
@@ -3271,10 +3277,11 @@ class Benchmark {
     options.max_bytes_for_level_multiplier =
         FLAGS_max_bytes_for_level_multiplier;
     if ((FLAGS_prefix_size == 0) && (FLAGS_rep_factory == kPrefixHash ||
-                                     FLAGS_rep_factory == kHashLinkedList)) {
+                                     FLAGS_rep_factory == kHashLinkedList ||
+                                     FLAGS_rep_factory == kHashDuaLinkedList)) {
       fprintf(stderr,
               "prefix_size should be non-zero if PrefixHash or "
-              "HashLinkedList memtablerep is used\n");
+              "HashLinkedList or HashDuaLinkedListmemtablerep is used\n");
       exit(1);
     }
     switch (FLAGS_rep_factory) {
@@ -3305,8 +3312,9 @@ class Benchmark {
         printf("TerarkZipTable was not enabled!");
         exit(1);
 #endif
+      case kHashDuaLinkedList:
+        options.memtable_factory.reset(NewConcurrentHashDualListReqFactory());
         break;
-#else
       default:
         fprintf(stderr, "Only skip list is supported in lite mode\n");
         exit(1);

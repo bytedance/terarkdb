@@ -5,8 +5,9 @@
 #include "monitoring/instrumented_mutex.h"
 #include "rocksdb/memtablerep.h"
 #include "rocksdb/slice_transform.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class ConcurrentHashDualListReqFactory : public MemTableRepFactory {
   using Pointer = std::atomic<void*>;
@@ -76,6 +77,8 @@ class ConcurrentHashDualListReqFactory : public MemTableRepFactory {
     return "ConcurrentHashDualListReqFactory";
   }
 
+  virtual bool IsPrefixExtractorRequired() const override { return true; }
+
  private:
   const size_t bucket_count_;
   const size_t huge_page_tlb_size_;
@@ -87,6 +90,6 @@ class ConcurrentHashDualListReqFactory : public MemTableRepFactory {
   InstrumentedMutex mutex_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif
