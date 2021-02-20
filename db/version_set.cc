@@ -343,10 +343,7 @@ class FilePicker {
 };
 }  // anonymous namespace
 
-VersionStorageInfo::~VersionStorageInfo() {
-  delete[](files_ - 1);
-}
-
+VersionStorageInfo::~VersionStorageInfo() { delete[](files_ - 1); }
 
 Version::~Version() {
   assert(refs_ == 0);
@@ -2884,27 +2881,33 @@ void Version::BuildGlobalMap(const ImmutableDBOptions& db_options,
   ROCKS_LOG_INFO(info_log_, "[BuildGlobalMap] start build global map");
   MapBuilder map_builder(0, db_options, env_options_, vset_, nullptr, dbname);
   std::unique_ptr<TableProperties> prop;
-  std::shared_ptr<FileMetaData> globalMap = this->storage_info()->GetGlobalMap();
-  globalMap.reset(new FileMetaData);
   ColumnFamilyData* cfd = this->cfd();
   db_mutex_->Unlock();
-  Status s = map_builder.BuildGlobalMap(1, cfd, this, globalMap.get(), &prop);
-
-  checkGlobalMap();
+  std::shared_ptr<FileMetaData> p;
+  Status s = map_builder.BuildGlobalMap(
+      1, cfd, this, &p , &prop);
+  this->storage_info()->SetGlobalMap(p);
+  checkGlobalMap(s);
   db_mutex_->Lock();
   ROCKS_LOG_INFO(info_log_,
                  "[BuildGlobalMap] finished build global map, num_entries= "
                  "%d,data_size=%d,index_size=%d",
                  prop->num_entries, prop->data_size, prop->index_size);
 }
-Status Version::checkGlobalMap() {
-  std::shared_ptr<FileMetaData> globalMap = this->storage_info()->GetGlobalMap();
+Status Version::checkGlobalMap(Status s) {
+  std::shared_ptr<FileMetaData> globalMap =
+      this->storage_info()->GetGlobalMap();
   ColumnFamilyData* cfd = this->cfd();
-  if (globalMap->fd.file_size > 0) {
+  if (globalMap.get() == nullptr || !s.ok()) {
+    ROCKS_LOG_INFO(info_log_, "[BuildGlobalMap] global map is not build, %s",
+                   s.ToString().c_str());
+    return s;
+  }
+  if (s.ok() && globalMap->fd.file_size > 0) {
     // test map sst
     DependenceMap empty_dependence_map;
     InternalIterator* iter = cfd->table_cache()->NewIterator(
-        ReadOptions(), env_options_, cfd->internal_comparator(), *globalMap.get(),
+        ReadOptions(), env_options_, cfd->internal_comparator(), *globalMap,
         empty_dependence_map, nullptr /* range_del_agg */, nullptr, nullptr,
         nullptr, false, nullptr /* arena */, false /* skip_filters */, 0);
     Status s = iter->status();

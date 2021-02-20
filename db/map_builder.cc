@@ -1573,7 +1573,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
 }
 Status MapBuilder::BuildGlobalMap(uint32_t output_path_id,
                                   ColumnFamilyData* cfd, Version* version,
-                                  FileMetaData* file_meta_ptr,
+                                  std::shared_ptr<FileMetaData>* file_meta_ptr,
                                   std::unique_ptr<TableProperties>* prop_ptr) {
   auto vstorage = version->storage_info();
   auto& icomp = cfd->internal_comparator();
@@ -1671,14 +1671,12 @@ Status MapBuilder::BuildGlobalMap(uint32_t output_path_id,
   }
   MapSstElementIterator output_iter(ranges, iterator_cache,
                                     cfd->internal_comparator());
-  FileMetaData file_meta;
+  file_meta_ptr->reset(new FileMetaData);
   std::unique_ptr<TableProperties> prop;
   s = WriteOutputFile(bound_builder, &output_iter, tombstone_iter.get(),
                       output_path_id, cfd, version->GetMutableCFOptions(),
-                      &file_meta, &prop);
-  if (file_meta_ptr != nullptr) {
-    *file_meta_ptr = std::move(file_meta);
-  }
+                      file_meta_ptr->get(), &prop);
+
   if (prop_ptr != nullptr) {
     prop_ptr->swap(prop);
   }

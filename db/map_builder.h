@@ -74,7 +74,8 @@ class MapBuilder {
                VersionEdit* edit,
                std::vector<MapBuilderOutput>* output = nullptr);
   Status BuildGlobalMap(uint32_t output_path_id, ColumnFamilyData* cfd,
-                        Version* version, FileMetaData* file_meta_ptr,
+                        Version* version,
+                        std::shared_ptr<FileMetaData>* file_meta_ptr,
                         std::unique_ptr<TableProperties>* prop_ptr);
 
  private:

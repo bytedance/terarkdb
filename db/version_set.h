@@ -492,6 +492,9 @@ class VersionStorageInfo {
                                      const Slice& largest_user_key,
                                      int last_level, int last_l0_idx);
   std::shared_ptr<FileMetaData> GetGlobalMap() { return globalmap_; }
+  void SetGlobalMap(std::shared_ptr<FileMetaData> globalmap) {
+    globalmap_ = globalmap;
+  }
 
  private:
   const InternalKeyComparator* internal_comparator_;
@@ -740,7 +743,7 @@ class Version : public SeparateHelper, private LazyBufferState {
 
   void BuildGlobalMap(const ImmutableDBOptions& db_options,
                       const std::string& dbname, InstrumentedMutex* db_mutex_);
-  Status checkGlobalMap();
+  Status checkGlobalMap(Status s);
 
  private:
   Env* env_;
