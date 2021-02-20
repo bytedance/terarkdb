@@ -491,6 +491,7 @@ class VersionStorageInfo {
   bool RangeMightExistAfterSortedRun(const Slice& smallest_user_key,
                                      const Slice& largest_user_key,
                                      int last_level, int last_l0_idx);
+  std::shared_ptr<FileMetaData> GetGlobalMap() { return globalmap_; }
 
  private:
   const InternalKeyComparator* internal_comparator_;
@@ -511,6 +512,7 @@ class VersionStorageInfo {
   // List of files per level, files in each level are arranged
   // in increasing order of keys
   std::vector<FileMetaData*>* files_;
+  std::shared_ptr<FileMetaData> globalmap_;
 
   // Dependence files both in files[-1] and dependence_map
   DependenceMap dependence_map_;
@@ -735,6 +737,10 @@ class Version : public SeparateHelper, private LazyBufferState {
   uint64_t GetSstFilesSize();
 
   const MutableCFOptions& GetMutableCFOptions() { return mutable_cf_options_; }
+
+  void BuildGlobalMap(const ImmutableDBOptions& db_options,
+                      const std::string& dbname, InstrumentedMutex* db_mutex_);
+  Status checkGlobalMap();
 
  private:
   Env* env_;

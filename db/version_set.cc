@@ -31,6 +31,7 @@
 #include "db/merge_helper.h"
 #include "db/table_cache.h"
 #include "db/version_builder.h"
+#include "map_builder.h"
 #include "monitoring/file_read_sample.h"
 #include "monitoring/perf_context_imp.h"
 #include "monitoring/persistent_stats_history.h"
@@ -342,7 +343,10 @@ class FilePicker {
 };
 }  // anonymous namespace
 
-VersionStorageInfo::~VersionStorageInfo() { delete[](files_ - 1); }
+VersionStorageInfo::~VersionStorageInfo() {
+  delete[](files_ - 1);
+}
+
 
 Version::~Version() {
   assert(refs_ == 0);
@@ -2874,6 +2878,45 @@ std::string Version::DebugString(bool hex, bool print_stats) const {
   }
   return r;
 }
+void Version::BuildGlobalMap(const ImmutableDBOptions& db_options,
+                             const std::string& dbname,
+                             InstrumentedMutex* db_mutex_) {
+  ROCKS_LOG_INFO(info_log_, "[BuildGlobalMap] start build global map");
+  MapBuilder map_builder(0, db_options, env_options_, vset_, nullptr, dbname);
+  std::unique_ptr<TableProperties> prop;
+  std::shared_ptr<FileMetaData> globalMap = this->storage_info()->GetGlobalMap();
+  globalMap.reset(new FileMetaData);
+  ColumnFamilyData* cfd = this->cfd();
+  db_mutex_->Unlock();
+  Status s = map_builder.BuildGlobalMap(1, cfd, this, globalMap.get(), &prop);
+
+  checkGlobalMap();
+  db_mutex_->Lock();
+  ROCKS_LOG_INFO(info_log_,
+                 "[BuildGlobalMap] finished build global map, num_entries= "
+                 "%d,data_size=%d,index_size=%d",
+                 prop->num_entries, prop->data_size, prop->index_size);
+}
+Status Version::checkGlobalMap() {
+  std::shared_ptr<FileMetaData> globalMap = this->storage_info()->GetGlobalMap();
+  ColumnFamilyData* cfd = this->cfd();
+  if (globalMap->fd.file_size > 0) {
+    // test map sst
+    DependenceMap empty_dependence_map;
+    InternalIterator* iter = cfd->table_cache()->NewIterator(
+        ReadOptions(), env_options_, cfd->internal_comparator(), *globalMap.get(),
+        empty_dependence_map, nullptr /* range_del_agg */, nullptr, nullptr,
+        nullptr, false, nullptr /* arena */, false /* skip_filters */, 0);
+    Status s = iter->status();
+    if (s.ok()) {
+      for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
+      }
+      s = iter->status();
+    }
+    delete iter;
+    return s;
+  }
+}
 
 // this is used to batch writes to the manifest file
 struct VersionSet::ManifestWriter {
@@ -3294,6 +3337,8 @@ Status VersionSet::ProcessManifestWrites(
 
       for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
         ColumnFamilyData* cfd = versions[i]->cfd_;
+        versions[i]->storage_info_.SetFinalized();
+        versions[i]->BuildGlobalMap(*db_options_, dbname_, mu);
         AppendVersion(cfd, versions[i]);
       }
     }
