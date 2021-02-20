@@ -427,7 +427,7 @@ class ConcurrentHashDualListRep : public MemTableRep {
   }
 
   Node *FindLessOrEqualInBucket(Node *prev, const Slice &internal_key) const {
-    assert(prev == nullptr || KeyIsAfterNode(internal_key, prev));
+    // assert(prev == nullptr || KeyIsAfterNode(internal_key, prev));
     Node *x = prev;
     prev = nullptr;
     while (true) {
@@ -443,7 +443,7 @@ class ConcurrentHashDualListRep : public MemTableRep {
     }
     assert(UserKeyEqual(internal_key, x));
     while (true) {
-      assert(UserKeyEqual(x, prev));
+      // assert(UserKeyEqual(x, prev));
       if (KeyIsAfterNode(internal_key, x)) {
         prev = x;
         x = x->VerticalNext();
