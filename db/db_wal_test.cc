@@ -8,6 +8,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "db/db_test_util.h"
+#include "db/pending_output_locker.h"
 #include "options/options_helper.h"
 #include "port/port.h"
 #include "port/stack_trace.h"
@@ -814,10 +815,12 @@ class RecoveryTestHelper {
     std::unique_ptr<VersionSet> versions;
     std::unique_ptr<WalManager> wal_manager;
     WriteController write_controller;
+    PendingOutputLocker pending_output_locker;
 
     versions.reset(new VersionSet(test->dbname_, &db_options, env_options,
                                   /* seq_per_batch */ false, table_cache.get(),
-                                  &write_buffer_manager, &write_controller));
+                                  &write_buffer_manager, &write_controller,
+                                  &pending_output_locker));
 
     wal_manager.reset(new WalManager(db_options, env_options));
 

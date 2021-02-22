@@ -953,8 +953,7 @@ Status DBImpl::CompactFilesImpl(
   std::vector<SequenceNumber> snapshot_seqs =
       snapshots_.GetAll(&earliest_write_conflict_snapshot);
 
-  auto pending_outputs_inserted_elem =
-      CaptureCurrentFileNumberInPendingOutputs();
+  auto pending_output_lock = CaptureCurrentFileNumberInPendingOutputs();
 
   auto snapshot_checker = snapshot_checker_.get();
   if (use_custom_gc_ && snapshot_checker == nullptr) {
@@ -1022,7 +1021,7 @@ Status DBImpl::CompactFilesImpl(
   }
 #endif  // ROCKSDB_LITE
 
-  ReleaseFileNumberFromPendingOutputs(pending_outputs_inserted_elem);
+  pending_output_lock.Unlock();
 
   if (status.ok()) {
     // Done
@@ -2228,8 +2227,7 @@ void DBImpl::BackgroundCallFlush() {
     assert(bg_flush_scheduled_);
     num_running_flushes_++;
 
-    auto pending_outputs_inserted_elem =
-        CaptureCurrentFileNumberInPendingOutputs();
+    auto pending_output_lock = CaptureCurrentFileNumberInPendingOutputs();
     FlushReason reason;
 
     Status s =
@@ -2255,7 +2253,7 @@ void DBImpl::BackgroundCallFlush() {
     }
 
     TEST_SYNC_POINT("DBImpl::BackgroundCallFlush:FlushFinish:0");
-    ReleaseFileNumberFromPendingOutputs(pending_outputs_inserted_elem);
+    pending_output_lock.Unlock();
 
     // If flush failed, we want to delete all temporary files that we might have
     // created. Thus, we force full scan in FindObsoleteFiles()
@@ -2309,8 +2307,7 @@ void DBImpl::BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
 
     num_running_compactions_++;
 
-    auto pending_outputs_inserted_elem =
-        CaptureCurrentFileNumberInPendingOutputs();
+    auto pending_output_lock = CaptureCurrentFileNumberInPendingOutputs();
 
     assert((bg_thread_pri == Env::Priority::BOTTOM &&
             bg_bottom_compaction_scheduled_) ||
@@ -2337,7 +2334,7 @@ void DBImpl::BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
       mutex_.Lock();
     }
 
-    ReleaseFileNumberFromPendingOutputs(pending_outputs_inserted_elem);
+    pending_output_lock.Unlock();
 
     // If compaction failed, we want to delete all temporary files that we might
     // have created (they might not be all recorded in job_context in case of a
@@ -2410,8 +2407,7 @@ void DBImpl::BackgroundCallGarbageCollection() {
 
     num_running_garbage_collections_++;
 
-    auto pending_outputs_inserted_elem =
-        CaptureCurrentFileNumberInPendingOutputs();
+    auto pending_output_lock = CaptureCurrentFileNumberInPendingOutputs();
 
     assert(bg_garbage_collection_scheduled_);
     Status s =
@@ -2436,7 +2432,7 @@ void DBImpl::BackgroundCallGarbageCollection() {
       mutex_.Lock();
     }
 
-    ReleaseFileNumberFromPendingOutputs(pending_outputs_inserted_elem);
+    pending_output_lock.Unlock();
 
     // If garbage collection failed, we want to delete all temporary files that
     // we might have created (they might not be all recorded in job_context in

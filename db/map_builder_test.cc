@@ -13,6 +13,7 @@
 #include "db/db_impl.h"
 #include "db/db_test_util.h"
 #include "db/log_writer.h"
+#include "db/pending_output_locker.h"
 #include "db/version_set.h"
 #include "db/wal_manager.h"
 #include "env/mock_env.h"
@@ -37,6 +38,7 @@ class MapBuilderTest : public testing::Test {
   std::shared_ptr<Cache> table_cache_;
   WriteController write_controller_;
   WriteBufferManager write_buffer_manager_;
+  PendingOutputLocker pending_output_locker_;
   std::unique_ptr<VersionSet> versions_;
   InstrumentedMutex mutex_;
   std::shared_ptr<mock::MockTableFactory> mock_table_factory_;
@@ -61,7 +63,8 @@ class MapBuilderTest : public testing::Test {
         write_buffer_manager_(db_options_.db_write_buffer_size),
         versions_(new VersionSet(dbname_, &db_options_, env_options_,
                                  /* seq_per_batch */ false, table_cache_.get(),
-                                 &write_buffer_manager_, &write_controller_)),
+                                 &write_buffer_manager_, &write_controller_,
+                                 &pending_output_locker_)),
         mock_table_factory_(new mock::MockTableFactory()),
         stats_(nullptr),
         error_handler_(nullptr, db_options_, &mutex_),

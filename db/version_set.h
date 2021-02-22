@@ -64,6 +64,7 @@ class MergeContext;
 class ColumnFamilySet;
 class TableCache;
 class MergeIteratorBuilder;
+class PendingOutputLocker;
 
 // Return the smallest index i such that file_level.files[i]->largest >= key.
 // Return file_level.num_files if there is no such file.
@@ -857,7 +858,8 @@ class VersionSet {
   VersionSet(const std::string& dbname, const ImmutableDBOptions* db_options,
              const EnvOptions& env_options, bool seq_per_batch,
              Cache* table_cache, WriteBufferManager* write_buffer_manager,
-             WriteController* write_controller);
+             WriteController* write_controller,
+             PendingOutputLocker* pending_output_locker);
   ~VersionSet();
 
   // Apply *edit to the current version to form a new descriptor that
@@ -1141,6 +1143,7 @@ class VersionSet {
                                const ColumnFamilyOptions* new_cf_options);
 
   std::unique_ptr<ColumnFamilySet> column_family_set_;
+  PendingOutputLocker* pending_output_locker_;
 
   Env* const env_;
   const std::string dbname_;

@@ -29,6 +29,7 @@
 #include "db/memtable.h"
 #include "db/merge_context.h"
 #include "db/merge_helper.h"
+#include "db/pending_output_locker.h"
 #include "db/table_cache.h"
 #include "db/version_builder.h"
 #include "map_builder.h"
@@ -2842,6 +2843,9 @@ void Version::AddLiveFiles(std::vector<FileDescriptor>* live) {
       live->push_back(file->fd);
     }
   }
+  if (storage_info_.global_map() != nullptr) {
+    live->emplace_back(storage_info_.global_map()->fd);
+  }
 }
 
 std::string Version::DebugString(bool hex, bool print_stats) const {
@@ -2951,10 +2955,12 @@ VersionSet::VersionSet(const std::string& dbname,
                        const EnvOptions& storage_options, bool seq_per_batch,
                        Cache* table_cache,
                        WriteBufferManager* write_buffer_manager,
-                       WriteController* write_controller)
+                       WriteController* write_controller,
+                       PendingOutputLocker* pending_output_locker)
     : column_family_set_(
           new ColumnFamilySet(dbname, _db_options, storage_options, table_cache,
                               write_buffer_manager, write_controller)),
+      pending_output_locker_(pending_output_locker),
       env_(_db_options->env),
       dbname_(dbname),
       db_options_(_db_options),
@@ -2999,9 +3005,6 @@ void VersionSet::AppendVersion(ColumnFamilyData* column_family_data,
   v->storage_info()->ComputeCompactionScore(
       *column_family_data->ioptions(),
       *column_family_data->GetLatestMutableCFOptions());
-
-  // Mark v finalized
-  v->storage_info_.SetFinalized();
 
   // Make "v" current
   assert(v->refs_ == 0);
@@ -3186,6 +3189,8 @@ Status VersionSet::ProcessManifestWrites(
 
   {
     EnvOptions opt_env_opts = env_->OptimizeForManifestWrite(env_options_);
+    auto pending_output_lock =
+        pending_output_locker_->Lock(current_next_file_number());
     mu->Unlock();
 
     if (!first_writer.edit_list.front()->IsColumnFamilyManipulation()) {
@@ -3293,6 +3298,7 @@ Status VersionSet::ProcessManifestWrites(
     LogFlush(db_options_->info_log);
     TEST_SYNC_POINT("VersionSet::LogAndApply:WriteManifestDone");
     mu->Lock();
+    pending_output_lock.Unlock();
   }
 
   // Append the old manifest file to the obsolete_manifest_ list to be deleted

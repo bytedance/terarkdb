@@ -12,6 +12,7 @@
 
 #include "db/column_family.h"
 #include "db/error_handler.h"
+#include "db/pending_output_locker.h"
 #include "db/version_set.h"
 #include "rocksdb/cache.h"
 #include "rocksdb/db.h"
@@ -76,7 +77,8 @@ class CompactionJobTest : public testing::Test {
         write_buffer_manager_(db_options_.db_write_buffer_size),
         versions_(new VersionSet(dbname_, &db_options_, env_options_,
                                  /* seq_per_batch */ false, table_cache_.get(),
-                                 &write_buffer_manager_, &write_controller_)),
+                                 &write_buffer_manager_, &write_controller_,
+                                 &pending_output_locker_)),
         shutting_down_(false),
         preserve_deletes_seqnum_(0),
         mock_table_factory_(new mock::MockTableFactory()),
@@ -303,6 +305,7 @@ class CompactionJobTest : public testing::Test {
   std::shared_ptr<Cache> table_cache_;
   WriteController write_controller_;
   WriteBufferManager write_buffer_manager_;
+  PendingOutputLocker pending_output_locker_;
   std::unique_ptr<VersionSet> versions_;
   InstrumentedMutex mutex_;
   std::atomic<bool> shutting_down_;

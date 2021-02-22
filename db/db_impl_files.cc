@@ -35,10 +35,7 @@ uint64_t DBImpl::MinLogNumberToKeep() {
 
 uint64_t DBImpl::MinObsoleteSstNumberToKeep() {
   mutex_.AssertHeld();
-  if (!pending_outputs_.empty()) {
-    return *pending_outputs_.begin();
-  }
-  return std::numeric_limits<uint64_t>::max();
+  return pending_output_locker_.MinLockFileNumber();
 }
 
 namespace {
@@ -178,12 +175,7 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
   // Since job_context->min_pending_output is set, until file scan finishes,
   // mutex_ cannot be released. Otherwise, we might see no min_pending_output
   // here but later find newer generated unfinalized files while scanning.
-  if (!pending_outputs_.empty()) {
-    job_context->min_pending_output = *pending_outputs_.begin();
-  } else {
-    // delete all of them
-    job_context->min_pending_output = std::numeric_limits<uint64_t>::max();
-  }
+  job_context->min_pending_output = pending_output_locker_.MinLockFileNumber();
 
   // Get obsolete files.  This function will also update the list of
   // pending files in VersionSet().
@@ -362,7 +354,9 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
         sst_live.emplace(f->fd.GetNumber());
       }
     }
-    sst_live.emplace(vstorage->global_map()->fd.GetNumber());
+    if (vstorage->global_map() != nullptr) {
+      sst_live.emplace(vstorage->global_map()->fd.GetNumber());
+    }
   }
   std::unordered_set<uint64_t> log_recycle_files_set(
       state.log_recycle_files.begin(), state.log_recycle_files.end());

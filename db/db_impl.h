@@ -30,6 +30,7 @@
 #include "db/internal_stats.h"
 #include "db/log_writer.h"
 #include "db/logs_with_prep_tracker.h"
+#include "db/pending_output_locker.h"
 #include "db/pre_release_callback.h"
 #include "db/range_del_aggregator.h"
 #include "db/read_callback.h"
@@ -1015,20 +1016,14 @@ class DBImpl : public DB {
   //     auto x = CaptureCurrentFileNumberInPendingOutputs()
   //     auto file_num = versions_->NewFileNumber();
   //     <do something>
-  //     ReleaseFileNumberFromPendingOutputs(x)
+  //     x.Unlock();
   // This will protect any file with number `file_num` or greater from being
   // deleted while <do something> is running.
   // -----------
   // This function will capture current file number and append it to
   // pending_outputs_. This will prevent any background process to delete any
   // file created after this point.
-  std::list<uint64_t>::iterator CaptureCurrentFileNumberInPendingOutputs();
-  // This function should be called with the result of
-  // CaptureCurrentFileNumberInPendingOutputs(). It then marks that any file
-  // created between the calls CaptureCurrentFileNumberInPendingOutputs() and
-  // ReleaseFileNumberFromPendingOutputs() can now be deleted (if it's not live
-  // and blocked by any other pending_outputs_ calls)
-  void ReleaseFileNumberFromPendingOutputs(std::list<uint64_t>::iterator v);
+  PendingOutputLocker::AutoUnlock CaptureCurrentFileNumberInPendingOutputs();
 
   Status SyncClosedLogs(JobContext* job_context);
 
@@ -1488,7 +1483,7 @@ class DBImpl : public DB {
   // deleted from pending_outputs_, which allows PurgeObsoleteFiles() to clean
   // it up.
   // State is protected with db mutex.
-  std::list<uint64_t> pending_outputs_;
+  PendingOutputLocker pending_output_locker_;
 
   // PurgeFileInfo is a structure to hold information of files to be deleted in
   // purge_queue_

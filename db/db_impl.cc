@@ -341,7 +341,8 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
 
   versions_.reset(new VersionSet(dbname_, &immutable_db_options_, env_options_,
                                  seq_per_batch, table_cache_.get(),
-                                 write_buffer_manager_, &write_controller_));
+                                 write_buffer_manager_, &write_controller_,
+                                 &pending_output_locker_));
   column_family_memtables_.reset(
       new ColumnFamilyMemTablesImpl(versions_->GetColumnFamilySet()));
 
@@ -2875,20 +2876,9 @@ void DBImpl::GetApproximateSizes(ColumnFamilyHandle* column_family,
   ReturnAndCleanupSuperVersion(cfd, sv);
 }
 
-std::list<uint64_t>::iterator
+PendingOutputLocker::AutoUnlock
 DBImpl::CaptureCurrentFileNumberInPendingOutputs() {
-  // We need to remember the iterator of our insert, because after the
-  // background job is done, we need to remove that element from
-  // pending_outputs_.
-  pending_outputs_.push_back(versions_->current_next_file_number());
-  auto pending_outputs_inserted_elem = pending_outputs_.end();
-  --pending_outputs_inserted_elem;
-  return pending_outputs_inserted_elem;
-}
-
-void DBImpl::ReleaseFileNumberFromPendingOutputs(
-    std::list<uint64_t>::iterator v) {
-  pending_outputs_.erase(v);
+  return pending_output_locker_.Lock(versions_->current_next_file_number());
 }
 
 #ifndef ROCKSDB_LITE
@@ -3024,7 +3014,7 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
     input_version->Ref();
 
     struct AutoRelease {
-      std::list<uint64_t>::iterator pending_outputs_inserted_elem;
+      PendingOutputLocker::AutoUnlock pending_lock;
       DBImpl* db_impl;
       Version* input_version;
       bool is_lock;
@@ -3043,11 +3033,10 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
       }
 
       ~AutoRelease() {
-        db_impl->ReleaseFileNumberFromPendingOutputs(
-            pending_outputs_inserted_elem);
         if (!is_lock) {
           db_mutex->Lock();
         }
+        pending_lock.Unlock();
         input_version->Unref();
         for (auto f : file_marked) {
           f->being_compacted = false;

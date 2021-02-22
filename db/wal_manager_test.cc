@@ -13,13 +13,13 @@
 #include "db/column_family.h"
 #include "db/db_impl.h"
 #include "db/log_writer.h"
+#include "db/pending_output_locker.h"
 #include "db/version_set.h"
 #include "env/mock_env.h"
 #include "rocksdb/cache.h"
 #include "rocksdb/terark_namespace.h"
 #include "rocksdb/write_batch.h"
 #include "rocksdb/write_buffer_manager.h"
-#include "table/mock_table.h"
 #include "util/file_reader_writer.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
@@ -49,10 +49,10 @@ class WalManagerTest : public testing::Test {
     db_options_.wal_dir = dbname_;
     db_options_.env = env_.get();
 
-    versions_.reset(new VersionSet(dbname_, &db_options_, env_options_,
-                                   /* seq_per_batch */ false,
-                                   table_cache_.get(), &write_buffer_manager_,
-                                   &write_controller_));
+    versions_.reset(new VersionSet(
+        dbname_, &db_options_, env_options_,
+        /* seq_per_batch */ false, table_cache_.get(), &write_buffer_manager_,
+        &write_controller_, &pending_output_locker_));
 
     wal_manager_.reset(new WalManager(db_options_, env_options_));
   }
@@ -108,6 +108,7 @@ class WalManagerTest : public testing::Test {
   std::string dbname_;
   ImmutableDBOptions db_options_;
   WriteController write_controller_;
+  PendingOutputLocker pending_output_locker_;
   EnvOptions env_options_;
   std::shared_ptr<Cache> table_cache_;
   WriteBufferManager write_buffer_manager_;
