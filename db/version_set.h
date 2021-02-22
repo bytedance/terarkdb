@@ -742,7 +742,7 @@ class Version : public SeparateHelper, private LazyBufferState {
   const MutableCFOptions& GetMutableCFOptions() { return mutable_cf_options_; }
 
   void BuildGlobalMap(const ImmutableDBOptions& db_options,
-                      const std::string& dbname, InstrumentedMutex* db_mutex_);
+                      const std::string& dbname);
   Status CheckGlobalMap(Status s);
 
  private:

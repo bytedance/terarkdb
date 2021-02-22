@@ -2877,8 +2877,7 @@ std::string Version::DebugString(bool hex, bool print_stats) const {
 }
 
 void Version::BuildGlobalMap(const ImmutableDBOptions& db_options,
-                             const std::string& dbname,
-                             InstrumentedMutex* db_mutex_) {
+                             const std::string& dbname) {
   StopWatchNano timer(env_, /*auto_start=*/true);
   ROCKS_LOG_INFO(info_log_, "[BuildGlobalMap] start build global map");
   MapBuilder map_builder(0, db_options, env_options_, vset_, nullptr, dbname);
@@ -3237,8 +3236,8 @@ Status VersionSet::ProcessManifestWrites(
     if (!first_writer.edit_list.front()->IsColumnFamilyManipulation()) {
       for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
         versions[i]->PrepareApply(*mutable_cf_options_ptrs[i]);
-        ColumnFamilyData* cfd = versions[i]->cfd_;
-        versions[i]->BuildGlobalMap(*db_options_, dbname_, mu);
+        versions[i]->storage_info()->SetFinalized();
+        versions[i]->BuildGlobalMap(*db_options_, dbname_);
       }
     }
 
