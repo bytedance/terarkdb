@@ -365,6 +365,12 @@ Version::~Version() {
       }
     }
   }
+  if (storage_info_.global_map() != nullptr) {
+    FileMetaData* f = storage_info_.global_map().get();
+    uint32_t path_id = f->fd.GetPathId();
+    vset_->obsolete_files_.push_back(
+        ObsoleteFileInfo(f, cfd_->ioptions()->cf_paths[path_id].path));
+  }
 }
 
 int FindFile(const InternalKeyComparator& icmp,

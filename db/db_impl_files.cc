@@ -362,6 +362,7 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
         sst_live.emplace(f->fd.GetNumber());
       }
     }
+    sst_live.emplace(vstorage->global_map()->fd.GetNumber());
   }
   std::unordered_set<uint64_t> log_recycle_files_set(
       state.log_recycle_files.begin(), state.log_recycle_files.end());
