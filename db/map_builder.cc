@@ -287,8 +287,8 @@ class MapSstElementIterator : public MapSstRangeIterator {
         } else {
           sst_read_amp_ratio_ /= sst_read_amp_size_;
         }
-//        assert(sst_read_amp_ratio_ >= 1);
-//        assert(sst_read_amp_ratio_ <= sst_read_amp_);
+        assert(sst_read_amp_ratio_ >= 1);
+        assert(sst_read_amp_ratio_ <= sst_read_amp_);
         for (auto& pair : dependence_build_) {
           auto f = iterator_cache_.GetFileMetaData(pair.first);
           assert(f != nullptr);
@@ -334,7 +334,6 @@ class MapSstElementIterator : public MapSstRangeIterator {
             buffer_.clear();
             return;
           }
-          TableReader* reader;
           if (icomp_.Compare(meta->smallest.Encode(), end) > 0 ||
               icomp_.Compare(meta->largest.Encode(), start) <= 0) {
             // non overlap with file, drop this link
@@ -346,42 +345,17 @@ class MapSstElementIterator : public MapSstRangeIterator {
             link.size = meta->fd.GetFileSize();
             range_size += link.size;
           } else {
-            auto iter = iterator_cache_.GetIterator(meta, &reader);
-            if (!iter->status().ok()) {
-              buffer_.clear();
-              status_ = iter->status();
-              return;
-            }
-            do {
-              iter->Seek(start);
-              if (!iter->Valid()) {
-                CheckIter(iter);
-                break;
-              }
-              temp_start_.DecodeFrom(iter->key());
-              iter->SeekForPrev(end);
-              if (!iter->Valid()) {
-                CheckIter(iter);
-                break;
-              }
-              temp_end_.DecodeFrom(iter->key());
-              if (icomp_.Compare(temp_start_, temp_end_) <= 0) {
-                uint64_t start_offset = reader->ApproximateOffsetOf(temp_start_.Encode());
-                uint64_t end_offset = reader->ApproximateOffsetOf(temp_end_.Encode());
-                link.size = end_offset - start_offset;
-                range_size += link.size;
-              }
-//              if (icomp_.Compare(start, end) <= 0) {
-//                uint64_t start_offset = reader->ApproximateOffsetOf(start);
-//                uint64_t end_offset = reader->ApproximateOffsetOf(end);
-//                link.size = end_offset - start_offset;
-//                range_size += link.size;
-//              }
-            } while (false);
+            TableReader* reader;
+            status_ =
+                iterator_cache_.GetReader(link.file_number, &reader, nullptr);
             if (!status_.ok()) {
               buffer_.clear();
               return;
             }
+            uint64_t start_offset = reader->ApproximateOffsetOf(start);
+            uint64_t end_offset = reader->ApproximateOffsetOf(end);
+            link.size = end_offset - start_offset;
+            range_size += link.size;
           }
           put_dependence(link.file_number, link.size);
         }
@@ -419,10 +393,10 @@ class MapSstElementIterator : public MapSstRangeIterator {
 
 class MapSstTombstoneIterator : public InternalIterator {
  public:
-  MapSstTombstoneIterator(const MapBuilderRangesItem::TombstonsItem& rombstons,
+  MapSstTombstoneIterator(const MapBuilderRangesItem::TombstonsItem& item,
                           const InternalKeyComparator& icomp)
-      : ranges_(rombstons.ranges),
-        tombstone_list_(rombstons.tombstones.get()),
+      : ranges_(item.ranges),
+        tombstone_list_(item.tombstones.get()),
         list_seq_(size_t(-1)),
         icomp_(icomp) {}
 
@@ -1044,10 +1018,9 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
       }
     }
     union_b = std::next(union_a);
-    level_ranges.insert(
-        union_a,
-        PartitionRangeWithDepend(*union_a, *union_b, cfd->internal_comparator(),
-                                 PartitionType::kMerge));
+    level_ranges.insert(union_a,
+                        PartitionRangeWithDepend(*union_a, *union_b, icomp,
+                                                 PartitionType::kMerge));
     level_ranges.erase(union_a);
     level_ranges.erase(union_b);
   }
@@ -1061,8 +1034,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     assert(std::is_sorted(ranges.begin(), ranges.end(),
                           TERARK_FIELD(point[1]) < icomp));
     level_ranges.front() = PartitionRangeWithDepend(
-        level_ranges.front(), ranges, cfd->internal_comparator(),
-        PartitionType::kDelete);
+        level_ranges.front(), ranges, icomp, PartitionType::kDelete);
     if (level_ranges.front().empty()) {
       level_ranges.pop_front();
     }
@@ -1119,8 +1091,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
       level_ranges.emplace_back(std::move(ranges));
     } else {
       level_ranges.front() = PartitionRangeWithDepend(
-          level_ranges.front(), ranges, cfd->internal_comparator(),
-          PartitionType::kMerge);
+          level_ranges.front(), ranges, icomp, PartitionType::kMerge);
     }
     for (auto& range_del_it : added_range_del_iter_vec) {
       range_del_iter_vec.emplace_back(std::move(range_del_it));
@@ -1361,8 +1332,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
           auto& level_ranges = range_items.front();
           level_ranges.is_map = false;
           level_ranges.ranges = PartitionRangeWithDepend(
-              level_ranges.ranges, ranges, cfd->internal_comparator(),
-              PartitionType::kMerge);
+              level_ranges.ranges, ranges, icomp, PartitionType::kMerge);
           level_ranges.input_range_count = size_t(-1);
         }
       }
@@ -1415,12 +1385,10 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
       continue;
     }
     std::vector<RangeWithDepend> extract = PartitionRangeWithDepend(
-        level_ranges.ranges, push_ranges, cfd->internal_comparator(),
-        PartitionType::kExtract);
+        level_ranges.ranges, push_ranges, icomp, PartitionType::kExtract);
     if (!extract.empty()) {
       level_ranges.ranges = PartitionRangeWithDepend(
-          level_ranges.ranges, push_ranges, cfd->internal_comparator(),
-          PartitionType::kDelete);
+          level_ranges.ranges, push_ranges, icomp, PartitionType::kDelete);
       auto& bound_builder = range_items[output_index].bound_builder;
       for (auto& r : extract) {
         for (auto& dependence : r.dependence) {
@@ -1449,8 +1417,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
           output_range_items.ranges.empty()
               ? std::move(extract)
               : PartitionRangeWithDepend(extract, output_range_items.ranges,
-                                         cfd->internal_comparator(),
-                                         PartitionType::kMerge);
+                                         icomp, PartitionType::kMerge);
     }
   }
 
@@ -1573,7 +1540,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
 }
 Status MapBuilder::BuildGlobalMap(uint32_t output_path_id,
                                   ColumnFamilyData* cfd, Version* version,
-                                  std::shared_ptr<FileMetaData>* file_meta_ptr,
+                                  FileMetaData* file_meta_ptr,
                                   std::unique_ptr<TableProperties>* prop_ptr) {
   auto vstorage = version->storage_info();
   auto& icomp = cfd->internal_comparator();
@@ -1593,7 +1560,7 @@ Status MapBuilder::BuildGlobalMap(uint32_t output_path_id,
   FileMetaDataBoundBuilder bound_builder(&cfd->internal_comparator());
   std::vector<std::unique_ptr<TruncatedRangeDelIterator>> range_del_iter_vec;
   std::list<std::vector<RangeWithDepend>> level_ranges;
-  std::vector<MapBuilderRangesItem::TombstonsItem> tombstones;
+  std::unique_ptr<MapBuilderRangesItem::TombstonsItem> tombstones;
   for (int i = 1; i < n; i++) {
     auto level_files = vstorage->LevelFiles(i);
     if (level_files.empty()) continue;
@@ -1626,38 +1593,35 @@ Status MapBuilder::BuildGlobalMap(uint32_t output_path_id,
       }
     }
     union_b = std::next(union_a);
-    level_ranges.insert(
-        union_a,
-        PartitionRangeWithDepend(*union_a, *union_b, cfd->internal_comparator(),
-                                 PartitionType::kMerge));
+    level_ranges.insert(union_a,
+                        PartitionRangeWithDepend(*union_a, *union_b, icomp,
+                                                 PartitionType::kMerge));
     level_ranges.erase(union_a);
     level_ranges.erase(union_b);
   }
 
   if (!level_ranges.empty() && !range_del_iter_vec.empty()) {
-    tombstones.emplace_back(std::shared_ptr<FragmentedRangeTombstoneList>(
-        new FragmentedRangeTombstoneList(
-            std::unique_ptr<InternalIteratorBase<Slice>>(
-                NewTruncatedRangeDelMergingIter(&icomp, range_del_iter_vec)),
-            icomp)));
+    tombstones.reset(new MapBuilderRangesItem::TombstonsItem(
+        std::shared_ptr<FragmentedRangeTombstoneList>(
+            new FragmentedRangeTombstoneList(
+                std::unique_ptr<InternalIteratorBase<Slice>>(
+                    NewTruncatedRangeDelMergingIter(&icomp,
+                                                    range_del_iter_vec)),
+                icomp))));
     s = AdjustRange(&icomp, &version_iter, arena, bound_builder.largest,
                     level_ranges.front());
     if (!s.ok()) {
       return s;
     }
-    tombstones.back().SetRanges(level_ranges.front());
+    tombstones->SetRanges(level_ranges.front());
   }
 
   ScopedArenaIterator tombstone_iter;
-  if (!tombstones.empty()) {
-    MergeIteratorBuilder builder(&icomp, iterator_cache.GetArena());
-    for (auto& item : tombstones) {
-      builder.AddIterator(
-          new (iterator_cache.GetArena()->AllocateAligned(
-              sizeof(MapSstTombstoneIterator)))
-              MapSstTombstoneIterator(item, cfd->internal_comparator()));
-    }
-    tombstone_iter.set(builder.Finish());
+  if (tombstones) {
+    tombstone_iter.set(
+        new (iterator_cache.GetArena()->AllocateAligned(
+            sizeof(MapSstTombstoneIterator)))
+            MapSstTombstoneIterator(*tombstones, cfd->internal_comparator()));
   }
   std::vector<RangeWithDepend> ranges;
   if (!level_ranges.empty()) {
@@ -1671,12 +1635,15 @@ Status MapBuilder::BuildGlobalMap(uint32_t output_path_id,
   }
   MapSstElementIterator output_iter(ranges, iterator_cache,
                                     cfd->internal_comparator());
-  file_meta_ptr->reset(new FileMetaData);
+
   std::unique_ptr<TableProperties> prop;
+  FileMetaData file_meta;
   s = WriteOutputFile(bound_builder, &output_iter, tombstone_iter.get(),
                       output_path_id, cfd, version->GetMutableCFOptions(),
-                      file_meta_ptr->get(), &prop);
-
+                      &file_meta, &prop);
+  if (file_meta_ptr != nullptr) {
+    *file_meta_ptr = std::move(file_meta);
+  }
   if (prop_ptr != nullptr) {
     prop_ptr->swap(prop);
   }

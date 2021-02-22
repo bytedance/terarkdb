@@ -2875,39 +2875,40 @@ std::string Version::DebugString(bool hex, bool print_stats) const {
   }
   return r;
 }
+
 void Version::BuildGlobalMap(const ImmutableDBOptions& db_options,
                              const std::string& dbname,
                              InstrumentedMutex* db_mutex_) {
+  StopWatchNano timer(env_, /*auto_start=*/true);
   ROCKS_LOG_INFO(info_log_, "[BuildGlobalMap] start build global map");
   MapBuilder map_builder(0, db_options, env_options_, vset_, nullptr, dbname);
   std::unique_ptr<TableProperties> prop;
   ColumnFamilyData* cfd = this->cfd();
-  db_mutex_->Unlock();
-  std::shared_ptr<FileMetaData> p;
-  Status s = map_builder.BuildGlobalMap(
-      1, cfd, this, &p , &prop);
+  std::shared_ptr<FileMetaData> p = std::make_shared<FileMetaData>();
+  Status s = map_builder.BuildGlobalMap(1, cfd, this, p.get(), &prop);
   this->storage_info()->SetGlobalMap(p);
-  checkGlobalMap(s);
-  db_mutex_->Lock();
-  ROCKS_LOG_INFO(info_log_,
-                 "[BuildGlobalMap] finished build global map, num_entries= "
-                 "%d,data_size=%d,index_size=%d",
-                 prop->num_entries, prop->data_size, prop->index_size);
+  CheckGlobalMap(s);
+  ROCKS_LOG_INFO(
+      info_log_,
+      "[BuildGlobalMap] finished build global map, elapsed_nanos=%" PRIu64
+      ", num_entries= %d, data_size=%d, index_size=%d",
+      timer.ElapsedNanos(), prop->num_entries, prop->data_size,
+      prop->index_size);
 }
-Status Version::checkGlobalMap(Status s) {
-  std::shared_ptr<FileMetaData> globalMap =
-      this->storage_info()->GetGlobalMap();
+
+Status Version::CheckGlobalMap(Status s) {
+  std::shared_ptr<FileMetaData> global_map = this->storage_info()->global_map();
   ColumnFamilyData* cfd = this->cfd();
-  if (globalMap.get() == nullptr || !s.ok()) {
+  if (global_map.get() == nullptr || !s.ok()) {
     ROCKS_LOG_INFO(info_log_, "[BuildGlobalMap] global map is not build, %s",
                    s.ToString().c_str());
     return s;
   }
-  if (s.ok() && globalMap->fd.file_size > 0) {
+  if (s.ok() && global_map->fd.file_size > 0) {
     // test map sst
     DependenceMap empty_dependence_map;
     InternalIterator* iter = cfd->table_cache()->NewIterator(
-        ReadOptions(), env_options_, cfd->internal_comparator(), *globalMap,
+        ReadOptions(), env_options_, cfd->internal_comparator(), *global_map,
         empty_dependence_map, nullptr /* range_del_agg */, nullptr, nullptr,
         nullptr, false, nullptr /* arena */, false /* skip_filters */, 0);
     Status s = iter->status();
@@ -3236,6 +3237,8 @@ Status VersionSet::ProcessManifestWrites(
     if (!first_writer.edit_list.front()->IsColumnFamilyManipulation()) {
       for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
         versions[i]->PrepareApply(*mutable_cf_options_ptrs[i]);
+        ColumnFamilyData* cfd = versions[i]->cfd_;
+        versions[i]->BuildGlobalMap(*db_options_, dbname_, mu);
       }
     }
 
@@ -3340,8 +3343,6 @@ Status VersionSet::ProcessManifestWrites(
 
       for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
         ColumnFamilyData* cfd = versions[i]->cfd_;
-        versions[i]->storage_info_.SetFinalized();
-        versions[i]->BuildGlobalMap(*db_options_, dbname_, mu);
         AppendVersion(cfd, versions[i]);
       }
     }
