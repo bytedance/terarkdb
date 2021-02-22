@@ -4051,8 +4051,7 @@ Status DBImpl::IngestExternalFile(
   SuperVersionContext dummy_sv_ctx(/* create_superversion */ true);
   VersionEdit dummy_edit;
   uint64_t next_file_number = 0;
-  // Make sure that bg cleanup wont delete the files that we are ingesting
-  auto pending_output_lock = CaptureCurrentFileNumberInPendingOutputs();
+  PendingOutputLocker::AutoUnlock pending_output_lock;
   {
     InstrumentedMutexLock l(&mutex_);
     if (error_handler_.IsDBStopped()) {
@@ -4060,7 +4059,8 @@ Status DBImpl::IngestExternalFile(
       return error_handler_.GetBGError();
     }
 
-
+    // Make sure that bg cleanup wont delete the files that we are ingesting
+    pending_output_lock = CaptureCurrentFileNumberInPendingOutputs();
 
     // If crash happen after a hard link established, Recover function may
     // reuse the file number that has already assigned to the internal file,

@@ -938,8 +938,7 @@ class VersionSet {
   static Status ReduceNumberOfLevels(const std::string& dbname,
                                      const Options* options,
                                      const EnvOptions& env_options,
-                                     int new_levels,
-                                     PendingOutputLocker* locker);
+                                     int new_levels);
 
   // printf contents (for debugging)
   Status DumpManifest(Options& options, std::string& manifestFileName,

@@ -26,6 +26,7 @@ class PendingOutputLocker {
     PendingOutputLocker* lock_;
 
    public:
+    AutoUnlock() : lock_(nullptr) {}
     AutoUnlock(std::list<uint64_t>::iterator _it, PendingOutputLocker* _lock)
         : it_(_it), lock_(_lock) {}
 

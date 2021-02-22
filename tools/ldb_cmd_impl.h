@@ -10,9 +10,9 @@
 #include <utility>
 #include <vector>
 
+#include "db/pending_output_locker.h"
 #include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/ldb_cmd.h"
-#include "db/pending_output_locker.h"
 
 namespace TERARKDB_NAMESPACE {
 
