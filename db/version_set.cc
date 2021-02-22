@@ -1346,11 +1346,15 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
 
     // report the counters before returning
     if (get_context.State() != GetContext::kNotFound &&
+        get_context.State() != GetContext::kRepair &&
         get_context.State() != GetContext::kMerge &&
         db_statistics_ != nullptr) {
       get_context.ReportCounters();
     }
     switch (get_context.State()) {
+      case GetContext::kRepair:
+        // repair mask the indexed-key
+        break;
       case GetContext::kNotFound:
         // Keep searching in other files
         break;
@@ -1431,6 +1435,8 @@ void Version::GetKey(const Slice& user_key, const Slice& ikey, Status* status,
     switch (get_context.State()) {
       case GetContext::kNotFound:
         break;
+      case GetContext::kRepair:
+        continue;
       case GetContext::kMerge:
         *type = get_context.is_index() ? kTypeMergeIndex : kTypeMerge;
         return;

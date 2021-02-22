@@ -213,6 +213,7 @@ class MapSstIterator final : public InternalIterator {
   int include_smallest_;
   int include_largest_;
   std::vector<uint64_t> link_;
+  const bool is_repair_mask_;
   struct HeapElement {
     InternalIterator* iter;
     Slice key;
@@ -367,6 +368,56 @@ class MapSstIterator final : public InternalIterator {
            icomp.Compare(k, largest_key_) < include_largest_;
   }
 
+  void SeekValidKey() {
+    if (is_repair_mask_) {
+      SeekValidKeyImpl();
+    }
+  }
+  void SeekValidKeyImpl() {
+    while (Valid()) {
+      ValueType value_type = ExtractValueType(key());
+      if (value_type == ValueType::kTypeValueIndex ||
+          value_type == ValueType::kTypeMergeIndex) {
+        NextImpl();
+        continue;
+      }
+      break;
+    }
+  }
+  void NextImpl() {
+    if (is_backword_) {
+      InternalKey where;
+      where.DecodeFrom(max_heap_.top().key);
+      max_heap_.clear();
+      InitSecondLevelMinHeap(where.Encode(), false);
+      assert(min_heap_.empty() || IsInRange(max_heap_.top().key));
+      is_backword_ = false;
+    } else {
+      auto current = min_heap_.top();
+      current.iter->Next();
+      if (current.iter->Valid()) {
+        current.key = current.iter->key();
+        min_heap_.replace_top(current);
+      } else {
+        min_heap_.pop();
+      }
+      auto& icomp = min_heap_.comparator().internal_comparator();
+      if (min_heap_.empty() ||
+          icomp.Compare(min_heap_.top().key, largest_key_) >=
+              include_largest_) {
+        // out of largest bound
+        first_level_value_.reset();
+        first_level_iter_->Next();
+        if (InitFirstLevelIter()) {
+          InitSecondLevelMinHeap(smallest_key_, include_smallest_);
+          assert(min_heap_.empty() || IsInRange(min_heap_.top().key));
+        }
+      } else {
+        assert(IsInRange(min_heap_.top().key));
+      }
+    }
+  }
+
  public:
   MapSstIterator(const FileMetaData* file_meta, InternalIterator* iter,
                  const DependenceMap& dependence_map,
@@ -378,7 +429,8 @@ class MapSstIterator final : public InternalIterator {
         iterator_cache_(dependence_map, create_arg, create),
         include_smallest_(false),
         include_largest_(false),
-        min_heap_(icomp) {
+        min_heap_(icomp),
+        is_repair_mask_(file_meta_->prop.is_repair_sst()) {
     if (file_meta != nullptr && !file_meta_->prop.is_map_sst()) {
       abort();
     }
@@ -398,7 +450,9 @@ class MapSstIterator final : public InternalIterator {
       InitSecondLevelMinHeap(smallest_key_, include_smallest_);
       assert(min_heap_.empty() || IsInRange(min_heap_.top().key));
     }
+    SeekValidKey();
   }
+
   virtual void SeekToLast() override {
     is_backword_ = true;
     first_level_value_.reset();
@@ -468,38 +522,10 @@ class MapSstIterator final : public InternalIterator {
     assert(max_heap_.empty() || IsInRange(max_heap_.top().key));
   }
   virtual void Next() override {
-    if (is_backword_) {
-      InternalKey where;
-      where.DecodeFrom(max_heap_.top().key);
-      max_heap_.clear();
-      InitSecondLevelMinHeap(where.Encode(), false);
-      assert(min_heap_.empty() || IsInRange(max_heap_.top().key));
-      is_backword_ = false;
-    } else {
-      auto current = min_heap_.top();
-      current.iter->Next();
-      if (current.iter->Valid()) {
-        current.key = current.iter->key();
-        min_heap_.replace_top(current);
-      } else {
-        min_heap_.pop();
-      }
-      auto& icomp = min_heap_.comparator().internal_comparator();
-      if (min_heap_.empty() ||
-          icomp.Compare(min_heap_.top().key, largest_key_) >=
-              include_largest_) {
-        // out of largest bound
-        first_level_value_.reset();
-        first_level_iter_->Next();
-        if (InitFirstLevelIter()) {
-          InitSecondLevelMinHeap(smallest_key_, include_smallest_);
-          assert(min_heap_.empty() || IsInRange(min_heap_.top().key));
-        }
-      } else {
-        assert(IsInRange(min_heap_.top().key));
-      }
-    }
+    NextImpl();
+    SeekValidKey();
   }
+
   virtual void Prev() override {
     if (!is_backword_) {
       InternalKey where;

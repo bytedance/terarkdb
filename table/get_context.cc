@@ -56,7 +56,8 @@ GetContext::GetContext(const Comparator* ucmp,
       min_seq_type_(0),
       callback_(callback),
       is_index_(false),
-      is_finished_(false) {
+      is_finished_(false),
+      is_repair_sst_(false) {
   if (seq_) {
     *seq_ = kMaxSequenceNumber;
   }
@@ -150,6 +151,12 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
   assert((state_ != kMerge && parsed_key.type != kTypeMerge &&
           parsed_key.type != kTypeMergeIndex) ||
          merge_context_ != nullptr || separate_helper_ == nullptr);
+
+  if (is_repair_sst() && (parsed_key.type == kTypeMergeIndex ||
+                          parsed_key.type == kTypeValueIndex)) {
+    state_ = kRepair;
+    return true;
+  }
   if (ucmp_->Equal(parsed_key.user_key, user_key_)) {
     if (PackSequenceAndType(parsed_key.sequence, parsed_key.type) <
         min_seq_type_) {
@@ -204,9 +211,9 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
                                                   parsed_key.sequence, value);
         FALLTHROUGH_INTENDED;
       case kTypeValue:
-        assert(state_ == kNotFound || state_ == kMerge);
+        assert(state_ == kNotFound || state_ == kMerge || state_ == kRepair);
         if (separate_helper_ == nullptr) {
-          assert(kNotFound == state_);
+          assert(kNotFound == state_ || state_ == kRepair);
           state_ = kFound;
           if (LIKELY(lazy_val_ != nullptr)) {
             *lazy_val_ = std::move(value);
@@ -214,7 +221,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
           }
           return Finish();
         }
-        if (kNotFound == state_) {
+        if (kNotFound == state_ || state_ == kRepair) {
           state_ = kFound;
           if (LIKELY(lazy_val_ != nullptr)) {
             OK(std::move(value).dump(*lazy_val_));
@@ -238,8 +245,8 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
       case kTypeRangeDeletion:
         // TODO(noetzli): Verify correctness once merge of single-deletes
         // is supported
-        assert(state_ == kNotFound || state_ == kMerge);
-        if (kNotFound == state_) {
+        assert(state_ == kNotFound || state_ == kMerge || state_ == kRepair);
+        if (kNotFound == state_ || state_ == kRepair) {
           state_ = kDeleted;
         } else if (kMerge == state_) {
           state_ = kFound;
@@ -269,7 +276,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
       case kTypeMerge:
         assert(state_ == kNotFound || state_ == kMerge);
         if (separate_helper_ == nullptr) {
-          assert(kNotFound == state_);
+          assert(kNotFound == state_ || state_ == kRepair);
           state_ = kMerge;
           if (LIKELY(lazy_val_ != nullptr)) {
             *lazy_val_ = std::move(value);

@@ -290,7 +290,6 @@ class Repairer {
         continue;
       }
       VersionStorageInfo* vstorage = cfd->current()->storage_info();
-      assert(cfd->ioptions()->enable_lazy_compaction);
       {
         MapBuilder map_builder(0, immutable_db_options_, env_options_, &vset_,
                                stat_, dbname_);
@@ -641,8 +640,8 @@ class Repairer {
       status = table_cache_->GetTableProperties(env_options_, icmp_, t->meta,
                                                 &props);
     }
-    t->meta.prop.purpose = props->purpose;
     if (status.ok()) {
+      t->meta.prop.purpose = props->purpose;
       if (t->meta.prop.is_map_sst()) {
         char* output = new char[100];
         sprintf(output,

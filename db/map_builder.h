@@ -84,7 +84,7 @@ class MapBuilder {
                          FileMetaData* file_meta,
                          std::unique_ptr<TableProperties>* porp,
                          SstPurpose sst_purpose = kMapSst);
-  SstPurpose ScanInputFile(const std::vector<CompactionInputFiles>& inputs);
+  // SstPurpose ScanInputFile(const std::vector<CompactionInputFiles>& inputs);
 
   int job_id_;
 

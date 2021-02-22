@@ -44,6 +44,7 @@ class GetContext {
     kDeleted,
     kCorrupt,
     kMerge,  // saver contains the current merge result (the operands)
+    kRepair,
   };
   GetContextStats get_context_stats_;
 
@@ -98,6 +99,14 @@ class GetContext {
 
   void ReportCounters();
 
+  bool is_repair_sst() const { return is_repair_sst_; }
+
+  void enable_repair_sst() { is_repair_sst_ = true; }
+
+  void disable_repair_sst() { is_repair_sst_ = false; }
+
+  void change_repair_sst() { is_repair_sst_ = !is_repair_sst_; }
+
  private:
   const Comparator* ucmp_;
   const MergeOperator* merge_operator_;
@@ -123,6 +132,7 @@ class GetContext {
   bool sample_;
   bool is_index_;
   bool is_finished_;
+  bool is_repair_sst_;
 };
 
 }  // namespace rocksdb

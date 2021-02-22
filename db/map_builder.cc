@@ -961,9 +961,9 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
                          SstPurpose sst_purpose) {
   assert(output_level != 0 || inputs.front().level == 0);
   assert(!inputs.front().files.empty());
-  if (sst_purpose != kRepairSst) {
-    sst_purpose = ScanInputFile(inputs);
-  }
+  // if (sst_purpose != kRepairSst) {
+  //   sst_purpose = ScanInputFile(inputs);
+  // }
   auto vstorage = version->storage_info();
   auto& icomp = cfd->internal_comparator();
   IteratorCacheContext iterator_cache_ctx = {
@@ -1308,9 +1308,9 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
                          std::vector<MapBuilderOutput>* output,
                          SstPurpose sst_purpose) {
   assert(output_level > 0);
-  if (sst_purpose != kRepairSst) {
-    sst_purpose = ScanInputFile(inputs);
-  }
+  // if (sst_purpose != kRepairSst) {
+  //   sst_purpose = ScanInputFile(inputs);
+  // }
   auto vstorage = version->storage_info();
   auto& icomp = cfd->internal_comparator();
   IteratorCacheContext iterator_cache_ctx = {
@@ -1744,18 +1744,18 @@ Status MapBuilder::WriteOutputFile(
   return s;
 }
 
-SstPurpose MapBuilder::ScanInputFile(
-    const std::vector<CompactionInputFiles>& inputs) {
-  // May be not effective
-  for (auto input_files : inputs) {
-    for (auto f : input_files.files) {
-      if (f->prop.is_repair_sst()) {
-        return kRepairSst;
-      }
-    }
-  }
-  return kMapSst;
-}
+// SstPurpose MapBuilder::ScanInputFile(
+//     const std::vector<CompactionInputFiles>& inputs) {
+//   // May be not effective
+//   for (auto input_files : inputs) {
+//     for (auto f : input_files.files) {
+//       if (f->prop.is_repair_sst()) {
+//         return kRepairSst;
+//       }
+//     }
+//   }
+//   return kMapSst;
+// }
 
 struct MapElementIterator : public InternalIterator {
   MapElementIterator(const FileMetaData* const* meta_array, size_t meta_size,

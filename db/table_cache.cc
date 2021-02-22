@@ -429,6 +429,16 @@ Status TableCache::Get(const ReadOptions& options,
                        const SliceTransform* prefix_extractor,
                        HistogramImpl* file_read_hist, bool skip_filters,
                        int level) {
+  bool repair_changed = false;
+  if (file_meta.prop.is_repair_sst() && !get_context->is_repair_sst()) {
+    get_context->enable_repair_sst();
+    repair_changed = true;
+  }
+  auto may_change_repair = [repair_changed, &get_context]() {
+    if (repair_changed) {
+      get_context->disable_repair_sst();
+    }
+  };
   auto& fd = file_meta.fd;
   IterKey key_buffer;
   Status s;
@@ -462,6 +472,7 @@ Status TableCache::Get(const ReadOptions& options,
                               LazyBuffer&& map_value) {
         s = map_value.fetch();
         if (!s.ok()) {
+          may_change_repair();
           return false;
         }
         // Manual inline MapSstElement::Decode
@@ -477,6 +488,7 @@ Status TableCache::Get(const ReadOptions& options,
             !GetVarint64(&map_input, &link_count) ||
             !GetLengthPrefixedSlice(&map_input, &smallest_key)) {
           s = Status::Corruption(err_msg);
+          may_change_repair();
           return false;
         }
         // don't care kNoRecords, Get call need load
@@ -489,6 +501,7 @@ Status TableCache::Get(const ReadOptions& options,
           if (icomp.user_comparator()->Compare(ExtractUserKey(smallest_key),
                                                ExtractUserKey(k)) != 0) {
             // k is out of smallest bound
+            may_change_repair();
             return false;
           }
           assert(ExtractInternalKeyFooter(k) >
@@ -501,6 +514,7 @@ Status TableCache::Get(const ReadOptions& options,
             if (seq_type == 0) {
               // 'smallest_key' has the largest seq_type of current user_key
               // k is out of smallest bound
+              may_change_repair();
               return false;
             }
             // make find_k a bit greater than smallest_key
@@ -524,6 +538,7 @@ Status TableCache::Get(const ReadOptions& options,
           if (seq_type == port::kMaxUint64 && !include_largest) {
             // 'largest_key' has the smallest seq_type of current user_key
             // k is out of largest bound. go next map element
+            may_change_repair();
             return true;
           }
           get_context->SetMinSequenceAndType(
@@ -534,11 +549,13 @@ Status TableCache::Get(const ReadOptions& options,
         for (uint64_t i = 0; i < link_count; ++i) {
           if (!GetVarint64(&map_input, &file_number)) {
             s = Status::Corruption(err_msg);
+            may_change_repair();
             return false;
           }
           auto find = dependence_map.find(file_number);
           if (find == dependence_map.end()) {
             s = Status::Corruption("Map sst dependence missing");
+            may_change_repair();
             return false;
           }
           assert(find->second->fd.GetNumber() == file_number);
@@ -548,11 +565,13 @@ Status TableCache::Get(const ReadOptions& options,
 
           if (!s.ok() || get_context->is_finished()) {
             // error or found, recovery min_seq_type_backup is unnecessary
+            may_change_repair();
             return false;
           }
         }
         // recovery min_seq_backup
         get_context->SetMinSequenceAndType(min_seq_type_backup);
+        may_change_repair();
         return is_largest_user_key;
       };
       t->RangeScan(&k, prefix_extractor, &get_from_map,
@@ -566,6 +585,7 @@ Status TableCache::Get(const ReadOptions& options,
   if (handle != nullptr) {
     ReleaseHandle(handle);
   }
+  may_change_repair();
   return s;
 }
 
