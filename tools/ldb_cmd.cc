@@ -950,8 +950,9 @@ void DumpManifestFile(std::string file, bool verbose, bool hex, bool json) {
   WriteBufferManager wb(options.db_write_buffer_size);
   ImmutableDBOptions immutable_db_options(options);
   const bool seq_per_batch = false;
+  PendingOutputLocker pending_output_locker;
   VersionSet versions(dbname, &immutable_db_options, sopt, seq_per_batch,
-                      tc.get(), &wb, &wc);
+                      tc.get(), &wb, &wc, &pending_output_locker);
   Status s = versions.DumpManifest(options, file, verbose, hex, json);
   if (!s.ok()) {
     printf("Error in processing file %s %s\n", file.c_str(),
@@ -1654,7 +1655,7 @@ Status ReduceDBLevelsCommand::GetOldNumOfLevels(Options& opt, int* levels) {
   WriteBufferManager wb(opt.db_write_buffer_size);
   const bool seq_per_batch = false;
   VersionSet versions(db_path_, &db_options, soptions, seq_per_batch, tc.get(),
-                      &wb, &wc);
+                      &wb, &wc, &pending_output_locker_);
   std::vector<ColumnFamilyDescriptor> dummy;
   ColumnFamilyDescriptor dummy_descriptor(kDefaultColumnFamilyName,
                                           ColumnFamilyOptions(opt));
@@ -1715,7 +1716,8 @@ void ReduceDBLevelsCommand::DoCommand() {
   CloseDB();
 
   EnvOptions soptions;
-  st = VersionSet::ReduceNumberOfLevels(db_path_, &opt, soptions, new_levels_);
+  st = VersionSet::ReduceNumberOfLevels(db_path_, &opt, soptions, new_levels_,
+                                        &pending_output_locker_);
   if (!st.ok()) {
     exec_state_ = LDBCommandExecuteResult::Failed(st.ToString());
     return;

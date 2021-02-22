@@ -4051,7 +4051,8 @@ Status DBImpl::IngestExternalFile(
   SuperVersionContext dummy_sv_ctx(/* create_superversion */ true);
   VersionEdit dummy_edit;
   uint64_t next_file_number = 0;
-  std::list<uint64_t>::iterator pending_output_elem;
+  // Make sure that bg cleanup wont delete the files that we are ingesting
+  auto pending_output_lock = CaptureCurrentFileNumberInPendingOutputs();
   {
     InstrumentedMutexLock l(&mutex_);
     if (error_handler_.IsDBStopped()) {
@@ -4059,8 +4060,7 @@ Status DBImpl::IngestExternalFile(
       return error_handler_.GetBGError();
     }
 
-    // Make sure that bg cleanup wont delete the files that we are ingesting
-    pending_output_elem = CaptureCurrentFileNumberInPendingOutputs();
+
 
     // If crash happen after a hard link established, Recover function may
     // reuse the file number that has already assigned to the internal file,
@@ -4077,7 +4077,7 @@ Status DBImpl::IngestExternalFile(
   dummy_sv_ctx.Clean();
   if (!status.ok()) {
     InstrumentedMutexLock l(&mutex_);
-    ReleaseFileNumberFromPendingOutputs(pending_output_elem);
+    pending_output_lock.Unlock();
     return status;
   }
 
@@ -4087,7 +4087,7 @@ Status DBImpl::IngestExternalFile(
   CleanupSuperVersion(super_version);
   if (!status.ok()) {
     InstrumentedMutexLock l(&mutex_);
-    ReleaseFileNumberFromPendingOutputs(pending_output_elem);
+    pending_output_lock.Unlock();
     return status;
   }
 
@@ -4169,7 +4169,7 @@ Status DBImpl::IngestExternalFile(
       ingestion_job.UpdateStats();
     }
 
-    ReleaseFileNumberFromPendingOutputs(pending_output_elem);
+    pending_output_lock.Unlock();
 
     num_running_ingest_file_--;
     if (num_running_ingest_file_ == 0) {

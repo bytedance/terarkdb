@@ -12,6 +12,7 @@
 
 #include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/ldb_cmd.h"
+#include "db/pending_output_locker.h"
 
 namespace TERARKDB_NAMESPACE {
 
@@ -230,6 +231,7 @@ class ReduceDBLevelsCommand : public LDBCommand {
   int old_levels_;
   int new_levels_;
   bool print_old_levels_;
+  PendingOutputLocker pending_output_locker_;
 
   static const std::string ARG_NEW_LEVELS;
   static const std::string ARG_PRINT_OLD_LEVELS;

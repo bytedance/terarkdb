@@ -4041,7 +4041,8 @@ Status VersionSet::ListColumnFamilies(std::vector<std::string>* column_families,
 Status VersionSet::ReduceNumberOfLevels(const std::string& dbname,
                                         const Options* options,
                                         const EnvOptions& env_options,
-                                        int new_levels) {
+                                        int new_levels,
+                                        PendingOutputLocker* locker) {
   if (new_levels <= 1) {
     return Status::InvalidArgument(
         "Number of levels needs to be bigger than 1");
@@ -4055,7 +4056,7 @@ Status VersionSet::ReduceNumberOfLevels(const std::string& dbname,
   WriteBufferManager wb(options->db_write_buffer_size);
   const bool seq_per_batch = false;
   VersionSet versions(dbname, &db_options, env_options, seq_per_batch, tc.get(),
-                      &wb, &wc);
+                      &wb, &wc, locker);
   Status status;
 
   std::vector<ColumnFamilyDescriptor> dummy;

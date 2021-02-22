@@ -121,7 +121,8 @@ class Repairer {
         wb_(db_options_.db_write_buffer_size),
         wc_(db_options_.delayed_write_rate),
         vset_(dbname_, &immutable_db_options_, env_options_,
-              /* seq_per_batch */ false, raw_table_cache_.get(), &wb_, &wc_),
+              /* seq_per_batch */ false, raw_table_cache_.get(), &wb_, &wc_,
+              &pending_output_locker),
         next_file_number_(1),
         db_lock_(nullptr) {
     for (const auto& cfd : column_families) {
@@ -249,6 +250,7 @@ class Repairer {
   WriteBufferManager wb_;
   WriteController wc_;
   VersionSet vset_;
+  PendingOutputLocker pending_output_locker;
   std::unordered_map<std::string, ColumnFamilyOptions> cf_name_to_opts_;
   InstrumentedMutex mutex_;
 
