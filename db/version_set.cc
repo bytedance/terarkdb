@@ -2895,13 +2895,18 @@ void Version::BuildGlobalMap(const ImmutableDBOptions& db_options,
   ColumnFamilyData* cfd = this->cfd();
   FileMetaData* p = this->storage_info()->global_map();
   Status s = map_builder.BuildGlobalMap(0, cfd, this, p, &prop);
-  CheckGlobalMap(s);
+  this->storage_info()->SetGlobalMap(p);
   ROCKS_LOG_INFO(
       info_log_,
       "[BuildGlobalMap] finished build global map, elapsed_nanos=%" PRIu64
-      ", num_entries= %d, data_size=%d, index_size=%d",
+          ", num_entries= %d, data_size=%d, index_size=%d",
       timer.ElapsedNanos(), prop->num_entries, prop->data_size,
       prop->index_size);
+  CheckGlobalMap(s);
+  ROCKS_LOG_INFO(
+      info_log_,
+      "[BuildGlobalMap] check global map, elapsed_nanos=%" PRIu64 ,
+      timer.ElapsedNanos());
 }
 
 Status Version::CheckGlobalMap(Status s) {
