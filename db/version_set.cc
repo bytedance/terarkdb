@@ -2893,7 +2893,7 @@ void Version::BuildGlobalMap(const ImmutableDBOptions& db_options,
   MapBuilder map_builder(0, db_options, env_options_, vset_, nullptr, dbname);
   std::unique_ptr<TableProperties> prop;
   ColumnFamilyData* cfd = this->cfd();
-  FileMetaData* p = this->storage_info()->global_map();
+  FileMetaData* p = new FileMetaData;
   Status s = map_builder.BuildGlobalMap(0, cfd, this, p, &prop);
   this->storage_info()->SetGlobalMap(p);
   ROCKS_LOG_INFO(
