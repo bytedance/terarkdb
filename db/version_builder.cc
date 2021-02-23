@@ -156,6 +156,7 @@ class VersionBuilder::Rep {
   size_t dependence_version_;
   size_t new_deleted_files_;
   std::unordered_map<uint64_t, DependenceItem> dependence_map_;
+  std::unordered_set<uint64_t> dependence_repair_mask_;
   std::unordered_map<uint64_t, InheritanceItem> inheritance_counter_;
   // Store states of levels larger than num_levels_. We do this instead of
   // storing them in levels_ to avoid regression in case there are no files
@@ -241,6 +242,12 @@ class VersionBuilder::Rep {
   void PutSst(FileMetaData* f, int level) {
     auto ib = dependence_map_.emplace(f->fd.GetNumber(),
                                       DependenceItem{0, 0, false, level, f, 0});
+    if (f->prop.is_repair_sst() ||
+        (dependence_repair_mask_.count(f->fd.GetNumber()))) {
+      for (auto _dependence : f->prop.dependence) {
+        dependence_repair_mask_.emplace(_dependence.file_number);
+      }
+    }
     f->Ref();
     if (ib.second) {
       PutInheritance(&ib.first->second);
@@ -528,12 +535,12 @@ class VersionBuilder::Rep {
     level_nonzero_cmp_.internal_comparator =
         base_vstorage_->InternalComparator();
 
-    for (int level = -1; level < num_levels_; level++) {
+    for (int level = num_levels_ - 1; level >= -1; level--) {
       for (auto f : base_vstorage_->LevelFiles(level)) {
         PutSst(f, level);
       }
     }
-    CheckConsistency(base_vstorage_, true, strict_sequence);
+    CheckConsistency(base_vstorage_, strict_sequence, strict_sequence);
     if (debugger_) {
       debugger_->PushVersion(base_vstorage_);
     }
@@ -595,7 +602,7 @@ class VersionBuilder::Rep {
   // WARNING: this func will call out of mutex
   void SaveTo(VersionStorageInfo* vstorage, bool strict_sequence = true) {
     Init(strict_sequence);
-    CheckConsistency(vstorage, true, strict_sequence);
+    CheckConsistency(vstorage, strict_sequence, strict_sequence);
     CalculateDependence(true);
     auto exists = [&](uint64_t file_number) {
       auto find = inheritance_counter_.find(file_number);
@@ -617,13 +624,16 @@ class VersionBuilder::Rep {
       if (!f->prop.is_map_sst() && !f->prop.dependence.empty()) {
         for (auto& dependence : f->prop.dependence) {
           auto item = TransFileNumber(dependence.file_number);
-          if (item->f->fd.GetNumber() != dependence.file_number) {
-            // item maybe invalid pointer, don't access it
-            old_file_queue.push(f);
-            if (old_file_queue.size() > max_queue_size) {
-              old_file_queue.pop();
+          if (strict_sequence || item) {
+            // strict_sequence is only for repair
+            if (item->f->fd.GetNumber() != dependence.file_number) {
+              // item maybe invalid pointer, don't access it
+              old_file_queue.push(f);
+              if (old_file_queue.size() > max_queue_size) {
+                old_file_queue.pop();
+              }
+              break;
             }
-            break;
           }
         }
       }
@@ -657,7 +667,8 @@ class VersionBuilder::Rep {
     for (auto& pair : dependence_map_) {
       auto& item = pair.second;
       if (item.level == -1) {
-        if (item.f->is_gc_forbidden()) {
+        if (item.f->is_gc_forbidden() &&
+            !(dependence_repair_mask_.count(item.f->fd.GetNumber()))) {
           push_old_file(item.f);
         }
         vstorage->AddFile(-1, item.f, c_style_callback(exists), &exists,
@@ -676,8 +687,10 @@ class VersionBuilder::Rep {
     }
     vstorage->set_read_amplification(read_amp);
     vstorage->oldest_snapshot_seqnum(base_vstorage_->oldest_snapshot_seqnum());
-
-    CheckConsistency(vstorage, true, strict_sequence);
+    bool strict_check = dependence_repair_mask_.size() == 0 && strict_sequence;
+    CheckConsistency(
+        vstorage, strict_check,
+        strict_sequence);  // dependence_check acts same as strict_sequence
     if (debugger_) {
       debugger_->Verify(this, vstorage);
     }
@@ -805,7 +818,7 @@ VersionBuilder::~VersionBuilder() { delete rep_; }
 
 void VersionBuilder::CheckConsistency(VersionStorageInfo* vstorage,
                                       bool strict_sequence) {
-  rep_->CheckConsistency(vstorage, true, strict_sequence);
+  rep_->CheckConsistency(vstorage, strict_sequence, strict_sequence);
 }
 
 void VersionBuilder::CheckConsistencyForDeletes(VersionEdit* edit,
