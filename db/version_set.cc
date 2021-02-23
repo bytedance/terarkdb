@@ -2894,7 +2894,7 @@ void Version::BuildGlobalMap(const ImmutableDBOptions& db_options,
   std::unique_ptr<TableProperties> prop;
   ColumnFamilyData* cfd = this->cfd();
   std::shared_ptr<FileMetaData> p = std::make_shared<FileMetaData>();
-  Status s = map_builder.BuildGlobalMap(1, cfd, this, p.get(), &prop);
+  Status s = map_builder.BuildGlobalMap(0, cfd, this, p.get(), &prop);
   this->storage_info()->SetGlobalMap(p);
   CheckGlobalMap(s);
   ROCKS_LOG_INFO(
