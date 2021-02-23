@@ -513,7 +513,7 @@ class VersionStorageInfo {
   // List of files per level, files in each level are arranged
   // in increasing order of keys
   std::vector<FileMetaData*>* files_;
-  FileMetaData* global_map_;
+  FileMetaData* global_map_ = nullptr;
 
   // Dependence files both in files[-1] and dependence_map
   DependenceMap dependence_map_;
