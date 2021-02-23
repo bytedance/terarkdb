@@ -293,7 +293,8 @@ MutableCFOptions::MutableCFOptions(const ColumnFamilyOptions& options, Env* env)
       compression(options.compression),
       ttl_gc_ratio(options.ttl_gc_ratio),
       ttl_max_scan_gap(options.ttl_max_scan_gap),
-      sst_ttl_seconds(options.sst_ttl_seconds) {
+      sst_ttl_seconds(options.sst_ttl_seconds),
+      build_global_map(options.build_global_map) {
   RefreshDerivedOptions(options.num_levels);
 
   int_tbl_prop_collector_factories = std::make_shared<

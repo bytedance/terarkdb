@@ -2372,6 +2372,7 @@ class Benchmark {
                 : ((FLAGS_writes > FLAGS_reads) ? FLAGS_writes : FLAGS_reads)),
         merge_keys_(FLAGS_merge_keys < 0 ? FLAGS_num : FLAGS_merge_keys),
         report_file_operations_(FLAGS_report_file_operations) {
+    open_options_.build_global_map = true;
     // use simcache instead of cache
     if (FLAGS_simcache_size >= 0) {
       if (FLAGS_cache_numshardbits >= 1) {

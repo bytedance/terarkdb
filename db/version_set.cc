@@ -2899,14 +2899,14 @@ void Version::BuildGlobalMap(const ImmutableDBOptions& db_options,
   ROCKS_LOG_INFO(
       info_log_,
       "[BuildGlobalMap] finished build global map, elapsed_nanos=%" PRIu64
-          ", num_entries= %d, data_size=%d, index_size=%d",
+      ", num_entries= %d, data_size=%d, index_size=%d",
       timer.ElapsedNanos(), prop->num_entries, prop->data_size,
       prop->index_size);
+  timer.Start();
   CheckGlobalMap(s);
-  ROCKS_LOG_INFO(
-      info_log_,
-      "[BuildGlobalMap] check global map, elapsed_nanos=%" PRIu64 ,
-      timer.ElapsedNanos());
+  ROCKS_LOG_INFO(info_log_,
+                 "[BuildGlobalMap] check global map, elapsed_nanos=%" PRIu64,
+                 timer.ElapsedNanos());
 }
 
 Status Version::CheckGlobalMap(Status s) {
@@ -3251,8 +3251,10 @@ Status VersionSet::ProcessManifestWrites(
     if (!first_writer.edit_list.front()->IsColumnFamilyManipulation()) {
       for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
         versions[i]->PrepareApply(*mutable_cf_options_ptrs[i]);
-        versions[i]->storage_info()->SetFinalized();
-        versions[i]->BuildGlobalMap(*db_options_, dbname_);
+        if (versions[i]->cfd()->GetLatestCFOptions().build_global_map) {
+          versions[i]->storage_info()->SetFinalized();
+          versions[i]->BuildGlobalMap(*db_options_, dbname_);
+        }
       }
     }
 

@@ -353,6 +353,10 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // Default : 0
   size_t sst_ttl_seconds = 0;
 
+  // The flag use to decide whether build global map
+  // Default : 0
+  bool build_global_map = false;
+
   // Create ColumnFamilyOptions with default values for all fields
   ColumnFamilyOptions();
   // Create ColumnFamilyOptions from Options
