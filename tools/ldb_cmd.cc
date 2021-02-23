@@ -1716,8 +1716,7 @@ void ReduceDBLevelsCommand::DoCommand() {
   CloseDB();
 
   EnvOptions soptions;
-  st = VersionSet::ReduceNumberOfLevels(db_path_, &opt, soptions, new_levels_,
-                                        &pending_output_locker_);
+  st = VersionSet::ReduceNumberOfLevels(db_path_, &opt, soptions, new_levels_);
   if (!st.ok()) {
     exec_state_ = LDBCommandExecuteResult::Failed(st.ToString());
     return;

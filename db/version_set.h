@@ -492,10 +492,7 @@ class VersionStorageInfo {
   bool RangeMightExistAfterSortedRun(const Slice& smallest_user_key,
                                      const Slice& largest_user_key,
                                      int last_level, int last_l0_idx);
-  std::shared_ptr<FileMetaData> global_map() { return global_map_; }
-  void SetGlobalMap(std::shared_ptr<FileMetaData> global_map) {
-    global_map_ = global_map;
-  }
+  FileMetaData* global_map() { return global_map_; }
 
  private:
   const InternalKeyComparator* internal_comparator_;
@@ -516,7 +513,7 @@ class VersionStorageInfo {
   // List of files per level, files in each level are arranged
   // in increasing order of keys
   std::vector<FileMetaData*>* files_;
-  std::shared_ptr<FileMetaData> global_map_;
+  FileMetaData* global_map_;
 
   // Dependence files both in files[-1] and dependence_map
   DependenceMap dependence_map_;

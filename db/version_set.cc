@@ -367,7 +367,7 @@ Version::~Version() {
     }
   }
   if (storage_info_.global_map() != nullptr) {
-    FileMetaData* f = storage_info_.global_map().get();
+    FileMetaData* f = storage_info_.global_map();
     uint32_t path_id = f->fd.GetPathId();
     vset_->obsolete_files_.push_back(
         ObsoleteFileInfo(f, cfd_->ioptions()->cf_paths[path_id].path));
@@ -2893,9 +2893,8 @@ void Version::BuildGlobalMap(const ImmutableDBOptions& db_options,
   MapBuilder map_builder(0, db_options, env_options_, vset_, nullptr, dbname);
   std::unique_ptr<TableProperties> prop;
   ColumnFamilyData* cfd = this->cfd();
-  std::shared_ptr<FileMetaData> p = std::make_shared<FileMetaData>();
-  Status s = map_builder.BuildGlobalMap(0, cfd, this, p.get(), &prop);
-  this->storage_info()->SetGlobalMap(p);
+  FileMetaData* p = this->storage_info()->global_map();
+  Status s = map_builder.BuildGlobalMap(0, cfd, this, p, &prop);
   CheckGlobalMap(s);
   ROCKS_LOG_INFO(
       info_log_,
@@ -2906,9 +2905,9 @@ void Version::BuildGlobalMap(const ImmutableDBOptions& db_options,
 }
 
 Status Version::CheckGlobalMap(Status s) {
-  std::shared_ptr<FileMetaData> global_map = this->storage_info()->global_map();
+  FileMetaData* global_map = this->storage_info()->global_map();
   ColumnFamilyData* cfd = this->cfd();
-  if (global_map.get() == nullptr || !s.ok()) {
+  if (global_map == nullptr || !s.ok()) {
     ROCKS_LOG_INFO(info_log_, "[BuildGlobalMap] global map is not build, %s",
                    s.ToString().c_str());
     return s;
