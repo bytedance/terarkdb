@@ -259,6 +259,8 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
                    blob_large_key_ratio);
   ROCKS_LOG_HEADER(log, "                          Options.blob_gc_ratio: %f",
                    blob_gc_ratio);
+  ROCKS_LOG_HEADER(log, "                       Options.build_global_map: %d",
+                   build_global_map);
 
   const auto& it_compaction_style =
       compaction_style_to_string.find(compaction_style);

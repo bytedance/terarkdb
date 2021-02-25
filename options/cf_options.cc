@@ -201,6 +201,8 @@ void MutableCFOptions::Dump(Logger* log) const {
                  ttl_max_scan_gap);
   ROCKS_LOG_INFO(log, "                          sst_ttl_seconds: %zd",
                  sst_ttl_seconds);
+  ROCKS_LOG_INFO(log, "                         build_global_map: %d",
+                 build_global_map);
   std::string result;
   char buf[10];
   for (const auto m : max_bytes_for_level_multiplier_additional) {

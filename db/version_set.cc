@@ -1319,6 +1319,8 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
       storage_info_.num_non_empty_levels_, &storage_info_.file_indexer_,
       user_comparator(), internal_comparator());
   FdWithKeyRange* f = fp.GetNextFile();
+  bool use_global = cfd_->GetLatestCFOptions().build_global_map &&
+                    storage_info()->global_map() != nullptr;
 
   while (f != nullptr) {
     if (get_context.is_finished()) {
@@ -1334,14 +1336,27 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
         GetPerfLevel() >= PerfLevel::kEnableTimeExceptForMutex &&
         get_perf_context()->per_level_perf_context_enabled;
     StopWatchNano timer(env_, timer_enabled /* auto_start */);
-    *status = table_cache_->Get(
-        read_options, *internal_comparator(), *f->file_metadata,
-        storage_info_.dependence_map(), ikey, &get_context,
-        mutable_cf_options_.prefix_extractor.get(),
-        cfd_->internal_stats()->GetFileReadHist(fp.GetHitFileLevel()),
-        IsFilterSkipped(static_cast<int>(fp.GetHitFileLevel()),
-                        fp.IsHitFileLastInLevel()),
-        fp.GetCurrentLevel());
+    if (use_global && fp.GetCurrentLevel() > 0) {
+      // set param level equal 1 , can't set 0 since level-0 is optimized
+      // file_read_hist is cfd_->internal_stats()->GetFileReadHist(1)
+      // IsFilterSkipped set false, so we not compatible with
+      // optimize_filters_for_hits optimize_filters_for_hits
+      *status = table_cache_->Get(
+          read_options, *internal_comparator(), *storage_info()->global_map(),
+          storage_info_.dependence_map(), ikey, &get_context,
+          mutable_cf_options_.prefix_extractor.get(),
+          cfd_->internal_stats()->GetFileReadHist(1), false, 1);
+      break;
+    } else {
+      *status = table_cache_->Get(
+          read_options, *internal_comparator(), *f->file_metadata,
+          storage_info_.dependence_map(), ikey, &get_context,
+          mutable_cf_options_.prefix_extractor.get(),
+          cfd_->internal_stats()->GetFileReadHist(fp.GetHitFileLevel()),
+          IsFilterSkipped(static_cast<int>(fp.GetHitFileLevel()),
+                          fp.IsHitFileLastInLevel()),
+          fp.GetCurrentLevel());
+    }
     // TODO: examine the behavior for corrupted key
     if (timer_enabled) {
       PERF_COUNTER_BY_LEVEL_ADD(get_from_table_nanos, timer.ElapsedNanos(),
