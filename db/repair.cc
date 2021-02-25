@@ -126,12 +126,17 @@ class Repairer {
               /* seq_per_batch */ false, raw_table_cache_.get(), &wb_, &wc_),
         next_file_number_(1),
         db_lock_(nullptr),
-        stat_(nullptr)
+        stat_(nullptr),
+        column_families_(column_families)
   /* bg_compaction_scheduled_(0),
    shutting_down_(false) */
   {
     for (const auto& cfd : column_families) {
       cf_name_to_opts_[cfd.name] = cfd.options;
+    }
+    if (column_families_.size() == 0) {
+      column_families_.emplace_back(
+          ColumnFamilyDescriptor(kDefaultColumnFamilyName, default_cf_opts_));
     }
   }
 
@@ -161,15 +166,17 @@ class Repairer {
     edit.SetComparatorName(opts.comparator->Name());
     edit.SetLogNumber(0);
     edit.SetColumnFamily(cf_id);
-    ColumnFamilyData* cfd;
-    cfd = nullptr;
     edit.AddColumnFamily(cf_name);
-
-    mutex_.Lock();
+    // mutex_.Lock();
+    ColumnFamilyData* cfd = nullptr;
     Status status = vset_.LogAndApply(cfd, mut_cf_opts, &edit, &mutex_,
                                       nullptr /* db_directory */,
                                       false /* new_descriptor_log */, cf_opts);
-    mutex_.Unlock();
+    // if (cfd && !cfd->initialized()) {
+    //   cfd->set_initialized();
+    // }
+    // mutex_.Unlock();
+    assert(!cfd);
     return status;
   }
 
@@ -200,7 +207,9 @@ class Repairer {
     if (status.ok()) {
       // Recover using the fresh manifest created by NewDB()
       status =
-          vset_.Recover({{kDefaultColumnFamilyName, default_cf_opts_}}, false);
+          // vset_.Recover({{kDefaultColumnFamilyName, default_cf_opts_}},
+          // false);
+          vset_.Recover(column_families_, false);
       // ROCKS_LOG_WARN(db_options_.info_log,
       //                "%" PRIu64 " counts of file number manifest has used",
       //                vset_.current_next_file_number());
@@ -282,6 +291,7 @@ class Repairer {
   // std::unique_ptr<SnapshotChecker> snapshot_checker_;
   // ErrorHandler error_handler_;
   Statistics* stat_;
+  std::vector<ColumnFamilyDescriptor> column_families_;
   // another way
   Status GenerateMapSstable() {
     SstPurpose sst_purpose = kRepairSst;
@@ -298,7 +308,11 @@ class Repairer {
         std::vector<FileMetaData*> added_files;
         std::unique_ptr<FileMetaData> output_file(new FileMetaData);
         VersionEdit edit;
-        std::string debugstring = cfd->current()->DebugString(true, false);
+        edit.SetColumnFamily(cfd->GetID());
+        edit.SetComparatorName(cfd->user_comparator()->Name());
+        edit.SetLogNumber(0);
+        edit.SetNextFile(next_file_number_);
+        // std::string debugstring = cfd->current()->DebugString(true, false);
         //  Header(immutable_db_options_.info_log, "%s", debugstring.c_str());
         Status status = map_builder.Build(
             {CompactionInputFiles{0, vstorage->LevelFiles(0)}}, deleted_range,
@@ -310,6 +324,9 @@ class Repairer {
               vset_.LogAndApply(cfd, *cfd->GetLatestMutableCFOptions(), &edit,
                                 &mutex_, nullptr, false, nullptr, false);
           mutex_.Unlock();
+        }
+        if (!status.ok()) {
+          return status;
         }
       }
     }
@@ -526,28 +543,12 @@ class Repairer {
     DependenceMap dependence_map;
     std::map<uint64_t, TableInfo*> mediate_sst;  // map or link sst
     // make sure tables_ enouth, so we can hold ptr of elements
-    tables_.reserve(table_fds_.size());
-    for (size_t i = 0; i < table_fds_.size(); i++) {
-      TableInfo t;
-      t.meta.fd = table_fds_[i];
-      Status status = ScanTable(&t);
-      std::string fname = TableFileName(
-          db_options_.db_paths, t.meta.fd.GetNumber(), t.meta.fd.GetPathId());
-      if (!status.ok()) {
-        char file_num_buf[kFormatFileNumberBufSize];
-        FormatFileNumber(t.meta.fd.GetNumber(), t.meta.fd.GetPathId(),
-                         file_num_buf, sizeof(file_num_buf));
-        ROCKS_LOG_WARN(db_options_.info_log, "Table #%s: ignoring %s",
-                       file_num_buf, status.ToString().c_str());
-        ArchiveFile(fname);
-      } else {
-        sstable_name_.push_back(fname);
-        tables_.push_back(t);
-        dependence_map.emplace(t.meta.fd.GetNumber(), &tables_.back().meta);
-        if (t.meta.prop.is_map_sst()) {
-          mediate_sst.emplace(t.meta.fd.GetNumber(), &tables_.back());
-        }
-      }
+    size_t table_counts = table_fds_.size();
+    tables_.reserve(table_counts);
+    if (table_counts < 10) {
+      ScanTables(&dependence_map, &mediate_sst);
+    } else {
+      ParallelScanTables(&dependence_map, &mediate_sst);
     }
     // recover map/link sst meta data
     while (!mediate_sst.empty()) {
@@ -627,6 +628,72 @@ class Repairer {
     tables_.erase(new_end, tables_.end());
   }
 
+  void ScanTables(DependenceMap* dependence_map,
+                  std::map<uint64_t, TableInfo*>* mediate_sst) {
+    for (size_t i = 0; i < table_fds_.size(); i++) {
+      TableInfo t;
+      t.meta.fd = table_fds_[i];
+      Status status = ScanTable(&t);
+      std::string fname = TableFileName(
+          db_options_.db_paths, t.meta.fd.GetNumber(), t.meta.fd.GetPathId());
+      if (!status.ok()) {
+        char file_num_buf[kFormatFileNumberBufSize];
+        FormatFileNumber(t.meta.fd.GetNumber(), t.meta.fd.GetPathId(),
+                         file_num_buf, sizeof(file_num_buf));
+        ROCKS_LOG_WARN(db_options_.info_log, "Table #%s: ignoring %s",
+                       file_num_buf, status.ToString().c_str());
+        ArchiveFile(fname);
+      } else {
+        sstable_name_.push_back(fname);
+        tables_.push_back(t);
+        dependence_map->emplace(t.meta.fd.GetNumber(), &tables_.back().meta);
+        if (t.meta.prop.is_map_sst()) {
+          mediate_sst->emplace(t.meta.fd.GetNumber(), &tables_.back());
+        }
+      }
+    }
+  }
+  void ParallelScanTables(DependenceMap* dependence_map,
+                          std::map<uint64_t, TableInfo*>* mediate_sst) {
+    size_t threads = 10;
+    size_t table_counts = table_fds_.size();
+    std::vector<std::thread> thread_vec;
+    auto scantable_inline = [this, table_counts, threads, &dependence_map,
+                             &mediate_sst](int number) {
+      for (size_t i = number; i < table_counts; i += threads) {
+        TableInfo t;
+        t.meta.fd = table_fds_[i];
+        Status status = ScanTable(&t);
+        std::string fname = TableFileName(
+            db_options_.db_paths, t.meta.fd.GetNumber(), t.meta.fd.GetPathId());
+        if (!status.ok()) {
+          char file_num_buf[kFormatFileNumberBufSize];
+          FormatFileNumber(t.meta.fd.GetNumber(), t.meta.fd.GetPathId(),
+                           file_num_buf, sizeof(file_num_buf));
+          ROCKS_LOG_WARN(db_options_.info_log, "Table #%s: ignoring %s",
+                         file_num_buf, status.ToString().c_str());
+          ArchiveFile(fname);
+        } else {
+          mutex_.Lock();
+          sstable_name_.push_back(fname);
+          tables_.push_back(t);
+          dependence_map->emplace(t.meta.fd.GetNumber(), &tables_.back().meta);
+          if (t.meta.prop.is_map_sst()) {
+            assert(false);
+            mediate_sst->emplace(t.meta.fd.GetNumber(), &tables_.back());
+          }
+          mutex_.Unlock();
+        }
+      }
+    };
+    for (size_t i = 0; i < threads; i++) {
+      thread_vec.emplace_back(std::thread(scantable_inline, i));
+    }
+    for (auto& thread : thread_vec) {
+      thread.join();
+    }
+  }
+
   Status ScanTable(TableInfo* t) {
     std::string fname = TableFileName(
         db_options_.db_paths, t->meta.fd.GetNumber(), t->meta.fd.GetPathId());
@@ -664,16 +731,23 @@ class Repairer {
             t->meta.fd.GetNumber());
         t->column_family_id = 0;
       }
-
       if (vset_.GetColumnFamilySet()->GetColumnFamily(t->column_family_id) ==
           nullptr) {
-        status =
-            AddColumnFamily(props->column_family_name, t->column_family_id);
+        mutex_.Lock();
+        if (vset_.GetColumnFamilySet()->GetColumnFamily(t->column_family_id) ==
+            nullptr) {
+          status =
+              AddColumnFamily(props->column_family_name, t->column_family_id);
+        }
+        mutex_.Unlock();
       }
     }
     ColumnFamilyData* cfd = nullptr;
     if (status.ok()) {
       cfd = vset_.GetColumnFamilySet()->GetColumnFamily(t->column_family_id);
+      if (!cfd->initialized()) {
+        cfd->set_initialized();
+      }
       if (cfd->GetName() != props->column_family_name) {
         ROCKS_LOG_ERROR(
             db_options_.info_log,

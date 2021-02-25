@@ -242,8 +242,8 @@ class VersionBuilder::Rep {
   void PutSst(FileMetaData* f, int level) {
     auto ib = dependence_map_.emplace(f->fd.GetNumber(),
                                       DependenceItem{0, 0, false, level, f, 0});
-    if (f->prop.is_repair_sst() ||
-        (dependence_repair_mask_.count(f->fd.GetNumber()))) {
+    if (f->prop.is_repair_sst() /*||
+        (dependence_repair_mask_.count(f->fd.GetNumber()))*/) {
       for (auto _dependence : f->prop.dependence) {
         dependence_repair_mask_.emplace(_dependence.file_number);
       }
@@ -504,6 +504,14 @@ class VersionBuilder::Rep {
         found = true;
       }
     }
+    // repair change the version
+    // if (!found) {
+    //   auto& level_added = levels_[-1];
+    //   auto got = level_added.find(number);
+    //   if (got != level_added.end()) {
+    //     found = true;
+    //   }
+    // }
     if (!found) {
       fprintf(stderr, "not found %" PRIu64 "\n", number);
       abort();
@@ -535,7 +543,7 @@ class VersionBuilder::Rep {
     level_nonzero_cmp_.internal_comparator =
         base_vstorage_->InternalComparator();
 
-    for (int level = num_levels_ - 1; level >= -1; level--) {
+    for (int level = -1; level < num_levels_; level++) {
       for (auto f : base_vstorage_->LevelFiles(level)) {
         PutSst(f, level);
       }
@@ -668,7 +676,7 @@ class VersionBuilder::Rep {
       auto& item = pair.second;
       if (item.level == -1) {
         if (item.f->is_gc_forbidden() &&
-            !(dependence_repair_mask_.count(item.f->fd.GetNumber()))) {
+            !(dependence_repair_mask_.count(pair.first))) {
           push_old_file(item.f);
         }
         vstorage->AddFile(-1, item.f, c_style_callback(exists), &exists,

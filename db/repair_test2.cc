@@ -41,10 +41,10 @@ class RepairTest2 : public DBTestBase {
     Options options(CurrentOptions());
     options.disable_auto_compactions = true;
     options.enable_lazy_compaction = false;
-    options.blob_size = 20;
     return options;
   }
-  Options RepairCurrentOptions() const { return options_; }
+  void SetRepairOptionsForBlob() { options_.blob_size = 20; }
+  Options RepairCurrentOptions() { return options_; }
   size_t GetSstCount() {
     if (true) {
       return GetSstFileCount(dbname_);
@@ -108,6 +108,7 @@ class RepairTest2 : public DBTestBase {
     return dbname_ + *sst_iter;
   }
   void BlobSstPrepare() {
+    ReOpen();
     Put(keys[0], vals_old[0]);
     Flush();
     Put(keys[1], vals_old[1]);
@@ -119,7 +120,6 @@ class RepairTest2 : public DBTestBase {
     Put(keys[1], vals_new[1]);
     Flush();
     ASSERT_EQ(GetSstCount(), 4);
-    ReOpen();
   }
   void ReOpen() {
     Close();
@@ -133,13 +133,66 @@ class RepairTest2 : public DBTestBase {
   std::string vals_new[4];
 };
 
+TEST_F(RepairTest2, RepairMultipleColumnFamiliesTest2) {
+  const int kNumCfs = 3;
+  const int kEntriesPerCf = 2;
+  const std::string keys_cf[] = {std::string("key1"), std::string("key2"),
+                                 std::string("key3"), std::string("key4")};
+  const std::string vals_cf_v1[] = {std::string("val1"), std::string("val2"),
+                                    std::string("val3"), std::string("val4")};
+  const std::string vals_cf_v2[] = {std::string("val01"), std::string("val02"),
+                                    std::string("val03"), std::string("val04")};
+  const std::string vals_cf_v3[] = {
+      std::string("val001"), std::string("val002"), std::string("val003"),
+      std::string("val004")};
+  DestroyAndReopen(RepairCurrentOptions());
+  CreateAndReopenWithCF({"pikachu1", "pikachu2"}, RepairCurrentOptions());
+  for (int i = 0; i < kNumCfs; ++i) {
+    for (int j = 0; j < kEntriesPerCf; ++j) {
+      Put(i, keys_cf[j], vals_cf_v1[j]);
+      if (j == kEntriesPerCf - 1) {
+        Put(i, keys_cf[j - 1], vals_cf_v2[j - 1]);
+        if (i == kNumCfs - 1) {
+          continue;
+        }
+      } else {
+        Put(i, keys_cf[j + 2], vals_cf_v3[j + 2]);
+      }
+      Flush(i);
+    }
+  }
+  ASSERT_EQ(GetSstCount(), 5);
+  Close();
+  // ColumnFamilyOptions cfoptions(RepairCurrentOptions());
+  // std::vector<ColumnFamilyDescriptor> column_families;
+  // column_families.emplace_back(ColumnFamilyDescriptor("default", cfoptions));
+  // column_families.emplace_back(ColumnFamilyDescriptor("pikachu1",
+  // cfoptions));
+  // column_families.emplace_back(ColumnFamilyDescriptor("pikachu2",
+  // cfoptions));
+
+  ASSERT_OK(RepairDB(dbname_, RepairCurrentOptions()));
+  ReopenWithColumnFamilies({"default", "pikachu1", "pikachu2"},
+                           RepairCurrentOptions());
+  ASSERT_EQ(GetSstCount(), 9);
+  for (int i = 0; i < kNumCfs; ++i) {
+    for (int j = 0; j < kEntriesPerCf; ++j) {
+      if (j == kEntriesPerCf - 2) {
+        ASSERT_EQ(Get(i, keys_cf[j]), vals_cf_v2[j]);
+      } else {
+        ASSERT_EQ(Get(i, keys_cf[j]), vals_cf_v1[j]);
+        ASSERT_EQ(Get(i, keys_cf[j + 1]), vals_cf_v3[j + 1]);
+      }
+    }
+  }
+}
+
 TEST_F(RepairTest2, NoMapSstTest) {
+  ReOpen();
   for (size_t i = 0; i < 4; ++i) {
     Put(keys[i], vals[i]);
     Flush();
   }
-  dbfull()->TEST_WaitForFlushMemTable();
-  dbfull()->TEST_WaitForCompact();
   ASSERT_EQ(GetSstCount(), 4);
   Close();
   ASSERT_OK(RepairDB(dbname_, RepairCurrentOptions()));
@@ -147,6 +200,7 @@ TEST_F(RepairTest2, NoMapSstTest) {
 }
 
 TEST_F(RepairTest2, MapSstTest) {
+  ReOpen();
   Put(keys[0], vals_old[0]);
   Flush();
   Put(keys[1], vals_old[1]);
@@ -179,9 +233,13 @@ TEST_F(RepairTest2, MapSstTest) {
 
 TEST_F(RepairTest2, BlobSstTest) {
   BlobSstPrepare();
+  std::set<uint64_t> sstnumber;
+  RestoreSstNumber(&sstnumber);
+  ASSERT_EQ(sstnumber.size(), 4);
+  SetRepairOptionsForBlob();
+  ReOpen();
   dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr);
   dbfull()->TEST_WaitForCompact();
-  std::set<uint64_t> sstnumber;
   RestoreSstNumber(&sstnumber);
   ASSERT_EQ(sstnumber.size(), 3);  // Delete two sst
   Close();
@@ -203,6 +261,7 @@ TEST_F(RepairTest2, BlobSstTest) {
 }
 
 TEST_F(RepairTest2, DropDependence1BlobSstTest) {
+  ReOpen();
   Put(keys[0], vals_old[0]);
   Flush();
   Put(keys[1], vals_old[1]);
@@ -215,6 +274,7 @@ TEST_F(RepairTest2, DropDependence1BlobSstTest) {
   Put(keys[1], vals_new[1]);
   Flush();
   ASSERT_EQ(GetSstCount(), 4);
+  SetRepairOptionsForBlob();
   ReOpen();
   dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr);
   dbfull()->TEST_WaitForCompact();
@@ -253,6 +313,7 @@ TEST_F(RepairTest2, DropDependence1BlobSstTest) {
 }
 
 TEST_F(RepairTest2, DropDependence2BlobSstTest) {
+  ReOpen();
   Put(keys[0], vals_old[0]);
   Flush();
   Put(keys[1], vals_old[1]);
@@ -265,6 +326,7 @@ TEST_F(RepairTest2, DropDependence2BlobSstTest) {
   Flush();
   auto sst_dependence2 = GetNewestSstPath();
   ASSERT_EQ(GetSstCount(), 4);
+  SetRepairOptionsForBlob();
   ReOpen();
   dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr);
   dbfull()->TEST_WaitForCompact();
@@ -294,6 +356,7 @@ TEST_F(RepairTest2, DropDependence2BlobSstTest) {
 }
 
 TEST_F(RepairTest2, DropBlobSstTest) {
+  ReOpen();
   Put(keys[0], vals_old[0]);
   Flush();
   Put(keys[1], vals_old[1]);
@@ -305,6 +368,7 @@ TEST_F(RepairTest2, DropBlobSstTest) {
   Put(keys[1], vals_new[1]);
   Flush();
   ASSERT_EQ(GetSstCount(), 4);
+  SetRepairOptionsForBlob();
   ReOpen();
   dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr);
   dbfull()->TEST_WaitForCompact();
@@ -325,6 +389,65 @@ TEST_F(RepairTest2, DropBlobSstTest) {
   }
   ASSERT_TRUE(!iterator->Valid());
   delete iterator;
+}
+
+TEST_F(RepairTest2, ParallelScanTest) {
+  ReOpen();
+  size_t keys = 10;
+  std::string manykey[keys] = {std::string("key0"), std::string("key1"),
+                               std::string("key2"), std::string("key3"),
+                               std::string("key4"), std::string("key5"),
+                               std::string("key6"), std::string("key7"),
+                               std::string("key8"), std::string("key9")};
+  std::string manyval[keys];
+  for (int i = 0; i < keys; i++) {
+    manyval[i] = RandomString(&r, 11);
+    Put(manykey[i], manyval[i]);
+    Flush();
+  }
+  Close();
+  ASSERT_OK(RepairDB(dbname_, RepairCurrentOptions()));
+  Reopen(RepairCurrentOptions());
+  Iterator* iterator = dbfull()->NewIterator(ReadOptions());
+  iterator->SeekToFirst();
+  for (size_t i = 0; i < keys; i++) {
+    ASSERT_EQ(Get(manykey[i]), manyval[i]);
+    ASSERT_TRUE(iterator->Valid());
+    ASSERT_TRUE(manykey[i] == iterator->key());
+    ASSERT_TRUE(manyval[i] == iterator->value());
+    iterator->Next();
+  }
+  ASSERT_TRUE(!iterator->Valid());
+  delete iterator;
+}
+
+TEST_F(RepairTest2, RepairMultipleColumnFamiliesTest1) {
+  // Verify repair logic associates SST files with their original column
+  // families.
+  const int kNumCfs = 3;
+  const int kEntriesPerCf = 2;
+  DestroyAndReopen(RepairCurrentOptions());
+  CreateAndReopenWithCF({"pikachu1", "pikachu2"}, RepairCurrentOptions());
+  for (int i = 0; i < kNumCfs; ++i) {
+    for (int j = 0; j < kEntriesPerCf; ++j) {
+      Put(i, "key" + ToString(j), "val" + ToString(j));
+      if (j == kEntriesPerCf - 1 && i == kNumCfs - 1) {
+        continue;
+      }
+      Flush(i);
+    }
+  }
+  ASSERT_EQ(GetSstCount(), 5);
+  Close();
+  ASSERT_OK(RepairDB(dbname_, RepairCurrentOptions()));
+  ReopenWithColumnFamilies({"default", "pikachu1", "pikachu2"},
+                           RepairCurrentOptions());
+  ASSERT_EQ(GetSstCount(), 6);
+  for (int i = 0; i < kNumCfs; ++i) {
+    for (int j = 0; j < kEntriesPerCf; ++j) {
+      ASSERT_EQ(Get(i, "key" + ToString(j)), "val" + ToString(j));
+    }
+  }
 }
 
 }  // namespace rocksdb
