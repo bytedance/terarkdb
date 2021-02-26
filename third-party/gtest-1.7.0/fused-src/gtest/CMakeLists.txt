@@ -1,1 +1,5 @@
-add_library(gtest gtest-all.cc)
+if(TARGET gtest)
+    message(STATUS "gtest target existed, re-use it!")
+else()
+    add_library(gtest gtest-all.cc)
+endif()
