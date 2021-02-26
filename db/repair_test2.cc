@@ -125,6 +125,10 @@ class RepairTest2 : public DBTestBase {
     Close();
     Reopen(RepairCurrentOptions());
   }
+  Status PutSequence(const Slice& k, const Slice& v, WriteOptions wo,
+                     SequenceNumber seq) {
+    return dbfull()->TEST_WriteSequence(wo, k, v, seq);
+  }
 
  protected:
   std::unique_ptr<rocksdb::MockTimeEnv> mock_env_;
@@ -132,60 +136,6 @@ class RepairTest2 : public DBTestBase {
   Random r;
   std::string vals_new[4];
 };
-
-TEST_F(RepairTest2, RepairMultipleColumnFamiliesTest2) {
-  const int kNumCfs = 3;
-  const int kEntriesPerCf = 2;
-  const std::string keys_cf[] = {std::string("key1"), std::string("key2"),
-                                 std::string("key3"), std::string("key4")};
-  const std::string vals_cf_v1[] = {std::string("val1"), std::string("val2"),
-                                    std::string("val3"), std::string("val4")};
-  const std::string vals_cf_v2[] = {std::string("val01"), std::string("val02"),
-                                    std::string("val03"), std::string("val04")};
-  const std::string vals_cf_v3[] = {
-      std::string("val001"), std::string("val002"), std::string("val003"),
-      std::string("val004")};
-  DestroyAndReopen(RepairCurrentOptions());
-  CreateAndReopenWithCF({"pikachu1", "pikachu2"}, RepairCurrentOptions());
-  for (int i = 0; i < kNumCfs; ++i) {
-    for (int j = 0; j < kEntriesPerCf; ++j) {
-      Put(i, keys_cf[j], vals_cf_v1[j]);
-      if (j == kEntriesPerCf - 1) {
-        Put(i, keys_cf[j - 1], vals_cf_v2[j - 1]);
-        if (i == kNumCfs - 1) {
-          continue;
-        }
-      } else {
-        Put(i, keys_cf[j + 2], vals_cf_v3[j + 2]);
-      }
-      Flush(i);
-    }
-  }
-  ASSERT_EQ(GetSstCount(), 5);
-  Close();
-  // ColumnFamilyOptions cfoptions(RepairCurrentOptions());
-  // std::vector<ColumnFamilyDescriptor> column_families;
-  // column_families.emplace_back(ColumnFamilyDescriptor("default", cfoptions));
-  // column_families.emplace_back(ColumnFamilyDescriptor("pikachu1",
-  // cfoptions));
-  // column_families.emplace_back(ColumnFamilyDescriptor("pikachu2",
-  // cfoptions));
-
-  ASSERT_OK(RepairDB(dbname_, RepairCurrentOptions()));
-  ReopenWithColumnFamilies({"default", "pikachu1", "pikachu2"},
-                           RepairCurrentOptions());
-  ASSERT_EQ(GetSstCount(), 9);
-  for (int i = 0; i < kNumCfs; ++i) {
-    for (int j = 0; j < kEntriesPerCf; ++j) {
-      if (j == kEntriesPerCf - 2) {
-        ASSERT_EQ(Get(i, keys_cf[j]), vals_cf_v2[j]);
-      } else {
-        ASSERT_EQ(Get(i, keys_cf[j]), vals_cf_v1[j]);
-        ASSERT_EQ(Get(i, keys_cf[j + 1]), vals_cf_v3[j + 1]);
-      }
-    }
-  }
-}
 
 TEST_F(RepairTest2, NoMapSstTest) {
   ReOpen();
@@ -227,6 +177,80 @@ TEST_F(RepairTest2, MapSstTest) {
     ASSERT_TRUE(vals[i] == iterator->value());
     iterator->Next();
   }
+  ASSERT_TRUE(!iterator->Valid());
+  delete iterator;
+}
+
+TEST_F(RepairTest2, UnorderMapSstTest1) {
+  ReOpen();
+  WriteOptions wo;
+  ASSERT_OK(PutSequence(keys[0], vals[0], wo, 1));
+  ASSERT_OK(PutSequence(keys[1], vals[1], wo, 4));
+  Flush();
+  MoveFilesToLevel(1, 0);
+  ASSERT_OK(PutSequence(keys[0], vals_new[0], wo, 2));
+  ASSERT_OK(PutSequence(keys[1], vals_new[1], wo, 3));
+  Flush();
+  ASSERT_EQ(GetSstCount(), 2);
+  ASSERT_EQ(Get(keys[0]), vals_new[0]);
+  ASSERT_EQ(Get(keys[1]), vals_new[1]);
+  Iterator* iterator = dbfull()->NewIterator(ReadOptions());
+  iterator->SeekToFirst();
+  ASSERT_TRUE(iterator->Valid());
+  ASSERT_TRUE(keys[0] == iterator->key());
+  ASSERT_TRUE(vals_new[0] == iterator->value());
+  iterator->Next();
+  ASSERT_TRUE(iterator->Valid());
+  ASSERT_TRUE(keys[1] == iterator->key());
+  ASSERT_TRUE(vals[1] == iterator->value());
+  iterator->Next();
+  ASSERT_TRUE(!iterator->Valid());
+  delete iterator;
+  Close();
+  ASSERT_OK(RepairDB(dbname_, RepairCurrentOptions()));
+  ASSERT_EQ(GetSstCount(), 3);
+  Reopen(RepairCurrentOptions());
+  ASSERT_EQ(Get(keys[0]), vals[0]);
+  ASSERT_EQ(Get(keys[1]), vals[1]);
+  iterator = dbfull()->NewIterator(ReadOptions());
+  iterator->SeekToFirst();
+  ASSERT_TRUE(iterator->Valid());
+  ASSERT_TRUE(keys[0] == iterator->key());
+  ASSERT_TRUE(vals_new[0] == iterator->value());
+  iterator->Next();
+  ASSERT_TRUE(iterator->Valid());
+  ASSERT_TRUE(keys[1] == iterator->key());
+  ASSERT_TRUE(vals[1] == iterator->value());
+  iterator->Next();
+  ASSERT_TRUE(!iterator->Valid());
+  delete iterator;
+}
+
+TEST_F(RepairTest2, UnorderMapSstTest2) {
+  ReOpen();
+  WriteOptions wo;
+  ASSERT_OK(PutSequence(keys[0], vals[0], wo, 1));
+  ASSERT_OK(PutSequence(keys[1], vals[1], wo, 4));
+  Flush();
+  MoveFilesToLevel(1, 0);
+  ASSERT_OK(PutSequence(keys[0], vals_new[0], wo, 2));
+  ASSERT_OK(PutSequence(keys[1], vals_new[1], wo, 3));
+  Flush();
+  dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr);
+  dbfull()->TEST_WaitForCompact();
+  ASSERT_EQ(GetSstCount(), 1);
+  ASSERT_EQ(Get(keys[0]), vals_new[0]);
+  ASSERT_EQ(Get(keys[1]), vals[1]);
+  Iterator* iterator = dbfull()->NewIterator(ReadOptions());
+  iterator->SeekToFirst();
+  ASSERT_TRUE(iterator->Valid());
+  ASSERT_TRUE(keys[0] == iterator->key());
+  ASSERT_TRUE(vals_new[0] == iterator->value());
+  iterator->Next();
+  ASSERT_TRUE(iterator->Valid());
+  ASSERT_TRUE(keys[1] == iterator->key());
+  ASSERT_TRUE(vals[1] == iterator->value());
+  iterator->Next();
   ASSERT_TRUE(!iterator->Valid());
   delete iterator;
 }
@@ -446,6 +470,52 @@ TEST_F(RepairTest2, RepairMultipleColumnFamiliesTest1) {
   for (int i = 0; i < kNumCfs; ++i) {
     for (int j = 0; j < kEntriesPerCf; ++j) {
       ASSERT_EQ(Get(i, "key" + ToString(j)), "val" + ToString(j));
+    }
+  }
+}
+
+TEST_F(RepairTest2, RepairMultipleColumnFamiliesTest2) {
+  const int kNumCfs = 3;
+  const int kEntriesPerCf = 2;
+  const std::string keys_cf[] = {std::string("key1"), std::string("key2"),
+                                 std::string("key3"), std::string("key4")};
+  const std::string vals_cf_v1[] = {std::string("val1"), std::string("val2"),
+                                    std::string("val3"), std::string("val4")};
+  const std::string vals_cf_v2[] = {std::string("val01"), std::string("val02"),
+                                    std::string("val03"), std::string("val04")};
+  const std::string vals_cf_v3[] = {
+      std::string("val001"), std::string("val002"), std::string("val003"),
+      std::string("val004")};
+  DestroyAndReopen(RepairCurrentOptions());
+  CreateAndReopenWithCF({"pikachu1", "pikachu2"}, RepairCurrentOptions());
+  for (int i = 0; i < kNumCfs; ++i) {
+    for (int j = 0; j < kEntriesPerCf; ++j) {
+      Put(i, keys_cf[j], vals_cf_v1[j]);
+      if (j == kEntriesPerCf - 1) {
+        Put(i, keys_cf[j - 1], vals_cf_v2[j - 1]);
+        if (i == kNumCfs - 1) {
+          continue;
+        }
+      } else {
+        Put(i, keys_cf[j + 2], vals_cf_v3[j + 2]);
+      }
+      Flush(i);
+    }
+  }
+  ASSERT_EQ(GetSstCount(), 5);
+  Close();
+  ASSERT_OK(RepairDB(dbname_, RepairCurrentOptions()));
+  ReopenWithColumnFamilies({"default", "pikachu1", "pikachu2"},
+                           RepairCurrentOptions());
+  ASSERT_EQ(GetSstCount(), 9);
+  for (int i = 0; i < kNumCfs; ++i) {
+    for (int j = 0; j < kEntriesPerCf; ++j) {
+      if (j == kEntriesPerCf - 2) {
+        ASSERT_EQ(Get(i, keys_cf[j]), vals_cf_v2[j]);
+      } else {
+        ASSERT_EQ(Get(i, keys_cf[j]), vals_cf_v1[j]);
+        ASSERT_EQ(Get(i, keys_cf[j + 1]), vals_cf_v3[j + 1]);
+      }
     }
   }
 }

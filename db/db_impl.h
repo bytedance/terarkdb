@@ -470,6 +470,27 @@ class DBImpl : public DB {
   int TEST_BGFlushesAllowed() const;
   size_t TEST_GetWalPreallocateBlockSize(uint64_t write_buffer_size) const;
   void TEST_WaitForTimedTaskRun(std::function<void()> callback) const;
+  Status TEST_WriteSequence(const WriteOptions& opt, const Slice& key,
+                            const Slice& value, SequenceNumber sequencenumber,
+                            ColumnFamilyHandle* column_family = nullptr) {
+    WriteBatch batch(key.size() + value.size() + 24);
+    Status s;
+    if (column_family == nullptr) {
+      s = batch.Put(DefaultColumnFamily(), key, value);
+    } else {
+      s = batch.Put(column_family, key, value);
+    }
+    if (!s.ok()) {
+      return s;
+    }
+    return TEST_WriteWithSequence(opt, &batch, sequencenumber);
+  }
+  Status TEST_WriteWithSequence(
+      const WriteOptions& options, WriteBatch* updates,
+      SequenceNumber sequencenumber, WriteCallback* callback = nullptr,
+      uint64_t* log_used = nullptr, uint64_t log_ref = 0,
+      bool disable_memtable = false, uint64_t* seq_used = nullptr,
+      size_t batch_cnt = 0, PreReleaseCallback* pre_release_callback = nullptr);
 
 #endif  // NDEBUG
 
