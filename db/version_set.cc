@@ -1346,7 +1346,6 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
           storage_info_.dependence_map(), ikey, &get_context,
           mutable_cf_options_.prefix_extractor.get(),
           cfd_->internal_stats()->GetFileReadHist(1), false, 1);
-      break;
     } else {
       *status = table_cache_->Get(
           read_options, *internal_comparator(), *f->file_metadata,
@@ -1397,6 +1396,9 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
       case GetContext::kCorrupt:
         *status = std::move(get_context).CorruptReason();
         return;
+    }
+    if (use_global && fp.GetCurrentLevel() > 0) {
+      break;
     }
     f = fp.GetNextFile();
   }
