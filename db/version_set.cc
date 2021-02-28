@@ -2914,9 +2914,9 @@ void Version::BuildGlobalMap(const ImmutableDBOptions& db_options,
   ROCKS_LOG_INFO(
       info_log_,
       "[BuildGlobalMap] finished build global map, elapsed_nanos=%" PRIu64
-      ", num_entries= %d, data_size=%d, index_size=%d",
+      ", num_entries= %d, data_size=%d, index_size=%d, read_amp=%f",
       timer.ElapsedNanos(), prop->num_entries, prop->data_size,
-      prop->index_size);
+      prop->index_size, prop->read_amp);
   timer.Start();
   CheckGlobalMap(s);
   ROCKS_LOG_INFO(info_log_,
