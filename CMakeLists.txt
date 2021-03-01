@@ -658,7 +658,6 @@ set(SOURCES
         table/table_properties.cc
         table/table_reader.cc
         table/two_level_iterator.cc
-        tools/db_bench_tool.cc
         tools/dump/db_dump_tool.cc
         tools/ldb_cmd.cc
         tools/ldb_tool.cc
@@ -694,7 +693,6 @@ set(SOURCES
         util/string_util.cc
         util/sync_point.cc
         util/sync_point_impl.cc
-        util/testutil.cc
         util/thread_local.cc
         util/threadpool_imp.cc
         util/trace_replay.cc
@@ -773,7 +771,8 @@ ENDIF()
 IF(WITH_TESTS OR WITH_TOOLS)
   LIST(APPEND SOURCES utilities/cassandra/cassandra_compaction_filter.cc
                       utilities/cassandra/format.cc
-                      utilities/cassandra/merge_operator.cc)
+                      utilities/cassandra/merge_operator.cc
+                      util/testutil.cc)
 ENDIF()
 
 # Scan more sources
@@ -1159,7 +1158,6 @@ if(WITH_TOOLS)
     cache/cache_bench.cc
     memtable/memtablerep_bench.cc
     db/range_del_aggregator_bench.cc
-    tools/db_bench.cc
     table/table_reader_bench.cc
     utilities/column_aware_encoding_exp.cc
     utilities/persistent_cache/hash_table_bench.cc)
@@ -1169,6 +1167,11 @@ if(WITH_TOOLS)
       $<TARGET_OBJECTS:testharness>)
     target_link_libraries(${exename}${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
   endforeach(sourcefile ${BENCHMARKS})
+
+  add_executable(db_bench${ARTIFACT_SUFFIX} tools/db_bench.cc
+      tools/db_bench_tool.cc
+      $<TARGET_OBJECTS:testharness>)
+  target_link_libraries(db_bench${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
 
   if(WITH_TERARK_ZIP)
     add_subdirectory(terark-tools/terark-test)
