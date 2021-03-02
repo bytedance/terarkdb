@@ -39,7 +39,7 @@ class FlushJobTest : public testing::Test {
         versions_(new VersionSet(dbname_, &db_options_, env_options_,
                                  /* seq_per_batch */ false, table_cache_.get(),
                                  &write_buffer_manager_, &write_controller_,
-                                 &pending_output_locker_),
+                                 &pending_output_locker_)),
         shutting_down_(false),
         mock_table_factory_(new mock::MockTableFactory()) {
     EXPECT_OK(env_->CreateDirIfMissing(dbname_));
@@ -100,7 +100,6 @@ class FlushJobTest : public testing::Test {
     // Make "CURRENT" file that points to the new manifest file.
     s = SetCurrentFile(env_, dbname_, 1, nullptr);
   }
-
   Env* env_;
   std::string dbname_;
   EnvOptions env_options_;

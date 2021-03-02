@@ -1,6 +1,6 @@
 #include "map_test.h"
 
-#include <util/sync_point.h>
+#include "util/sync_point.h"
 
 #include "rocksdb/terark_namespace.h"
 
@@ -10,9 +10,9 @@ class MapTest {
   MapTest(const std::string &conf_path, const std::string &&name,
           uint64_t record_count)
       : config_file_(conf_path), db_name_(name), count_(record_count) {
-    std::vector<rocksdb::ColumnFamilyDescriptor> cf_descs;
+    std::vector<TERARKDB_NAMESPACE::ColumnFamilyDescriptor> cf_descs;
 
-    rocksdb::Status s = rocksdb::LoadOptionsFromFile(
+    TERARKDB_NAMESPACE::Status s = TERARKDB_NAMESPACE::LoadOptionsFromFile(
         config_file_, Env::Default(), &db_options_, &cf_descs, false);
     if (!s.ok()) {
       fprintf(stderr, "Load Option Error! %s\n", s.getState());
@@ -30,9 +30,9 @@ class MapTest {
     //                                             kNoCompression};
     cf_desc_ = cf_descs[0];
     cf_desc_.options.table_factory.reset(
-        rocksdb::NewBlockBasedTableFactory(BlockBasedTableOptions()));
+        TERARKDB_NAMESPACE::NewBlockBasedTableFactory(BlockBasedTableOptions()));
     if (FLAGS_table_factory.compare("TerarkZipTable") == 0) {
-      cf_desc_.options.table_factory.reset(rocksdb::NewTerarkZipTableFactory(
+      cf_desc_.options.table_factory.reset(TERARKDB_NAMESPACE::NewTerarkZipTableFactory(
           TerarkZipTableOptions(), cf_desc_.options.table_factory));
       db_options_.allow_mmap_reads = true;
     }
@@ -165,8 +165,8 @@ class MapTest {
 
  private:
   void OpenDB() {
-    rocksdb::Status s;
-    std::vector<rocksdb::ColumnFamilyDescriptor> cf_descs;
+    TERARKDB_NAMESPACE::Status s;
+    std::vector<TERARKDB_NAMESPACE::ColumnFamilyDescriptor> cf_descs;
 
     cf_descs.push_back(cf_desc_);
     db_options_.create_if_missing = true;
@@ -183,7 +183,7 @@ class MapTest {
   std::string config_file_ = "";
   DB *db_;
   std::string db_name_ = "";
-  std::vector<rocksdb::ColumnFamilyHandle *> cf_handles_;  // size = 1
+  std::vector<TERARKDB_NAMESPACE::ColumnFamilyHandle *> cf_handles_;  // size = 1
   std::atomic<int64_t> count_;
   std::atomic<uint64_t> get_found_{0};
   std::atomic<uint64_t> get_miss_{0};
@@ -200,23 +200,23 @@ class MapTest {
 int main(int argc, char *argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
 
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "MapBuilder::Build::build_map_sst",
       [](void *ptr) { *(bool *)ptr = true; });
   if (FLAGS_disable_force_memory) {
-    rocksdb::SyncPoint::GetInstance()->SetCallBack(
+    TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
         "MapBuilder::Build::force_memory",
         [](void *ptr) { *(bool *)ptr = false; });
   }
 
-  rocksdb::MapTest t("./db.ini", "./mapdb", FLAGS_record_count);
+  TERARKDB_NAMESPACE::MapTest t("./db.ini", "./mapdb", FLAGS_record_count);
 
   t.LoadData();
 
   t.CompactRange();
 
-  std::thread qps_watcher(&rocksdb::MapTest::PrintStat, &t);
+  std::thread qps_watcher(&TERARKDB_NAMESPACE::MapTest::PrintStat, &t);
   t.ReadFunc();
   return 0;
 }

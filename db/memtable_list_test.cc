@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "db/merge_context.h"
+#include "db/pending_output_locker.h"
 #include "db/version_set.h"
 #include "db/write_controller.h"
 #include "rocksdb/db.h"
@@ -29,6 +30,7 @@ class MemTableListTest : public testing::Test {
   Options options;
   std::vector<ColumnFamilyHandle*> handles;
   std::atomic<uint64_t> file_number;
+  PendingOutputLocker pending_output_locker_;
 
   MemTableListTest() : db(nullptr), file_number(1) {
     dbname = test::PerThreadDBPath("memtable_list_test");
@@ -103,7 +105,7 @@ class MemTableListTest : public testing::Test {
 
     VersionSet versions(dbname, &immutable_db_options, env_options, false,
                         table_cache.get(), &write_buffer_manager,
-                        &write_controller);
+                        &write_controller, &pending_output_locker_);
     std::vector<ColumnFamilyDescriptor> cf_descs;
     cf_descs.emplace_back(kDefaultColumnFamilyName, ColumnFamilyOptions());
     cf_descs.emplace_back("one", ColumnFamilyOptions());
@@ -147,7 +149,8 @@ class MemTableListTest : public testing::Test {
 
     VersionSet versions(dbname, &immutable_db_options, env_options,
                         /* seq_per_batch */ false, table_cache.get(),
-                        &write_buffer_manager, &write_controller);
+                        &write_buffer_manager, &write_controller,
+                        &pending_output_locker_);
     std::vector<ColumnFamilyDescriptor> cf_descs;
     cf_descs.emplace_back(kDefaultColumnFamilyName, ColumnFamilyOptions());
     cf_descs.emplace_back("one", ColumnFamilyOptions());
