@@ -746,7 +746,11 @@ class Repairer {
     if (status.ok()) {
       cfd = vset_.GetColumnFamilySet()->GetColumnFamily(t->column_family_id);
       if (!cfd->initialized()) {
-        cfd->set_initialized();
+        mutex_.Lock();
+        if (!cfd->initialized()) {
+          cfd->set_initialized();
+        }
+        mutex_.Unlock();
       }
       if (cfd->GetName() != props->column_family_name) {
         ROCKS_LOG_ERROR(

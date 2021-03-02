@@ -125,10 +125,10 @@ class RepairTest2 : public DBTestBase {
     Close();
     Reopen(RepairCurrentOptions());
   }
-  Status PutSequence(const Slice& k, const Slice& v, WriteOptions wo,
-                     SequenceNumber seq) {
-    return dbfull()->TEST_WriteSequence(wo, k, v, seq);
-  }
+  // Status PutSequence(const Slice& k, const Slice& v, WriteOptions wo,
+  //                    SequenceNumber seq) {
+  //   return dbfull()->TEST_WriteSequence(wo, k, v, seq);
+  // }
 
  protected:
   std::unique_ptr<rocksdb::MockTimeEnv> mock_env_;
@@ -137,7 +137,7 @@ class RepairTest2 : public DBTestBase {
   std::string vals_new[4];
 };
 
-TEST_F(RepairTest2, NoMapSstTest) {
+TEST_F(RepairTest2, NoMapSstTest1) {
   ReOpen();
   for (size_t i = 0; i < 4; ++i) {
     Put(keys[i], vals[i]);
@@ -146,6 +146,20 @@ TEST_F(RepairTest2, NoMapSstTest) {
   ASSERT_EQ(GetSstCount(), 4);
   Close();
   ASSERT_OK(RepairDB(dbname_, RepairCurrentOptions()));
+  ASSERT_EQ(GetSstCount(), 4);
+}
+TEST_F(RepairTest2, NoMapSstTest2) {
+  Close();
+  Options options = RepairCurrentOptions();
+  options.comparator = ReverseBytewiseComparator();
+  Reopen(options);
+  for (size_t i = 0; i < 4; ++i) {
+    Put(keys[i], vals[i]);
+    Flush();
+  }
+  ASSERT_EQ(GetSstCount(), 4);
+  Close();
+  ASSERT_OK(RepairDB(dbname_, options));
   ASSERT_EQ(GetSstCount(), 4);
 }
 
@@ -181,79 +195,79 @@ TEST_F(RepairTest2, MapSstTest) {
   delete iterator;
 }
 
-TEST_F(RepairTest2, UnorderMapSstTest1) {
-  ReOpen();
-  WriteOptions wo;
-  ASSERT_OK(PutSequence(keys[0], vals[0], wo, 1));
-  ASSERT_OK(PutSequence(keys[1], vals[1], wo, 4));
-  Flush();
-  MoveFilesToLevel(1, 0);
-  ASSERT_OK(PutSequence(keys[0], vals_new[0], wo, 2));
-  ASSERT_OK(PutSequence(keys[1], vals_new[1], wo, 3));
-  Flush();
-  ASSERT_EQ(GetSstCount(), 2);
-  ASSERT_EQ(Get(keys[0]), vals_new[0]);
-  ASSERT_EQ(Get(keys[1]), vals_new[1]);
-  Iterator* iterator = dbfull()->NewIterator(ReadOptions());
-  iterator->SeekToFirst();
-  ASSERT_TRUE(iterator->Valid());
-  ASSERT_TRUE(keys[0] == iterator->key());
-  ASSERT_TRUE(vals_new[0] == iterator->value());
-  iterator->Next();
-  ASSERT_TRUE(iterator->Valid());
-  ASSERT_TRUE(keys[1] == iterator->key());
-  ASSERT_TRUE(vals[1] == iterator->value());
-  iterator->Next();
-  ASSERT_TRUE(!iterator->Valid());
-  delete iterator;
-  Close();
-  ASSERT_OK(RepairDB(dbname_, RepairCurrentOptions()));
-  ASSERT_EQ(GetSstCount(), 3);
-  Reopen(RepairCurrentOptions());
-  ASSERT_EQ(Get(keys[0]), vals[0]);
-  ASSERT_EQ(Get(keys[1]), vals[1]);
-  iterator = dbfull()->NewIterator(ReadOptions());
-  iterator->SeekToFirst();
-  ASSERT_TRUE(iterator->Valid());
-  ASSERT_TRUE(keys[0] == iterator->key());
-  ASSERT_TRUE(vals_new[0] == iterator->value());
-  iterator->Next();
-  ASSERT_TRUE(iterator->Valid());
-  ASSERT_TRUE(keys[1] == iterator->key());
-  ASSERT_TRUE(vals[1] == iterator->value());
-  iterator->Next();
-  ASSERT_TRUE(!iterator->Valid());
-  delete iterator;
-}
+// TEST_F(RepairTest2, UnorderMapSstTest1) {
+//   ReOpen();
+//   WriteOptions wo;
+//   ASSERT_OK(PutSequence(keys[0], vals[0], wo, 1));
+//   ASSERT_OK(PutSequence(keys[1], vals[1], wo, 4));
+//   Flush();
+//   MoveFilesToLevel(1, 0);
+//   ASSERT_OK(PutSequence(keys[0], vals_new[0], wo, 2));
+//   ASSERT_OK(PutSequence(keys[1], vals_new[1], wo, 3));
+//   Flush();
+//   ASSERT_EQ(GetSstCount(), 2);
+//   ASSERT_EQ(Get(keys[0]), vals_new[0]);
+//   ASSERT_EQ(Get(keys[1]), vals_new[1]);
+//   Iterator* iterator = dbfull()->NewIterator(ReadOptions());
+//   iterator->SeekToFirst();
+//   ASSERT_TRUE(iterator->Valid());
+//   ASSERT_TRUE(keys[0] == iterator->key());
+//   ASSERT_TRUE(vals_new[0] == iterator->value());
+//   iterator->Next();
+//   ASSERT_TRUE(iterator->Valid());
+//   ASSERT_TRUE(keys[1] == iterator->key());
+//   ASSERT_TRUE(vals[1] == iterator->value());
+//   iterator->Next();
+//   ASSERT_TRUE(!iterator->Valid());
+//   delete iterator;
+//   Close();
+//   ASSERT_OK(RepairDB(dbname_, RepairCurrentOptions()));
+//   ASSERT_EQ(GetSstCount(), 3);
+//   Reopen(RepairCurrentOptions());
+//   ASSERT_EQ(Get(keys[0]), vals[0]);
+//   ASSERT_EQ(Get(keys[1]), vals[1]);
+//   iterator = dbfull()->NewIterator(ReadOptions());
+//   iterator->SeekToFirst();
+//   ASSERT_TRUE(iterator->Valid());
+//   ASSERT_TRUE(keys[0] == iterator->key());
+//   ASSERT_TRUE(vals_new[0] == iterator->value());
+//   iterator->Next();
+//   ASSERT_TRUE(iterator->Valid());
+//   ASSERT_TRUE(keys[1] == iterator->key());
+//   ASSERT_TRUE(vals[1] == iterator->value());
+//   iterator->Next();
+//   ASSERT_TRUE(!iterator->Valid());
+//   delete iterator;
+// }
 
-TEST_F(RepairTest2, UnorderMapSstTest2) {
-  ReOpen();
-  WriteOptions wo;
-  ASSERT_OK(PutSequence(keys[0], vals[0], wo, 1));
-  ASSERT_OK(PutSequence(keys[1], vals[1], wo, 4));
-  Flush();
-  MoveFilesToLevel(1, 0);
-  ASSERT_OK(PutSequence(keys[0], vals_new[0], wo, 2));
-  ASSERT_OK(PutSequence(keys[1], vals_new[1], wo, 3));
-  Flush();
-  dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr);
-  dbfull()->TEST_WaitForCompact();
-  ASSERT_EQ(GetSstCount(), 1);
-  ASSERT_EQ(Get(keys[0]), vals_new[0]);
-  ASSERT_EQ(Get(keys[1]), vals[1]);
-  Iterator* iterator = dbfull()->NewIterator(ReadOptions());
-  iterator->SeekToFirst();
-  ASSERT_TRUE(iterator->Valid());
-  ASSERT_TRUE(keys[0] == iterator->key());
-  ASSERT_TRUE(vals_new[0] == iterator->value());
-  iterator->Next();
-  ASSERT_TRUE(iterator->Valid());
-  ASSERT_TRUE(keys[1] == iterator->key());
-  ASSERT_TRUE(vals[1] == iterator->value());
-  iterator->Next();
-  ASSERT_TRUE(!iterator->Valid());
-  delete iterator;
-}
+// TEST_F(RepairTest2, UnorderMapSstTest2) {
+//   ReOpen();
+//   WriteOptions wo;
+//   ASSERT_OK(PutSequence(keys[0], vals[0], wo, 1));
+//   ASSERT_OK(PutSequence(keys[1], vals[1], wo, 4));
+//   Flush();
+//   MoveFilesToLevel(1, 0);
+//   ASSERT_OK(PutSequence(keys[0], vals_new[0], wo, 2));
+//   ASSERT_OK(PutSequence(keys[1], vals_new[1], wo, 3));
+//   Flush();
+//   dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr);
+//   dbfull()->TEST_WaitForCompact();
+//   ASSERT_EQ(GetSstCount(), 1);
+//   ASSERT_EQ(Get(keys[0]), vals_new[0]);
+//   ASSERT_EQ(Get(keys[1]), vals[1]);
+//   Iterator* iterator = dbfull()->NewIterator(ReadOptions());
+//   iterator->SeekToFirst();
+//   ASSERT_TRUE(iterator->Valid());
+//   ASSERT_TRUE(keys[0] == iterator->key());
+//   ASSERT_TRUE(vals_new[0] == iterator->value());
+//   iterator->Next();
+//   ASSERT_TRUE(iterator->Valid());
+//   ASSERT_TRUE(keys[1] == iterator->key());
+//   ASSERT_TRUE(vals[1] == iterator->value());
+//   iterator->Next();
+//   ASSERT_TRUE(!iterator->Valid());
+//   delete iterator;
+// }
 
 TEST_F(RepairTest2, BlobSstTest) {
   BlobSstPrepare();
