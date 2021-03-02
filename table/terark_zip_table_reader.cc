@@ -814,6 +814,11 @@ Status TerarkZipTableReaderBase::LoadTombstone(RandomAccessFileReader* file,
   return s;
 }
 
+std::shared_ptr<const FragmentedRangeTombstoneList>
+TerarkZipTableReaderBase::GetFragmentedRangeTombstoneList()  {
+  return fragmented_range_dels_;
+}
+
 FragmentedRangeTombstoneIterator*
 TerarkZipTableReaderBase::NewRangeTombstoneIterator(
     const ReadOptions& read_options) {

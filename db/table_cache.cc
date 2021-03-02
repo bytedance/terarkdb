@@ -178,9 +178,7 @@ Status TableCache::GetTableReaderImpl(
 
   RecordTick(ioptions_.statistics, NO_FILE_OPENS);
   if (s.ok()) {
-    if (force_memory) {
-      file = NewMemoryRandomAccessFile(std::move(file), fd.GetFileSize());
-    } else if (readahead > 0 && !env_options.use_mmap_reads) {
+    if (readahead > 0 && !env_options.use_mmap_reads) {
       // Not compatible with mmap files since ReadaheadRandomAccessFile requires
       // its wrapped file's Read() to copy data into the provided scratch
       // buffer, which mmap files don't use.
@@ -197,12 +195,21 @@ Status TableCache::GetTableReaderImpl(
             record_read_stats ? ioptions_.statistics : nullptr, SST_READ_MICROS,
             file_read_hist, ioptions_.rate_limiter, for_compaction,
             ioptions_.listeners));
+    TableReaderOptions table_reader_option(
+        ioptions_, prefix_extractor, env_options, internal_comparator,
+        skip_filters, immortal_tables_, level, fd.GetNumber(),
+        fd.largest_seqno);
     s = ioptions_.table_factory->NewTableReader(
-        TableReaderOptions(ioptions_, prefix_extractor, env_options,
-                           internal_comparator, skip_filters, immortal_tables_,
-                           level, fd.GetNumber(), fd.largest_seqno),
-        std::move(file_reader), fd.GetFileSize(), table_reader,
-        prefetch_index_and_filter_in_cache);
+        table_reader_option, std::move(file_reader), fd.GetFileSize(),
+        table_reader, prefetch_index_and_filter_in_cache);
+    TEST_SYNC_POINT_CALLBACK("MapBuilder::Build::force_memory", &force_memory);
+    if (s.ok() && force_memory) {
+      std::unique_ptr<TableReader> file_table_reader(std::move(*table_reader));
+      s = NewTableMemReader(ioptions_, table_reader_option, file_table_reader,
+                            table_reader);
+      ROCKS_LOG_INFO(ioptions_.info_log, "Force&Decompress Table %" PRIu64 " in Mem",
+                     file_table_reader->FileNumber());
+    }
     TEST_SYNC_POINT("TableCache::GetTableReader:0");
   }
   return s;
@@ -453,7 +460,7 @@ Status TableCache::Get(const ReadOptions& options,
       s = t->Get(options, k, get_context, prefix_extractor, skip_filters);
     } else if (dependence_map.empty()) {
       s = Status::Corruption(
-          "TableCache::Get: Composite sst depend files missing");
+          "TableCache::Get: Map sst depend files missing");
     } else {
       // Forward query to target sst
       ReadOptions forward_options = options;

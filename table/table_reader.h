@@ -10,11 +10,15 @@
 #pragma once
 #include <memory>
 
+#include "db/dbformat.h"
+#include "db/memtable.h"
 #include "db/range_tombstone_fragmenter.h"
+#include "memtable/skiplist.h"
 #include "rocksdb/cache.h"
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/terark_namespace.h"
 #include "table/internal_iterator.h"
+#include "table/table_builder.h"
 
 namespace TERARKDB_NAMESPACE {
 
@@ -51,6 +55,11 @@ class TableReader {
 
   virtual FragmentedRangeTombstoneIterator* NewRangeTombstoneIterator(
       const ReadOptions& /*read_options*/) {
+    return nullptr;
+  }
+
+  virtual std::shared_ptr<const FragmentedRangeTombstoneList>
+  GetFragmentedRangeTombstoneList() {
     return nullptr;
   }
 
@@ -131,5 +140,10 @@ class TableReader {
 
   virtual void Close() {}
 };
+
+Status NewTableMemReader(const ImmutableCFOptions& icfo,
+                         const TableReaderOptions& table_reader_options,
+                         std::unique_ptr<TableReader>& file_table_reader,
+                         std::unique_ptr<TableReader>* mem_table_reader);
 
 }  // namespace TERARKDB_NAMESPACE

@@ -65,6 +65,9 @@ class TerarkZipTableReaderBase : public TableReader, boost::noncopyable {
   virtual FragmentedRangeTombstoneIterator* NewRangeTombstoneIterator(
       const ReadOptions& read_options) override;
 
+  virtual std::shared_ptr<const FragmentedRangeTombstoneList>
+  GetFragmentedRangeTombstoneList() override;
+
   std::shared_ptr<const TableProperties> GetTableProperties() const override;
 
   void MmapColdize(const void* addr, size_t len);

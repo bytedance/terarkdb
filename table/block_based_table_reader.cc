@@ -2359,6 +2359,11 @@ InternalIterator* BlockBasedTable::NewIterator(
   }
 }
 
+std::shared_ptr<const FragmentedRangeTombstoneList>
+BlockBasedTable::GetFragmentedRangeTombstoneList() {
+  return rep_->fragmented_range_dels;
+}
+
 FragmentedRangeTombstoneIterator* BlockBasedTable::NewRangeTombstoneIterator(
     const ReadOptions& read_options) {
   if (rep_->fragmented_range_dels == nullptr) {

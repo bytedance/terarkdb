@@ -14,6 +14,7 @@
 
 #include <string>
 #include <vector>
+#include <inttypes.h>
 
 #include "db/dbformat.h"
 #include "db/range_del_aggregator.h"
