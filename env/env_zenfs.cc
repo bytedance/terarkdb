@@ -135,21 +135,20 @@ Status ZenMetaLog::ReadRecord(Slice* record, std::string* scratch) {
   return Status::OK();
 }
 
-ZenFS::ZenFS(ZonedBlockDevice* zbd, std::shared_ptr<FileSystem> aux_fs,
-             std::shared_ptr<Logger> logger)
-    : FileSystemWrapper(aux_fs), zbd_(zbd), logger_(logger) {
-  Info(logger_, "ZenFS initializing");
-  Info(logger_, "ZenFS parameters: block device: %s, aux filesystem: %s",
-       zbd_->GetFilename().c_str(), target()->Name());
+ZenEnv::ZenEnv(ZonedBlockDevice* zbd, Env* env, std::shared_ptr<Logger> logger)
+    : EnvWrapper(env), zbd_(zbd), logger_(logger) {
+  Info(logger_, "ZenEnv initializing");
+  Info(logger_, "ZenEnv parameters: block device: %s",
+       zbd_->GetFilename().c_str());
 
-  Info(logger_, "ZenFS initializing");
+  Info(logger_, "ZenEnv initializing");
   next_file_id_ = 1;
-  metadata_writer_.zenFS = this;
+  metadata_writer_.zenEnv = this;
 }
 
-ZenFS::~ZenFS() {
+ZenEnv::~ZenEnv() {
   Status s;
-  Info(logger_, "ZenFS shutting down");
+  Info(logger_, "ZenEnv shutting down");
   zbd_->LogZoneUsage();
   LogFiles();
 
@@ -158,7 +157,7 @@ ZenFS::~ZenFS() {
   delete zbd_;
 }
 
-void ZenFS::LogFiles() {
+void ZenEnv::LogFiles() {
   std::map<std::string, ZoneFile*>::iterator it;
   uint64_t total_size = 0;
 
@@ -183,13 +182,13 @@ void ZenFS::LogFiles() {
        total_size / (1024 * 1024));
 }
 
-void ZenFS::ClearFiles() {
+void ZenEnv::ClearFiles() {
   std::map<std::string, ZoneFile*>::iterator it;
   for (it = files_.begin(); it != files_.end(); it++) delete it->second;
   files_.clear();
 }
 
-Status ZenFS::WriteSnapshot(ZenMetaLog* meta_log) {
+Status ZenEnv::WriteSnapshot(ZenMetaLog* meta_log) {
   Status s;
   std::string snapshot;
 
@@ -204,14 +203,14 @@ Status ZenFS::WriteSnapshot(ZenMetaLog* meta_log) {
   return s;
 }
 
-Status ZenFS::WriteEndRecord(ZenMetaLog* meta_log) {
+Status ZenEnv::WriteEndRecord(ZenMetaLog* meta_log) {
   std::string endRecord;
 
   PutFixed32(&endRecord, kCompleteFilesSnapshot);
   return meta_log->AddRecord(endRecord);
 }
 
-Status ZenFS::RollMetaZone() {
+Status ZenEnv::RollMetaZone() {
   ZenMetaLog* new_meta_log;
   Zone *new_meta_zone, *old_meta_zone;
   Status s;
@@ -253,7 +252,7 @@ Status ZenFS::RollMetaZone() {
   return s;
 }
 
-Status ZenFS::PersistSnapshot(ZenMetaLog* meta_writer) {
+Status ZenEnv::PersistSnapshot(ZenMetaLog* meta_writer) {
   Status s;
 
   files_mtx_.lock();
@@ -276,7 +275,7 @@ Status ZenFS::PersistSnapshot(ZenMetaLog* meta_writer) {
   return s;
 }
 
-Status ZenFS::PersistRecord(std::string record) {
+Status ZenEnv::PersistRecord(std::string record) {
   Status s;
 
   metadata_sync_mtx_.lock();
@@ -292,7 +291,7 @@ Status ZenFS::PersistRecord(std::string record) {
   return s;
 }
 
-Status ZenFS::SyncFileMetadata(ZoneFile* zoneFile) {
+Status ZenEnv::SyncFileMetadata(ZoneFile* zoneFile) {
   std::string fileRecord;
   std::string output;
 
@@ -312,7 +311,7 @@ Status ZenFS::SyncFileMetadata(ZoneFile* zoneFile) {
   return s;
 }
 
-ZoneFile* ZenFS::GetFile(std::string fname) {
+ZoneFile* ZenEnv::GetFile(std::string fname) {
   ZoneFile* zoneFile = nullptr;
   files_mtx_.lock();
   if (files_.find(fname) != files_.end()) {
@@ -322,7 +321,7 @@ ZoneFile* ZenFS::GetFile(std::string fname) {
   return zoneFile;
 }
 
-Status ZenFS::DeleteFile(std::string fname) {
+Status ZenEnv::DeleteFile_Internal(std::string fname) {
   ZoneFile* zoneFile = nullptr;
   Status s;
 
@@ -343,46 +342,46 @@ Status ZenFS::DeleteFile(std::string fname) {
   return s;
 }
 
-Status ZenFS::NewSequentialFile(const std::string& fname,
-                                  const FileOptions& file_opts,
-                                  std::unique_ptr<FSSequentialFile>* result) {
+Status ZenEnv::NewSequentialFile(const std::string& fname,
+                                  std::unique_ptr<SequentialFile>* result,
+                                  const EnvOptions& options) {
   ZoneFile* zoneFile = GetFile(fname);
 
   Debug(logger_, "New sequential file: %s direct: %d\n", fname.c_str(),
-        file_opts.use_direct_reads);
+        options.use_direct_reads);
 
   if (zoneFile == nullptr) {
     return Status::IOError("File does not exist!\n");
   }
 
-  result->reset(new ZonedSequentialFile(zoneFile, file_opts));
+  result->reset(new ZonedSequentialFile(zoneFile, options));
   return Status::OK();
 }
 
-Status ZenFS::NewRandomAccessFile(const std::string& fname,
-                                    const FileOptions& file_opts,
-                                    std::unique_ptr<FSRandomAccessFile>* result) {
+Status ZenEnv::NewRandomAccessFile(const std::string& fname,
+                                    std::unique_ptr<RandomAccessFile>* result,
+                                    const EnvOptions& options) {
   ZoneFile* zoneFile = GetFile(fname);
 
   Debug(logger_, "New random access file: %s direct: %d\n", fname.c_str(),
-        file_opts.use_direct_reads);
+        options.use_direct_reads);
 
   if (zoneFile == nullptr) {
     return Status::NotFound("File does not exist\n");
   }
 
-  result->reset(new ZonedRandomAccessFile(files_[fname], file_opts));
+  result->reset(new ZonedRandomAccessFile(files_[fname], options));
   return Status::OK();
 }
 
-Status ZenFS::NewWritableFile(const std::string& fname,
-                                const FileOptions& file_opts,
-                                std::unique_ptr<FSWritableFile>* result) {
+Status ZenEnv::NewWritableFile(const std::string& fname,
+                                std::unique_ptr<WritableFile>* result,
+                                const EnvOptions& options) {
   ZoneFile* zoneFile;
   Status s;
 
   Debug(logger_, "New writable file: %s direct: %d\n", fname.c_str(),
-        file_opts.use_direct_writes);
+        options.use_direct_writes);
 
   if (GetFile(fname) != nullptr) {
     s = DeleteFile(fname);
@@ -400,17 +399,17 @@ Status ZenFS::NewWritableFile(const std::string& fname,
   return s;
 }
 
-Status ZenFS::ReuseWritableFile(const std::string& fname,
+Status ZenEnv::ReuseWritableFile(const std::string& fname,
                                   const std::string& old_fname,
-                                  const FileOptions& file_opts,
-                                  std::unique_ptr<FSWritableFile>* result) {
+                                  std::unique_ptr<WritableFile>* result,
+                                  const EnvOptions& options) {
   Debug(logger_, "Reuse writable file: %s old name: %s\n", fname.c_str(),
         old_fname.c_str());
 
   if (GetFile(fname) == nullptr)
     return Status::NotFound("Old file does not exist");
 
-  return NewWritableFile(fname, file_opts, result);
+  return NewWritableFile(fname, result, options);
 }
 
 Status ZenEnv::FileExists(const std::string& fname) {
@@ -423,7 +422,7 @@ Status ZenEnv::FileExists(const std::string& fname) {
   }
 }
 
-Status ZenFS::GetChildren(const std::string& dir,
+Status ZenEnv::GetChildren(const std::string& dir,
                             std::vector<std::string>* result) {
   std::map<std::string, ZoneFile*>::iterator it;
   std::vector<std::string> auxfiles;
@@ -452,7 +451,7 @@ Status ZenFS::GetChildren(const std::string& dir,
   return s;
 }
 
-Status ZenFS::DeleteFile(const std::string& fname) {
+Status ZenEnv::DeleteFile(const std::string& fname) {
   Status s;
   Debug(logger_, "Delete file: %s \n", fname.c_str());
 
@@ -466,7 +465,7 @@ Status ZenFS::DeleteFile(const std::string& fname) {
   return s;
 }
 
-Status ZenFS::GetFileSize(const std::string& f, uint64_t* size) {
+Status ZenEnv::GetFileSize(const std::string& f, uint64_t* size) {
   ZoneFile* zoneFile;
   Status s;
 
@@ -484,7 +483,7 @@ Status ZenFS::GetFileSize(const std::string& f, uint64_t* size) {
   return s;
 }
 
-Status ZenFS::RenameFile(const std::string& f, const std::string& t) {
+Status ZenEnv::RenameFile(const std::string& f, const std::string& t) {
   ZoneFile* zoneFile;
   Status s;
 
@@ -509,7 +508,7 @@ Status ZenFS::RenameFile(const std::string& f, const std::string& t) {
   return s;
 }
 
-void ZenFS::EncodeSnapshotTo(std::string* output) {
+void ZenEnv::EncodeSnapshotTo(std::string* output) {
   std::map<std::string, ZoneFile*>::iterator it;
   std::string files_string;
   PutFixed32(output, kCompleteFilesSnapshot);
@@ -523,7 +522,7 @@ void ZenFS::EncodeSnapshotTo(std::string* output) {
   PutLengthPrefixedSlice(output, Slice(files_string));
 }
 
-Status ZenFS::DecodeFileUpdateFrom(Slice* slice) {
+Status ZenEnv::DecodeFileUpdateFrom(Slice* slice) {
   ZoneFile* update = new ZoneFile(zbd_, "not_set", 0);
   uint64_t id;
   Status s;
@@ -561,7 +560,7 @@ Status ZenFS::DecodeFileUpdateFrom(Slice* slice) {
   return Status::OK();
 }
 
-Status ZenFS::DecodeSnapshotFrom(Slice* input) {
+Status ZenEnv::DecodeSnapshotFrom(Slice* input) {
   Slice slice;
 
   assert(files_.size() == 0);
@@ -577,7 +576,7 @@ Status ZenFS::DecodeSnapshotFrom(Slice* input) {
   return Status::OK();
 }
 
-void ZenFS::EncodeFileDeletionTo(ZoneFile* zoneFile, std::string* output) {
+void ZenEnv::EncodeFileDeletionTo(ZoneFile* zoneFile, std::string* output) {
   std::string file_string;
 
   PutFixed64(&file_string, zoneFile->GetID());
@@ -587,7 +586,7 @@ void ZenFS::EncodeFileDeletionTo(ZoneFile* zoneFile, std::string* output) {
   PutLengthPrefixedSlice(output, Slice(file_string));
 }
 
-Status ZenFS::DecodeFileDeletionFrom(Slice* input) {
+Status ZenEnv::DecodeFileDeletionFrom(Slice* input) {
   uint64_t fileID;
   std::string fileName;
   Slice slice;
@@ -612,7 +611,7 @@ Status ZenFS::DecodeFileDeletionFrom(Slice* input) {
   return Status::OK();
 }
 
-Status ZenFS::RecoverFrom(ZenMetaLog* log) {
+Status ZenEnv::RecoverFrom(ZenMetaLog* log) {
   bool at_least_one_snapshot = false;
   std::string scratch;
   uint32_t tag = 0;
@@ -626,13 +625,13 @@ Status ZenFS::RecoverFrom(ZenMetaLog* log) {
     if (!rs.ok()) {
       Error(logger_, "Read recovery record failed with error: %s",
             rs.ToString().c_str());
-      return Status::Corruption("ZenFS", "Metadata corruption");
+      return Status::Corruption("ZenEnv", "Metadata corruption");
     }
 
     if (!GetFixed32(&record, &tag)) break;
 
     if (!GetLengthPrefixedSlice(&record, &data))
-      return Status::Corruption("ZenFS", "No recovery record data");
+      return Status::Corruption("ZenEnv", "No recovery record data");
 
     switch (tag) {
       case kCompleteFilesSnapshot:
@@ -670,19 +669,19 @@ Status ZenFS::RecoverFrom(ZenMetaLog* log) {
 
       default:
         Warn(logger_, "Unexpected metadata record tag: %u", tag);
-        return Status::Corruption("ZenFS", "Unexpected tag");
+        return Status::Corruption("ZenEnv", "Unexpected tag");
     }
   }
 
   if (at_least_one_snapshot)
     return Status::OK();
   else
-    return Status::NotFound("ZenFS", "No snapshot found");
+    return Status::NotFound("ZenEnv", "No snapshot found");
 }
 
 #define ZENV_URI_PATTERN "zenfs://"
 
-Status ZenFS::Mount() {
+Status ZenEnv::Mount() {
   std::vector<Zone*> metazones = zbd_->GetMetaZones();
   std::vector<std::unique_ptr<Superblock>> valid_superblocks;
   std::vector<std::unique_ptr<ZenMetaLog>> valid_logs;
@@ -798,7 +797,7 @@ Status ZenFS::Mount() {
   return Status::OK();
 }
 
-Status ZenFS::MkFS(std::string aux_fs_path, uint32_t finish_threshold) {
+Status ZenEnv::MkFS(std::string aux_fs_path, uint32_t finish_threshold) {
   std::vector<Zone*> metazones = zbd_->GetMetaZones();
   std::unique_ptr<ZenMetaLog> log;
   Zone* meta_zone = nullptr;
@@ -858,14 +857,14 @@ static std::string GetLogFilename(std::string bdev) {
 }
 #endif
 
-Status NewZenFS(FileSystem** fs, const std::string& bdevname) {
+Status NewZenEnv(Env** env, const std::string& bdevname) {
   std::shared_ptr<Logger> logger;
   Status s;
 
 #ifndef NDEBUG
   s = Env::Default()->NewLogger(GetLogFilename(bdevname), &logger);
   if (!s.ok()) {
-    fprintf(stderr, "ZenFS: Could not create logger");
+    fprintf(stderr, "ZenEnv: Could not create logger");
   } else {
     logger->SetInfoLogLevel(DEBUG_LEVEL);
   }
@@ -879,14 +878,14 @@ Status NewZenFS(FileSystem** fs, const std::string& bdevname) {
     return Status::IOError(zbd_status.ToString());
   }
 
-  ZenFS* zenFS = new ZenFS(zbd, FileSystem::Default(), logger);
-  s = zenFS->Mount();
+  ZenEnv* zenEnv = new ZenEnv(zbd, Env::Default(), logger);
+  s = zenEnv->Mount();
   if (!s.ok()) {
-    delete zenFS;
+    delete zenEnv;
     return s;
   }
 
-  *fs = zenFS;
+  *env = zenEnv;
   return Status::OK();
 }
 

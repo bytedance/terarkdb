@@ -20,7 +20,6 @@
 #include <utility>
 #include <vector>
 
-#include "rocksdb/file_system.h"
 #include "zbd_zenfs.h"
 
 namespace TERARKDB_NAMESPACE {
@@ -88,7 +87,7 @@ class ZoneFile {
   size_t GetUniqueId(char* id, size_t max_size);
 };
 
-class ZonedWritableFile : public FSWritableFile {
+class ZonedWritableFile : public WritableFile {
  public:
   /* Interface for persisting metadata for files */
   class MetadataWriter {
@@ -135,15 +134,15 @@ class ZonedWritableFile : public FSWritableFile {
   std::mutex buffer_mtx_;
 };
 
-class ZonedSequentialFile : public FSSequentialFile {
+class ZonedSequentialFile : public SequentialFile {
  private:
   ZoneFile* zoneFile_;
   uint64_t rp;
   bool direct_;
 
  public:
-  explicit ZonedSequentialFile(ZoneFile* zoneFile, const FileOptions& file_opts)
-      : zoneFile_(zoneFile), rp(0), direct_(file_opts.use_direct_reads) {}
+  explicit ZonedSequentialFile(ZoneFile* zoneFile, const EnvOptions& opts)
+      : zoneFile_(zoneFile), rp(0), direct_(opts.use_direct_reads) {}
 
   Status Read(size_t n, Slice* result, char* scratch) override;
   Status PositionedRead(uint64_t offset, size_t n,
@@ -163,15 +162,15 @@ class ZonedSequentialFile : public FSSequentialFile {
   }
 };
 
-class ZonedRandomAccessFile : public FSRandomAccessFile {
+class ZonedRandomAccessFile : public RandomAccessFile {
  private:
   ZoneFile* zoneFile_;
   bool direct_;
 
  public:
   explicit ZonedRandomAccessFile(ZoneFile* zoneFile,
-                                 const FileOptions& file_opts)
-      : zoneFile_(zoneFile), direct_(file_opts.use_direct_reads) {}
+                                 const EnvOptions& opts)
+      : zoneFile_(zoneFile), direct_(opts.use_direct_reads) {}
 
   Status Read(uint64_t offset, size_t n,
                 Slice* result, char* scratch) const override;
