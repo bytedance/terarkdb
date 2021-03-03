@@ -191,7 +191,7 @@ ZoneExtent* ZoneFile::GetExtent(uint64_t file_offset, uint64_t* dev_offset) {
   return NULL;
 }
 
-IOStatus ZoneFile::PositionedRead(uint64_t offset, size_t n, Slice* result,
+Status ZoneFile::PositionedRead(uint64_t offset, size_t n, Slice* result,
                                   char* scratch, bool direct) {
   int f = zbd_->GetReadFD();
   int f_direct = zbd_->GetReadDirectFD();
@@ -202,11 +202,11 @@ IOStatus ZoneFile::PositionedRead(uint64_t offset, size_t n, Slice* result,
   size_t read = 0;
   ZoneExtent* extent;
   uint64_t extent_end;
-  IOStatus s;
+  Status s;
 
   if (offset >= fileSize) {
     *result = Slice(scratch, 0);
-    return IOStatus::OK();
+    return Status::OK();
   }
 
   r_off = 0;
@@ -266,7 +266,7 @@ IOStatus ZoneFile::PositionedRead(uint64_t offset, size_t n, Slice* result,
   }
 
   if (r < 0) {
-    s = IOStatus::IOError("pread error\n");
+    s = Status::IOError("pread error\n");
     read = 0;
   }
 
@@ -293,15 +293,15 @@ void ZoneFile::PushExtent() {
 }
 
 /* Assumes that data and size are block aligned */
-IOStatus ZoneFile::Append(void* data, int data_size, int valid_size) {
+Status ZoneFile::Append(void* data, int data_size, int valid_size) {
   uint32_t left = data_size;
   uint32_t wr_size, offset = 0;
-  IOStatus s;
+  Status s;
 
   if (active_zone_ == NULL) {
     active_zone_ = zbd_->AllocateZone(lifetime_);
     if (!active_zone_) {
-      return IOStatus::NoSpace("Zone allocation failure\n");
+      return Status::NoSpace("Zone allocation failure\n");
     }
     extent_start_ = active_zone_->wp_;
     extent_filepos_ = fileSize;
@@ -314,7 +314,7 @@ IOStatus ZoneFile::Append(void* data, int data_size, int valid_size) {
       active_zone_->CloseWR();
       active_zone_ = zbd_->AllocateZone(lifetime_);
       if (!active_zone_) {
-        return IOStatus::NoSpace("Zone allocation failure\n");
+        return Status::NoSpace("Zone allocation failure\n");
       }
       extent_start_ = active_zone_->wp_;
       extent_filepos_ = fileSize;
@@ -332,12 +332,12 @@ IOStatus ZoneFile::Append(void* data, int data_size, int valid_size) {
   }
 
   fileSize -= (data_size - valid_size);
-  return IOStatus::OK();
+  return Status::OK();
 }
 
-IOStatus ZoneFile::SetWriteLifeTimeHint(Env::WriteLifeTimeHint lifetime) {
+Status ZoneFile::SetWriteLifeTimeHint(Env::WriteLifeTimeHint lifetime) {
   lifetime_ = lifetime;
-  return IOStatus::OK();
+  return Status::OK();
 }
 
 ZonedWritableFile::ZonedWritableFile(ZonedBlockDevice* zbd, bool _buffered,
@@ -371,16 +371,16 @@ ZonedWritableFile::~ZonedWritableFile() {
 
 ZonedWritableFile::MetadataWriter::~MetadataWriter() {}
 
-IOStatus ZonedWritableFile::Truncate(uint64_t size,
+Status ZonedWritableFile::Truncate(uint64_t size,
                                      const IOOptions& /*options*/,
                                      IODebugContext* /*dbg*/) {
   zoneFile_->SetFileSize(size);
-  return IOStatus::OK();
+  return Status::OK();
 }
 
-IOStatus ZonedWritableFile::Fsync(const IOOptions& /*options*/,
+Status ZonedWritableFile::Fsync(const IOOptions& /*options*/,
                                   IODebugContext* /*dbg*/) {
-  IOStatus s;
+  Status s;
 
   buffer_mtx_.lock();
   s = FlushBuffer();
@@ -393,37 +393,37 @@ IOStatus ZonedWritableFile::Fsync(const IOOptions& /*options*/,
   return metadata_writer_->Persist(zoneFile_);
 }
 
-IOStatus ZonedWritableFile::Sync(const IOOptions& options,
+Status ZonedWritableFile::Sync(const IOOptions& options,
                                  IODebugContext* dbg) {
   return Fsync(options, dbg);
 }
 
-IOStatus ZonedWritableFile::Flush(const IOOptions& /*options*/,
+Status ZonedWritableFile::Flush(const IOOptions& /*options*/,
                                   IODebugContext* /*dbg*/) {
-  return IOStatus::OK();
+  return Status::OK();
 }
 
-IOStatus ZonedWritableFile::RangeSync(uint64_t offset, uint64_t nbytes,
+Status ZonedWritableFile::RangeSync(uint64_t offset, uint64_t nbytes,
                                       const IOOptions& options,
                                       IODebugContext* dbg) {
   if (wp < offset + nbytes) return Fsync(options, dbg);
 
-  return IOStatus::OK();
+  return Status::OK();
 }
 
-IOStatus ZonedWritableFile::Close(const IOOptions& options,
+Status ZonedWritableFile::Close(const IOOptions& options,
                                   IODebugContext* dbg) {
   Fsync(options, dbg);
   zoneFile_->CloseWR();
 
-  return IOStatus::OK();
+  return Status::OK();
 }
 
-IOStatus ZonedWritableFile::FlushBuffer() {
+Status ZonedWritableFile::FlushBuffer() {
   uint32_t align, pad_sz = 0, wr_sz;
-  IOStatus s;
+  Status s;
 
-  if (!buffer_pos) return IOStatus::OK();
+  if (!buffer_pos) return Status::OK();
 
   align = buffer_pos % block_sz;
   if (align) pad_sz = block_sz - align;
@@ -439,10 +439,10 @@ IOStatus ZonedWritableFile::FlushBuffer() {
   wp += buffer_pos;
   buffer_pos = 0;
 
-  return IOStatus::OK();
+  return Status::OK();
 }
 
-IOStatus ZonedWritableFile::BufferedWrite(const Slice& slice) {
+Status ZonedWritableFile::BufferedWrite(const Slice& slice) {
   uint32_t buffer_left = buffer_sz - buffer_pos;
   uint32_t data_left = slice.size();
   char* data = (char*)slice.data();
@@ -450,7 +450,7 @@ IOStatus ZonedWritableFile::BufferedWrite(const Slice& slice) {
   int blocks, aligned_sz;
   int ret;
   void* alignbuf;
-  IOStatus s;
+  Status s;
 
   if (buffer_pos || data_left <= buffer_left) {
     if (data_left < buffer_left) {
@@ -463,7 +463,7 @@ IOStatus ZonedWritableFile::BufferedWrite(const Slice& slice) {
     buffer_pos += tobuffer;
     data_left -= tobuffer;
 
-    if (!data_left) return IOStatus::OK();
+    if (!data_left) return Status::OK();
 
     data += tobuffer;
   }
@@ -479,7 +479,7 @@ IOStatus ZonedWritableFile::BufferedWrite(const Slice& slice) {
 
     ret = posix_memalign(&alignbuf, block_sz, aligned_sz);
     if (ret) {
-      return IOStatus::IOError("failed allocating alignment write buffer\n");
+      return Status::IOError("failed allocating alignment write buffer\n");
     }
 
     memcpy(alignbuf, data, aligned_sz);
@@ -498,13 +498,13 @@ IOStatus ZonedWritableFile::BufferedWrite(const Slice& slice) {
     buffer_pos = data_left;
   }
 
-  return IOStatus::OK();
+  return Status::OK();
 }
 
-IOStatus ZonedWritableFile::Append(const Slice& data,
+Status ZonedWritableFile::Append(const Slice& data,
                                    const IOOptions& /*options*/,
                                    IODebugContext* /*dbg*/) {
-  IOStatus s;
+  Status s;
 
   if (buffered) {
     buffer_mtx_.lock();
@@ -518,14 +518,14 @@ IOStatus ZonedWritableFile::Append(const Slice& data,
   return s;
 }
 
-IOStatus ZonedWritableFile::PositionedAppend(const Slice& data, uint64_t offset,
+Status ZonedWritableFile::PositionedAppend(const Slice& data, uint64_t offset,
                                              const IOOptions& /*options*/,
                                              IODebugContext* /*dbg*/) {
-  IOStatus s;
+  Status s;
 
   if (offset != wp) {
     assert(false);
-    return IOStatus::IOError("positioned append not at write pointer");
+    return Status::IOError("positioned append not at write pointer");
   }
 
   if (buffered) {
@@ -544,10 +544,10 @@ void ZonedWritableFile::SetWriteLifeTimeHint(Env::WriteLifeTimeHint hint) {
   zoneFile_->SetWriteLifeTimeHint(hint);
 }
 
-IOStatus ZonedSequentialFile::Read(size_t n, const IOOptions& /*options*/,
+Status ZonedSequentialFile::Read(size_t n, const IOOptions& /*options*/,
                                    Slice* result, char* scratch,
                                    IODebugContext* /*dbg*/) {
-  IOStatus s;
+  Status s;
 
   s = zoneFile_->PositionedRead(rp, n, result, scratch, direct_);
   if (s.ok()) rp += result->size();
@@ -555,21 +555,21 @@ IOStatus ZonedSequentialFile::Read(size_t n, const IOOptions& /*options*/,
   return s;
 }
 
-IOStatus ZonedSequentialFile::Skip(uint64_t n) {
+Status ZonedSequentialFile::Skip(uint64_t n) {
   if (rp + n >= zoneFile_->GetFileSize())
-    return IOStatus::InvalidArgument("Skip beyond end of file");
+    return Status::InvalidArgument("Skip beyond end of file");
   rp += n;
-  return IOStatus::OK();
+  return Status::OK();
 }
 
-IOStatus ZonedSequentialFile::PositionedRead(uint64_t offset, size_t n,
+Status ZonedSequentialFile::PositionedRead(uint64_t offset, size_t n,
                                              const IOOptions& /*options*/,
                                              Slice* result, char* scratch,
                                              IODebugContext* /*dbg*/) {
   return zoneFile_->PositionedRead(offset, n, result, scratch, direct_);
 }
 
-IOStatus ZonedRandomAccessFile::Read(uint64_t offset, size_t n,
+Status ZonedRandomAccessFile::Read(uint64_t offset, size_t n,
                                      const IOOptions& /*options*/,
                                      Slice* result, char* scratch,
                                      IODebugContext* /*dbg*/) const {
