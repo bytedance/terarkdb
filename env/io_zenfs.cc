@@ -371,15 +371,12 @@ ZonedWritableFile::~ZonedWritableFile() {
 
 ZonedWritableFile::MetadataWriter::~MetadataWriter() {}
 
-Status ZonedWritableFile::Truncate(uint64_t size,
-                                     const IOOptions& /*options*/,
-                                     IODebugContext* /*dbg*/) {
+Status ZonedWritableFile::Truncate(uint64_t size) {
   zoneFile_->SetFileSize(size);
   return Status::OK();
 }
 
-Status ZonedWritableFile::Fsync(const IOOptions& /*options*/,
-                                  IODebugContext* /*dbg*/) {
+Status ZonedWritableFile::Fsync() {
   Status s;
 
   buffer_mtx_.lock();
@@ -393,27 +390,22 @@ Status ZonedWritableFile::Fsync(const IOOptions& /*options*/,
   return metadata_writer_->Persist(zoneFile_);
 }
 
-Status ZonedWritableFile::Sync(const IOOptions& options,
-                                 IODebugContext* dbg) {
-  return Fsync(options, dbg);
+Status ZonedWritableFile::Sync() {
+  return Fsync();
 }
 
-Status ZonedWritableFile::Flush(const IOOptions& /*options*/,
-                                  IODebugContext* /*dbg*/) {
+Status ZonedWritableFile::Flush() {
   return Status::OK();
 }
 
-Status ZonedWritableFile::RangeSync(uint64_t offset, uint64_t nbytes,
-                                      const IOOptions& options,
-                                      IODebugContext* dbg) {
-  if (wp < offset + nbytes) return Fsync(options, dbg);
+Status ZonedWritableFile::RangeSync(uint64_t offset, uint64_t nbytes) {
+  if (wp < offset + nbytes) return Fsync();
 
   return Status::OK();
 }
 
-Status ZonedWritableFile::Close(const IOOptions& options,
-                                  IODebugContext* dbg) {
-  Fsync(options, dbg);
+Status ZonedWritableFile::Close() {
+  Fsync();
   zoneFile_->CloseWR();
 
   return Status::OK();
@@ -501,9 +493,7 @@ Status ZonedWritableFile::BufferedWrite(const Slice& slice) {
   return Status::OK();
 }
 
-Status ZonedWritableFile::Append(const Slice& data,
-                                   const IOOptions& /*options*/,
-                                   IODebugContext* /*dbg*/) {
+Status ZonedWritableFile::Append(const Slice& data) {
   Status s;
 
   if (buffered) {
@@ -518,9 +508,7 @@ Status ZonedWritableFile::Append(const Slice& data,
   return s;
 }
 
-Status ZonedWritableFile::PositionedAppend(const Slice& data, uint64_t offset,
-                                             const IOOptions& /*options*/,
-                                             IODebugContext* /*dbg*/) {
+Status ZonedWritableFile::PositionedAppend(const Slice& data, uint64_t offset) {
   Status s;
 
   if (offset != wp) {
@@ -544,9 +532,7 @@ void ZonedWritableFile::SetWriteLifeTimeHint(Env::WriteLifeTimeHint hint) {
   zoneFile_->SetWriteLifeTimeHint(hint);
 }
 
-Status ZonedSequentialFile::Read(size_t n, const IOOptions& /*options*/,
-                                   Slice* result, char* scratch,
-                                   IODebugContext* /*dbg*/) {
+Status ZonedSequentialFile::Read(size_t n, Slice* result, char* scratch) {
   Status s;
 
   s = zoneFile_->PositionedRead(rp, n, result, scratch, direct_);
@@ -563,16 +549,12 @@ Status ZonedSequentialFile::Skip(uint64_t n) {
 }
 
 Status ZonedSequentialFile::PositionedRead(uint64_t offset, size_t n,
-                                             const IOOptions& /*options*/,
-                                             Slice* result, char* scratch,
-                                             IODebugContext* /*dbg*/) {
+                                             Slice* result, char* scratch) {
   return zoneFile_->PositionedRead(offset, n, result, scratch, direct_);
 }
 
 Status ZonedRandomAccessFile::Read(uint64_t offset, size_t n,
-                                     const IOOptions& /*options*/,
-                                     Slice* result, char* scratch,
-                                     IODebugContext* /*dbg*/) const {
+                                     Slice* result, char* scratch) const {
   return zoneFile_->PositionedRead(offset, n, result, scratch, direct_);
 }
 
