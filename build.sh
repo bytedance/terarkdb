@@ -26,5 +26,6 @@ fi
 
 git submodule update --init --recursive
 
-cd $BASE/$OUTPUT && cmake ../ -DCMAKE_BUILD_TYPE=Release -DWITH_TESTS=${WITH_TESTS} -DWITH_TOOLS=ON -DWITH_TERARK_ZIP=ON
+cd $BASE/$OUTPUT && cmake ../ -DCMAKE_BUILD_TYPE=Release -DWITH_TESTS=${WITH_TESTS} -DWITH_TOOLS=ON
+-DWITH_TERARK_ZIP=OFF
 cd $BASE/$OUTPUT && make -j $(nproc) && make install
