@@ -1,15 +1,8 @@
-// Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
-// Copyright (c) 2019-present, Western Digital Corporation
-//  This source code is licensed under both the GPLv2 (found in the
-//  COPYING file in the root directory) and Apache 2.0 License
-//  (found in the LICENSE.Apache file in the root directory).
-
 #pragma once
 
 #include "env/io_zenfs.h"
 #include "env/zbd_zenfs.h"
 #include "rocksdb/env.h"
-#include "rocksdb/file_system.h"
 #include "rocksdb/status.h"
 #include "util/coding.h"
 
@@ -218,19 +211,15 @@ class ZenEnv : public EnvWrapper {
   }
 
   ZoneFile* GetFile(std::string fname);
-  Status DeleteFile(std::string fname);
+  Status DeleteFile_Internal(std::string fname);
 
  public:
   explicit ZenEnv(ZonedBlockDevice* zbd, Env* env,
                   std::shared_ptr<Logger> logger);
-  virtual ~ZenFS();
+  ~ZenEnv();
 
   Status Mount();
   Status MkFS(std::string aux_fs_path, uint32_t finish_threshold);
-
-  const char* Name() const override {
-    return "ZenFS - The Zoned-enabled File System";
-  }
 
   virtual Status NewSequentialFile(const std::string& fname,
                                    std::unique_ptr<SequentialFile>* result,
@@ -374,7 +363,6 @@ class ZenEnv : public EnvWrapper {
 };
 #endif  // !defined(ROCKSDB_LITE) && defined(OS_LINUX) && defined(LIBZBD)
 
-Status NewZenFS(FileSystem** fs, const std::string& bdevname);
 std::map<std::string, std::string> ListZenFileSystems();
 
 } // namespace_TERARKDB_NAMESPACE
