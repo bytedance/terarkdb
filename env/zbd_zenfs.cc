@@ -38,7 +38,7 @@
 /* Minimum of number of zones that makes sense */
 #define ZENFS_MIN_ZONES (32)
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMESPACE {
 
 Zone::Zone(ZonedBlockDevice *zbd, struct zbd_zone *z)
     : zbd_(zbd),
@@ -505,6 +505,6 @@ Zone *ZonedBlockDevice::AllocateZone(Env::WriteLifeTimeHint file_lifetime) {
 std::string ZonedBlockDevice::GetFilename() { return filename_; }
 uint32_t ZonedBlockDevice::GetBlockSize() { return block_sz_; }
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // !defined(ROCKSDB_LITE) && !defined(OS_WIN) && defined(LIBZBD)

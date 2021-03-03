@@ -27,7 +27,7 @@
 #include "util/coding.h"
 #include "zbd_zenfs.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMESPACE {
 
 Status ZoneExtent::DecodeFrom(Slice* input) {
   if (input->size() != (sizeof(start_) + sizeof(length_)))
@@ -585,6 +585,6 @@ size_t ZonedRandomAccessFile::GetUniqueId(char* id, size_t max_size) const {
   return zoneFile_->GetUniqueId(id, max_size);
 }
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // !defined(ROCKSDB_LITE) && !defined(OS_WIN) && defined(LIBZBD)

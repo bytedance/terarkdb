@@ -23,7 +23,7 @@
 
 #define DEFAULT_ZENV_LOG_PATH "/tmp/"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMESPACE {
 
 Status ZenMetaLog::AddRecord(const Slice& slice) {
   uint32_t record_sz = slice.size();
@@ -937,7 +937,7 @@ std::map<std::string, std::string> ListZenFileSystems() {
   return zenFileSystems;
 }
 
-};  // namespace ROCKSDB_NAMESPACE
+};  // namespace TERARKDB_NAMESPACE
 
 #else
 
