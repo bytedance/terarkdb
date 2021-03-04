@@ -82,6 +82,11 @@
 #include <io.h>  // open/close
 #endif
 
+#ifdef LIBZBD
+#include "env/env_zenfs.h"
+#include "env/zbd_zenfs.h"
+#endif
+
 using GFLAGS_NAMESPACE::ParseCommandLineFlags;
 using GFLAGS_NAMESPACE::RegisterFlagValidator;
 using GFLAGS_NAMESPACE::SetUsageMessage;
@@ -832,9 +837,6 @@ DEFINE_uint64(prepare_log_writer_num, 1, "");
 DEFINE_string(env_uri, "",
               "URI for registry Env lookup. Mutually exclusive"
               " with --hdfs.");
-DEFINE_string(env_uri, "",
-              "URI for registry Env lookup. Mutually exclusive"
-              " with --hdfs and --fs_uri");
 DEFINE_string(fs_uri, "",
               "URI for registry Filesystem lookup. Mutually exclusive"
               " with --hdfs and --env_uri."
@@ -843,9 +845,6 @@ DEFINE_string(fs_uri, "",
 DEFINE_string(hdfs, "",
               "Name of hdfs environment. Mutually exclusive with"
               " --env_uri and --fs_uri");
-DEFINE_string(hdfs, "",
-              "Name of hdfs environment. Mutually exclusive with"
-              " --env_uri.");
 static TERARKDB_NAMESPACE::Env* FLAGS_env = TERARKDB_NAMESPACE::Env::Default();
 
 DEFINE_int64(stats_interval, 0,
@@ -5887,13 +5886,11 @@ int db_bench_tool(int argc, char** argv) {
       exit(1);
     }
   } else if (!FLAGS_fs_uri.empty()) {
-    std::shared_ptr<FileSystem> fs;
-    Status s = FileSystem::Load(FLAGS_fs_uri, &fs);
-    if (fs == nullptr) {
+    Status s = NewZenEnv(&FLAGS_env, FLAGS_fs_uri);
+    if (!s.ok()) {
       fprintf(stderr, "Error: %s\n", s.ToString().c_str());
       exit(1);
     }
-    FLAGS_env = GetCompositeEnv(fs);
   }
 #endif  // ROCKSDB_LITE
   if (!FLAGS_hdfs.empty()) {
