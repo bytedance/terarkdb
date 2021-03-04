@@ -832,7 +832,17 @@ DEFINE_uint64(prepare_log_writer_num, 1, "");
 DEFINE_string(env_uri, "",
               "URI for registry Env lookup. Mutually exclusive"
               " with --hdfs.");
+DEFINE_string(env_uri, "",
+              "URI for registry Env lookup. Mutually exclusive"
+              " with --hdfs and --fs_uri");
+DEFINE_string(fs_uri, "",
+              "URI for registry Filesystem lookup. Mutually exclusive"
+              " with --hdfs and --env_uri."
+              " Creates a default environment with the specified filesystem.");
 #endif  // ROCKSDB_LITE
+DEFINE_string(hdfs, "",
+              "Name of hdfs environment. Mutually exclusive with"
+              " --env_uri and --fs_uri");
 DEFINE_string(hdfs, "",
               "Name of hdfs environment. Mutually exclusive with"
               " --env_uri.");
@@ -5859,6 +5869,13 @@ int db_bench_tool(int argc, char** argv) {
       StringToCompressionType(FLAGS_compression_type.c_str());
 
 #ifndef ROCKSDB_LITE
+  int env_opts =
+      !FLAGS_hdfs.empty() + !FLAGS_env_uri.empty() + !FLAGS_fs_uri.empty();
+  if (env_opts > 1) {
+    fprintf(stderr,
+            "Error: --hdfs, --env_uri and --fs_uri are mutually exclusive\n");
+    exit(1);
+  }
   std::unique_ptr<Env> custom_env_guard;
   if (!FLAGS_hdfs.empty() && !FLAGS_env_uri.empty()) {
     fprintf(stderr, "Cannot provide both --hdfs and --env_uri.\n");
@@ -5869,6 +5886,14 @@ int db_bench_tool(int argc, char** argv) {
       fprintf(stderr, "No Env registered for URI: %s\n", FLAGS_env_uri.c_str());
       exit(1);
     }
+  } else if (!FLAGS_fs_uri.empty()) {
+    std::shared_ptr<FileSystem> fs;
+    Status s = FileSystem::Load(FLAGS_fs_uri, &fs);
+    if (fs == nullptr) {
+      fprintf(stderr, "Error: %s\n", s.ToString().c_str());
+      exit(1);
+    }
+    FLAGS_env = GetCompositeEnv(fs);
   }
 #endif  // ROCKSDB_LITE
   if (!FLAGS_hdfs.empty()) {
