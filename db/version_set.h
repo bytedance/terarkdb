@@ -46,6 +46,7 @@
 #include "port/port.h"
 #include "rocksdb/env.h"
 #include "rocksdb/terark_namespace.h"
+#include "util/static_map_index.h"
 
 namespace TERARKDB_NAMESPACE {
 
@@ -493,7 +494,9 @@ class VersionStorageInfo {
                                      const Slice& largest_user_key,
                                      int last_level, int last_l0_idx);
   FileMetaData* global_map() { return global_map_; }
+  StaticMapIndex* map_index() { return map_index_; }
   void SetGlobalMap(FileMetaData* global_map) { global_map_ = global_map; }
+  void SetMapIndex(StaticMapIndex* map_index) { map_index_ = map_index; }
 
  private:
   const InternalKeyComparator* internal_comparator_;
@@ -515,6 +518,7 @@ class VersionStorageInfo {
   // in increasing order of keys
   std::vector<FileMetaData*>* files_;
   FileMetaData* global_map_ = nullptr;
+  StaticMapIndex* map_index_ = nullptr;
 
   // Dependence files both in files[-1] and dependence_map
   DependenceMap dependence_map_;
@@ -742,7 +746,7 @@ class Version : public SeparateHelper, private LazyBufferState {
 
   void BuildGlobalMap(const ImmutableDBOptions& db_options,
                       const std::string& dbname);
-  Status CheckGlobalMap(Status s);
+  Status BuildMapIndex(Status s, StaticMapIndex* index);
 
  private:
   Env* env_;

@@ -53,6 +53,7 @@
 #include "util/file_reader_writer.h"
 #include "util/filename.h"
 #include "util/logging.h"
+#include "util/static_map_index.h"
 #include "util/stop_watch.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
@@ -344,7 +345,10 @@ class FilePicker {
 };
 }  // anonymous namespace
 
-VersionStorageInfo::~VersionStorageInfo() { delete[](files_ - 1); }
+VersionStorageInfo::~VersionStorageInfo() {
+  delete[](files_ - 1);
+  delete map_index_;
+}
 
 Version::~Version() {
   assert(refs_ == 0);
@@ -1320,7 +1324,9 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
       user_comparator(), internal_comparator());
   FdWithKeyRange* f = fp.GetNextFile();
   bool use_global = cfd_->GetLatestCFOptions().build_global_map &&
-                    storage_info()->global_map() != nullptr;
+                    storage_info()->global_map() != nullptr &&
+                    storage_info()->global_map()->prop.read_amp >
+                        storage_info()->num_levels();
 
   while (f != nullptr) {
     if (get_context.is_finished()) {
@@ -2911,22 +2917,21 @@ void Version::BuildGlobalMap(const ImmutableDBOptions& db_options,
   std::unique_ptr<TableProperties> prop;
   ColumnFamilyData* cfd = this->cfd();
   FileMetaData* p = new FileMetaData;
+  StaticMapIndex* index = new StaticMapIndex(&cfd->internal_comparator());
+
   Status s = map_builder.BuildGlobalMap(0, cfd, this, p, &prop);
   this->storage_info()->SetGlobalMap(p);
+  BuildMapIndex(s,index);
+  this->storage_info()->SetMapIndex(index);
   ROCKS_LOG_INFO(
       info_log_,
       "[BuildGlobalMap] finished build global map, elapsed_nanos=%" PRIu64
       ", num_entries= %d, data_size=%d, index_size=%d, read_amp=%f",
       timer.ElapsedNanos(), prop->num_entries, prop->data_size,
       prop->index_size, prop->read_amp);
-  timer.Start();
-  CheckGlobalMap(s);
-  ROCKS_LOG_INFO(info_log_,
-                 "[BuildGlobalMap] check global map, elapsed_nanos=%" PRIu64,
-                 timer.ElapsedNanos());
 }
 
-Status Version::CheckGlobalMap(Status s) {
+Status Version::BuildMapIndex(Status s, StaticMapIndex* index) {
   FileMetaData* global_map = this->storage_info()->global_map();
   ColumnFamilyData* cfd = this->cfd();
   if (global_map == nullptr || !s.ok()) {
@@ -2946,6 +2951,14 @@ Status Version::CheckGlobalMap(Status s) {
       for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
       }
       s = iter->status();
+      StopWatchNano timer(env_, /*auto_start=*/true);
+      auto& icomp = cfd_->internal_comparator();
+      BuildStaticMapIndex(iter, index);
+      ROCKS_LOG_INFO(
+          info_log_,
+          "[BuildMapIndex] finished build map index, elapsed_nanos=%" PRIu64
+          ", key_size= %d, value-lens= %d",
+          timer.ElapsedNanos(), index->key_len, index->value_len);
     }
     delete iter;
     return s;
