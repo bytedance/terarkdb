@@ -370,6 +370,10 @@ if(WITH_TBB)
   list(APPEND THIRDPARTY_LIBS ${TBB_LIBRARIES})
 endif()
 
+if(WITH_ZENFS)
+  list(APPEND THIRDPARTY_LIBS zbd)
+endif()
+
 # Stall notifications eat some performance from inserts
 option(DISABLE_STALL_NOTIF "Build with stall notifications" OFF)
 if(DISABLE_STALL_NOTIF)
