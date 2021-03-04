@@ -17,8 +17,8 @@ Status BuildStaticMapIndex(InternalIterator *iter, StaticMapIndex *index) {
   }
   int key_lens = 0;
   int value_lens = 0;
-  int *key_offset = new int(key_nums + 1);
-  int *value_offset = new int(key_nums + 1);
+  int *key_offset = new int[key_nums + 1];
+  int *value_offset = new int[key_nums + 1];
   int i = 0;
   for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
     auto lazy_val = iter->value();
