@@ -2956,8 +2956,9 @@ Status Version::BuildMapIndex(Status s, StaticMapIndex* index) {
       ROCKS_LOG_INFO(
           info_log_,
           "[BuildMapIndex] finished build map index, elapsed_nanos=%" PRIu64
-          ", key_size= %d, value-lens= %d",
-          timer.ElapsedNanos(), index->key_len, index->value_len);
+          ", key_size= %d, value_lens= %d, key_nums= %d ,read_amp= %f",
+          timer.ElapsedNanos(), index->key_len, index->value_len,
+          index->key_nums, global_map->prop.read_amp);
     }
     delete iter;
     return s;
