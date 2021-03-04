@@ -1191,6 +1191,11 @@ if(WITH_TOOLS)
       $<TARGET_OBJECTS:testharness>)
   target_link_libraries(db_bench${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
 
+  add_executable(zenfs${ARTIFACT_SUFFIX} tools/zenfs.cc
+      tools/zenfs_tool.cc
+      $<TARGET_OBJECTS:testharness>)
+  target_link_libraries(zenfs${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
+
   if(WITH_TERARK_ZIP)
     add_subdirectory(terark-tools/terark-test)
   endif()
