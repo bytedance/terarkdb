@@ -828,7 +828,9 @@ if(WIN32)
       list(APPEND SOURCES
         env/env_zenfs.cc
         env/io_zenfs.cc
-        env/zbd_zenfs.cc)
+        env/zbd_zenfs.cc
+        tools/zenfs.cc
+        tools/zenfs_tool.cc)
     endif()  
 endif()
 
