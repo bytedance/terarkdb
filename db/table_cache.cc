@@ -162,7 +162,6 @@ Status TableCache::GetTableReader(
   }
   return s;
 }
-
 Status TableCache::GetTableReaderImpl(
     const EnvOptions& env_options,
     const InternalKeyComparator& internal_comparator, const FileDescriptor& fd,
@@ -205,9 +204,9 @@ Status TableCache::GetTableReaderImpl(
     TEST_SYNC_POINT_CALLBACK("MapBuilder::Build::force_memory", &force_memory);
     if (s.ok() && force_memory) {
       std::unique_ptr<TableReader> file_table_reader(std::move(*table_reader));
-      s = NewTableMemReader(ioptions_, table_reader_option, file_table_reader,
-                            table_reader);
-      ROCKS_LOG_INFO(ioptions_.info_log, "Force&Decompress Table %" PRIu64 " in Mem",
+      s = NewMapIndexReader(ioptions_, file_table_reader, table_reader);
+      ROCKS_LOG_INFO(ioptions_.info_log,
+                     "Force&Decompress Table %" PRIu64 " in Mem",
                      file_table_reader->FileNumber());
     }
     TEST_SYNC_POINT("TableCache::GetTableReader:0");
@@ -325,8 +324,7 @@ InternalIterator* TableCache::NewIterator(
       s = FindTable(env_options, icomparator, fd, &handle, prefix_extractor,
                     options.read_tier == kBlockCacheTier /* no_io */,
                     record_stats, file_read_hist, skip_filters, level,
-                    true /* prefetch_index_and_filter_in_cache */,
-                    file_meta.prop.is_map_sst());
+                    true /* prefetch_index_and_filter_in_cache */, false);
       if (s.ok()) {
         table_reader = GetTableReaderFromHandle(handle);
       }
@@ -459,8 +457,7 @@ Status TableCache::Get(const ReadOptions& options,
     if (!file_meta.prop.is_map_sst()) {
       s = t->Get(options, k, get_context, prefix_extractor, skip_filters);
     } else if (dependence_map.empty()) {
-      s = Status::Corruption(
-          "TableCache::Get: Map sst depend files missing");
+      s = Status::Corruption("TableCache::Get: Map sst depend files missing");
     } else {
       // Forward query to target sst
       ReadOptions forward_options = options;

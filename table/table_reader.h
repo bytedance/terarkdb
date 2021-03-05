@@ -146,4 +146,7 @@ Status NewTableMemReader(const ImmutableCFOptions& icfo,
                          std::unique_ptr<TableReader>& file_table_reader,
                          std::unique_ptr<TableReader>* mem_table_reader);
 
+Status NewMapIndexReader(const ImmutableCFOptions& icfo,
+                         std::unique_ptr<TableReader>& file_table_reader,
+                         std::unique_ptr<TableReader>* mem_table_reader);
 }  // namespace TERARKDB_NAMESPACE

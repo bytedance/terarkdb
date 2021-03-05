@@ -9,6 +9,8 @@
 
 #include "table_reader.h"
 
+#include <inttypes.h>
+
 #include "db/dbformat.h"
 #include "memtable/skiplist.h"
 #include "rocksdb/statistics.h"
@@ -17,8 +19,11 @@
 #include "table/scoped_arena_iterator.h"
 #include "table/table_builder.h"
 #include "util/arena.h"
+#include "util/static_map_index.h"
 
 namespace TERARKDB_NAMESPACE {
+
+class StaticMapIndex;
 
 void TableReader::RangeScan(const Slice* begin,
                             const SliceTransform* prefix_extractor, void* arg,
@@ -34,9 +39,8 @@ void TableReader::RangeScan(const Slice* begin,
 }
 
 void TableReader::UpdateMaxCoveringTombstoneSeq(
-    const TERARKDB_NAMESPACE::ReadOptions& readOptions,
-    const TERARKDB_NAMESPACE::Slice& user_key,
-    TERARKDB_NAMESPACE::SequenceNumber* max_covering_tombstone_seq) {
+    const ReadOptions& readOptions, const Slice& user_key,
+    SequenceNumber* max_covering_tombstone_seq) {
   if (max_covering_tombstone_seq != nullptr &&
       !readOptions.ignore_range_deletions) {
     std::unique_ptr<FragmentedRangeTombstoneIterator> range_del_iter(
@@ -47,6 +51,122 @@ void TableReader::UpdateMaxCoveringTombstoneSeq(
                    range_del_iter->MaxCoveringTombstoneSeqnum(user_key));
     }
   }
+}
+class TableMapIndexReader : public TableReader {
+  class Iter : public InternalIterator {
+   public:
+    Iter(StaticMapIndex* _index) : index(_index) {}
+    bool Valid() const override { return idx >= 0 && idx < index->key_nums; }
+    void SeekToFirst() override { idx = 0; }
+    void SeekToLast() override { idx = index->key_nums - 1; }
+    void SeekForPrev(const Slice& key) override {
+      idx = index->getIdx(key) - 1;
+    }
+    void Seek(const Slice& key) override { idx = index->getIdx(key); }
+    void Next() override { idx++; }
+    void Prev() override { idx--; }
+    Slice key() const override { return index->getKey(idx); }
+    LazyBuffer value() const override { return LazyBuffer(index->getKey(idx)); }
+    Status status() const override { return Status::OK(); }
+
+   private:
+    StaticMapIndex* index;
+    int idx;
+  };
+
+  // Logic same as for(it->Seek(begin); it->Valid() && callback(*it); ++it) {}
+  // Specialization for performance
+ public:
+  ~TableMapIndexReader() {
+    if (index != nullptr) {
+      delete index;
+    }
+  }
+  TableMapIndexReader(const ImmutableCFOptions& icfo,
+                      std::unique_ptr<TableReader>& table_reader)
+      : immutable_cfoptions_(icfo), file_number_(table_reader->FileNumber()) {}
+  void RangeScan(const Slice* begin, const SliceTransform* prefix_extractor,
+                 void* arg,
+                 bool (*callback_func)(void* arg, const Slice& key,
+                                       LazyBuffer&& value)) {
+    int k = 0;
+    if (begin != nullptr) k = index->getIdx(*begin);
+    for (; k < index->key_nums &&
+           callback_func(arg, index->getKey(k), LazyBuffer(index->getValue(k)));
+         k++) {
+    }
+  }
+  uint64_t ApproximateOffsetOf(const Slice& key) override { return 0; }
+
+  void SetupForCompaction() override {}
+
+  std::shared_ptr<const TableProperties> GetTableProperties() const override {
+    return table_properties_;
+  }
+  InternalIterator* NewIterator(const ReadOptions&,
+                                const SliceTransform* prefix_extractor,
+                                Arena* arena = nullptr,
+                                bool skip_filters = false,
+                                bool for_compaction = false) override {
+    return new Iter(index);
+  }
+  FragmentedRangeTombstoneIterator* NewRangeTombstoneIterator(
+      const ReadOptions& read_options) override {
+    if (fragmented_range_dels_ == nullptr) {
+      return nullptr;
+    }
+    SequenceNumber snapshot = kMaxSequenceNumber;
+    if (read_options.snapshot != nullptr) {
+      snapshot = read_options.snapshot->GetSequenceNumber();
+    }
+    auto icomp = &immutable_cfoptions_.internal_comparator;
+    return new FragmentedRangeTombstoneIterator(fragmented_range_dels_, *icomp,
+                                                snapshot);
+  }
+
+  size_t ApproximateMemoryUsage() const override {
+    if (index == nullptr)
+      return 0;
+    else
+      return index->size();
+  }
+  uint64_t FileNumber() const override { return file_number_; }
+
+  Status Get(const ReadOptions& readOptions, const Slice& key,
+             GetContext* get_context, const SliceTransform* prefix_extractor,
+             bool skip_filters = false) override {
+    assert(false);
+    return Status();
+  }
+
+  Status Open(std::unique_ptr<TableReader>& table_reader);
+
+ private:
+  const ImmutableCFOptions& immutable_cfoptions_;
+  StaticMapIndex* index = nullptr;
+
+  const uint64_t file_number_;
+
+  std::shared_ptr<const FragmentedRangeTombstoneList> fragmented_range_dels_;
+  std::shared_ptr<const TableProperties> table_properties_;
+};
+
+Status TableMapIndexReader::Open(std::unique_ptr<TableReader>& table_reader) {
+  Status status;
+  auto iter = table_reader->NewIterator(ReadOptions(), nullptr);
+  index = new StaticMapIndex(&immutable_cfoptions_.internal_comparator);
+  StopWatchNano timer(immutable_cfoptions_.env, /*auto_start=*/true);
+  status = BuildStaticMapIndex(iter, index);
+  if (index != nullptr) {
+    ROCKS_LOG_INFO(
+        immutable_cfoptions_.info_log,
+        "[BuildMapIndex] finished build map index, elapsed_nanos=%" PRIu64
+        ", key_size= %d, value_lens= %d, key_nums= %d",
+        timer.ElapsedNanos(), index->key_len, index->value_len,
+        index->key_nums);
+    index->DebugString();
+  }
+  return status;
 }
 
 // for small sst and frequence-used sst, force it in memory
@@ -256,6 +376,16 @@ Status NewTableMemReader(const ImmutableCFOptions& icfo,
 
   Status status = mem_reader->Open(file_table_reader);
   if (status.ok()) mem_table_reader->reset(mem_reader);
+  return status;
+}
+Status NewMapIndexReader(const ImmutableCFOptions& icfo,
+                         std::unique_ptr<TableReader>& file_table_reader,
+                         std::unique_ptr<TableReader>* mem_table_reader) {
+  TableMapIndexReader* map_index_reader =
+      new TableMapIndexReader(icfo, file_table_reader);
+
+  Status status = map_index_reader->Open(file_table_reader);
+  if (status.ok()) mem_table_reader->reset(map_index_reader);
   return status;
 }
 }  // namespace TERARKDB_NAMESPACE

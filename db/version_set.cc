@@ -2916,21 +2916,19 @@ void Version::BuildGlobalMap(const ImmutableDBOptions& db_options,
   std::unique_ptr<TableProperties> prop;
   ColumnFamilyData* cfd = this->cfd();
   FileMetaData* p = new FileMetaData;
-  StaticMapIndex* index = new StaticMapIndex(&cfd->internal_comparator());
 
   Status s = map_builder.BuildGlobalMap(0, cfd, this, p, &prop);
   this->storage_info()->SetGlobalMap(p);
-  BuildMapIndex(s, index);
-  this->storage_info()->SetMapIndex(index);
   ROCKS_LOG_INFO(
       info_log_,
       "[BuildGlobalMap] finished build global map, elapsed_nanos=%" PRIu64
       ", num_entries= %d, data_size=%d, index_size=%d, read_amp=%f",
       timer.ElapsedNanos(), prop->num_entries, prop->data_size,
       prop->index_size, prop->read_amp);
+  BuildMapIndex(s);
 }
 
-Status Version::BuildMapIndex(Status s, StaticMapIndex* index) {
+Status Version::BuildMapIndex(Status s) {
   FileMetaData* global_map = this->storage_info()->global_map();
   ColumnFamilyData* cfd = this->cfd();
   if (global_map == nullptr || !s.ok()) {
@@ -2939,28 +2937,15 @@ Status Version::BuildMapIndex(Status s, StaticMapIndex* index) {
     return s;
   }
   if (s.ok() && global_map->fd.file_size > 0) {
-    // test map sst
-    DependenceMap empty_dependence_map;
-    InternalIterator* iter = cfd->table_cache()->NewIterator(
-        ReadOptions(), env_options_, cfd->internal_comparator(), *global_map,
-        empty_dependence_map, nullptr /* range_del_agg */, nullptr, nullptr,
-        nullptr, false, nullptr /* arena */, false /* skip_filters */, 0);
-    Status s = iter->status();
+    //     build Map Index Table Reader
+    Cache::Handle* handle = nullptr;
+    s = cfd->table_cache()->FindTable(env_options_, *internal_comparator(),
+                                      global_map->fd, &handle, nullptr, true,
+                                      false, nullptr, true, 0, true, true);
     if (s.ok()) {
-      for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
-      }
-      s = iter->status();
-      StopWatchNano timer(env_, /*auto_start=*/true);
-      auto& icomp = cfd_->internal_comparator();
-      BuildStaticMapIndex(iter, index);
-      ROCKS_LOG_INFO(
-          info_log_,
-          "[BuildMapIndex] finished build map index, elapsed_nanos=%" PRIu64
-          ", key_size= %d, value_lens= %d, key_nums= %d ,read_amp= %f",
-          timer.ElapsedNanos(), index->key_len, index->value_len,
-          index->key_nums, global_map->prop.read_amp);
+      global_map->fd.table_reader =
+          cfd->table_cache()->GetTableReaderFromHandle(handle);
     }
-    delete iter;
     return s;
   }
 }

@@ -746,7 +746,7 @@ class Version : public SeparateHelper, private LazyBufferState {
 
   void BuildGlobalMap(const ImmutableDBOptions& db_options,
                       const std::string& dbname);
-  Status BuildMapIndex(Status s, StaticMapIndex* index);
+  Status BuildMapIndex(Status s);
 
  private:
   Env* env_;
