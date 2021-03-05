@@ -445,8 +445,7 @@ Status TableCache::Get(const ReadOptions& options,
                   prefix_extractor,
                   options.read_tier == kBlockCacheTier /* no_io */,
                   true /* record_read_stats */, file_read_hist, skip_filters,
-                  level, true /* prefetch_index_and_filter_in_cache */,
-                  file_meta.prop.is_map_sst());
+                  level, true /* prefetch_index_and_filter_in_cache */, false);
     if (s.ok()) {
       t = GetTableReaderFromHandle(handle);
     }

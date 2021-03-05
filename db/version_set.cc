@@ -1323,9 +1323,10 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
       user_comparator(), internal_comparator());
   FdWithKeyRange* f = fp.GetNextFile();
   bool use_global = cfd_->GetLatestCFOptions().build_global_map &&
-                    storage_info()->global_map() != nullptr &&
-                    storage_info()->global_map()->prop.read_amp >
-                        storage_info()->num_levels();
+                    storage_info()->global_map() != nullptr;
+  //                    &&
+  //                    storage_info()->global_map()->prop.read_amp >
+  //                        storage_info()->num_levels();
 
   while (f != nullptr) {
     if (get_context.is_finished()) {
@@ -2940,7 +2941,7 @@ Status Version::BuildMapIndex(Status s) {
     //     build Map Index Table Reader
     Cache::Handle* handle = nullptr;
     s = cfd->table_cache()->FindTable(env_options_, *internal_comparator(),
-                                      global_map->fd, &handle, nullptr, true,
+                                      global_map->fd, &handle, nullptr, false,
                                       false, nullptr, true, 1, true, true);
     if (s.ok()) {
       global_map->fd.table_reader =
