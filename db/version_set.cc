@@ -2941,7 +2941,7 @@ Status Version::BuildMapIndex(Status s) {
     Cache::Handle* handle = nullptr;
     s = cfd->table_cache()->FindTable(env_options_, *internal_comparator(),
                                       global_map->fd, &handle, nullptr, true,
-                                      false, nullptr, true, 0, true, true);
+                                      false, nullptr, true, 1, true, true);
     if (s.ok()) {
       global_map->fd.table_reader =
           cfd->table_cache()->GetTableReaderFromHandle(handle);

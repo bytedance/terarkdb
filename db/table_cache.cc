@@ -595,7 +595,7 @@ Status TableCache::GetTableProperties(
                 prefix_extractor, no_io, true /* record_read_stats */,
                 nullptr /* file_read_hist */, false /* skip_filters */,
                 -1 /* level */, true /* prefetch_index_and_filter_in_cache */,
-                file_meta.prop.is_map_sst());
+                false);
   if (!s.ok()) {
     return s;
   }

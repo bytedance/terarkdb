@@ -725,7 +725,7 @@ class VersionBuilder::Rep {
             env_options_, *base_vstorage_->InternalComparator(), file_meta->fd,
             &file_meta->table_reader_handle, prefix_extractor, false /*no_io */,
             true /* record_read_stats */, file_read_hist, false, level,
-            prefetch_index_and_filter_in_cache, file_meta->prop.is_map_sst());
+            prefetch_index_and_filter_in_cache, false);
         if (file_meta->table_reader_handle != nullptr) {
           // Load table_reader
           file_meta->fd.table_reader = table_cache_->GetTableReaderFromHandle(

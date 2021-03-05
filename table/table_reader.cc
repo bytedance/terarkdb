@@ -164,7 +164,7 @@ Status TableMapIndexReader::Open(std::unique_ptr<TableReader>& table_reader) {
         ", key_size= %d, value_lens= %d, key_nums= %d",
         timer.ElapsedNanos(), index->key_len, index->value_len,
         index->key_nums);
-    index->DebugString();
+    //    index->DebugString();
   }
   return status;
 }
