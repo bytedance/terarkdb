@@ -108,6 +108,8 @@ struct PerfContext {
   // total nanos spent after Get() finds a key
   uint64_t get_post_process_time;
   uint64_t get_from_output_files_time;  // total nanos reading from output files
+  uint64_t get_from_sst_time;        //
+  uint64_t get_from_map_time;        //
   // total nanos spent on seeking memtable
   uint64_t seek_on_memtable_time;
   // number of seeks issued on memtable

@@ -13,6 +13,7 @@
 
 #include "db/dbformat.h"
 #include "memtable/skiplist.h"
+#include "monitoring/perf_context_imp.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/terark_namespace.h"
 #include "table/get_context.h"
@@ -32,8 +33,11 @@ void TableReader::RangeScan(const Slice* begin,
   Arena arena;
   ScopedArenaIterator iter(
       NewIterator(ReadOptions(), prefix_extractor, &arena));
-  for (begin == nullptr ? iter->SeekToFirst() : iter->Seek(*begin);
-       iter->Valid() && callback_func(arg, iter->key(), iter->value());
+  {
+    PERF_TIMER_GUARD(get_from_map_time);
+    begin == nullptr ? iter->SeekToFirst() : iter->Seek(*begin);
+  }
+  for (; iter->Valid() && callback_func(arg, iter->key(), iter->value());
        iter->Next()) {
   }
 }
@@ -90,7 +94,10 @@ class TableMapIndexReader : public TableReader {
                  bool (*callback_func)(void* arg, const Slice& key,
                                        LazyBuffer&& value)) {
     int k = 0;
-    if (begin != nullptr) k = index->getIdx(*begin);
+    {
+      PERF_TIMER_GUARD(get_from_map_time);
+      if (begin != nullptr) k = index->getIdx(*begin);
+    }
     for (; k < index->key_nums &&
            callback_func(arg, index->getKey(k), LazyBuffer(index->getValue(k)));
          k++) {
