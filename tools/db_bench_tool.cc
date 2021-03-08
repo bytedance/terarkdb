@@ -5092,7 +5092,7 @@ class Benchmark {
         }
         get_weight--;
         reads_done++;
-        if (reads_done % 1000000 == 0) {
+        if (thread->tid == 0 && reads_done % 1000000 == 0) {
           fprintf(stdout,
                   "perf: get_from_map_sst:%" PRIu64 "\n get_from_sst:%" PRIu64
                   "\n",
