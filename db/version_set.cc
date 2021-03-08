@@ -3273,8 +3273,6 @@ Status VersionSet::ProcessManifestWrites(
         }
       }
     }
-    ROCKS_LOG_INFO(db_options_->info_log, "perf: %s\n",
-                   get_perf_context()->ToString(true).c_str());
 
     // Write new records to MANIFEST log
     if (s.ok()) {

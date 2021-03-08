@@ -263,8 +263,7 @@ DEFINE_bool(reverse_iterator, false,
             "When true use Prev rather than Next for iterators that do "
             "Seek and then Next");
 
-DEFINE_bool(build_global_map, false,
-            "We use global map to optimize read perf");
+DEFINE_bool(build_global_map, false, "We use global map to optimize read perf");
 
 DEFINE_int64(max_scan_distance, 0,
              "Used to define iterate_upper_bound (or iterate_lower_bound "
@@ -5093,6 +5092,13 @@ class Benchmark {
         }
         get_weight--;
         reads_done++;
+        if (reads_done % 1000000 == 0) {
+          fprintf(stdout,
+                  "perf: get_from_map_sst:%" PRIu64 "\n get_from_sst:%" PRIu64
+                  "\n",
+                  get_perf_context()->get_from_map_time,
+                  get_perf_context()->get_from_sst_time);
+        }
         thread->stats.FinishedOps(nullptr, db, 1, kRead);
       } else if (put_weight > 0) {
         // then do all the corresponding number of puts
