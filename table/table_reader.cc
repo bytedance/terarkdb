@@ -34,8 +34,12 @@ void TableReader::RangeScan(const Slice* begin,
   ScopedArenaIterator iter(
       NewIterator(ReadOptions(), prefix_extractor, &arena));
   {
+    PerfLevel prev_perf_level = PerfLevel::kEnableTime;
+    prev_perf_level = GetPerfLevel();
+    SetPerfLevel(PerfLevel::kEnableTime);
     PERF_TIMER_GUARD(get_from_map_time);
     begin == nullptr ? iter->SeekToFirst() : iter->Seek(*begin);
+    SetPerfLevel(prev_perf_level);
   }
   for (; iter->Valid() && callback_func(arg, iter->key(), iter->value());
        iter->Next()) {
@@ -95,8 +99,12 @@ class TableMapIndexReader : public TableReader {
                                        LazyBuffer&& value)) {
     int k = 0;
     {
+      PerfLevel prev_perf_level = PerfLevel::kEnableTime;
+      prev_perf_level = GetPerfLevel();
+      SetPerfLevel(PerfLevel::kEnableTime);
       PERF_TIMER_GUARD(get_from_map_time);
       if (begin != nullptr) k = index->getIdx(*begin);
+      SetPerfLevel(prev_perf_level);
     }
     for (; k < index->key_nums &&
            callback_func(arg, index->getKey(k), LazyBuffer(index->getValue(k)));

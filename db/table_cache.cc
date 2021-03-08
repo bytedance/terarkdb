@@ -454,8 +454,12 @@ Status TableCache::Get(const ReadOptions& options,
     t->UpdateMaxCoveringTombstoneSeq(options, ExtractUserKey(k),
                                      get_context->max_covering_tombstone_seq());
     if (!file_meta.prop.is_map_sst()) {
+      PerfLevel prev_perf_level = PerfLevel::kEnableTime;
+      prev_perf_level = GetPerfLevel();
+      SetPerfLevel(PerfLevel::kEnableTime);
       PERF_TIMER_GUARD(get_from_sst_time);
       s = t->Get(options, k, get_context, prefix_extractor, skip_filters);
+      SetPerfLevel(prev_perf_level);
     } else if (dependence_map.empty()) {
       s = Status::Corruption("TableCache::Get: Map sst depend files missing");
     } else {
