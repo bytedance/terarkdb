@@ -1406,7 +1406,11 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
     if (use_global && fp.GetCurrentLevel() > 0) {
       break;
     }
-    f = fp.GetNextFile();
+    {
+      PERF_TIMER_GUARD(get_from_file_picker);
+      f = fp.GetNextFile();
+    }
+
   }
 
   if (db_statistics_ != nullptr) {

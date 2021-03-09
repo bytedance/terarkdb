@@ -110,6 +110,7 @@ struct PerfContext {
   uint64_t get_from_output_files_time;  // total nanos reading from output files
   uint64_t get_from_sst_time;        //
   uint64_t get_from_map_time;        //
+  uint64_t get_from_file_picker;
   // total nanos spent on seeking memtable
   uint64_t seek_on_memtable_time;
   // number of seeks issued on memtable

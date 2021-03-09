@@ -65,6 +65,7 @@ void PerfContext::Reset() {
   get_from_output_files_time = 0;
   get_from_sst_time = 0;
   get_from_map_time = 0;
+  get_from_file_picker = 0;
   seek_on_memtable_time = 0;
   seek_on_memtable_count = 0;
   next_on_memtable_count = 0;
@@ -173,6 +174,7 @@ std::string PerfContext::ToString(bool exclude_zero_counters) const {
   PERF_CONTEXT_OUTPUT(get_from_output_files_time);
   PERF_CONTEXT_OUTPUT(get_from_sst_time);
   PERF_CONTEXT_OUTPUT(get_from_map_time);
+  PERF_CONTEXT_OUTPUT(get_from_file_picker);
   PERF_CONTEXT_OUTPUT(seek_on_memtable_time);
   PERF_CONTEXT_OUTPUT(seek_on_memtable_count);
   PERF_CONTEXT_OUTPUT(next_on_memtable_count);
