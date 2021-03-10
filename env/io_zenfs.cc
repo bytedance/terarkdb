@@ -405,7 +405,6 @@ Status ZonedWritableFile::RangeSync(uint64_t offset, uint64_t nbytes) {
 }
 
 Status ZonedWritableFile::Close() {
-  Fsync();
   zoneFile_->CloseWR();
 
   return Status::OK();
