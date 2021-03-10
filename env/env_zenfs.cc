@@ -484,7 +484,7 @@ Status ZenEnv::RenameFile(const std::string& f, const std::string& t) {
 
   zoneFile = GetFile(f);
   if (zoneFile != nullptr) {
-    s = DeleteFile(t);
+    s = DeleteFile_Internal(t);
     if (s.ok()) {
       files_mtx_.lock();
       files_.erase(f);
