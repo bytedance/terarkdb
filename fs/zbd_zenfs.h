@@ -113,6 +113,9 @@ class ZonedBlockDevice {
 
   void NotifyIOZoneFull();
   void NotifyIOZoneClosed();
+
+ private:
+  std::string ErrorToString(int err);
 };
 
 }  // namespace ROCKSDB_NAMESPACE
