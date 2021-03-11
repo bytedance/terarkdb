@@ -167,6 +167,14 @@ ZonedBlockDevice::ZonedBlockDevice(std::string bdevname,
   Info(logger_, "New Zoned Block Device: %s", filename_.c_str());
 };
 
+
+std::string ZonedBlockDevice::ErrorToString(int err) {
+  char *err_str = strerror(err);
+  if (err_str != nullptr)
+    return std::string(err_str);
+  return "";
+}
+
 IOStatus ZonedBlockDevice::Open(bool readonly) {
   struct zbd_zone *zone_rep;
   unsigned int reported_zones;
@@ -179,20 +187,20 @@ IOStatus ZonedBlockDevice::Open(bool readonly) {
 
   read_f_ = zbd_open(filename_.c_str(), O_RDONLY, &info);
   if (read_f_ < 0) {
-    return IOStatus::InvalidArgument("Failed to open zoned block device");
+    return IOStatus::InvalidArgument("Failed to open zoned block device: " + ErrorToString(errno));
   }
 
   read_direct_f_ = zbd_open(filename_.c_str(), O_RDONLY, &info);
   if (read_f_ < 0) {
-    return IOStatus::InvalidArgument("Failed to open zoned block device");
+    return IOStatus::InvalidArgument("Failed to open zoned block device: " + ErrorToString(errno));
   }
 
   if (readonly) {
     write_f_ = -1;
   } else {
-    write_f_ = zbd_open(filename_.c_str(), O_WRONLY | O_DIRECT, &info);
+    write_f_ = zbd_open(filename_.c_str(), O_WRONLY | O_DIRECT | O_EXCL, &info);
     if (write_f_ < 0) {
-      return IOStatus::InvalidArgument("Failed to open zoned block device");
+      return IOStatus::InvalidArgument("Failed to open zoned block device: " + ErrorToString(errno));
     }
   }
 
