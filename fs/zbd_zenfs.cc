@@ -299,8 +299,24 @@ uint64_t ZonedBlockDevice::GetFreeSpace() {
   for (const auto z : io_zones) {
     free += z->capacity_;
   }
-
   return free;
+}
+
+uint64_t ZonedBlockDevice::GetUsedSpace() {
+  uint64_t used = 0;
+  for (const auto z : io_zones) {
+    used += z->used_capacity_;
+  }
+  return used;
+}
+
+uint64_t ZonedBlockDevice::GetReclaimableSpace() {
+  uint64_t reclaimable= 0;
+  for (const auto z : io_zones) {
+    if (z->IsFull())
+      reclaimable += (z->max_capacity_ - z->used_capacity_);
+  }
+  return reclaimable;
 }
 
 void ZonedBlockDevice::LogZoneStats() {
