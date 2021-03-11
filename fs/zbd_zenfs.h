@@ -94,6 +94,9 @@ class ZonedBlockDevice {
   Zone *AllocateMetaZone();
 
   uint64_t GetFreeSpace();
+  uint64_t GetUsedSpace();
+  uint64_t GetReclaimableSpace();
+
   std::string GetFilename();
   uint32_t GetBlockSize();
 
