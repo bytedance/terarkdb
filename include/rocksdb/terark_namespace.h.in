@@ -5,6 +5,4 @@
 
 #pragma once
 
-#ifndef TERARKDB_NAMESPACE
-#define TERARKDB_NAMESPACE terarkdb
-#endif
+#define TERARKDB_NAMESPACE @WITH_TERARKDB_NAMESPACE@
