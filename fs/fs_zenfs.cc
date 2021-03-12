@@ -790,7 +790,7 @@ Status ZenFS::RecoverFrom(ZenMetaLog* log) {
 #define ZENV_URI_PATTERN "zenfs://"
 
 /* Mount the filesystem by recovering form the latest valid metadata zone */
-Status ZenFS::Mount() {
+Status ZenFS::Mount(bool readonly) {
   std::vector<Zone*> metazones = zbd_->GetMetaZones();
   std::vector<std::unique_ptr<Superblock>> valid_superblocks;
   std::vector<std::unique_ptr<ZenMetaLog>> valid_logs;
@@ -898,21 +898,28 @@ Status ZenFS::Mount() {
     }
   }
 
-  files_mtx_.lock();
-  s = RollMetaZoneLocked();
-  if (!s.ok()) {
+  if (readonly) {
+    Info(logger_, "Mounting READ ONLY");
+  } else {
+    files_mtx_.lock();
+    s = RollMetaZoneLocked();
+    if (!s.ok()) {
+      files_mtx_.unlock();
+      Error(logger_, "Failed to roll metadata zone.");
+      return s;
+    }
     files_mtx_.unlock();
-    Error(logger_, "Failed to roll metadata zone.");
-    return s;
   }
-  files_mtx_.unlock();
 
   Info(logger_, "Superblock sequence %d", (int)superblock_->GetSeq());
   Info(logger_, "Finish threshold %u", superblock_->GetFinishTreshold());
   Info(logger_, "Filesystem mount OK");
-  Info(logger_, "Resetting unused IO Zones..");
-  zbd_->ResetUnusedIOZones();
-  Info(logger_, "  Done");
+
+  if (!readonly) {
+    Info(logger_, "Resetting unused IO Zones..");
+    zbd_->ResetUnusedIOZones();
+    Info(logger_, "  Done");
+  }
 
   LogFiles();
 
@@ -1013,7 +1020,7 @@ Status NewZenFS(FileSystem** fs, const std::string& bdevname) {
   }
 
   ZenFS* zenFS = new ZenFS(zbd, FileSystem::Default(), logger);
-  s = zenFS->Mount();
+  s = zenFS->Mount(false);
   if (!s.ok()) {
     delete zenFS;
     return s;

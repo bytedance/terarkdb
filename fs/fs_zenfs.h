@@ -166,7 +166,7 @@ class ZenFS : public FileSystemWrapper {
                  std::shared_ptr<Logger> logger);
   virtual ~ZenFS();
 
-  Status Mount();
+  Status Mount(bool readonly);
   Status MkFS(std::string aux_fs_path, uint32_t finish_threshold);
   std::map<std::string, Env::WriteLifeTimeHint> GetWriteLifeTimeHints();
 

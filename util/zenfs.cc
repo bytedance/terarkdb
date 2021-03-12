@@ -29,9 +29,9 @@ DEFINE_int32(finish_threshold, 0, "Finish used zones if less than x% left");
 
 namespace ROCKSDB_NAMESPACE {
 
-ZonedBlockDevice *zbd_open() {
+ZonedBlockDevice *zbd_open(bool readonly) {
   ZonedBlockDevice *zbd = new ZonedBlockDevice(FLAGS_zbd, nullptr);
-  IOStatus open_status = zbd->Open();
+  IOStatus open_status = zbd->Open(readonly);
 
   if (!open_status.ok()) {
     fprintf(stderr, "Failed to open zoned block device: %s, error: %s\n",
@@ -43,11 +43,11 @@ ZonedBlockDevice *zbd_open() {
   return zbd;
 }
 
-Status zenfs_mount(ZonedBlockDevice *zbd, ZenFS **zenFS) {
+Status zenfs_mount(ZonedBlockDevice *zbd, ZenFS **zenFS, bool readonly) {
   Status s;
 
   *zenFS = new ZenFS(zbd, FileSystem::Default(), nullptr);
-  s = (*zenFS)->Mount();
+  s = (*zenFS)->Mount(readonly);
   if (!s.ok()) {
     delete *zenFS;
     *zenFS = nullptr;
@@ -72,11 +72,11 @@ int zenfs_tool_mkfs() {
     return 1;
   }
 
-  ZonedBlockDevice *zbd = zbd_open();
+  ZonedBlockDevice *zbd = zbd_open(false);
   if (zbd == nullptr) return 1;
 
   ZenFS *zenFS;
-  s = zenfs_mount(zbd, &zenFS);
+  s = zenfs_mount(zbd, &zenFS, false);
   if ((s.ok() || !s.IsNotFound()) && !FLAGS_force) {
     fprintf(
         stderr,
@@ -86,7 +86,7 @@ int zenfs_tool_mkfs() {
 
   if (zenFS != nullptr) delete zenFS;
 
-  zbd = zbd_open();
+  zbd = zbd_open(false);
   zenFS = new ZenFS(zbd, FileSystem::Default(), nullptr);
 
   if (FLAGS_aux_path.back() != '/') FLAGS_aux_path.append("/");
@@ -121,11 +121,11 @@ void list_children(ZenFS *zenFS, std::string path) {
 
 int zenfs_tool_list() {
   Status s;
-  ZonedBlockDevice *zbd = zbd_open();
+  ZonedBlockDevice *zbd = zbd_open(true);
   if (zbd == nullptr) return 1;
 
   ZenFS *zenFS;
-  s = zenfs_mount(zbd, &zenFS);
+  s = zenfs_mount(zbd, &zenFS, true);
   if (!s.ok()) {
     fprintf(stderr, "Failed to mount filesystem, error: %s\n",
             s.ToString().c_str());
@@ -139,11 +139,11 @@ int zenfs_tool_list() {
 
 int zenfs_tool_df() {
   Status s;
-  ZonedBlockDevice *zbd = zbd_open();
+  ZonedBlockDevice *zbd = zbd_open(true);
   if (zbd == nullptr) return 1;
 
   ZenFS *zenFS;
-  s = zenfs_mount(zbd, &zenFS);
+  s = zenfs_mount(zbd, &zenFS, true);
   if (!s.ok()) {
     fprintf(stderr, "Failed to mount filesystem, error: %s\n",
             s.ToString().c_str());
@@ -313,10 +313,10 @@ int zenfs_tool_backup() {
   ZonedBlockDevice *zbd;
   ZenFS *zenFS;
 
-  zbd = zbd_open();
+  zbd = zbd_open(false);
   if (zbd == nullptr) return 1;
 
-  status = zenfs_mount(zbd, &zenFS);
+  status = zenfs_mount(zbd, &zenFS, false);
   if (!status.ok()) {
     fprintf(stderr, "Failed to mount filesystem, error: %s\n",
             status.ToString().c_str());
@@ -341,10 +341,10 @@ int zenfs_tool_restore() {
 
   ReadWriteLifeTimeHints();
 
-  zbd = zbd_open();
+  zbd = zbd_open(false);
   if (zbd == nullptr) return 1;
 
-  status = zenfs_mount(zbd, &zenFS);
+  status = zenfs_mount(zbd, &zenFS, false);
   if (!status.ok()) {
     fprintf(stderr, "Failed to mount filesystem, error: %s\n",
             status.ToString().c_str());
