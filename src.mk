@@ -70,6 +70,9 @@ LIB_SOURCES =                                                   \
   env/env_io_prof.cc                                            \
   env/env_posix.cc                                              \
   env/io_posix.cc                                               \
+#  env/fs_zenfs.cc                                               \
+#  env/io_zenfs.cc                                               \
+#  env/zbd_zenfs.cc                                              
   env/mock_env.cc                                               \
   memtable/alloc_tracker.cc                                     \
   memtable/concurrent_hashduallist_rep.cc                       \
