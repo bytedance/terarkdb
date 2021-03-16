@@ -29,6 +29,7 @@ build/
 
 ldb
 manifest_dump
+zenfs
 sst_dump
 blob_dump
 column_aware_encoding_exp

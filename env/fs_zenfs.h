@@ -332,7 +332,11 @@ class ZenFS : public FileSystemWrapper {
 
   IOStatus GetTestDirectory(const IOOptions& options, std::string* path,
                             IODebugContext* dbg) override {
+#ifdef ZENFS_READY
     *path = "/rocksdbtest";
+#else
+    *path = "rocksdbtest";
+#endif
     Debug(logger_, "GetTestDirectory: %s aux: %s\n", path->c_str(),
           ToAuxPath(*path).c_str());
     return target()->CreateDirIfMissing(ToAuxPath(*path), options, dbg);
