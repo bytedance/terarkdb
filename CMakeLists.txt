@@ -379,6 +379,10 @@ if(WITH_TBB)
   list(APPEND THIRDPARTY_LIBS ${TBB_LIBRARIES})
 endif()
 
+if(WITH_ZENFS)
+  list(APPEND THIRDPARTY_LIBS zbd)
+endif()
+
 # Stall notifications eat some performance from inserts
 option(DISABLE_STALL_NOTIF "Build with stall notifications" OFF)
 if(DISABLE_STALL_NOTIF)
@@ -1195,6 +1199,11 @@ if(WITH_TOOLS)
       tools/db_bench_tool.cc
       $<TARGET_OBJECTS:testharness>)
   target_link_libraries(db_bench${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
+
+  add_executable(zenfs${ARTIFACT_SUFFIX} tools/zenfs.cc
+      tools/zenfs_tool.cc
+      $<TARGET_OBJECTS:testharness>)
+  target_link_libraries(zenfs${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
 
   if(WITH_TERARK_ZIP)
     add_subdirectory(terark-tools/terark-test)
