@@ -149,13 +149,13 @@ class ZenMetaLog {
 
   virtual ~ZenMetaLog() { zone_->open_for_write_ = false; }
 
-  IOStatus AddRecord(const Slice& slice);
-  IOStatus ReadRecord(Slice* record, std::string* scratch);
+  Status AddRecord(const Slice& slice);
+  Status ReadRecord(Slice* record, std::string* scratch);
 
   Zone* GetZone() { return zone_; };
 
  private:
-  IOStatus Read(Slice* slice);
+  Status Read(Slice* slice);
 };
 
 class ZenFS : public FileSystemWrapper {
@@ -174,7 +174,7 @@ class ZenFS : public FileSystemWrapper {
 
   struct MetadataWriter : public ZonedWritableFile::MetadataWriter {
     ZenFS* zenFS;
-    IOStatus Persist(ZoneFile* zoneFile) {
+    Status Persist(ZoneFile* zoneFile) {
       Debug(zenFS->GetLogger(), "Syncing metadata for: %s",
             zoneFile->GetFilename().c_str());
       return zenFS->SyncFileMetadata(zoneFile);
@@ -192,12 +192,12 @@ class ZenFS : public FileSystemWrapper {
 
   void LogFiles();
   void ClearFiles();
-  IOStatus WriteSnapshot(ZenMetaLog* meta_log);
-  IOStatus WriteEndRecord(ZenMetaLog* meta_log);
-  IOStatus RollMetaZone();
-  IOStatus PersistSnapshot(ZenMetaLog* meta_writer);
-  IOStatus PersistRecord(std::string record);
-  IOStatus SyncFileMetadata(ZoneFile* zoneFile);
+  Status WriteSnapshot(ZenMetaLog* meta_log);
+  Status WriteEndRecord(ZenMetaLog* meta_log);
+  Status RollMetaZone();
+  Status PersistSnapshot(ZenMetaLog* meta_writer);
+  Status PersistRecord(std::string record);
+  Status SyncFileMetadata(ZoneFile* zoneFile);
 
   void EncodeSnapshotTo(std::string* output);
   void EncodeFileDeletionTo(ZoneFile* zoneFile, std::string* output);
@@ -219,7 +219,7 @@ class ZenFS : public FileSystemWrapper {
   }
 
   ZoneFile* GetFile(std::string fname);
-  IOStatus DeleteFile(std::string fname);
+  Status DeleteFile(std::string fname);
 
  public:
   explicit ZenFS(ZonedBlockDevice* zbd, std::shared_ptr<FileSystem> aux_fs,
@@ -233,52 +233,52 @@ class ZenFS : public FileSystemWrapper {
     return "ZenFS - The Zoned-enabled File System";
   }
 
-  virtual IOStatus NewSequentialFile(const std::string& fname,
+  virtual Status NewSequentialFile(const std::string& fname,
                                      const FileOptions& file_opts,
                                      std::unique_ptr<FSSequentialFile>* result,
                                      IODebugContext* dbg) override;
-  virtual IOStatus NewRandomAccessFile(
+  virtual Status NewRandomAccessFile(
       const std::string& fname, const FileOptions& file_opts,
       std::unique_ptr<FSRandomAccessFile>* result,
       IODebugContext* dbg) override;
-  virtual IOStatus NewWritableFile(const std::string& fname,
+  virtual Status NewWritableFile(const std::string& fname,
                                    const FileOptions& file_opts,
                                    std::unique_ptr<FSWritableFile>* result,
                                    IODebugContext* dbg) override;
-  virtual IOStatus ReuseWritableFile(const std::string& fname,
+  virtual Status ReuseWritableFile(const std::string& fname,
                                      const std::string& old_fname,
                                      const FileOptions& file_opts,
                                      std::unique_ptr<FSWritableFile>* result,
                                      IODebugContext* dbg) override;
-  virtual IOStatus FileExists(const std::string& fname,
+  virtual Status FileExists(const std::string& fname,
                               const IOOptions& options,
                               IODebugContext* dbg) override;
-  virtual IOStatus GetChildren(const std::string& dir, const IOOptions& options,
+  virtual Status GetChildren(const std::string& dir, const IOOptions& options,
                                std::vector<std::string>* result,
                                IODebugContext* dbg) override;
-  virtual IOStatus DeleteFile(const std::string& fname,
+  virtual Status DeleteFile(const std::string& fname,
                               const IOOptions& options,
                               IODebugContext* dbg) override;
-  IOStatus GetFileSize(const std::string& f, const IOOptions& options,
+  Status GetFileSize(const std::string& f, const IOOptions& options,
                        uint64_t* size, IODebugContext* dbg) override;
-  IOStatus RenameFile(const std::string& f, const std::string& t,
+  Status RenameFile(const std::string& f, const std::string& t,
                       const IOOptions& options, IODebugContext* dbg) override;
 
-  IOStatus GetFreeSpace(const std::string& /*path*/,
+  Status GetFreeSpace(const std::string& /*path*/,
                         const IOOptions& /*options*/, uint64_t* diskfree,
                         IODebugContext* /*dbg*/) override {
     *diskfree = zbd_->GetFreeSpace();
-    return IOStatus::OK();
+    return Status::OK();
   }
 
   // The directory structure is stored in the aux file system
 
-  IOStatus IsDirectory(const std::string& path, const IOOptions& options,
+  Status IsDirectory(const std::string& path, const IOOptions& options,
                        bool* is_dir, IODebugContext* dbg) override {
     return target()->IsDirectory(ToAuxPath(path), options, is_dir, dbg);
   }
 
-  IOStatus NewDirectory(const std::string& name, const IOOptions& io_opts,
+  Status NewDirectory(const std::string& name, const IOOptions& io_opts,
                         std::unique_ptr<FSDirectory>* result,
                         IODebugContext* dbg) override {
     Debug(logger_, "NewDirectory: %s to aux: %s\n", name.c_str(),
@@ -286,52 +286,52 @@ class ZenFS : public FileSystemWrapper {
     return target()->NewDirectory(ToAuxPath(name), io_opts, result, dbg);
   }
 
-  IOStatus CreateDir(const std::string& d, const IOOptions& options,
+  Status CreateDir(const std::string& d, const IOOptions& options,
                      IODebugContext* dbg) override {
     Debug(logger_, "CreatDir: %s to aux: %s\n", d.c_str(),
           ToAuxPath(d).c_str());
     return target()->CreateDir(ToAuxPath(d), options, dbg);
   }
 
-  IOStatus CreateDirIfMissing(const std::string& d, const IOOptions& options,
+  Status CreateDirIfMissing(const std::string& d, const IOOptions& options,
                               IODebugContext* dbg) override {
     Debug(logger_, "CreatDirIfMissing: %s to aux: %s\n", d.c_str(),
           ToAuxPath(d).c_str());
     return target()->CreateDirIfMissing(ToAuxPath(d), options, dbg);
   }
 
-  IOStatus DeleteDir(const std::string& d, const IOOptions& options,
+  Status DeleteDir(const std::string& d, const IOOptions& options,
                      IODebugContext* dbg) override {
     std::vector<std::string> children;
-    IOStatus s;
+    Status s;
 
     Debug(logger_, "DeleteDir: %s aux: %s\n", d.c_str(), ToAuxPath(d).c_str());
 
     s = GetChildren(d, options, &children, dbg);
     if (children.size() != 0)
-      return IOStatus::IOError("Directory has children");
+      return Status::IOError("Directory has children");
 
     return target()->DeleteDir(ToAuxPath(d), options, dbg);
   }
 
   // We might want to override these in the future
-  IOStatus GetAbsolutePath(const std::string& db_path, const IOOptions& options,
+  Status GetAbsolutePath(const std::string& db_path, const IOOptions& options,
                            std::string* output_path,
                            IODebugContext* dbg) override {
     return target()->GetAbsolutePath(db_path, options, output_path, dbg);
   }
 
-  IOStatus LockFile(const std::string& f, const IOOptions& options,
+  Status LockFile(const std::string& f, const IOOptions& options,
                     FileLock** l, IODebugContext* dbg) override {
     return target()->LockFile(ToAuxPath(f), options, l, dbg);
   }
 
-  IOStatus UnlockFile(FileLock* l, const IOOptions& options,
+  Status UnlockFile(FileLock* l, const IOOptions& options,
                       IODebugContext* dbg) override {
     return target()->UnlockFile(l, options, dbg);
   }
 
-  IOStatus GetTestDirectory(const IOOptions& options, std::string* path,
+  Status GetTestDirectory(const IOOptions& options, std::string* path,
                             IODebugContext* dbg) override {
 #ifdef ZENFS_READY
     *path = "/rocksdbtest";
@@ -343,67 +343,67 @@ class ZenFS : public FileSystemWrapper {
     return target()->CreateDirIfMissing(ToAuxPath(*path), options, dbg);
   }
 
-  IOStatus NewLogger(const std::string& fname, const IOOptions& options,
+  Status NewLogger(const std::string& fname, const IOOptions& options,
                      std::shared_ptr<Logger>* result,
                      IODebugContext* dbg) override {
     return target()->NewLogger(ToAuxPath(fname), options, result, dbg);
   }
 
   // Not supported (at least not yet)
-  IOStatus Truncate(const std::string& /*fname*/, size_t /*size*/,
+  Status Truncate(const std::string& /*fname*/, size_t /*size*/,
                     const IOOptions& /*options*/,
                     IODebugContext* /*dbg*/) override {
-    return IOStatus::NotSupported("Truncate is not implemented in ZenFS");
+    return Status::NotSupported("Truncate is not implemented in ZenFS");
   }
 
-  virtual IOStatus ReopenWritableFile(const std::string& fname,
+  virtual Status ReopenWritableFile(const std::string& fname,
                                       const FileOptions& options,
                                       std::unique_ptr<FSWritableFile>* result,
                                       IODebugContext* dbg) {
     return target()->NewWritableFile(fname, options, result, dbg);
   }
 
-  virtual IOStatus NewRandomRWFile(const std::string& /*fname*/,
+  virtual Status NewRandomRWFile(const std::string& /*fname*/,
                                    const FileOptions& /*options*/,
                                    std::unique_ptr<FSRandomRWFile>* /*result*/,
                                    IODebugContext* /*dbg*/) override {
-    return IOStatus::NotSupported("RandomRWFile is not implemented in ZenFS");
+    return Status::NotSupported("RandomRWFile is not implemented in ZenFS");
   }
 
-  virtual IOStatus NewMemoryMappedFileBuffer(
+  virtual Status NewMemoryMappedFileBuffer(
       const std::string& /*fname*/,
       std::unique_ptr<MemoryMappedFileBuffer>* /*result*/) override {
-    return IOStatus::NotSupported(
+    return Status::NotSupported(
         "MemoryMappedFileBuffer is not implemented in ZenFS");
   }
 
-  IOStatus GetFileModificationTime(const std::string& /*fname*/,
+  Status GetFileModificationTime(const std::string& /*fname*/,
                                    const IOOptions& /*options*/,
                                    uint64_t* /*file_mtime*/,
                                    IODebugContext* /*dbg*/) override {
-    return IOStatus::NotSupported(
+    return Status::NotSupported(
         "GetFileModificationTime is not implemented in ZenFS");
   }
 
-  virtual IOStatus LinkFile(const std::string& /*src*/,
+  virtual Status LinkFile(const std::string& /*src*/,
                             const std::string& /*target*/,
                             const IOOptions& /*options*/,
                             IODebugContext* /*dbg*/) {
-    return IOStatus::NotSupported("LinkFile is not supported in ZenFS");
+    return Status::NotSupported("LinkFile is not supported in ZenFS");
   }
 
-  virtual IOStatus NumFileLinks(const std::string& /*fname*/,
+  virtual Status NumFileLinks(const std::string& /*fname*/,
                                 const IOOptions& /*options*/,
                                 uint64_t* /*count*/, IODebugContext* /*dbg*/) {
-    return IOStatus::NotSupported(
+    return Status::NotSupported(
         "Getting number of file links is not supported in ZenFS");
   }
 
-  virtual IOStatus AreFilesSame(const std::string& /*first*/,
+  virtual Status AreFilesSame(const std::string& /*first*/,
                                 const std::string& /*second*/,
                                 const IOOptions& /*options*/, bool* /*res*/,
                                 IODebugContext* /*dbg*/) {
-    return IOStatus::NotSupported("AreFilesSame is not supported in ZenFS");
+    return Status::NotSupported("AreFilesSame is not supported in ZenFS");
   }
 };
 #endif  // !defined(ROCKSDB_LITE) && defined(OS_LINUX) && defined(LIBZBD)
