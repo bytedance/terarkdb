@@ -9,7 +9,7 @@
 
 #include <cstdio>
 
-#include "env/fs_zenfs.h"
+#include "env/env_zenfs.h"
 #include "util/gflags_compat.h"
 using GFLAGS_NAMESPACE::ParseCommandLineFlags;
 using GFLAGS_NAMESPACE::RegisterFlagValidator;
@@ -22,11 +22,11 @@ DEFINE_bool(force, false, "Force file system creation.");
 DEFINE_string(path, "", "Path to directory to list files under");
 DEFINE_int32(finish_threshold, 0, "Finish used zones if less than x% left");
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMESPACE {
 
 ZonedBlockDevice *zbd_open() {
   ZonedBlockDevice *zbd = new ZonedBlockDevice(FLAGS_zbd, nullptr);
-  IOStatus open_status = zbd->Open();
+  Status open_status = zbd->Open();
 
   if (!open_status.ok()) {
     fprintf(stderr, "Failed to open zoned block device: %s, error: %s\n",
@@ -38,14 +38,14 @@ ZonedBlockDevice *zbd_open() {
   return zbd;
 }
 
-Status zenfs_mount(ZonedBlockDevice *zbd, ZenFS **zenFS) {
+Status zenfs_mount(ZonedBlockDevice *zbd, ZenEnv **zenEnv) {
   Status s;
 
-  *zenFS = new ZenFS(zbd, FileSystem::Default(), nullptr);
-  s = (*zenFS)->Mount();
+  *zenEnv = new ZenEnv(zbd, Env::Default(), nullptr);
+  s = (*zenEnv)->Mount();
   if (!s.ok()) {
-    delete *zenFS;
-    *zenFS = nullptr;
+    delete *zenEnv;
+    *zenEnv = nullptr;
   }
 
   return s;
@@ -62,8 +62,8 @@ int zenfs_tool_mkfs() {
   ZonedBlockDevice *zbd = zbd_open();
   if (zbd == nullptr) return 1;
 
-  ZenFS *zenFS;
-  s = zenfs_mount(zbd, &zenFS);
+  ZenEnv *zenEnv;
+  s = zenfs_mount(zbd, &zenEnv);
   if ((s.ok() || !s.IsNotFound()) && !FLAGS_force) {
     fprintf(
         stderr,
@@ -71,33 +71,31 @@ int zenfs_tool_mkfs() {
     return 1;
   }
 
-  if (zenFS != nullptr) delete zenFS;
+  if (zenEnv != nullptr) delete zenEnv;
 
   zbd = zbd_open();
-  zenFS = new ZenFS(zbd, FileSystem::Default(), nullptr);
+  zenEnv = new ZenEnv(zbd, Env::Default(), nullptr);
 
   if (FLAGS_aux_path.back() != '/') FLAGS_aux_path.append("/");
 
-  s = zenFS->MkFS(FLAGS_aux_path, FLAGS_finish_threshold);
+  s = zenEnv->MkFS(FLAGS_aux_path, FLAGS_finish_threshold);
   if (!s.ok()) {
     fprintf(stderr, "Failed to create file system, error: %s\n",
             s.ToString().c_str());
-    delete zenFS;
+    delete zenEnv;
     return 1;
   }
 
-  fprintf(stdout, "ZenFS file system created. Free space: %lu MB\n",
+  fprintf(stdout, "ZenEnv file system created. Free space: %lu MB\n",
           zbd->GetFreeSpace() / (1024 * 1024));
 
-  delete zenFS;
+  delete zenEnv;
   return 0;
 }
 
-void list_children(ZenFS *zenFS, std::string path) {
-  IOOptions opts;
-  IODebugContext dbg;
+void list_children(ZenEnv *zenEnv, std::string path) {
   std::vector<std::string> result;
-  IOStatus io_status = zenFS->GetChildren(path, opts, &result, &dbg);
+  Status io_status = zenEnv->GetChildren(path, &result);
 
   if (!io_status.ok()) return;
 
@@ -111,15 +109,15 @@ int zenfs_tool_list() {
   ZonedBlockDevice *zbd = zbd_open();
   if (zbd == nullptr) return 1;
 
-  ZenFS *zenFS;
-  s = zenfs_mount(zbd, &zenFS);
+  ZenEnv *zenEnv;
+  s = zenfs_mount(zbd, &zenEnv);
   if (!s.ok()) {
     fprintf(stderr, "Failed to mount filesystem, error: %s\n",
             s.ToString().c_str());
     return 1;
   }
 
-  list_children(zenFS, FLAGS_path);
+  list_children(zenEnv, FLAGS_path);
 
   return 0;
 }
@@ -133,7 +131,8 @@ int zenfs_tool_lsuuid() {
 
   return 0;
 }
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE
+
 
 int zenfs_tool(int argc, char **argv) {
   SetUsageMessage(std::string("\nUSAGE:\n") + std::string(argv[0]) +
@@ -151,11 +150,11 @@ int zenfs_tool(int argc, char **argv) {
     return 1;
   }
   if (subcmd == "mkfs") {
-    return ROCKSDB_NAMESPACE::zenfs_tool_mkfs();
+    return TERARKDB_NAMESPACE::zenfs_tool_mkfs();
   } else if (subcmd == "list") {
-    return ROCKSDB_NAMESPACE::zenfs_tool_list();
+    return TERARKDB_NAMESPACE::zenfs_tool_list();
   } else if (subcmd == "ls-uuid") {
-    return ROCKSDB_NAMESPACE::zenfs_tool_lsuuid();
+    return TERARKDB_NAMESPACE::zenfs_tool_lsuuid();
   } else {
     fprintf(stderr, "Subcommand not recognized: %s\n", subcmd.c_str());
     return 1;
@@ -165,4 +164,3 @@ int zenfs_tool(int argc, char **argv) {
 }
 
 #endif  // defined(GFLAGS) && !defined(ROCKSDB_LITE) && defined(LIBZBD)
-
