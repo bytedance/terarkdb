@@ -269,6 +269,9 @@ MOCK_LIB_SOURCES = \
 BENCH_LIB_SOURCES =                                             \
   tools/db_bench_tool.cc                                        \
 
+ZENFS_LIB_SOURCES =                                             \
+  tools/zenfs_tool.cc                                           \
+
 EXP_LIB_SOURCES = \
   utilities/col_buf_decoder.cc                                  \
   utilities/col_buf_encoder.cc                                  \
