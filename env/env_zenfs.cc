@@ -7,7 +7,7 @@
 
 #if !defined(ROCKSDB_LITE) && defined(OS_LINUX) && defined(LIBZBD)
 
-#include "env/fs_zenfs.h"
+#include "env/env_zenfs.h"
 
 #include <dirent.h>
 #include <errno.h>
@@ -417,7 +417,7 @@ Status ZenEnv::FileExists(const std::string& fname) {
   Debug(logger_, "FileExists: %s \n", fname.c_str());
 
   if (GetFile(fname) == nullptr) {
-    return target()->FileExists(ToAuxPath(fname), options, dbg);
+    return target()->FileExists(ToAuxPath(fname));
   } else {
     return Status::OK();
   }
@@ -431,7 +431,7 @@ Status ZenEnv::GetChildren(const std::string& dir,
 
   Debug(logger_, "GetChildren: %s \n", dir.c_str());
 
-  target()->GetChildren(ToAuxPath(dir), options, &auxfiles, dbg);
+  target()->GetChildren(ToAuxPath(dir), &auxfiles);
   for (const auto f : auxfiles) {
     if (f != "." && f != "..") result->push_back(f);
   }
@@ -457,10 +457,10 @@ Status ZenEnv::DeleteFile(const std::string& fname) {
   Debug(logger_, "Delete file: %s \n", fname.c_str());
 
   if (GetFile(fname) == nullptr) {
-    return target()->DeleteFile(ToAuxPath(fname), options, dbg);
+    return target()->DeleteFile(ToAuxPath(fname));
   }
 
-  s = DeleteFile(fname);
+  s = DeleteFile_Internal(fname);
   zbd_->LogZoneStats();
 
   return s;
@@ -492,7 +492,7 @@ Status ZenEnv::RenameFile(const std::string& f, const std::string& t) {
 
   zoneFile = GetFile(f);
   if (zoneFile != nullptr) {
-    s = DeleteFile(t);
+    s = DeleteFile_Internal(t);
     if (s.ok()) {
       files_mtx_.lock();
       files_.erase(f);
@@ -503,7 +503,7 @@ Status ZenEnv::RenameFile(const std::string& f, const std::string& t) {
       s = SyncFileMetadata(zoneFile);
     }
   } else {
-    s = target()->RenameFile(ToAuxPath(f), ToAuxPath(t), options, dbg);
+    s = target()->RenameFile(ToAuxPath(f), ToAuxPath(t));
   }
 
   return s;
@@ -937,21 +937,5 @@ std::map<std::string, std::string> ListZenFileSystems() {
   return zenFileSystems;
 }
 
-};  // namespace ROCKSDB_NAMESPACE
-
-#else
-
-#include "rocksdb/env.h"
-
-namespace ROCKSDB_NAMESPACE {
-Status NewZenFS(FileSystem** /*fs*/, const std::string& /*bdevname*/) {
-  return Status::NotSupported("Not built with ZenFS support\n");
-}
-std::map<std::string, std::string> ListZenFileSystems() {
-  std::map<std::string, std::string> zenFileSystems;
-  return zenFileSystems;
-}
-} // namespace_TERARKDB_NAMESPACE
-
+};  // namespace TERARKDB_NAMESPACE
 #endif  // !defined(ROCKSDB_LITE) && defined(OS_LINUX) && defined(LIBZBD)
-
