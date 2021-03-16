@@ -10,7 +10,6 @@
 #include "env/io_zenfs.h"
 #include "env/zbd_zenfs.h"
 #include "rocksdb/env.h"
-#include "rocksdb/file_system.h"
 #include "rocksdb/status.h"
 #include "util/coding.h"
 
@@ -158,7 +157,7 @@ class ZenMetaLog {
   Status Read(Slice* slice);
 };
 
-class ZenFS : public FileSystemWrapper {
+class ZenEnv : public EnvWrapper {
   ZonedBlockDevice* zbd_;
   std::map<std::string, ZoneFile*> files_;
   std::mutex files_mtx_;
@@ -173,11 +172,11 @@ class ZenFS : public FileSystemWrapper {
   std::shared_ptr<Logger> GetLogger() { return logger_; }
 
   struct MetadataWriter : public ZonedWritableFile::MetadataWriter {
-    ZenFS* zenFS;
+    ZenEnv* zenEnv;
     Status Persist(ZoneFile* zoneFile) {
-      Debug(zenFS->GetLogger(), "Syncing metadata for: %s",
+      Debug(zenEnv->GetLogger(), "Syncing metadata for: %s",
             zoneFile->GetFilename().c_str());
-      return zenFS->SyncFileMetadata(zoneFile);
+      return zenEnv->SyncFileMetadata(zoneFile);
     }
   };
 
@@ -219,19 +218,15 @@ class ZenFS : public FileSystemWrapper {
   }
 
   ZoneFile* GetFile(std::string fname);
-  Status DeleteFile(std::string fname);
+  Status DeleteFile_Internal(std::string fname);
 
  public:
-  explicit ZenFS(ZonedBlockDevice* zbd, std::shared_ptr<FileSystem> aux_fs,
-                 std::shared_ptr<Logger> logger);
-  virtual ~ZenFS();
+  explicit ZenEnv(ZonedBlockDevice* zbd, Env* env,
+                  std::shared_ptr<Logger> logger);
+  ~ZenEnv();
 
   Status Mount();
   Status MkFS(std::string aux_fs_path, uint32_t finish_threshold);
-
-  const char* Name() const override {
-    return "ZenFS - The Zoned-enabled File System";
-  }
 
   virtual Status NewSequentialFile(const std::string& fname,
                                    std::unique_ptr<SequentialFile>* result,
@@ -375,8 +370,6 @@ class ZenFS : public FileSystemWrapper {
 };
 #endif  // !defined(ROCKSDB_LITE) && defined(OS_LINUX) && defined(LIBZBD)
 
-Status NewZenFS(FileSystem** fs, const std::string& bdevname);
 std::map<std::string, std::string> ListZenFileSystems();
 
-};  // namespace TERARKDB_NAMESPACE
-
+} // namespace_TERARKDB_NAMESPACE
