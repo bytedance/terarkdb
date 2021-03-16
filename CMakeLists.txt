@@ -826,6 +826,9 @@ if(WIN32)
     list(APPEND SOURCES
       port/port_posix.cc
       env/env_posix.cc
+      #env/fs_zenfs.cc
+      #env/io_zenfs_cc
+      #env/zbd_zenfs.cc
       env/io_posix.cc)
 endif()
 
