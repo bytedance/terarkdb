@@ -7,7 +7,7 @@ BASE=$PWD
 OUTPUT=output
 mkdir -p $OUTPUT
 
-if [ "$WITH_TESTS" == "1" ];then
+if [ "$WITH_TESTS" = "1" ];then
   WITH_TESTS=ON
 else
   WITH_TESTS=OFF
