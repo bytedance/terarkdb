@@ -23,7 +23,7 @@
 #include "rocksdb/file_system.h"
 #include "zbd_zenfs.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMESPACE {
 
 class ZoneExtent {
  public:
@@ -189,7 +189,7 @@ class ZonedRandomAccessFile : public FSRandomAccessFile {
   size_t GetUniqueId(char* id, size_t max_size) const override;
 };
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // !defined(ROCKSDB_LITE) && defined(OS_LINUX) && defined(LIBZBD)
 
