@@ -1423,4 +1423,8 @@ Env* NewTimedEnv(Env* base_env);
 // This is a env forwarding method defined in env/env_io_prof.cc
 Env* NewIOProfEnv(Env* base_env);
 
+// Returns a new environment that is used for ZENFS environment.
+// This is a factory method for ZENFS declared in hdfs/env_zenfs.h
+Status NewZenEnv(Env** env, const std::string& bdevname);
+
 }  // namespace TERARKDB_NAMESPACE
