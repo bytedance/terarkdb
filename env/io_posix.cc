@@ -1115,4 +1115,41 @@ Status PosixDirectory::Fsync() {
   return Status::OK();
 }
 }  // namespace TERARKDB_NAMESPACE
+
+#ifdef ZENFS_READY
+static FactoryFunc<FileSystem> zenfs_filesystem_reg =
+    ObjectLibrary::Default()->Register<FileSystem>(
+        "zenfs://.*", [](const std::string& uri, std::unique_ptr<FileSystem>* f,
+                         std::string* errmsg) {
+          std::string devID = uri;
+          FileSystem* fs = nullptr;
+          Status s;
+
+          devID.replace(0, strlen("zenfs://"), "");
+          if (devID.rfind("dev:") == 0) {
+            devID.replace(0, strlen("dev:"), "");
+            s = NewZenFS(&fs, devID);
+            if (!s.ok()) {
+              *errmsg = s.ToString();
+            }
+          } else if (devID.rfind("uuid:") == 0) {
+            std::map<std::string, std::string> zenFileSystems =
+                ListZenFileSystems();
+            devID.replace(0, strlen("uuid:"), "");
+
+            if (zenFileSystems.find(devID) == zenFileSystems.end()) {
+              *errmsg = "UUID not found";
+            } else {
+              s = NewZenFS(&fs, zenFileSystems[devID]);
+              if (!s.ok()) {
+                *errmsg = s.ToString();
+              }
+            }
+          } else {
+            *errmsg = "Malformed URI";
+          }
+          f->reset(fs);
+          return f->get();
+        });
+#endif
 #endif
