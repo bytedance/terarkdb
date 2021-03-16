@@ -234,139 +234,113 @@ class ZenFS : public FileSystemWrapper {
   }
 
   virtual Status NewSequentialFile(const std::string& fname,
-                                     const FileOptions& file_opts,
-                                     std::unique_ptr<FSSequentialFile>* result,
-                                     IODebugContext* dbg) override;
+                                   std::unique_ptr<SequentialFile>* result,
+                                   const EnvOptions& options) override;
+
   virtual Status NewRandomAccessFile(
-      const std::string& fname, const FileOptions& file_opts,
-      std::unique_ptr<FSRandomAccessFile>* result,
-      IODebugContext* dbg) override;
+      const std::string& fname,
+      std::unique_ptr<RandomAccessFile>* result,
+      const EnvOptions& options) override;
+
   virtual Status NewWritableFile(const std::string& fname,
-                                   const FileOptions& file_opts,
-                                   std::unique_ptr<FSWritableFile>* result,
-                                   IODebugContext* dbg) override;
+                                   std::unique_ptr<WritableFile>* result,
+                                   const EnvOptions& options) override;
+
   virtual Status ReuseWritableFile(const std::string& fname,
                                      const std::string& old_fname,
-                                     const FileOptions& file_opts,
-                                     std::unique_ptr<FSWritableFile>* result,
-                                     IODebugContext* dbg) override;
-  virtual Status FileExists(const std::string& fname,
-                              const IOOptions& options,
-                              IODebugContext* dbg) override;
-  virtual Status GetChildren(const std::string& dir, const IOOptions& options,
-                               std::vector<std::string>* result,
-                               IODebugContext* dbg) override;
-  virtual Status DeleteFile(const std::string& fname,
-                              const IOOptions& options,
-                              IODebugContext* dbg) override;
-  Status GetFileSize(const std::string& f, const IOOptions& options,
-                       uint64_t* size, IODebugContext* dbg) override;
-  Status RenameFile(const std::string& f, const std::string& t,
-                      const IOOptions& options, IODebugContext* dbg) override;
+                                     std::unique_ptr<WritableFile>* result,
+                                     const EnvOptions& options) override;
 
-  Status GetFreeSpace(const std::string& /*path*/,
-                        const IOOptions& /*options*/, uint64_t* diskfree,
-                        IODebugContext* /*dbg*/) override {
+  virtual Status FileExists(const std::string& fname) override;
+
+  virtual Status GetChildren(const std::string& dir,
+                               std::vector<std::string>* result) override;
+
+  virtual Status DeleteFile(const std::string& fname) override;
+
+  Status GetFileSize(const std::string& f, uint64_t* size) override;
+
+  Status RenameFile(const std::string& f, const std::string& t) override;
+
+  Status GetFreeSpace(const std::string& /*path*/, uint64_t* diskfree) override {
     *diskfree = zbd_->GetFreeSpace();
     return Status::OK();
   }
 
   // The directory structure is stored in the aux file system
 
-  Status IsDirectory(const std::string& path, const IOOptions& options,
-                       bool* is_dir, IODebugContext* dbg) override {
-    return target()->IsDirectory(ToAuxPath(path), options, is_dir, dbg);
-  }
-
-  Status NewDirectory(const std::string& name, const IOOptions& io_opts,
-                        std::unique_ptr<FSDirectory>* result,
-                        IODebugContext* dbg) override {
+  Status NewDirectory(const std::string& name,
+                        std::unique_ptr<Directory>* result) override {
     Debug(logger_, "NewDirectory: %s to aux: %s\n", name.c_str(),
           ToAuxPath(name).c_str());
-    return target()->NewDirectory(ToAuxPath(name), io_opts, result, dbg);
+    return target()->NewDirectory(ToAuxPath(name), result);
   }
 
-  Status CreateDir(const std::string& d, const IOOptions& options,
-                     IODebugContext* dbg) override {
+  Status CreateDir(const std::string& d) override {
     Debug(logger_, "CreatDir: %s to aux: %s\n", d.c_str(),
           ToAuxPath(d).c_str());
-    return target()->CreateDir(ToAuxPath(d), options, dbg);
+    return target()->CreateDir(ToAuxPath(d));
   }
 
-  Status CreateDirIfMissing(const std::string& d, const IOOptions& options,
-                              IODebugContext* dbg) override {
+  Status CreateDirIfMissing(const std::string& d) override {
     Debug(logger_, "CreatDirIfMissing: %s to aux: %s\n", d.c_str(),
           ToAuxPath(d).c_str());
-    return target()->CreateDirIfMissing(ToAuxPath(d), options, dbg);
+    return target()->CreateDirIfMissing(ToAuxPath(d));
   }
 
-  Status DeleteDir(const std::string& d, const IOOptions& options,
-                     IODebugContext* dbg) override {
+  Status DeleteDir(const std::string& d) override {
     std::vector<std::string> children;
     Status s;
 
     Debug(logger_, "DeleteDir: %s aux: %s\n", d.c_str(), ToAuxPath(d).c_str());
 
-    s = GetChildren(d, options, &children, dbg);
+    s = GetChildren(d, &children);
     if (children.size() != 0)
       return Status::IOError("Directory has children");
 
-    return target()->DeleteDir(ToAuxPath(d), options, dbg);
+    return target()->DeleteDir(ToAuxPath(d));
   }
 
   // We might want to override these in the future
-  Status GetAbsolutePath(const std::string& db_path, const IOOptions& options,
-                           std::string* output_path,
-                           IODebugContext* dbg) override {
-    return target()->GetAbsolutePath(db_path, options, output_path, dbg);
+  Status GetAbsolutePath(const std::string& db_path,
+                           std::string* output_path) override {
+    return target()->GetAbsolutePath(db_path, output_path);
   }
 
-  Status LockFile(const std::string& f, const IOOptions& options,
-                    FileLock** l, IODebugContext* dbg) override {
-    return target()->LockFile(ToAuxPath(f), options, l, dbg);
+  Status LockFile(const std::string& f, FileLock** l) override {
+    return target()->LockFile(ToAuxPath(f), l);
   }
 
-  Status UnlockFile(FileLock* l, const IOOptions& options,
-                      IODebugContext* dbg) override {
-    return target()->UnlockFile(l, options, dbg);
+  Status UnlockFile(FileLock* l) override {
+    return target()->UnlockFile(l);
   }
 
-  Status GetTestDirectory(const IOOptions& options, std::string* path,
-                            IODebugContext* dbg) override {
-#ifdef ZENFS_READY
-    *path = "/rocksdbtest";
-#else
+  Status GetTestDirectory(std::string* path) override {
     *path = "rocksdbtest";
-#endif
     Debug(logger_, "GetTestDirectory: %s aux: %s\n", path->c_str(),
           ToAuxPath(*path).c_str());
-    return target()->CreateDirIfMissing(ToAuxPath(*path), options, dbg);
+    return target()->CreateDirIfMissing(ToAuxPath(*path));
   }
 
-  Status NewLogger(const std::string& fname, const IOOptions& options,
-                     std::shared_ptr<Logger>* result,
-                     IODebugContext* dbg) override {
-    return target()->NewLogger(ToAuxPath(fname), options, result, dbg);
+  Status NewLogger(const std::string& fname,
+                     std::shared_ptr<Logger>* result) override {
+    return target()->NewLogger(ToAuxPath(fname), result);
   }
 
   // Not supported (at least not yet)
-  Status Truncate(const std::string& /*fname*/, size_t /*size*/,
-                    const IOOptions& /*options*/,
-                    IODebugContext* /*dbg*/) override {
+  Status Truncate(const std::string& /*fname*/, size_t /*size*/) override {
     return Status::NotSupported("Truncate is not implemented in ZenFS");
   }
 
   virtual Status ReopenWritableFile(const std::string& fname,
-                                      const FileOptions& options,
-                                      std::unique_ptr<FSWritableFile>* result,
-                                      IODebugContext* dbg) {
-    return target()->NewWritableFile(fname, options, result, dbg);
+                                    std::unique_ptr<WritableFile>* result,
+                                    const EnvOptions& opts) {
+    return target()->NewWritableFile(fname, result, opts);
   }
 
   virtual Status NewRandomRWFile(const std::string& /*fname*/,
-                                   const FileOptions& /*options*/,
-                                   std::unique_ptr<FSRandomRWFile>* /*result*/,
-                                   IODebugContext* /*dbg*/) override {
+                                 std::unique_ptr<RandomRWFile>* /*result*/,
+                                 const EnvOptions& ) override {
     return Status::NotSupported("RandomRWFile is not implemented in ZenFS");
   }
 
@@ -378,31 +352,24 @@ class ZenFS : public FileSystemWrapper {
   }
 
   Status GetFileModificationTime(const std::string& /*fname*/,
-                                   const IOOptions& /*options*/,
-                                   uint64_t* /*file_mtime*/,
-                                   IODebugContext* /*dbg*/) override {
+                                   uint64_t* /*file_mtime*/) override {
     return Status::NotSupported(
         "GetFileModificationTime is not implemented in ZenFS");
   }
 
   virtual Status LinkFile(const std::string& /*src*/,
-                            const std::string& /*target*/,
-                            const IOOptions& /*options*/,
-                            IODebugContext* /*dbg*/) {
+                            const std::string& /*target*/) {
     return Status::NotSupported("LinkFile is not supported in ZenFS");
   }
 
   virtual Status NumFileLinks(const std::string& /*fname*/,
-                                const IOOptions& /*options*/,
-                                uint64_t* /*count*/, IODebugContext* /*dbg*/) {
+                                uint64_t* /*count*/) {
     return Status::NotSupported(
         "Getting number of file links is not supported in ZenFS");
   }
 
   virtual Status AreFilesSame(const std::string& /*first*/,
-                                const std::string& /*second*/,
-                                const IOOptions& /*options*/, bool* /*res*/,
-                                IODebugContext* /*dbg*/) {
+                                const std::string& /*second*/, bool* /*res*/) {
     return Status::NotSupported("AreFilesSame is not supported in ZenFS");
   }
 };
