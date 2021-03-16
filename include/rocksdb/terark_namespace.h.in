@@ -14,5 +14,6 @@
 #cmakedefine WITH_ZENFS
 
 #ifdef WITH_ZENFS
+#define ROCKSDB_NAMESPACE @WITH_TERARKDB_NAMESPACE@
 #define LIBZBD
 #endif

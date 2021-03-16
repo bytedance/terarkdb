@@ -109,7 +109,7 @@ std::vector<Env*> GetCustomEnvs() {
     init = true;
     const char* uri = getenv("TEST_ENV_URI");
     if (uri != nullptr) {
-      custom_env = NewCustomObject<Env>(uri, &custom_env_guard);
+      Env::LoadEnv(uri, &custom_env);
     }
   }
 

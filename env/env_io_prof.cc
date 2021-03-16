@@ -41,12 +41,6 @@ class IOProfRandomAccessFile : public RandomAccessFileWrapper {
     IOProfiler::Scope _scope_(BOOST_CURRENT_FUNCTION);
     return RandomAccessFileWrapper::Prefetch(offset, n);
   }
-
-  Status FsRead(uint64_t offset, size_t len, Slice* result,
-                void* buf) const override {
-    IOProfiler::Scope _scope_(BOOST_CURRENT_FUNCTION);
-    return RandomAccessFileWrapper::FsRead(offset, len, result, buf);
-  }
 };
 
 class IOProfRandomRWFile : public RandomRWFileWrapper {
@@ -82,7 +76,7 @@ class IOProfRandomRWFile : public RandomRWFileWrapper {
 class IOProfWritableFile : public WritableFileWrapper {
  public:
   IOProfWritableFile(WritableFile* file) : WritableFileWrapper(file) {}
-  Status Append(const Slice& data) override {
+  Status Append(const Slice& data) final {
     IOProfiler::Scope _scope_(BOOST_CURRENT_FUNCTION);
     return WritableFileWrapper::Append(data);
   }

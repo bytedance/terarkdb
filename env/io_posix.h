@@ -131,7 +131,15 @@ class PosixWritableFile : public WritableFile {
   virtual Status Truncate(uint64_t size) override;
   virtual Status Close() override;
   virtual Status Append(const Slice& data) override;
+  virtual Status Append(const Slice& data,
+                        const DataVerificationInfo& /* verification_info */) override {
+    return Append(data);
+  }
   virtual Status PositionedAppend(const Slice& data, uint64_t offset) override;
+  virtual Status PositionedAppend(const Slice& data, uint64_t offset,
+                                  const DataVerificationInfo& /* verification_info */) override {
+    return PositionedAppend(data, offset);
+  }
   virtual Status Flush() override;
   virtual Status Sync() override;
   virtual Status Fsync() override;
@@ -168,11 +176,8 @@ class PosixMmapReadableFile : public RandomAccessFile {
                         size_t length, const EnvOptions& options);
   ~PosixMmapReadableFile();
   bool use_aio_reads() const final { return use_aio_reads_; }
-  bool is_mmap_open() const final { return true; }
   Status Read(uint64_t offset, size_t n, Slice* result,
               char* scratch) const final;
-  Status FsRead(uint64_t offset, size_t len, Slice* result,
-                void* buf) const final;
   Status InvalidateCache(size_t offset, size_t length) final;
   intptr_t FileDescriptor() const final;
 };
@@ -216,6 +221,10 @@ class PosixMmapFile : public WritableFile {
   virtual Status Truncate(uint64_t /*size*/) override { return Status::OK(); }
   virtual Status Close() override;
   virtual Status Append(const Slice& data) override;
+  virtual Status Append(const Slice& data,
+                        const DataVerificationInfo& /* verification_info */) override {
+    return Append(data);
+  }
   virtual Status Flush() override;
   virtual Status Sync() override;
   virtual Status Fsync() override;
