@@ -346,8 +346,7 @@ Status ZenFS::DeleteFile(std::string fname) {
 
 Status ZenFS::NewSequentialFile(const std::string& fname,
                                   const FileOptions& file_opts,
-                                  std::unique_ptr<FSSequentialFile>* result,
-                                  IODebugContext* /*dbg*/) {
+                                  std::unique_ptr<FSSequentialFile>* result) {
   ZoneFile* zoneFile = GetFile(fname);
 
   Debug(logger_, "New sequential file: %s direct: %d\n", fname.c_str(),
@@ -363,8 +362,7 @@ Status ZenFS::NewSequentialFile(const std::string& fname,
 
 Status ZenFS::NewRandomAccessFile(const std::string& fname,
                                     const FileOptions& file_opts,
-                                    std::unique_ptr<FSRandomAccessFile>* result,
-                                    IODebugContext* /*dbg*/) {
+                                    std::unique_ptr<FSRandomAccessFile>* result) {
   ZoneFile* zoneFile = GetFile(fname);
 
   Debug(logger_, "New random access file: %s direct: %d\n", fname.c_str(),
@@ -380,8 +378,7 @@ Status ZenFS::NewRandomAccessFile(const std::string& fname,
 
 Status ZenFS::NewWritableFile(const std::string& fname,
                                 const FileOptions& file_opts,
-                                std::unique_ptr<FSWritableFile>* result,
-                                IODebugContext* /*dbg*/) {
+                                std::unique_ptr<FSWritableFile>* result) {
   ZoneFile* zoneFile;
   Status s;
 
@@ -407,8 +404,7 @@ Status ZenFS::NewWritableFile(const std::string& fname,
 Status ZenFS::ReuseWritableFile(const std::string& fname,
                                   const std::string& old_fname,
                                   const FileOptions& file_opts,
-                                  std::unique_ptr<FSWritableFile>* result,
-                                  IODebugContext* dbg) {
+                                  std::unique_ptr<FSWritableFile>* result) {
   Debug(logger_, "Reuse writable file: %s old name: %s\n", fname.c_str(),
         old_fname.c_str());
 
@@ -418,8 +414,7 @@ Status ZenFS::ReuseWritableFile(const std::string& fname,
   return NewWritableFile(fname, file_opts, result, dbg);
 }
 
-Status ZenFS::FileExists(const std::string& fname, const IOOptions& options,
-                           IODebugContext* dbg) {
+Status ZenEnv::FileExists(const std::string& fname) {
   Debug(logger_, "FileExists: %s \n", fname.c_str());
 
   if (GetFile(fname) == nullptr) {
@@ -429,9 +424,8 @@ Status ZenFS::FileExists(const std::string& fname, const IOOptions& options,
   }
 }
 
-Status ZenFS::GetChildren(const std::string& dir, const IOOptions& options,
-                            std::vector<std::string>* result,
-                            IODebugContext* dbg) {
+Status ZenFS::GetChildren(const std::string& dir,
+                            std::vector<std::string>* result) {
   std::map<std::string, ZoneFile*>::iterator it;
   std::vector<std::string> auxfiles;
   Status s;
@@ -459,8 +453,7 @@ Status ZenFS::GetChildren(const std::string& dir, const IOOptions& options,
   return s;
 }
 
-Status ZenFS::DeleteFile(const std::string& fname, const IOOptions& options,
-                           IODebugContext* dbg) {
+Status ZenFS::DeleteFile(const std::string& fname) {
   Status s;
   Debug(logger_, "Delete file: %s \n", fname.c_str());
 
@@ -474,8 +467,7 @@ Status ZenFS::DeleteFile(const std::string& fname, const IOOptions& options,
   return s;
 }
 
-Status ZenFS::GetFileSize(const std::string& f, const IOOptions& /*options*/,
-                            uint64_t* size, IODebugContext* /*dbg*/) {
+Status ZenFS::GetFileSize(const std::string& f, uint64_t* size) {
   ZoneFile* zoneFile;
   Status s;
 
@@ -493,8 +485,7 @@ Status ZenFS::GetFileSize(const std::string& f, const IOOptions& /*options*/,
   return s;
 }
 
-Status ZenFS::RenameFile(const std::string& f, const std::string& t,
-                           const IOOptions& options, IODebugContext* dbg) {
+Status ZenFS::RenameFile(const std::string& f, const std::string& t) {
   ZoneFile* zoneFile;
   Status s;
 
@@ -777,9 +768,7 @@ Status ZenFS::Mount() {
   superblock_ = std::move(valid_superblocks[r]);
   zbd_->SetFinishTreshold(superblock_->GetFinishTreshold());
 
-  IOOptions foo;
-  IODebugContext bar;
-  s = target()->CreateDirIfMissing(superblock_->GetAuxFsPath(), foo, &bar);
+  s = target()->CreateDirIfMissing(superblock_->GetAuxFsPath());
   if (!s.ok()) {
     Error(logger_, "Failed to create aux filesystem directory.");
     return s;

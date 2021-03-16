@@ -102,34 +102,14 @@ class ZonedWritableFile : public FSWritableFile {
                              MetadataWriter* metadata_writer = nullptr);
   virtual ~ZonedWritableFile();
 
-  virtual Status Append(const Slice& data, const IOOptions& options,
-                          IODebugContext* dbg) override;
-  virtual Status Append(const Slice& data, const IOOptions& opts,
-                          const DataVerificationInfo& /* verification_info */,
-                          IODebugContext* dbg) override {
-    return Append(data, opts, dbg);
-  }
-  virtual Status PositionedAppend(const Slice& data, uint64_t offset,
-                                    const IOOptions& options,
-                                    IODebugContext* dbg) override;
-  virtual Status PositionedAppend(
-      const Slice& data, uint64_t offset, const IOOptions& opts,
-      const DataVerificationInfo& /* verification_info */,
-      IODebugContext* dbg) override {
-    return PositionedAppend(data, offset, opts, dbg);
-  }
-  virtual Status Truncate(uint64_t size, const IOOptions& options,
-                            IODebugContext* dbg) override;
-  virtual Status Close(const IOOptions& options,
-                         IODebugContext* dbg) override;
-  virtual Status Flush(const IOOptions& options,
-                         IODebugContext* dbg) override;
-  virtual Status Sync(const IOOptions& options, IODebugContext* dbg) override;
-  virtual Status RangeSync(uint64_t offset, uint64_t nbytes,
-                             const IOOptions& options,
-                             IODebugContext* dbg) override;
-  virtual Status Fsync(const IOOptions& options,
-                         IODebugContext* dbg) override;
+  virtual Status Append(const Slice& data) override;
+  virtual Status PositionedAppend(const Slice& data, uint64_t offset) override;
+  virtual Status Truncate(uint64_t size) override;
+  virtual Status Close() override;
+  virtual Status Flush() override;
+  virtual Status Sync() override;
+  virtual Status RangeSync(uint64_t offset, uint64_t nbytes) override;
+  virtual Status Fsync() override;
   bool use_direct_io() const override { return !buffered; }
   bool IsSyncThreadSafe() const override { return true; };
   size_t GetRequiredBufferAlignment() const override {
@@ -165,11 +145,9 @@ class ZonedSequentialFile : public FSSequentialFile {
   explicit ZonedSequentialFile(ZoneFile* zoneFile, const FileOptions& file_opts)
       : zoneFile_(zoneFile), rp(0), direct_(file_opts.use_direct_reads) {}
 
-  Status Read(size_t n, const IOOptions& options, Slice* result,
-                char* scratch, IODebugContext* dbg) override;
-  Status PositionedRead(uint64_t offset, size_t n, const IOOptions& options,
-                          Slice* result, char* scratch,
-                          IODebugContext* dbg) override;
+  Status Read(size_t n, Slice* result, char* scratch) override;
+  Status PositionedRead(uint64_t offset, size_t n,
+                          Slice* result, char* scratch) override;
   Status Skip(uint64_t n);
 
   bool use_direct_io() const override { /*return target_->use_direct_io(); */
@@ -195,21 +173,8 @@ class ZonedRandomAccessFile : public FSRandomAccessFile {
                                  const FileOptions& file_opts)
       : zoneFile_(zoneFile), direct_(file_opts.use_direct_reads) {}
 
-  Status Read(uint64_t offset, size_t n, const IOOptions& options,
-                Slice* result, char* scratch,
-                IODebugContext* dbg) const override;
-
-  Status MultiRead(FSReadRequest* /*reqs*/, size_t /*num_reqs*/,
-                     const IOOptions& /*options*/,
-                     IODebugContext* /*dbg*/) override {
-    return Status::IOError("Not implemented");
-  }
-
-  Status Prefetch(uint64_t /*offset*/, size_t /*n*/,
-                    const IOOptions& /*options*/,
-                    IODebugContext* /*dbg*/) override {
-    return Status::OK();
-  }
+  Status Read(uint64_t offset, size_t n,
+                Slice* result, char* scratch) const override;
 
   bool use_direct_io() const override { return true; }
 
