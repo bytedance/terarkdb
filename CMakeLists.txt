@@ -34,6 +34,7 @@ include(CMakeDependentOption)
 CMAKE_DEPENDENT_OPTION(WITH_TESTS "build with tests" ON "CMAKE_BUILD_TYPE STREQUAL Debug" OFF)
 option(WITH_TOOLS "build with tools" OFF)
 option(WITH_TERARK_ZIP "build with TerarkZipTable support" ON)
+option(WITH_ZENFS "build with experimental zenfs" ON)
 option(WITH_BOOSTLIB "build with boost, if WITH_TERARK_ZIP is ON, this will also set to ON" OFF)
 option(WITH_TERARKDB_NAMESPACE "namespace" "terarkdb")
 
@@ -55,6 +56,10 @@ endif()
 
 if (WITH_WINDOWS_UTF8_FILENAMES)
   add_definitions(-DROCKSDB_WINDOWS_UTF8_FILENAMES)
+endif()
+
+if(WITH_ZENFS)
+  add_definitions(-DLIBZBD)
 endif()
 
 IF(FORCE_TERARKDB_RELEASE_BUILD)
@@ -817,10 +822,16 @@ if(WIN32)
     list(APPEND SOURCES
       port/port_posix.cc
       env/env_posix.cc
-      #env/fs_zenfs.cc
-      #env/io_zenfs_cc
-      #env/zbd_zenfs.cc
       env/io_posix.cc)
+
+    if(WITH_ZENFS)
+      list(APPEND SOURCES
+        env/env_zenfs.cc
+        env/io_zenfs.cc
+        env/zbd_zenfs.cc
+        tools/zenfs.cc
+        tools/zenfs_tool.cc)
+    endif()  
 endif()
 
 set(ROCKSDB_STATIC_LIB terarkdb${ARTIFACT_SUFFIX})
