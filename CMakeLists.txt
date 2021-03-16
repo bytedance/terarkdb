@@ -41,6 +41,7 @@ include(CMakeDependentOption)
 CMAKE_DEPENDENT_OPTION(WITH_TESTS "build with tests" ON "CMAKE_BUILD_TYPE STREQUAL Debug" OFF)
 option(WITH_TOOLS "build with tools" OFF)
 option(WITH_TERARK_ZIP "build with TerarkZipTable support" ON)
+option(WITH_ZENFS "build with experimental zenfs" ON)
 option(WITH_DIAGNOSE_CACHE "build with diagnosable cache support" OFF)
 option(WITH_BOOSTLIB "build with boost, if WITH_TERARK_ZIP is ON, this will also set to ON" OFF)
 option(WITH_TERARKDB_NAMESPACE "namespace" "terarkdb")
@@ -63,6 +64,11 @@ endif()
 
 if (WITH_WINDOWS_UTF8_FILENAMES)
   add_definitions(-DROCKSDB_WINDOWS_UTF8_FILENAMES)
+endif()
+
+if(WITH_ZENFS)
+  add_definitions(-DLIBZBD)
+  add_compile_definitions(ROCKSDB_NAMESPACE=${WITH_TERARKDB_NAMESPACE})
 endif()
 
 IF(FORCE_TERARKDB_RELEASE_BUILD)
@@ -372,6 +378,10 @@ if(WITH_TBB)
   add_definitions(-DTBB)
   include_directories(${TBB_INCLUDE_DIR})
   list(APPEND THIRDPARTY_LIBS ${TBB_LIBRARIES})
+endif()
+
+if(WITH_ZENFS)
+  list(APPEND THIRDPARTY_LIBS zbd)
 endif()
 
 # Stall notifications eat some performance from inserts
@@ -827,6 +837,15 @@ if(WIN32)
       port/port_posix.cc
       env/env_posix.cc
       env/io_posix.cc)
+
+    if(WITH_ZENFS)
+      list(APPEND SOURCES
+        third-party/zenfs/fs/fs_zenfs.cc
+        third-party/zenfs/fs/io_zenfs.cc
+        third-party/zenfs/fs/zbd_zenfs.cc
+        third-party/zenfs/util/zenfs.cc
+        tools/zenfs_tool.cc)
+    endif()
 endif()
 
 set(ROCKSDB_STATIC_LIB terarkdb${ARTIFACT_SUFFIX})
@@ -919,7 +938,7 @@ if(NOT WIN32 OR ROCKSDB_INSTALL_ON_WINDOWS)
   # We should also expose terarkdb's source dir
   INSTALL(DIRECTORY memtable monitoring env db cache options port table util utilities
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-        FILES_MATCHING 
+        FILES_MATCHING
         PATTERN "*.h"
         PATTERN "*.hpp"
   )
@@ -1183,6 +1202,11 @@ if(WITH_TOOLS)
       tools/db_bench_tool.cc
       $<TARGET_OBJECTS:testharness>)
   target_link_libraries(db_bench${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
+
+  add_executable(zenfs${ARTIFACT_SUFFIX} tools/zenfs.cc
+      tools/zenfs_tool.cc
+      $<TARGET_OBJECTS:testharness>)
+  target_link_libraries(zenfs${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
 
   if(WITH_TERARK_ZIP)
     add_subdirectory(terark-tools/terark-test)
