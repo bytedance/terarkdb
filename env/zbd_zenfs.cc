@@ -71,7 +71,7 @@ void Zone::CloseWR() {
   if (capacity_ == 0) zbd_->NotifyIOZoneFull();
 }
 
-IOStatus Zone::Reset() {
+Status Zone::Reset() {
   size_t zone_sz = zbd_->GetZoneSize();
   int fd = zbd_->GetWriteFD();
   unsigned int report = 1;
@@ -81,11 +81,11 @@ IOStatus Zone::Reset() {
   assert(!IsUsed());
 
   ret = zbd_reset_zones(fd, start_, zone_sz);
-  if (ret) return IOStatus::IOError("Zone reset failed\n");
+  if (ret) return Status::IOError("Zone reset failed\n");
 
   ret = zbd_report_zones(fd, start_, zone_sz, ZBD_RO_ALL, &z, &report);
 
-  if (ret || (report != 1)) return IOStatus::IOError("Zone report failed\n");
+  if (ret || (report != 1)) return Status::IOError("Zone report failed\n");
 
   if (zbd_zone_offline(&z))
     capacity_ = 0;
@@ -95,10 +95,10 @@ IOStatus Zone::Reset() {
   wp_ = start_;
   lifetime_ = Env::WLTH_NOT_SET;
 
-  return IOStatus::OK();
+  return Status::OK();
 }
 
-IOStatus Zone::Finish() {
+Status Zone::Finish() {
   size_t zone_sz = zbd_->GetZoneSize();
   int fd = zbd_->GetWriteFD();
   int ret;
@@ -106,15 +106,15 @@ IOStatus Zone::Finish() {
   assert(!open_for_write_);
 
   ret = zbd_finish_zones(fd, start_, zone_sz);
-  if (ret) return IOStatus::IOError("Zone finish failed\n");
+  if (ret) return Status::IOError("Zone finish failed\n");
 
   capacity_ = 0;
   wp_ = start_ + zone_sz;
 
-  return IOStatus::OK();
+  return Status::OK();
 }
 
-IOStatus Zone::Close() {
+Status Zone::Close() {
   size_t zone_sz = zbd_->GetZoneSize();
   int fd = zbd_->GetWriteFD();
   int ret;
@@ -123,26 +123,26 @@ IOStatus Zone::Close() {
 
   if (!(IsEmpty() || IsFull())) {
     ret = zbd_close_zones(fd, start_, zone_sz);
-    if (ret) return IOStatus::IOError("Zone close failed\n");
+    if (ret) return Status::IOError("Zone close failed\n");
   }
 
-  return IOStatus::OK();
+  return Status::OK();
 }
 
-IOStatus Zone::Append(char *data, uint32_t size) {
+Status Zone::Append(char *data, uint32_t size) {
   char *ptr = data;
   uint32_t left = size;
   int fd = zbd_->GetWriteFD();
   int ret;
 
   if (capacity_ < size)
-    return IOStatus::NoSpace("Not enough capacity for append");
+    return Status::NoSpace("Not enough capacity for append");
 
   assert((size % zbd_->GetBlockSize()) == 0);
 
   while (left) {
     ret = pwrite(fd, ptr, size, wp_);
-    if (ret < 0) return IOStatus::IOError("Write failed");
+    if (ret < 0) return Status::IOError("Write failed");
 
     ptr += ret;
     wp_ += ret;
@@ -150,7 +150,7 @@ IOStatus Zone::Append(char *data, uint32_t size) {
     left -= ret;
   }
 
-  return IOStatus::OK();
+  return Status::OK();
 }
 
 ZoneExtent::ZoneExtent(uint64_t start, uint32_t length, Zone *zone)
@@ -168,7 +168,7 @@ ZonedBlockDevice::ZonedBlockDevice(std::string bdevname,
   Info(logger_, "New Zoned Block Device: %s", filename_.c_str());
 };
 
-IOStatus ZonedBlockDevice::Open(bool readonly) {
+Status ZonedBlockDevice::Open(bool readonly) {
   struct zbd_zone *zone_rep;
   unsigned int reported_zones;
   size_t addr_space_sz;
@@ -180,12 +180,12 @@ IOStatus ZonedBlockDevice::Open(bool readonly) {
 
   read_f_ = zbd_open(filename_.c_str(), O_RDONLY, &info);
   if (read_f_ < 0) {
-    return IOStatus::InvalidArgument("Failed to open zoned block device");
+    return Status::InvalidArgument("Failed to open zoned block device");
   }
 
   read_direct_f_ = zbd_open(filename_.c_str(), O_RDONLY, &info);
   if (read_f_ < 0) {
-    return IOStatus::InvalidArgument("Failed to open zoned block device");
+    return Status::InvalidArgument("Failed to open zoned block device");
   }
 
   if (readonly) {
@@ -193,16 +193,16 @@ IOStatus ZonedBlockDevice::Open(bool readonly) {
   } else {
     write_f_ = zbd_open(filename_.c_str(), O_WRONLY | O_DIRECT, &info);
     if (write_f_ < 0) {
-      return IOStatus::InvalidArgument("Failed to open zoned block device");
+      return Status::InvalidArgument("Failed to open zoned block device");
     }
   }
 
   if (info.model != ZBD_DM_HOST_MANAGED) {
-    return IOStatus::NotSupported("Not a host managed block device");
+    return Status::NotSupported("Not a host managed block device");
   }
 
   if (info.nr_zones < ZENFS_MIN_ZONES) {
-    return IOStatus::NotSupported(
+    return Status::NotSupported(
         "To few zones on zoned block device (32 required)");
   }
 
@@ -232,7 +232,7 @@ IOStatus ZonedBlockDevice::Open(bool readonly) {
 
   if (ret || reported_zones != nr_zones_) {
     Error(logger_, "Failed to list zones, err: %d", ret);
-    return IOStatus::IOError("Failed to list zones");
+    return Status::IOError("Failed to list zones");
   }
 
   while (m < ZENFS_META_ZONES && i < reported_zones) {
@@ -272,7 +272,7 @@ IOStatus ZonedBlockDevice::Open(bool readonly) {
   free(zone_rep);
   start_time_ = time(NULL);
 
-  return IOStatus::OK();
+  return Status::OK();
 }
 
 void ZonedBlockDevice::NotifyIOZoneFull() {

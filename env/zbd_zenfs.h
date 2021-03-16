@@ -44,11 +44,11 @@ class Zone {
   Env::WriteLifeTimeHint lifetime_;
   std::atomic<long> used_capacity_;
 
-  IOStatus Reset();
-  IOStatus Finish();
-  IOStatus Close();
+  Status Reset();
+  Status Finish();
+  Status Close();
 
-  IOStatus Append(char *data, uint32_t size);
+  Status Append(char *data, uint32_t size);
   bool IsUsed();
   bool IsFull();
   bool IsEmpty();
@@ -87,7 +87,7 @@ class ZonedBlockDevice {
                             std::shared_ptr<Logger> logger);
   virtual ~ZonedBlockDevice();
 
-  IOStatus Open(bool readonly = false);
+  Status Open(bool readonly = false);
 
   Zone *GetIOZone(uint64_t offset);
 
