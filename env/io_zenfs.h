@@ -58,8 +58,8 @@ class ZoneFile {
   virtual ~ZoneFile();
 
   void CloseWR();
-  IOStatus Append(void* data, int data_size, int valid_size);
-  IOStatus SetWriteLifeTimeHint(Env::WriteLifeTimeHint lifetime);
+  Status Append(void* data, int data_size, int valid_size);
+  Status SetWriteLifeTimeHint(Env::WriteLifeTimeHint lifetime);
   std::string GetFilename();
   void Rename(std::string name);
   uint64_t GetFileSize();
@@ -69,7 +69,7 @@ class ZoneFile {
   std::vector<ZoneExtent*> GetExtents() { return extents_; }
   Env::WriteLifeTimeHint GetWriteLifeTimeHint() { return lifetime_; }
 
-  IOStatus PositionedRead(uint64_t offset, size_t n, Slice* result,
+  Status PositionedRead(uint64_t offset, size_t n, Slice* result,
                           char* scratch, bool direct);
   ZoneExtent* GetExtent(uint64_t file_offset, uint64_t* dev_offset);
   void PushExtent();
@@ -94,7 +94,7 @@ class ZonedWritableFile : public FSWritableFile {
   class MetadataWriter {
    public:
     virtual ~MetadataWriter();
-    virtual IOStatus Persist(ZoneFile* zoneFile) = 0;
+    virtual Status Persist(ZoneFile* zoneFile) = 0;
   };
 
   explicit ZonedWritableFile(ZonedBlockDevice* zbd, bool buffered,
@@ -102,33 +102,33 @@ class ZonedWritableFile : public FSWritableFile {
                              MetadataWriter* metadata_writer = nullptr);
   virtual ~ZonedWritableFile();
 
-  virtual IOStatus Append(const Slice& data, const IOOptions& options,
+  virtual Status Append(const Slice& data, const IOOptions& options,
                           IODebugContext* dbg) override;
-  virtual IOStatus Append(const Slice& data, const IOOptions& opts,
+  virtual Status Append(const Slice& data, const IOOptions& opts,
                           const DataVerificationInfo& /* verification_info */,
                           IODebugContext* dbg) override {
     return Append(data, opts, dbg);
   }
-  virtual IOStatus PositionedAppend(const Slice& data, uint64_t offset,
+  virtual Status PositionedAppend(const Slice& data, uint64_t offset,
                                     const IOOptions& options,
                                     IODebugContext* dbg) override;
-  virtual IOStatus PositionedAppend(
+  virtual Status PositionedAppend(
       const Slice& data, uint64_t offset, const IOOptions& opts,
       const DataVerificationInfo& /* verification_info */,
       IODebugContext* dbg) override {
     return PositionedAppend(data, offset, opts, dbg);
   }
-  virtual IOStatus Truncate(uint64_t size, const IOOptions& options,
+  virtual Status Truncate(uint64_t size, const IOOptions& options,
                             IODebugContext* dbg) override;
-  virtual IOStatus Close(const IOOptions& options,
+  virtual Status Close(const IOOptions& options,
                          IODebugContext* dbg) override;
-  virtual IOStatus Flush(const IOOptions& options,
+  virtual Status Flush(const IOOptions& options,
                          IODebugContext* dbg) override;
-  virtual IOStatus Sync(const IOOptions& options, IODebugContext* dbg) override;
-  virtual IOStatus RangeSync(uint64_t offset, uint64_t nbytes,
+  virtual Status Sync(const IOOptions& options, IODebugContext* dbg) override;
+  virtual Status RangeSync(uint64_t offset, uint64_t nbytes,
                              const IOOptions& options,
                              IODebugContext* dbg) override;
-  virtual IOStatus Fsync(const IOOptions& options,
+  virtual Status Fsync(const IOOptions& options,
                          IODebugContext* dbg) override;
   bool use_direct_io() const override { return !buffered; }
   bool IsSyncThreadSafe() const override { return true; };
@@ -138,8 +138,8 @@ class ZonedWritableFile : public FSWritableFile {
   void SetWriteLifeTimeHint(Env::WriteLifeTimeHint hint) override;
 
  private:
-  IOStatus BufferedWrite(const Slice& data);
-  IOStatus FlushBuffer();
+  Status BufferedWrite(const Slice& data);
+  Status FlushBuffer();
 
   bool buffered;
   char* buffer;
@@ -165,12 +165,12 @@ class ZonedSequentialFile : public FSSequentialFile {
   explicit ZonedSequentialFile(ZoneFile* zoneFile, const FileOptions& file_opts)
       : zoneFile_(zoneFile), rp(0), direct_(file_opts.use_direct_reads) {}
 
-  IOStatus Read(size_t n, const IOOptions& options, Slice* result,
+  Status Read(size_t n, const IOOptions& options, Slice* result,
                 char* scratch, IODebugContext* dbg) override;
-  IOStatus PositionedRead(uint64_t offset, size_t n, const IOOptions& options,
+  Status PositionedRead(uint64_t offset, size_t n, const IOOptions& options,
                           Slice* result, char* scratch,
                           IODebugContext* dbg) override;
-  IOStatus Skip(uint64_t n);
+  Status Skip(uint64_t n);
 
   bool use_direct_io() const override { /*return target_->use_direct_io(); */
     return true;
@@ -180,8 +180,8 @@ class ZonedSequentialFile : public FSSequentialFile {
     return zoneFile_->GetBlockSize();
   }
 
-  IOStatus InvalidateCache(size_t /*offset*/, size_t /*length*/) override {
-    return IOStatus::OK();
+  Status InvalidateCache(size_t /*offset*/, size_t /*length*/) override {
+    return Status::OK();
   }
 };
 
@@ -195,20 +195,20 @@ class ZonedRandomAccessFile : public FSRandomAccessFile {
                                  const FileOptions& file_opts)
       : zoneFile_(zoneFile), direct_(file_opts.use_direct_reads) {}
 
-  IOStatus Read(uint64_t offset, size_t n, const IOOptions& options,
+  Status Read(uint64_t offset, size_t n, const IOOptions& options,
                 Slice* result, char* scratch,
                 IODebugContext* dbg) const override;
 
-  IOStatus MultiRead(FSReadRequest* /*reqs*/, size_t /*num_reqs*/,
+  Status MultiRead(FSReadRequest* /*reqs*/, size_t /*num_reqs*/,
                      const IOOptions& /*options*/,
                      IODebugContext* /*dbg*/) override {
-    return IOStatus::IOError("Not implemented");
+    return Status::IOError("Not implemented");
   }
 
-  IOStatus Prefetch(uint64_t /*offset*/, size_t /*n*/,
+  Status Prefetch(uint64_t /*offset*/, size_t /*n*/,
                     const IOOptions& /*options*/,
                     IODebugContext* /*dbg*/) override {
-    return IOStatus::OK();
+    return Status::OK();
   }
 
   bool use_direct_io() const override { return true; }
@@ -217,8 +217,8 @@ class ZonedRandomAccessFile : public FSRandomAccessFile {
     return zoneFile_->GetBlockSize();
   }
 
-  IOStatus InvalidateCache(size_t /*offset*/, size_t /*length*/) override {
-    return IOStatus::OK();
+  Status InvalidateCache(size_t /*offset*/, size_t /*length*/) override {
+    return Status::OK();
   }
 
   size_t GetUniqueId(char* id, size_t max_size) const override;
