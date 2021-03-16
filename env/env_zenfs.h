@@ -14,7 +14,7 @@
 #include "rocksdb/status.h"
 #include "util/coding.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMESPACE {
 
 #if !defined(ROCKSDB_LITE) && defined(OS_LINUX) && defined(LIBZBD)
 
@@ -378,5 +378,5 @@ class ZenFS : public FileSystemWrapper {
 Status NewZenFS(FileSystem** fs, const std::string& bdevname);
 std::map<std::string, std::string> ListZenFileSystems();
 
-}  // namespace ROCKSDB_NAMESPACE
+};  // namespace TERARKDB_NAMESPACE
 
