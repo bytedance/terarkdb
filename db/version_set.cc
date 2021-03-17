@@ -486,8 +486,6 @@ class LevelIterator final : public InternalIterator, public Snapshot {
       snapshot_ = read_options_.snapshot->GetSequenceNumber();
       read_options_.snapshot = this;
     }
-    read_options_.iterate_lower_bound = nullptr;
-    read_options_.iterate_upper_bound = nullptr;
   }
 
   virtual ~LevelIterator() { delete file_iter_.Set(nullptr); }
