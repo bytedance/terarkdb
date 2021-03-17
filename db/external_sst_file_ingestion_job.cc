@@ -318,6 +318,29 @@ Status ExternalSstFileIngestionJob::GetIngestedFileInfo(
                          sv->mutable_cf_options.prefix_extractor.get(),
                          env_options_, cfd_->internal_comparator()),
       std::move(sst_file_reader), file_to_ingest->file_size, &table_reader);
+  if (status.IsInvalidArgument() && status.subcode() == Status::kRequireMmap) {
+    // this table requires mmap open, make it happy
+    assert(!env_options.use_mmap_reads);
+    EnvOptions mmap_env_options = env_options_;
+    mmap_env_options.use_mmap_reads = true;
+    mmap_env_options.use_direct_reads = false;
+    mmap_env_options.use_aio_reads = false;
+
+    status =
+        env_->NewRandomAccessFile(external_file, &sst_file, mmap_env_options);
+    if (!status.ok()) {
+      return status;
+    }
+    sst_file_reader.reset(
+        new RandomAccessFileReader(std::move(sst_file), external_file));
+
+    status = cfd_->ioptions()->table_factory->NewTableReader(
+        TableReaderOptions(*cfd_->ioptions(),
+                           sv->mutable_cf_options.prefix_extractor.get(),
+                           mmap_env_options, cfd_->internal_comparator()),
+        std::move(sst_file_reader), file_to_ingest->file_size, &table_reader);
+  }
+
   if (!status.ok()) {
     return status;
   }

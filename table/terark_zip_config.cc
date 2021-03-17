@@ -165,7 +165,6 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
   cfo.hard_pending_compaction_bytes_limit = 0;
 
   dbo.create_if_missing = true;
-  dbo.allow_mmap_reads = true;
   dbo.allow_mmap_populate = false;
   dbo.max_background_flushes = 4;
   dbo.new_table_reader_for_compaction_inputs = false;
@@ -195,7 +194,6 @@ void TerarkZipAutoConfigForOnlineDB_DBOptions(struct DBOptions& dbo,
   terark::DictZipBlobStore_setZipThreads(
       (int)terark::getEnvLong("DictZipBlobStore_zipThreads", zipThreads));
   dbo.create_if_missing = true;
-  dbo.allow_mmap_reads = true;
   dbo.allow_mmap_populate = true;
   dbo.new_table_reader_for_compaction_inputs = false;
   dbo.base_background_compactions = 1;
