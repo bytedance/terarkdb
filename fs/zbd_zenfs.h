@@ -78,8 +78,8 @@ class ZonedBlockDevice {
   std::condition_variable zone_resources_;
   std::mutex zone_resources_mtx_; /* Protects active/open io zones */
 
-  unsigned int max_nr_active_io_zones_;
-  unsigned int max_nr_open_io_zones_;
+  uint32_t max_nr_active_io_zones_;
+  uint32_t max_nr_open_io_zones_;
 
  public:
   explicit ZonedBlockDevice(std::string bdevname,
@@ -110,9 +110,34 @@ class ZonedBlockDevice {
 
   uint32_t GetZoneSize() { return zone_sz_; }
   uint32_t GetNrZones() { return nr_zones_; }
+  uint32_t GetMaxActiveZones() { return max_nr_active_io_zones_ + 1; };
+  uint32_t GetMaxOpenZones() { return max_nr_open_io_zones_ + 1; };
+
   std::vector<Zone *> GetMetaZones() { return meta_zones; }
 
   void SetFinishTreshold(uint32_t threshold) { finish_threshold_ = threshold; }
+
+  bool SetMaxActiveZones(uint32_t max_active) {
+    if (max_active == 0) /* No limit */
+      return true;
+    if (max_active <= GetMaxActiveZones()) {
+      max_nr_active_io_zones_ = max_active - 1;
+      return true;
+    } else {
+      return false;
+    }
+  }
+  
+  bool SetMaxOpenZones(uint32_t max_open) {
+    if (max_open == 0) /* No limit */
+      return true;
+    if (max_open <= GetMaxOpenZones()) {
+      max_nr_open_io_zones_ = max_open - 1;
+      return true;
+    } else {
+      return false;
+    }
+  }
 
   void NotifyIOZoneFull();
   void NotifyIOZoneClosed();

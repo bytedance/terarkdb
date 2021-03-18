@@ -44,6 +44,8 @@ Status Superblock::DecodeFrom(Slice* input) {
   GetFixed32(input, &finish_treshold_);
   memcpy(&aux_fs_path_, input->data(), sizeof(aux_fs_path_));
   input->remove_prefix(sizeof(aux_fs_path_));
+  GetFixed32(input, &max_active_limit_);
+  GetFixed32(input, &max_open_limit_);
   memcpy(&reserved_, input->data(), sizeof(reserved_));
   input->remove_prefix(sizeof(reserved_));
   assert(input->size() == 0);
@@ -69,6 +71,8 @@ void Superblock::EncodeTo(std::string* output) {
   PutFixed32(output, nr_zones_);
   PutFixed32(output, finish_treshold_);
   output->append(aux_fs_path_, sizeof(aux_fs_path_));
+  PutFixed32(output, max_active_limit_);
+  PutFixed32(output, max_open_limit_);
   output->append(reserved_, sizeof(reserved_));
   assert(output->length() == ENCODED_SIZE);
 }
@@ -83,6 +87,12 @@ Status Superblock::CompatibleWith(ZonedBlockDevice* zbd) {
   if (nr_zones_ > zbd->GetNrZones())
     return Status::Corruption("ZenFS Superblock",
                               "Error: nr of zones missmatch");
+  if (max_active_limit_ > zbd->GetMaxActiveZones())
+    return Status::Corruption("ZenFS Superblock",
+                              "Error: active zone limit missmatch");
+  if (max_open_limit_ > zbd->GetMaxOpenZones())
+    return Status::Corruption("ZenFS Superblock",
+                              "Error: open zone limit missmatch");
 
   return Status::OK();
 }
@@ -884,6 +894,8 @@ Status ZenFS::Mount(bool readonly) {
   Info(logger_, "Recovered from zone: %d", (int)valid_zones[r]->GetZoneNr());
   superblock_ = std::move(valid_superblocks[r]);
   zbd_->SetFinishTreshold(superblock_->GetFinishTreshold());
+  zbd_->SetMaxActiveZones(superblock_->GetMaxActiveZoneLimit());
+  zbd_->SetMaxOpenZones(superblock_->GetMaxOpenZoneLimit());
 
   IOOptions foo;
   IODebugContext bar;
@@ -932,11 +944,29 @@ Status ZenFS::Mount(bool readonly) {
   return Status::OK();
 }
 
-Status ZenFS::MkFS(std::string aux_fs_path, uint32_t finish_threshold) {
+Status ZenFS::MkFS(std::string aux_fs_path, uint32_t finish_threshold,
+                   uint32_t max_open_limit, uint32_t max_active_limit) {
   std::vector<Zone*> metazones = zbd_->GetMetaZones();
   std::unique_ptr<ZenMetaLog> log;
   Zone* meta_zone = nullptr;
   IOStatus s;
+
+  /* TODO: check practical limits */
+
+  if (max_open_limit > zbd_->GetMaxOpenZones()) {
+    return Status::InvalidArgument(
+        "Max open zone limit exceeds the device limit\n");
+  }
+
+  if (max_active_limit > zbd_->GetMaxActiveZones()) {
+    return Status::InvalidArgument(
+        "Max active zone limit exceeds the device limit\n");
+  }
+
+  if (max_active_limit < max_open_limit) {
+    return Status::InvalidArgument(
+        "Max open limit must be smaller than max active limit\n");
+  }
 
   if (aux_fs_path.length() > 255) {
     return Status::InvalidArgument(
@@ -955,12 +985,13 @@ Status ZenFS::MkFS(std::string aux_fs_path, uint32_t finish_threshold) {
   }
 
   if (!meta_zone) {
-    return Status::IOError("Not available meta zones\n");
+    return Status::IOError("No available meta zones\n");
   }
 
   log.reset(new ZenMetaLog(zbd_, meta_zone));
 
-  Superblock* super = new Superblock(zbd_, aux_fs_path, finish_threshold);
+  Superblock* super = new Superblock(zbd_, aux_fs_path,
+                          finish_threshold, max_open_limit, max_active_limit);
   std::string super_string;
   super->EncodeTo(&super_string);
 

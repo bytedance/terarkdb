@@ -26,6 +26,8 @@ DEFINE_string(aux_path, "",
 DEFINE_bool(force, false, "Force file system creation.");
 DEFINE_string(path, "", "File path");
 DEFINE_int32(finish_threshold, 0, "Finish used zones if less than x% left");
+DEFINE_int32(max_active_zones, 0, "Max active zone limit");
+DEFINE_int32(max_open_zones, 0, "Max active zone limit");
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -91,7 +93,8 @@ int zenfs_tool_mkfs() {
 
   if (FLAGS_aux_path.back() != '/') FLAGS_aux_path.append("/");
 
-  s = zenFS->MkFS(FLAGS_aux_path, FLAGS_finish_threshold);
+  s = zenFS->MkFS(FLAGS_aux_path, FLAGS_finish_threshold,
+                  FLAGS_max_open_zones, FLAGS_max_active_zones);
   if (!s.ok()) {
     fprintf(stderr, "Failed to create file system, error: %s\n",
             s.ToString().c_str());
