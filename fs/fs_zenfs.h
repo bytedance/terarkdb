@@ -25,9 +25,11 @@ class Superblock {
   uint32_t block_size_ = 0; /* in bytes */
   uint32_t zone_size_ = 0;  /* in blocks */
   uint32_t nr_zones_ = 0;
-  char aux_fs_path_[256] = {0};
   uint32_t finish_treshold_ = 0;
-  char reserved_[187] = {0};
+  char aux_fs_path_[256] = {0};
+  uint32_t max_active_limit_ = 0;
+  uint32_t max_open_limit_ = 0;
+  char reserved_[179] = {0};
 
  public:
   const uint32_t MAGIC = 0x5a454e46; /* ZENF */
@@ -39,8 +41,9 @@ class Superblock {
 
   /* Create a superblock for a filesystem covering the entire zoned block device
    */
-  Superblock(ZonedBlockDevice* zbd, std::string aux_fs_path = "",
-             uint32_t finish_threshold = 0) {
+  Superblock(ZonedBlockDevice* zbd, std::string aux_fs_path,
+             uint32_t finish_threshold,
+             uint32_t max_open_limit, uint32_t max_active_limit) {
     std::string uuid = Env::Default()->GenerateUniqueId();
     int uuid_len =
         std::min(uuid.length(),
@@ -55,6 +58,18 @@ class Superblock {
     zone_size_ = zbd->GetZoneSize() / block_size_;
     nr_zones_ = zbd->GetNrZones();
 
+    if (max_open_limit == 0) {
+      max_open_limit_ = zbd->GetMaxOpenZones();
+    } else {
+      max_open_limit_ = max_open_limit;
+    }
+    
+    if (max_active_limit == 0) {
+      max_active_limit_ = zbd->GetMaxActiveZones();
+    } else {
+      max_active_limit_ = max_active_limit;
+    }
+
     strncpy(aux_fs_path_, aux_fs_path.c_str(), sizeof(aux_fs_path_) - 1);
   }
 
@@ -65,6 +80,8 @@ class Superblock {
   uint32_t GetSeq() { return sequence_; }
   std::string GetAuxFsPath() { return std::string(aux_fs_path_); }
   uint32_t GetFinishTreshold() { return finish_treshold_; }
+  uint32_t GetMaxOpenZoneLimit() { return max_open_limit_; }
+  uint32_t GetMaxActiveZoneLimit() { return max_active_limit_; }
   std::string GetUUID() { return std::string(uuid_); }
 };
 
@@ -167,7 +184,8 @@ class ZenFS : public FileSystemWrapper {
   virtual ~ZenFS();
 
   Status Mount(bool readonly);
-  Status MkFS(std::string aux_fs_path, uint32_t finish_threshold);
+  Status MkFS(std::string aux_fs_path, uint32_t finish_threshold,
+              uint32_t max_open_limit, uint32_t max_active_limit);
   std::map<std::string, Env::WriteLifeTimeHint> GetWriteLifeTimeHints();
 
   const char* Name() const override {
