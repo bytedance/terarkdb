@@ -5094,10 +5094,12 @@ class Benchmark {
         reads_done++;
         if (thread->tid == 0 && reads_done % 1000000 == 0) {
           fprintf(stdout,
-                  "perf: get_from_map_sst:%" PRIu64 "\n get_from_sst:%" PRIu64
+                  "perf: get_from_map_sst:%" PRIu64 "\n get_from_sst:%" PRIu64 "get_from_file_index:%" PRIu64 "get_from_version_set:%" PRIu64
                   "\n",
                   get_perf_context()->get_from_map_time,
-                  get_perf_context()->get_from_sst_time);
+                  get_perf_context()->get_from_sst_time,
+                  get_perf_context()->get_from_file_picker,
+                  get_perf_context()->get_from_version_set);
         }
         thread->stats.FinishedOps(nullptr, db, 1, kRead);
       } else if (put_weight > 0) {

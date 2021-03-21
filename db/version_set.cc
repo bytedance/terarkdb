@@ -1302,6 +1302,7 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
                   SequenceNumber* max_covering_tombstone_seq, bool* value_found,
                   bool* key_exists, SequenceNumber* seq,
                   ReadCallback* callback) {
+  PERF_TIMER_GUARD(get_from_version_set);
   Slice ikey = k.internal_key();
 
   assert(status->ok() || status->IsMergeInProgress());
@@ -1316,12 +1317,14 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
       status->ok() ? GetContext::kNotFound : GetContext::kMerge, user_key,
       value, value_found, merge_context, this, max_covering_tombstone_seq,
       this->env_, seq, callback);
-
+  PERF_TIMER_GUARD(get_from_file_picker);
   FilePicker fp(
       storage_info_.files_, user_key, ikey, &storage_info_.level_files_brief_,
       storage_info_.num_non_empty_levels_, &storage_info_.file_indexer_,
       user_comparator(), internal_comparator());
   FdWithKeyRange* f = fp.GetNextFile();
+  PERF_TIMER_STOP(get_from_file_picker);
+
   bool use_global = cfd_->GetLatestCFOptions().build_global_map &&
                     storage_info()->global_map() != nullptr;
   //                    &&
