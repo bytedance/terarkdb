@@ -50,14 +50,17 @@ class ZoneFile {
   uint64_t file_id_;
 
   uint32_t nr_synced_extents_;
-
+  bool open_for_wr_ = false;
  public:
   explicit ZoneFile(ZonedBlockDevice* zbd, std::string filename,
                     uint64_t file_id_);
 
   virtual ~ZoneFile();
 
+  void OpenWR();
   void CloseWR();
+  bool IsOpenForWR();
+
   IOStatus Append(void* data, int data_size, int valid_size);
   IOStatus SetWriteLifeTimeHint(Env::WriteLifeTimeHint lifetime);
   std::string GetFilename();

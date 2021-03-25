@@ -549,14 +549,20 @@ IOStatus ZenFS::GetChildren(const std::string& dir, const IOOptions& options,
 IOStatus ZenFS::DeleteFile(const std::string& fname, const IOOptions& options,
                            IODebugContext* dbg) {
   IOStatus s;
+  ZoneFile *zoneFile = GetFile(fname);
+
   Debug(logger_, "Delete file: %s \n", fname.c_str());
 
-  if (GetFile(fname) == nullptr) {
+  if (zoneFile == nullptr) {
     return target()->DeleteFile(ToAuxPath(fname), options, dbg);
   }
 
-  s = DeleteFile(fname);
-  zbd_->LogZoneStats();
+  if (zoneFile->IsOpenForWR()) {
+    s = IOStatus::Busy("Cannot delete, file open for writing: ", fname.c_str());
+  } else {
+    s = DeleteFile(fname);
+    zbd_->LogZoneStats();
+  }
 
   return s;
 }

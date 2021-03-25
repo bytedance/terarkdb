@@ -187,6 +187,15 @@ void ZoneFile::CloseWR() {
     active_zone_->CloseWR();
     active_zone_ = NULL;
   }
+  open_for_wr_ = false;
+}
+
+void ZoneFile::OpenWR() {
+    open_for_wr_ = true;
+}
+
+bool ZoneFile::IsOpenForWR() {
+    return open_for_wr_;
 }
 
 ZoneExtent* ZoneFile::GetExtent(uint64_t file_offset, uint64_t* dev_offset) {
@@ -369,6 +378,7 @@ ZonedWritableFile::ZonedWritableFile(ZonedBlockDevice* zbd, bool _buffered,
   }
 
   metadata_writer_ = metadata_writer;
+  zoneFile_->OpenWR();
 }
 
 ZonedWritableFile::~ZonedWritableFile() {
