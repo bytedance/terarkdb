@@ -3952,6 +3952,9 @@ Status VersionSet::Recover(
 
       // Install recovered version
       v->PrepareApply(*cfd->GetLatestMutableCFOptions());
+      if(v->cfd()->GetLatestCFOptions().build_global_map) {
+        v->BuildGlobalMap(*db_options_,dbname_);
+      }
       AppendVersion(cfd, v);
     }
 
