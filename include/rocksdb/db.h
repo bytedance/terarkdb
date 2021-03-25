@@ -1262,6 +1262,12 @@ class DB {
     return Status::NotSupported("SuggestCompactRange() is not implemented.");
   }
 
+  virtual Status SuggestCompactColumnFamily(
+      ColumnFamilyHandle* /*column_family*/) {
+    return Status::NotSupported(
+        "SuggestCompactColumnFamily() is not implemented.");
+  }
+
   virtual Status PromoteL0(ColumnFamilyHandle* /*column_family*/,
                            int /*target_level*/) {
     return Status::NotSupported("PromoteL0() is not implemented.");

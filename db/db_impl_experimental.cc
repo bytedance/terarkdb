@@ -55,6 +55,28 @@ Status DBImpl::SuggestCompactRange(ColumnFamilyHandle* column_family,
     vstorage->ComputeCompactionScore(*cfd->ioptions(),
                                      *cfd->GetLatestMutableCFOptions());
     SchedulePendingCompaction(cfd);
+    MaybeScheduleFlushOrCompaction();
+  }
+  return Status::OK();
+}
+
+Status DBImpl::SuggestCompactColumnFamily(ColumnFamilyHandle* column_family) {
+  auto cfh = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family);
+  auto cfd = cfh->cfd();
+  {
+    InstrumentedMutexLock l(&mutex_);
+    auto vstorage = cfd->current()->storage_info();
+    for (int level = -1; level < vstorage->num_non_empty_levels() - 1;
+         ++level) {
+      for (auto f : vstorage->LevelFiles(level)) {
+        f->marked_for_compaction = true;
+      }
+    }
+    // Since we have some more files to compact, we should also recompute
+    // compaction score
+    vstorage->ComputeCompactionScore(*cfd->ioptions(),
+                                     *cfd->GetLatestMutableCFOptions());
+    SchedulePendingCompaction(cfd);
     SchedulePendingGarbageCollection(cfd);
     MaybeScheduleFlushOrCompaction();
   }

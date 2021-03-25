@@ -1881,6 +1881,7 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
     auto& meta = sub_compact->blob_outputs.front().meta;
     auto& inputs = *sub_compact->compaction->inputs();
     assert(inputs.size() == 1 && inputs.front().level == -1);
+    auto& files = inputs.front().files;
     ROCKS_LOG_INFO(
         db_options_.info_log,
         "[%s] [JOB %d] Table #%" PRIu64 " GC: %" PRIu64
@@ -1889,12 +1890,17 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
         " get not found, %" PRIu64
         " file number mismatch ], inheritance chain: %" PRIu64 " -> %" PRIu64,
         cfd->GetName().c_str(), job_id_, meta.fd.GetNumber(), counter.input,
-        inputs.front().size(), counter.input - meta.prop.num_entries,
+        files.size(), counter.input - meta.prop.num_entries,
         sub_compact->compaction->num_antiquation() * 100. / counter.input,
         counter.garbage_type, counter.get_not_found,
         counter.file_number_mismatch, raw_chain_length,
         inheritance_chain.size());
-    if (counter.input == meta.prop.num_entries || meta.prop.num_entries == 0) {
+    if ((std::find_if(files.begin(), files.end(),
+                      [](FileMetaData* f) {
+                        return f->marked_for_compaction;
+                      }) == files.end() &&
+         files.size() == 1 && counter.input == meta.prop.num_entries) ||
+        meta.prop.num_entries == 0) {
       ROCKS_LOG_INFO(db_options_.info_log,
                      "[%s] [JOB %d] Table #%" PRIu64
                      " GC purge %s records, dropped",

@@ -303,6 +303,8 @@ class DBImpl : public DB {
   Status SuggestCompactRange(ColumnFamilyHandle* column_family,
                              const Slice* begin, const Slice* end) override;
 
+  Status SuggestCompactColumnFamily(ColumnFamilyHandle* column_family) override;
+
   Status PromoteL0(ColumnFamilyHandle* column_family,
                    int target_level) override;
 

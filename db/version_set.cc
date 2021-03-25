@@ -1195,7 +1195,8 @@ VersionStorageInfo::VersionStorageInfo(
       finalized_(false),
       is_pick_compaction_fail(false),
       is_pick_garbage_collection_fail(false),
-      force_consistency_checks_(_force_consistency_checks) {
+      force_consistency_checks_(_force_consistency_checks),
+      blob_marked_for_compaction_(false) {
   ++files_;  // level -1 used for dependence files
 }
 
@@ -1764,15 +1765,20 @@ void VersionStorageInfo::ComputeCompactionScore(
   }
 
   // Calculate total_garbage_ratio_ as criterion for NeedsGarbageCollection().
-  double num_entries = 0;
+  uint64_t num_antiquation = 0;
+  uint64_t num_entries = 0;
+  bool marked = false;
   for (auto& f : LevelFiles(-1)) {
     if (f->is_gc_forbidden()) {
       continue;
     }
-    total_garbage_ratio_ += f->num_antiquation;
+    // if a file being_compacted, gc_status must be kGarbageCollectionForbidden
+    marked |= f->marked_for_compaction;
+    num_antiquation += f->num_antiquation;
     num_entries += f->prop.num_entries;
   }
-  total_garbage_ratio_ /= std::max<double>(1, num_entries);
+  blob_marked_for_compaction_ = marked;
+  total_garbage_ratio_ = num_antiquation / std::max<double>(1, num_entries);
 
   is_pick_compaction_fail = false;
   ComputeFilesMarkedForCompaction();

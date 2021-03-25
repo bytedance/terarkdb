@@ -278,6 +278,10 @@ class VersionStorageInfo {
 
   double total_garbage_ratio() const { return total_garbage_ratio_; }
 
+  bool blob_marked_for_compaction() const {
+    return blob_marked_for_compaction_;
+  }
+
   bool has_space_amplification() const { return !space_amplification_.empty(); }
 
   bool has_space_amplification(int level) const {
@@ -610,6 +614,8 @@ class VersionStorageInfo {
   // If set to true, we will run consistency checks even if RocksDB
   // is compiled in release mode
   bool force_consistency_checks_;
+
+  bool blob_marked_for_compaction_;
 
   friend class Version;
   friend class VersionSet;
