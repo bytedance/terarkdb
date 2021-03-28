@@ -199,6 +199,27 @@ class DBIter final : public Iterator {
     }
     return value_.slice();
   }
+  virtual std::string value_meta() const override {
+    if (cfd_ == nullptr) return "";
+
+    value_.fetch();
+    assert(value_.valid());
+    if (isValueHandleType(ikey_.type)) {
+      return separate_helper_->DecodeValueMeta(value_.slice()).ToString();
+    }
+
+    ValueExtractorContext context = {cfd_->GetID()};
+    auto value_meta_extractor =
+        cfd_->ioptions()->value_meta_extractor_factory->CreateValueExtractor(
+            context);
+    std::string value_meta;
+    Status s = value_meta_extractor->Extract(ikey_.user_key, value_.slice(),
+                                             &value_meta);
+    if (!s.ok()) {
+      return "";
+    }
+    return value_meta;
+  }
   virtual Status status() const override {
     if (status_.ok()) {
       return iter_->status();
@@ -1446,6 +1467,9 @@ inline void ArenaWrappedDBIter::Next() { db_iter_->Next(); }
 inline void ArenaWrappedDBIter::Prev() { db_iter_->Prev(); }
 inline Slice ArenaWrappedDBIter::key() const { return db_iter_->key(); }
 inline Slice ArenaWrappedDBIter::value() const { return db_iter_->value(); }
+inline std::string ArenaWrappedDBIter::value_meta() const {
+  return db_iter_->value_meta();
+}
 inline Status ArenaWrappedDBIter::status() const { return db_iter_->status(); }
 inline Status ArenaWrappedDBIter::GetProperty(std::string prop_name,
                                               std::string* prop) {

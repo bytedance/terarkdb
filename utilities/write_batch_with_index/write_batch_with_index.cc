@@ -160,7 +160,10 @@ class BaseDeltaIterator : public Iterator {
     return current_at_base_ ? base_iterator_->value()
                             : delta_iterator_->Entry().value;
   }
-
+  std::string value_meta() const override {
+    assert(false);
+    return "";
+  }
   Status status() const override {
     if (!status_.ok()) {
       return status_;

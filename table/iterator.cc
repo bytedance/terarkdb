@@ -167,6 +167,10 @@ class EmptyIterator : public Iterator {
     assert(false);
     return Slice();
   }
+  std::string value_meta() const override {
+    assert(false);
+    return "";
+  }
   virtual Status status() const override { return status_; }
 
  private:

@@ -77,6 +77,9 @@ inline bool IsValueType(ValueType t) {
   return t <= kTypeMerge || t == kTypeSingleDeletion || t == kTypeValueIndex ||
          t == kTypeMergeIndex;
 }
+inline bool isValueHandleType(ValueType t) {
+  return t == kTypeValueIndex || t == kTypeMergeIndex;
+}
 
 // Checks whether a type is from user operation
 // kTypeRangeDeletion is in meta block so this API is separated from above

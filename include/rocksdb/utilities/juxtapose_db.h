@@ -302,7 +302,10 @@ class JuxtaposeDB : public StackableDB {
       assert(iter->value() == iter_ref->value());
       return iter->value();
     }
-
+    std::string value_meta() const override {
+      assert(false);
+      return "";
+    }
     Status status() const override {
       assert(iter->status() == iter_ref->status());
       return iter->status();

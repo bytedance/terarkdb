@@ -539,6 +539,10 @@ class KVIter : public Iterator {
 
   virtual Slice key() const { return iter_->first; }
   virtual Slice value() const { return iter_->second; }
+  std::string value_meta() const override {
+    assert(false);
+    return "";
+  }
   virtual Status status() const { return Status::OK(); }
 
  private:

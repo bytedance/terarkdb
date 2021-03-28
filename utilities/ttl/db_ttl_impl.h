@@ -134,7 +134,10 @@ class TtlIterator : public Iterator {
     trimmed_value.size_ -= DBWithTTLImpl::kTSLength;
     return trimmed_value;
   }
-
+  std::string value_meta() const override {
+    assert(false);
+    return "";
+  }
   Status status() const override { return iter_->status(); }
 
  private:
