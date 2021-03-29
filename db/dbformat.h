@@ -77,9 +77,6 @@ inline bool IsValueType(ValueType t) {
   return t <= kTypeMerge || t == kTypeSingleDeletion || t == kTypeValueIndex ||
          t == kTypeMergeIndex;
 }
-inline bool isValueHandleType(ValueType t) {
-  return t == kTypeValueIndex || t == kTypeMergeIndex;
-}
 
 // Checks whether a type is from user operation
 // kTypeRangeDeletion is in meta block so this API is separated from above
@@ -813,7 +810,7 @@ class SeparateHelper {
   static Status TransToSeparate(const Slice& internal_key, LazyBuffer& value,
                                 uint64_t file_number, const Slice& meta,
                                 bool is_merge, bool is_index,
-                                const ValueExtractor* value_meta_extractor);
+                                const ValueExtractor* meta_extractor);
 
   virtual Status TransToSeparate(const Slice& internal_key, LazyBuffer& value,
                                  const Slice& meta, bool is_merge,

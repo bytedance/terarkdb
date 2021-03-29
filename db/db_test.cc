@@ -271,25 +271,25 @@ TEST_F(DBTest, GetValueMeta) {
       dbfull()->NewIterator(ReadOptions(), dbfull()->GetColumnFamilyHandle(1)));
   db_iter->SeekToFirst();
   ASSERT_TRUE(db_iter->Valid());
-  ASSERT_EQ(db_iter->value_meta(), "3");
+  ASSERT_EQ(db_iter->meta(), "3");
   db_iter->Next();
   ASSERT_TRUE(db_iter->Valid());
-  ASSERT_EQ(db_iter->value_meta(), "4");
+  ASSERT_EQ(db_iter->meta(), "4");
   db_iter->Next();
   ASSERT_TRUE(db_iter->Valid());
-  ASSERT_EQ(db_iter->value_meta(), "5");
+  ASSERT_EQ(db_iter->meta(), "5");
   db_iter->Next();
   ASSERT_TRUE(db_iter->Valid());
-  ASSERT_EQ(db_iter->value_meta(), "6");
+  ASSERT_EQ(db_iter->meta(), "6");
   db_iter->Next();
   ASSERT_TRUE(db_iter->Valid());
-  ASSERT_EQ(db_iter->value_meta(), "7");
+  ASSERT_EQ(db_iter->meta(), "7");
   db_iter->Next();
   ASSERT_TRUE(db_iter->Valid());
-  ASSERT_EQ(db_iter->value_meta(), "8");
+  ASSERT_EQ(db_iter->meta(), "8");
   db_iter->Next();
   ASSERT_TRUE(db_iter->Valid());
-  ASSERT_EQ(db_iter->value_meta(), "9");
+  ASSERT_EQ(db_iter->meta(), "9");
   db_iter.reset();
 
   ASSERT_OK(TryReopenWithColumnFamilies({"default", "pikachu"}, options));
@@ -297,25 +297,25 @@ TEST_F(DBTest, GetValueMeta) {
       dbfull()->NewIterator(ReadOptions(), dbfull()->GetColumnFamilyHandle(1)));
   db_iter->SeekToFirst();
   ASSERT_TRUE(db_iter->Valid());
-  ASSERT_EQ(db_iter->value_meta(), "3");
+  ASSERT_EQ(db_iter->meta(), "3");
   db_iter->Next();
   ASSERT_TRUE(db_iter->Valid());
-  ASSERT_EQ(db_iter->value_meta(), "4");
+  ASSERT_EQ(db_iter->meta(), "4");
   db_iter->Next();
   ASSERT_TRUE(db_iter->Valid());
-  ASSERT_EQ(db_iter->value_meta(), "5");
+  ASSERT_EQ(db_iter->meta(), "5");
   db_iter->Next();
   ASSERT_TRUE(db_iter->Valid());
-  ASSERT_EQ(db_iter->value_meta(), "6");
+  ASSERT_EQ(db_iter->meta(), "6");
   db_iter->Next();
   ASSERT_TRUE(db_iter->Valid());
-  ASSERT_EQ(db_iter->value_meta(), "7");
+  ASSERT_EQ(db_iter->meta(), "7");
   db_iter->Next();
   ASSERT_TRUE(db_iter->Valid());
-  ASSERT_EQ(db_iter->value_meta(), "8");
+  ASSERT_EQ(db_iter->meta(), "8");
   db_iter->Next();
   ASSERT_TRUE(db_iter->Valid());
-  ASSERT_EQ(db_iter->value_meta(), "9");
+  ASSERT_EQ(db_iter->meta(), "9");
 }
 
 TEST_F(DBTest, SkipDelay) {
@@ -2855,10 +2855,7 @@ class ModelDB : public DB {
 
     virtual Slice key() const override { return iter_->first; }
     virtual Slice value() const override { return iter_->second; }
-    virtual std::string value_meta() const override {
-      assert(false);
-      return "";
-    }
+    virtual Slice meta() const override { return Slice::Invalid(); }
     virtual Status status() const override { return Status::OK(); }
 
    private:

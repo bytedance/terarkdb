@@ -27,6 +27,7 @@
 #include "rocksdb/thread_status.h"
 #include "rocksdb/transaction_log.h"
 #include "rocksdb/types.h"
+#include "rocksdb/value_extractor.h"
 #include "rocksdb/version.h"
 
 #ifdef _WIN32
@@ -99,6 +100,7 @@ class ColumnFamilyHandle {
   // Returns the comparator of the column family associated with the
   // current handle.
   virtual const Comparator* GetComparator() const = 0;
+  virtual const ValueExtractor* GetMetaExtractor() const = 0;
 };
 
 static const int kMajorVersion = __ROCKSDB_MAJOR__;

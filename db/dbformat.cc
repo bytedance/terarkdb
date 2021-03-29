@@ -198,12 +198,13 @@ void IterKey::EnlargeBuffer(size_t key_size) {
   buf_size_ = key_size;
 }
 
-Status SeparateHelper::TransToSeparate(
-    const Slice& internal_key, LazyBuffer& value, uint64_t file_number,
-    const Slice& meta, bool is_merge, bool is_index,
-    const ValueExtractor* value_meta_extractor) {
+Status SeparateHelper::TransToSeparate(const Slice& internal_key,
+                                       LazyBuffer& value, uint64_t file_number,
+                                       const Slice& meta, bool is_merge,
+                                       bool is_index,
+                                       const ValueExtractor* meta_extractor) {
   assert(file_number != uint64_t(-1));
-  if (value_meta_extractor == nullptr || is_merge) {
+  if (meta_extractor == nullptr || is_merge) {
     value.reset(EncodeFileNumber(file_number), true, file_number);
     return Status::OK();
   }
@@ -217,8 +218,8 @@ Status SeparateHelper::TransToSeparate(
       return s;
     }
     std::string value_meta;
-    s = value_meta_extractor->Extract(ExtractUserKey(internal_key),
-                                      value.slice(), &value_meta);
+    s = meta_extractor->Extract(ExtractUserKey(internal_key), value.slice(),
+                                &value_meta);
     if (s.ok()) {
       Slice parts[] = {EncodeFileNumber(file_number), value_meta};
       value.reset(SliceParts(parts, 2), file_number);

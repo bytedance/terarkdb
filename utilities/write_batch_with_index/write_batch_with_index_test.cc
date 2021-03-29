@@ -34,6 +34,7 @@ class ColumnFamilyHandleImplDummy : public ColumnFamilyHandleImpl {
         comparator_(comparator) {}
   uint32_t GetID() const override { return id_; }
   const Comparator* GetComparator() const override { return comparator_; }
+  const ValueExtractor* GetMetaExtractor() const override { return nullptr; }
 
  private:
   uint32_t id_;
@@ -538,11 +539,8 @@ class KVIter : public Iterator {
   }
 
   virtual Slice key() const { return iter_->first; }
+  virtual Slice meta() const override { return Slice::Invalid(); }
   virtual Slice value() const { return iter_->second; }
-  std::string value_meta() const override {
-    assert(false);
-    return "";
-  }
   virtual Status status() const { return Status::OK(); }
 
  private:

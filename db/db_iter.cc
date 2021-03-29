@@ -189,6 +189,31 @@ class DBIter final : public Iterator {
       return saved_key_.GetUserKey();
     }
   }
+  virtual Slice meta() const override {
+    if (cfd_ == nullptr) {
+      return Slice::Invalid();
+    }
+    if (meta_.valid()) {
+      return meta_;
+    }
+    do {
+      auto v = value();
+      if (!v.valid()) {
+        break;
+      }
+      auto s = cfd_->meta_extractor()->Extract(saved_key_.GetUserKey(), v,
+                                               &meta_buffer_);
+      if (!s.ok()) {
+        valid_ = false;
+        break;
+      }
+      meta_ = meta_buffer_;
+      return meta_;
+    } while (false);
+
+    meta_ = Slice::Invalid();
+    return meta_;
+  }
   virtual Slice value() const override {
     assert(valid_);
     auto s = value_.fetch();
@@ -198,27 +223,6 @@ class DBIter final : public Iterator {
       return Slice::Invalid();
     }
     return value_.slice();
-  }
-  virtual std::string value_meta() const override {
-    if (cfd_ == nullptr) return "";
-
-    value_.fetch();
-    assert(value_.valid());
-    if (isValueHandleType(ikey_.type)) {
-      return separate_helper_->DecodeValueMeta(value_.slice()).ToString();
-    }
-
-    ValueExtractorContext context = {cfd_->GetID()};
-    auto value_meta_extractor =
-        cfd_->ioptions()->value_meta_extractor_factory->CreateValueExtractor(
-            context);
-    std::string value_meta;
-    Status s = value_meta_extractor->Extract(ikey_.user_key, value_.slice(),
-                                             &value_meta);
-    if (!s.ok()) {
-      return "";
-    }
-    return value_meta;
   }
   virtual Status status() const override {
     if (status_.ok()) {
@@ -300,6 +304,7 @@ class DBIter final : public Iterator {
       local_stats_.skip_count_--;
     }
     num_internal_keys_skipped_ = 0;
+    meta_ = Slice::Invalid();
     value_.reset();
     if (value_buffer_.capacity() > 1048576) {
       std::string().swap(value_buffer_);
@@ -324,6 +329,8 @@ class DBIter final : public Iterator {
   ParsedInternalKey ikey_;
   LazyBuffer value_;
   std::string value_buffer_;
+  mutable Slice meta_;
+  mutable std::string meta_buffer_;
   Direction direction_;
   mutable bool valid_;
   bool current_entry_is_merged_;
@@ -1466,10 +1473,8 @@ inline void ArenaWrappedDBIter::SeekForPrev(const Slice& target) {
 inline void ArenaWrappedDBIter::Next() { db_iter_->Next(); }
 inline void ArenaWrappedDBIter::Prev() { db_iter_->Prev(); }
 inline Slice ArenaWrappedDBIter::key() const { return db_iter_->key(); }
+inline Slice ArenaWrappedDBIter::meta() const { return db_iter_->meta(); }
 inline Slice ArenaWrappedDBIter::value() const { return db_iter_->value(); }
-inline std::string ArenaWrappedDBIter::value_meta() const {
-  return db_iter_->value_meta();
-}
 inline Status ArenaWrappedDBIter::status() const { return db_iter_->status(); }
 inline Status ArenaWrappedDBIter::GetProperty(std::string prop_name,
                                               std::string* prop) {

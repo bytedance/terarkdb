@@ -64,6 +64,7 @@ class ColumnFamilyHandleImpl : public ColumnFamilyHandle {
   virtual const std::string& GetName() const override;
   virtual Status GetDescriptor(ColumnFamilyDescriptor* desc) override;
   virtual const Comparator* GetComparator() const override;
+  virtual const ValueExtractor* GetMetaExtractor() const override;
 
  private:
   ColumnFamilyData* cfd_;
@@ -318,6 +319,8 @@ class ColumnFamilyData {
   const InternalKeyComparator& internal_comparator() const {
     return internal_comparator_;
   }
+  // thread-safe
+  const ValueExtractor* meta_extractor() const { return meta_extractor_.get(); }
 
   const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
   int_tbl_prop_collector_factories(const MutableCFOptions& moptions) const {
@@ -435,6 +438,8 @@ class ColumnFamilyData {
   const ColumnFamilyOptions initial_cf_options_;
   const ImmutableCFOptions ioptions_;
   MutableCFOptions mutable_cf_options_;
+
+  std::unique_ptr<ValueExtractor> meta_extractor_;
 
   const bool is_delete_range_supported_;
 
@@ -653,6 +658,9 @@ class ColumnFamilyMemTablesImpl : public ColumnFamilyMemTables {
 extern uint32_t GetColumnFamilyID(ColumnFamilyHandle* column_family);
 
 extern const Comparator* GetColumnFamilyUserComparator(
+    ColumnFamilyHandle* column_family);
+
+extern const ValueExtractor* GetColumnFamilyMetaExtractor(
     ColumnFamilyHandle* column_family);
 
 }  // namespace TERARKDB_NAMESPACE

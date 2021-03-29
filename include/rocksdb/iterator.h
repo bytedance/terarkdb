@@ -74,18 +74,17 @@ class Iterator : public Cleanable {
   // REQUIRES: Valid()
   virtual Slice key() const = 0;
 
+  // Return the meta for the current entry.  The underlying storage for
+  // the returned slice is valid only until the next modification of
+  // the iterator.
+  // REQUIRES: Valid()
+  virtual Slice meta() const = 0;
+
   // Return the value for the current entry.  The underlying storage for
   // the returned slice is valid only until the next modification of
   // the iterator.
   // REQUIRES: Valid()
   virtual Slice value() const = 0;
-
-  // Return the value meta for the current entry.  The underlying storage for
-  // the returned slice is valid only until the next modification of
-  // the iterator.
-  // NOTE: value meta may generate on the fly, just return str value not Slice
-  // REQUIRES: Valid()
-  virtual std::string value_meta() const = 0;
 
   // If an error has occurred, return it.  Else return an ok status.
   // If non-blocking IO is requested and this operation cannot be

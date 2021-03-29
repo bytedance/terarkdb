@@ -298,14 +298,16 @@ class JuxtaposeDB : public StackableDB {
       return iter->key();
     }
 
+    Slice meta() const override {
+      assert(iter->meta() == iter_ref->meta());
+      return iter->meta();
+    }
+
     Slice value() const override {
       assert(iter->value() == iter_ref->value());
       return iter->value();
     }
-    std::string value_meta() const override {
-      assert(false);
-      return "";
-    }
+
     Status status() const override {
       assert(iter->status() == iter_ref->status());
       return iter->status();
