@@ -1327,7 +1327,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       status = SeparateHelper::TransToSeparate(
           key, value, blob_meta->fd.GetNumber(), Slice(),
           GetInternalKeyType(key) == kTypeMerge, false,
-          separate_helper.value_meta_extractor.get());
+          separate_helper.meta_extractor);
     }
     return status;
   };
