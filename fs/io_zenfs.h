@@ -61,8 +61,10 @@ class ZoneFile {
   void CloseWR();
   bool IsOpenForWR();
 
-  IOStatus Append(void* data, int data_size, int valid_size);
+  IOStatus Append(void* data, int data_size, int valid_size, bool async = false);
   IOStatus SetWriteLifeTimeHint(Env::WriteLifeTimeHint lifetime);
+  IOStatus Sync();
+
   std::string GetFilename();
   void Rename(std::string name);
   uint64_t GetFileSize();
@@ -148,7 +150,9 @@ class ZonedWritableFile : public FSWritableFile {
   IOStatus FlushBuffer();
 
   bool buffered;
-  char* buffer;
+  char *buffer;
+  char *b1;
+  char *b2;
   size_t buffer_sz;
   uint32_t block_sz;
   uint32_t buffer_pos;
