@@ -97,7 +97,7 @@ class VersionStorageInfo {
                      const Comparator* user_comparator, int num_levels,
                      CompactionStyle compaction_style,
                      bool _force_consistency_checks);
-  ~VersionStorageInfo();
+  ~VersionStorageInfo() = default;
 
   void Reserve(int level, size_t size) { files_[level].reserve(size); }
 
@@ -514,7 +514,59 @@ class VersionStorageInfo {
 
   // List of files per level, files in each level are arranged
   // in increasing order of keys
-  std::vector<FileMetaData*>* files_;
+  struct Files {
+    Files(const Files&) = delete;
+    Files& operator=(const Files&) = delete;
+
+#if __SANITIZE_ADDRESS__
+    std::vector<std::vector<FileMetaData*>> files;
+
+    Files(size_t num_levels) { files.resize(num_levels + 1); }
+    Files(Files&&) = default;
+    Files& operator=(Files&&) = default;
+
+    std::vector<FileMetaData*>& operator[](int l) { return files[l + 1]; }
+    const std::vector<FileMetaData*>& operator[](int l) const {
+      return files[l + 1];
+    }
+
+    operator std::vector<FileMetaData*>*() { return files.data() + 1; }
+#else
+    std::vector<FileMetaData*>* files;
+
+    Files(size_t num_levels)
+        : files(new std::vector<FileMetaData*>[num_levels + 1]) {
+      ++files;
+    }
+    Files(Files&& other) {
+      files = other.files;
+      other.files = nullptr;
+    }
+    Files& operator=(Files&& other) {
+      if (this != &other) {
+        if (files != nullptr) {
+          delete[](files - 1);
+        }
+        files = other.files;
+        other.files = nullptr;
+      }
+      return *this;
+    }
+    ~Files() {
+      if (files != nullptr) {
+        delete[](files - 1);
+      }
+    }
+
+    std::vector<FileMetaData*>& operator[](int l) { return files[l]; }
+    const std::vector<FileMetaData*>& operator[](int l) const {
+      return files[l];
+    }
+
+    operator std::vector<FileMetaData*>*() { return files; }
+#endif
+  };
+  Files files_;
 
   // Dependence files both in files[-1] and dependence_map
   DependenceMap dependence_map_;

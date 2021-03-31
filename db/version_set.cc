@@ -342,8 +342,6 @@ class FilePicker {
 };
 }  // anonymous namespace
 
-VersionStorageInfo::~VersionStorageInfo() { delete[](files_ - 1); }
-
 Version::~Version() {
   assert(refs_ == 0);
 
@@ -1174,7 +1172,7 @@ VersionStorageInfo::VersionStorageInfo(
       num_non_empty_levels_(0),
       file_indexer_(user_comparator),
       compaction_style_(compaction_style),
-      files_(new std::vector<FileMetaData*>[num_levels_ + 1]),
+      files_(num_levels_),
       base_level_(num_levels_ == 1 ? -1 : 1),
       level_multiplier_(0.0),
       files_by_compaction_pri_(num_levels_),
@@ -1196,9 +1194,7 @@ VersionStorageInfo::VersionStorageInfo(
       is_pick_compaction_fail(false),
       is_pick_garbage_collection_fail(false),
       force_consistency_checks_(_force_consistency_checks),
-      blob_marked_for_compaction_(false) {
-  ++files_;  // level -1 used for dependence files
-}
+      blob_marked_for_compaction_(false) {}
 
 Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
                  const EnvOptions& env_opt,
@@ -4046,9 +4042,7 @@ Status VersionSet::ReduceNumberOfLevels(const std::string& dbname,
   // we need to allocate an array with the old number of levels size to
   // avoid SIGSEGV in WriteSnapshot()
   // however, all levels bigger or equal to new_levels will be empty
-  std::vector<FileMetaData*>* new_files_list =
-      new std::vector<FileMetaData*>[current_levels + 1];
-  ++new_files_list;
+  VersionStorageInfo::Files new_files_list(current_levels);
   for (int i = -1; i < new_levels - 1; i++) {
     new_files_list[i] = vstorage->LevelFiles(i);
   }
@@ -4057,8 +4051,7 @@ Status VersionSet::ReduceNumberOfLevels(const std::string& dbname,
     new_files_list[new_levels - 1] = vstorage->LevelFiles(first_nonempty_level);
   }
 
-  delete[](vstorage->files_ - 1);
-  vstorage->files_ = new_files_list;
+  vstorage->files_ = std::move(new_files_list);
   vstorage->num_levels_ = new_levels;
 
   MutableCFOptions mutable_cf_options(*options);
