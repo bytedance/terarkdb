@@ -51,6 +51,15 @@ Zone::Zone(ZonedBlockDevice *zbd, struct zbd_zone *z)
   capacity_ = 0;
   if (!(zbd_zone_full(z) || zbd_zone_offline(z) || zbd_zone_rdonly(z)))
     capacity_ = zbd_zone_capacity(z) - (zbd_zone_wp(z) - zbd_zone_start(z));
+
+  memset(&wr_ctx.io_ctx, 0, sizeof(wr_ctx.io_ctx));
+  wr_ctx.fd = zbd_->GetWriteFD();
+  wr_ctx.iocbs[0] = &wr_ctx.iocb;
+  wr_ctx.inflight = 0; 
+
+  if (io_setup(1, &wr_ctx.io_ctx) < 0) {
+    fprintf(stderr, "Failed to allocate io context\n");
+ }
 }
 
 bool Zone::IsUsed() { return (used_capacity_ > 0) || open_for_write_; }
@@ -61,6 +70,7 @@ uint64_t Zone::GetZoneNr() { return start_ / zbd_->GetZoneSize(); }
 
 void Zone::CloseWR() {
   assert(open_for_write_);
+  Sync();
   open_for_write_ = false;
 
   if (Close().ok()) {
@@ -133,11 +143,17 @@ IOStatus Zone::Append(char *data, uint32_t size) {
   uint32_t left = size;
   int fd = zbd_->GetWriteFD();
   int ret;
+  IOStatus s;
 
   if (capacity_ < size)
     return IOStatus::NoSpace("Not enough capacity for append");
 
   assert((size % zbd_->GetBlockSize()) == 0);
+
+  /* Make sure we don't have any outstanding writes */
+  s = Sync();
+  if (!s.ok())
+    return s;
 
   while (left) {
     ret = pwrite(fd, ptr, size, wp_);
@@ -148,6 +164,71 @@ IOStatus Zone::Append(char *data, uint32_t size) {
     capacity_ -= ret;
     left -= ret;
   }
+
+  return IOStatus::OK();
+}
+
+IOStatus Zone::Sync() {
+  struct io_event events[1];
+  struct timespec timeout;
+  int ret;
+  timeout.tv_sec = 1;
+  timeout.tv_nsec = 0;
+  
+  if (wr_ctx.inflight == 0)
+    return IOStatus::OK();
+
+  ret = io_getevents(wr_ctx.io_ctx, 1, 1, events, &timeout);
+  if (ret != 1) {
+    fprintf(stderr, "Failed to complete io - timeout ret: %d\n", ret);
+    return IOStatus::IOError("Failed to complete io - timeout?");
+  }
+
+  ret = events[0].res;
+  if (ret != (int)(wr_ctx.iocb.u.c.nbytes)) {
+    if (ret >= 0) {
+        /* TODO: we need to handle this case and keep on submittin' until we're done*/
+        fprintf(stderr, "failed to complete io - short write\n");
+        return IOStatus::IOError("Failed to complete io - short write");
+    } else {
+        return IOStatus::IOError("Failed to complete io - io error");
+    }
+  }
+
+  wr_ctx.inflight = 0; 
+
+  return IOStatus::OK();
+}
+
+IOStatus Zone::Append_async(char *data, uint32_t size) {
+  char *ptr = data;
+  uint32_t left = size;
+  int ret;
+  IOStatus s;
+
+  assert((size % zbd_->GetBlockSize()) == 0);
+  
+  /* Make sure we don't have any outstanding writes */
+  s = Sync();
+  if (!s.ok())
+    return s;
+
+  if (capacity_ < size)
+    return IOStatus::NoSpace("Not enough capacity for append");
+
+  io_prep_pwrite(&wr_ctx.iocb, wr_ctx.fd, data, size, wp_);
+
+  ret = io_submit(wr_ctx.io_ctx, 1, wr_ctx.iocbs);
+  if (ret < 0) {
+    fprintf(stderr, "Failed to submit io\n");
+    return IOStatus::IOError("Failed to submit io");
+  }
+
+  wr_ctx.inflight = size;  
+  ptr += size;
+  wp_ += size;
+  capacity_ -= size;
+  left -= size;
 
   return IOStatus::OK();
 }

@@ -309,7 +309,7 @@ void ZoneFile::PushExtent() {
 }
 
 /* Assumes that data and size are block aligned */
-IOStatus ZoneFile::Append(void* data, int data_size, int valid_size) {
+IOStatus ZoneFile::Append(void* data, int data_size, int valid_size, bool async) {
   uint32_t left = data_size;
   uint32_t wr_size, offset = 0;
   IOStatus s;
@@ -339,8 +339,13 @@ IOStatus ZoneFile::Append(void* data, int data_size, int valid_size) {
     wr_size = left;
     if (wr_size > active_zone_->capacity_) wr_size = active_zone_->capacity_;
 
-    s = active_zone_->Append((char*)data + offset, wr_size);
-    if (!s.ok()) return s;
+    if (async) {
+      s = active_zone_->Append_async((char*)data + offset, wr_size); 
+      if (!s.ok()) return s;
+    
+    } else {
+      s = active_zone_->Append((char*)data + offset, wr_size); 
+    }
 
     fileSize += wr_size;
     left -= wr_size;
@@ -364,26 +369,45 @@ ZonedWritableFile::ZonedWritableFile(ZonedBlockDevice* zbd, bool _buffered,
 
   buffered = _buffered;
   block_sz = zbd->GetBlockSize();
-  buffer_sz = block_sz * 256;
+  buffer_sz = block_sz * 32;
   buffer_pos = 0;
 
   zoneFile_ = zoneFile;
 
+  // TODO: add an Open() method so we can handle out of memory gracefully
+
   if (buffered) {
-    int ret = posix_memalign((void**)&buffer, block_sz, buffer_sz);
+    int ret;
 
-    if (ret) buffer = nullptr;
-
-    assert(buffer != nullptr);
+    ret = posix_memalign((void**)&b1, block_sz, buffer_sz);
+    assert(ret == 0);
+    ret = posix_memalign((void**)&b2, block_sz, buffer_sz);
+    assert(ret == 0);
+    (void)ret;
+    assert(b1 != nullptr && b2 != nullptr);
+  
+    buffer = b1;
   }
 
   metadata_writer_ = metadata_writer;
   zoneFile_->OpenWR();
 }
 
+IOStatus ZoneFile::Sync() {
+  IOStatus s;
+  if (active_zone_) {
+     s = active_zone_->Sync();
+    if (!s.ok()) return s;
+  }
+  return s;
+}
+
 ZonedWritableFile::~ZonedWritableFile() {
   zoneFile_->CloseWR();
-  if (buffered) free(buffer);
+  if (buffered) {
+    free(b1);
+    free(b2);
+  }
 };
 
 ZonedWritableFile::MetadataWriter::~MetadataWriter() {}
@@ -401,12 +425,14 @@ IOStatus ZonedWritableFile::Fsync(const IOOptions& /*options*/,
 
   buffer_mtx_.lock();
   s = FlushBuffer();
-  buffer_mtx_.unlock();
-  if (!s.ok()) {
-    return s;
+  if (s.ok()) {
+    s = zoneFile_->Sync();
   }
+  buffer_mtx_.unlock();
+  
+  if (!s.ok()) return s;
+  
   zoneFile_->PushExtent();
-
   return metadata_writer_->Persist(zoneFile_);
 }
 
@@ -448,9 +474,19 @@ IOStatus ZonedWritableFile::FlushBuffer() {
   if (pad_sz) memset((char*)buffer + buffer_pos, 0x0, pad_sz);
 
   wr_sz = buffer_pos + pad_sz;
-  s = zoneFile_->Append((char*)buffer, wr_sz, buffer_pos);
+  s = zoneFile_->Append((char*)buffer, wr_sz, buffer_pos, true);
   if (!s.ok()) {
     return s;
+  }
+
+  s = zoneFile_->Sync();
+  if (!s.ok())
+    return s;
+
+  if (buffer == b1) {
+    buffer = b2;
+  } else {
+    buffer = b1;
   }
 
   wp += buffer_pos;

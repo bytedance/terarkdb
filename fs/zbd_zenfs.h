@@ -14,6 +14,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <libaio.h>
 
 #include <atomic>
 #include <condition_variable>
@@ -29,6 +30,14 @@ namespace ROCKSDB_NAMESPACE {
 
 class ZonedBlockDevice;
 
+struct zenfs_aio_ctx {
+  struct iocb iocb;
+  struct iocb *iocbs[1];
+  io_context_t io_ctx;
+  int inflight;
+  int fd;
+};
+
 class Zone {
   ZonedBlockDevice *zbd_;
 
@@ -42,12 +51,15 @@ class Zone {
   bool open_for_write_;
   Env::WriteLifeTimeHint lifetime_;
   std::atomic<long> used_capacity_;
+  struct zenfs_aio_ctx wr_ctx;
 
   IOStatus Reset();
   IOStatus Finish();
   IOStatus Close();
 
   IOStatus Append(char *data, uint32_t size);
+  IOStatus Append_async(char *data, uint32_t size);
+  IOStatus Sync();
   bool IsUsed();
   bool IsFull();
   bool IsEmpty();
