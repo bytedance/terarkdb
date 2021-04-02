@@ -305,6 +305,7 @@ class DBIter final : public Iterator {
     }
     num_internal_keys_skipped_ = 0;
     meta_ = Slice::Invalid();
+    meta_buffer_.clear();
     value_.reset();
     if (value_buffer_.capacity() > 1048576) {
       std::string().swap(value_buffer_);
