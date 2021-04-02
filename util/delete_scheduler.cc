@@ -276,7 +276,7 @@ void DeleteScheduler::BackgroundEmptyTrash() {
         // rate limiting is disabled
         total_penlty = 0;
       }
-      // mu_wait_.Lock();q
+      // mu_wait_.Lock();
       TEST_SYNC_POINT_CALLBACK("DeleteScheduler::BackgroundEmptyTrash:Wait",
                                &total_penlty);
 

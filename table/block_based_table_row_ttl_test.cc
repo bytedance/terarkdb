@@ -235,26 +235,14 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
   ASSERT_EQ(36ul * 26, props->raw_value_size);
   ASSERT_EQ(26ul, props->num_entries);
   ASSERT_EQ(1ul, props->num_data_blocks);
-  auto answer1 = props->user_collected_properties.find(
-      TablePropertiesNames::kEarliestTimeBeginCompact);
-  auto answer2 = props->user_collected_properties.find(
-      TablePropertiesNames::kLatestTimeEndCompact);
+  uint64_t act_answer1, act_answer2;
+  GetCompactionTimePoint(props->user_collected_properties, &act_answer1,
+                         &act_answer2);
   // auto answer3 = props->user_collected_properties.end();
-  auto get_varint64 = [](const std::string& v) {
-    Slice s(v);
-    uint64_t r;
-    auto assert_true = [](bool b) {
-      ASSERT_TRUE(b);
-    };
-    assert_true(GetVarint64(&s, &r));
-    return r;
-  };
-  uint64_t act_answer1 = get_varint64(answer1->second);
-  uint64_t act_answer2 = get_varint64(answer2->second);
   if (n.ttl_ratio > 1.000) {
     // ASSERT_EQ(std::numeric_limits<uint64_t>::max(),
     // props->ratio_expire_time);
-    ASSERT_EQ(act_answer1, std::numeric_limits<uint64_t>::max());
+    ASSERT_EQ(act_answer1, port::kMaxUint64);
   } else {
     // ASSERT_NE(answer1, answer3);
 
@@ -268,7 +256,7 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
     }
   }
   if (n.ttl_scan == 0) {
-    ASSERT_EQ(act_answer2, std::numeric_limits<uint64_t>::max());
+    ASSERT_EQ(act_answer2, port::kMaxUint64);
     // ASSERT_EQ(std::numeric_limits<uint64_t>::max(),
     //           props->scan_gap_expire_time);
   } else {

@@ -402,14 +402,12 @@ void TestInternalKeyPropertiesCollector(
     options.info_log = std::make_shared<test::NullLogger>();
     options = SanitizeOptions("db",  // just a place holder
                               options);
-    ImmutableCFOptions ioptions(options);
-    MutableCFOptions moptions(options);
-    int_tbl_prop_collector_factories =
-        moptions.int_tbl_prop_collector_factories.get();
-    options.comparator = comparator;
   }
-  const ImmutableCFOptions ioptions(options);
+  ImmutableCFOptions ioptions(options);
   MutableCFOptions moptions(options);
+  int_tbl_prop_collector_factories =
+      moptions.int_tbl_prop_collector_factories.get();
+  options.comparator = options.comparator;
 
   for (int iter = 0; iter < 2; ++iter) {
     MakeBuilder(options, ioptions, moptions, pikc,
