@@ -465,6 +465,8 @@ endif()
 
 if(NOT WIN32)
   add_definitions(-DROCKSDB_PLATFORM_POSIX -DROCKSDB_LIB_IO_POSIX)
+  SET(ROCKSDB_PLATFORM_POSIX ON)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/port/port.h.in ${CMAKE_CURRENT_SOURCE_DIR}/port/port.h)
 endif()
 
 option(WITH_FALLOCATE "build with fallocate" ON)
