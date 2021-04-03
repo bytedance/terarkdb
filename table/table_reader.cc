@@ -74,7 +74,9 @@ class TableMapIndexReader : public TableReader {
     void Next() override { idx++; }
     void Prev() override { idx--; }
     Slice key() const override { return index->getKey(idx); }
-    LazyBuffer value() const override { return LazyBuffer(index->getKey(idx)); }
+    LazyBuffer value() const override {
+      return LazyBuffer(index->getValue(idx));
+    }
     Status status() const override { return Status::OK(); }
 
    private:

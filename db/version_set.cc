@@ -372,9 +372,6 @@ Version::~Version() {
     vset_->obsolete_files_.push_back(
         ObsoleteFileInfo(f, cfd_->ioptions()->cf_paths[path_id].path));
   }
-  if (storage_info_.map_index_ != nullptr) {
-    delete storage_info_.map_index_;
-  }
 }
 
 int FindFile(const InternalKeyComparator& icmp,

@@ -1179,6 +1179,7 @@ static const bool FLAGS_readwritepercent_dummy __attribute__((__unused__)) =
 
 DEFINE_int32(disable_seek_compaction, false,
              "Not used, left here for backwards compatibility");
+DEFINE_int32(use_srt_index, false, "use srt index to accelerate srt read");
 
 static const bool FLAGS_deletepercent_dummy __attribute__((__unused__)) =
     RegisterFlagValidator(&FLAGS_deletepercent, &ValidateInt32Percent);
@@ -2375,6 +2376,7 @@ class Benchmark {
         merge_keys_(FLAGS_merge_keys < 0 ? FLAGS_num : FLAGS_merge_keys),
         report_file_operations_(FLAGS_report_file_operations) {
     open_options_.build_global_map = FLAGS_build_global_map;
+    open_options_.use_srt_index = FLAGS_use_srt_index;
     // use simcache instead of cache
     if (FLAGS_simcache_size >= 0) {
       if (FLAGS_cache_numshardbits >= 1) {
@@ -5094,7 +5096,8 @@ class Benchmark {
         reads_done++;
         if (thread->tid == 0 && reads_done % 1000000 == 0) {
           fprintf(stdout,
-                  "perf: get_from_map_sst:%" PRIu64 "\n get_from_sst:%" PRIu64 "get_from_file_index:%" PRIu64 "get_from_version_set:%" PRIu64
+                  "perf: get_from_map_sst:%" PRIu64 "\n get_from_sst:%" PRIu64
+                  "get_from_file_index:%" PRIu64 "get_from_version_set:%" PRIu64
                   "\n",
                   get_perf_context()->get_from_map_time,
                   get_perf_context()->get_from_sst_time,

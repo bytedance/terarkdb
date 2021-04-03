@@ -25,7 +25,8 @@ namespace TERARKDB_NAMESPACE {
 ImmutableDBOptions::ImmutableDBOptions() : ImmutableDBOptions(Options()) {}
 
 ImmutableDBOptions::ImmutableDBOptions(const DBOptions& options)
-    : create_if_missing(options.create_if_missing),
+    : use_srt_index(options.use_srt_index),
+      create_if_missing(options.create_if_missing),
       create_missing_column_families(options.create_missing_column_families),
       error_if_exists(options.error_if_exists),
       paranoid_checks(options.paranoid_checks),
@@ -292,7 +293,7 @@ MutableDBOptions::MutableDBOptions(const DBOptions& options)
       max_open_files(options.max_open_files),
       bytes_per_sync(options.bytes_per_sync),
       wal_bytes_per_sync(options.wal_bytes_per_sync),
-      compaction_readahead_size(options.compaction_readahead_size) {}
+      compaction_readahead_size(options.compaction_readahead_size){}
 
 void MutableDBOptions::Dump(Logger* log) const {
   ROCKS_LOG_HEADER(log, "                   Options.max_background_jobs: %d",

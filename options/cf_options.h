@@ -53,6 +53,8 @@ struct ImmutableCFOptions {
 
   bool enable_lazy_compaction;
 
+  bool use_srt_index;
+
   bool pin_table_properties_in_reader;
 
   bool inplace_update_support;

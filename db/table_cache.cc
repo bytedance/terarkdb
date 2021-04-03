@@ -202,7 +202,7 @@ Status TableCache::GetTableReaderImpl(
         table_reader_option, std::move(file_reader), fd.GetFileSize(),
         table_reader, prefetch_index_and_filter_in_cache);
     TEST_SYNC_POINT_CALLBACK("MapBuilder::Build::force_memory", &force_memory);
-    if (s.ok() && force_memory) {
+    if (s.ok() && force_memory && ioptions_.use_srt_index) {
       std::unique_ptr<TableReader> file_table_reader(std::move(*table_reader));
       s = NewMapIndexReader(ioptions_, file_table_reader, table_reader);
       ROCKS_LOG_INFO(ioptions_.info_log,
@@ -324,7 +324,7 @@ InternalIterator* TableCache::NewIterator(
       s = FindTable(env_options, icomparator, fd, &handle, prefix_extractor,
                     options.read_tier == kBlockCacheTier /* no_io */,
                     record_stats, file_read_hist, skip_filters, level,
-                    true /* prefetch_index_and_filter_in_cache */, false);
+                    true /* prefetch_index_and_filter_in_cache */, file_meta.prop.is_map_sst());
       if (s.ok()) {
         table_reader = GetTableReaderFromHandle(handle);
       }

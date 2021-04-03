@@ -88,6 +88,7 @@ struct ImmutableDBOptions {
   bool atomic_flush;
   bool avoid_unnecessary_blocking_io;
   bool persist_stats_to_disk;
+  bool use_srt_index;
 };
 
 struct MutableDBOptions {

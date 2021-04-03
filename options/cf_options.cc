@@ -28,7 +28,8 @@ ImmutableCFOptions::ImmutableCFOptions(const Options& options)
 
 ImmutableCFOptions::ImmutableCFOptions(const ImmutableDBOptions& db_options,
                                        const ColumnFamilyOptions& cf_options)
-    : compaction_style(cf_options.compaction_style),
+    : use_srt_index(db_options.use_srt_index),
+      compaction_style(cf_options.compaction_style),
       compaction_pri(cf_options.compaction_pri),
       user_comparator(cf_options.comparator),
       internal_comparator(InternalKeyComparator(cf_options.comparator)),

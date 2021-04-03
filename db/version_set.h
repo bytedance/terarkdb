@@ -494,9 +494,7 @@ class VersionStorageInfo {
                                      const Slice& largest_user_key,
                                      int last_level, int last_l0_idx);
   FileMetaData* global_map() { return global_map_; }
-  StaticMapIndex* map_index() { return map_index_; }
   void SetGlobalMap(FileMetaData* global_map) { global_map_ = global_map; }
-  void SetMapIndex(StaticMapIndex* map_index) { map_index_ = map_index; }
 
  private:
   const InternalKeyComparator* internal_comparator_;
