@@ -2176,22 +2176,21 @@ void VersionStorageInfo::ComputeBottommostFilesMarkedForCompaction() {
   bottommost_files_marked_for_compaction_.clear();
   bottommost_files_mark_threshold_ = kMaxSequenceNumber;
   for (auto& level_and_file : bottommost_files_) {
-    if (!level_and_file.second->being_compacted) {
-      if (level_and_file.second->fd.largest_seqno != 0 &&
-          level_and_file.second->prop.num_deletions > 1) {
-        // largest_seqno might be nonzero due to containing the final key in an
-        // earlier compaction, whose seqnum we didn't zero out. Multiple
-        // deletions ensures the file really contains deleted or overwritten
-        // keys.
-        if (level_and_file.second->fd.largest_seqno < oldest_snapshot_seqnum_) {
-          bottommost_files_marked_for_compaction_.push_back(level_and_file);
-        } else {
-          bottommost_files_mark_threshold_ =
-              std::min(bottommost_files_mark_threshold_,
-                       level_and_file.second->fd.largest_seqno);
-        }
-      } else if (level_and_file.second->marked_for_compaction) {
+    auto meta = level_and_file.second;
+    if (meta->being_compacted) {
+      continue;
+    }
+    if (meta->marked_for_compaction) {
+      bottommost_files_marked_for_compaction_.push_back(level_and_file);
+    } else if (meta->prop.has_snapshots()) {
+      // largest_seqno might be nonzero due to containing the final key in an
+      // earlier compaction, whose seqnum we didn't zero out. Multiple deletions
+      // ensures the file really contains deleted or overwritten keys.
+      if (meta->fd.largest_seqno < oldest_snapshot_seqnum_) {
         bottommost_files_marked_for_compaction_.push_back(level_and_file);
+      } else {
+        bottommost_files_mark_threshold_ =
+            std::min(bottommost_files_mark_threshold_, meta->fd.largest_seqno);
       }
     }
   }
