@@ -66,8 +66,7 @@ Status DBImpl::SuggestCompactColumnFamily(ColumnFamilyHandle* column_family) {
   {
     InstrumentedMutexLock l(&mutex_);
     auto vstorage = cfd->current()->storage_info();
-    for (int level = -1; level < vstorage->num_non_empty_levels() - 1;
-         ++level) {
+    for (int level = -1; level < vstorage->num_non_empty_levels(); ++level) {
       for (auto f : vstorage->LevelFiles(level)) {
         f->marked_for_compaction = true;
       }
