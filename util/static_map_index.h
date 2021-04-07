@@ -67,12 +67,12 @@ struct StaticMapIndex {
   }
   int getIdx(const Slice& key) {
     int l = 0, r = key_nums - 1;
-    while (l <= r) {
+    while (l < r) {
       int mid = (l + r) >> 1;
-      if (c->Compare(key, getKey(mid)) > 0)
-        l = mid + 1;
+      if (c->Compare(key, getKey(mid)) >= 0)
+        r = mid;
       else
-        r = mid - 1;
+        l = mid + 1;
     }
     return l;
   }
