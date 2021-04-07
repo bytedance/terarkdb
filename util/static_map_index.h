@@ -69,7 +69,7 @@ struct StaticMapIndex {
     int l = 0, r = key_nums - 1;
     while (l < r) {
       int mid = (l + r) >> 1;
-      if (c->Compare(key, getKey(mid)) >= 0)
+      if (c->Compare(key, getKey(mid)) < 0)
         r = mid;
       else
         l = mid + 1;

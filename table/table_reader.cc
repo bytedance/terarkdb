@@ -68,7 +68,10 @@ class TableMapIndexReader : public TableReader {
     void SeekToFirst() override { idx = 0; }
     void SeekToLast() override { idx = index->key_nums - 1; }
     void SeekForPrev(const Slice& key) override {
-      idx = index->getIdx(key) - 1;
+      idx = index->getIdx(key);
+      if(index->c->Compare(key,index->getKey(idx)) > 0){
+        idx -= 1;
+      }
     }
     void Seek(const Slice& key) override { idx = index->getIdx(key); }
     void Next() override { idx++; }
