@@ -2209,7 +2209,6 @@ class LevelCompactionBuilder {
   int parent_index_ = -1;
   int base_index_ = -1;
   double start_level_score_ = 0;
-  bool is_manual_ = false;
   CompactionInputFiles start_level_inputs_;
   std::vector<CompactionInputFiles> compaction_inputs_;
   CompactionInputFiles output_level_inputs_;
@@ -2318,7 +2317,6 @@ void LevelCompactionBuilder::SetupInitialFiles() {
         cf_name_, vstorage_, &start_level_, &output_level_,
         &start_level_inputs_);
     if (!start_level_inputs_.empty()) {
-      is_manual_ = true;
       compaction_reason_ = CompactionReason::kFilesMarkedForCompaction;
       return;
     }
@@ -2870,7 +2868,6 @@ Compaction* LevelCompactionBuilder::GetCompaction() {
   params.compression_opts =
       GetCompressionOptions(ioptions_, vstorage_, output_level_);
   params.grandparents = std::move(grandparents_);
-  params.manual_compaction = is_manual_;
   params.score = start_level_score_;
   params.compaction_type = compaction_type_;
   params.input_range = std::move(input_range_);
