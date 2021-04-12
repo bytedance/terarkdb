@@ -187,9 +187,7 @@ struct MutableCFOptions {
   // Must be called after any change to MutableCFOptions
   void RefreshDerivedOptions(int num_levels);
 
-  void RefreshDerivedOptions(const ImmutableCFOptions& ioptions) {
-    RefreshDerivedOptions(ioptions.num_levels);
-  }
+  void RefreshDerivedOptions(const ImmutableCFOptions& ioptions);
 
   int MaxBytesMultiplerAdditional(int level) const {
     if (level >=

@@ -139,6 +139,24 @@ void MutableCFOptions::RefreshDerivedOptions(int num_levels) {
   }
 }
 
+void MutableCFOptions::RefreshDerivedOptions(
+    const ImmutableCFOptions& ioptions) {
+  RefreshDerivedOptions(ioptions.num_levels);
+
+  int_tbl_prop_collector_factories = std::make_shared<
+      std::vector<std::unique_ptr<IntTblPropCollectorFactory>>>();
+  for (auto& f : ioptions.table_properties_collector_factories) {
+    int_tbl_prop_collector_factories->emplace_back(
+        new UserKeyTablePropertiesCollectorFactory(f));
+  }
+  if (ioptions.ttl_extractor_factory != nullptr) {
+    int_tbl_prop_collector_factories->emplace_back(
+        NewTtlIntTblPropCollectorFactory(ioptions.ttl_extractor_factory,
+                                         ioptions.env, ttl_gc_ratio,
+                                         ttl_max_scan_gap));
+  }
+}
+
 void MutableCFOptions::Dump(Logger* log) const {
   // Memtable related options
   ROCKS_LOG_INFO(log,
