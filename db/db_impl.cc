@@ -925,14 +925,14 @@ void DBImpl::ScheduleTtlGC() {
         std::min(earliest_time_begin_compact, latest_time_end_compact) <= now;
     if (should_mark) {
       ROCKS_LOG_BUFFER(&log_buffer_info,
-                       "SST Table property level=%d file-id = %" PRIu64
-                       ", info : (%" PRIu64 " , %" PRIu64 ") now = %" PRIu64,
-                       level, file_number, earliest_time_begin_compact,
+                       "SST #%" PRIu64
+                       " marked for compaction @L%d , property: (%" PRIu64
+                       " , %" PRIu64 ") now: %" PRIu64,
+                       file_number, level, earliest_time_begin_compact,
                        latest_time_end_compact, now);
     }
     return should_mark;
   };
-  ROCKS_LOG_INFO(immutable_db_options_.info_log, "Start ScheduleTtlGC");
   mutex_.Lock();
   for (auto cfd : *versions_->GetColumnFamilySet()) {
     uint64_t mark_count = 0;
@@ -981,6 +981,7 @@ void DBImpl::ScheduleTtlGC() {
   log_buffer_info.FlushBufferToLog();
   log_buffer_debug.FlushBufferToLog();
 }
+
 void DBImpl::DumpStats() {
   TEST_SYNC_POINT("DBImpl::DumpStats:1");
 #ifndef ROCKSDB_LITE
