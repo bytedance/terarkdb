@@ -3312,6 +3312,7 @@ class Benchmark {
         printf("TerarkZipTable was not enabled!");
         exit(1);
 #endif
+        break;
       case kHashDuaLinkedList:
         options.memtable_factory.reset(NewConcurrentHashDualListReqFactory());
         break;
