@@ -3140,6 +3140,7 @@ Status VersionSet::ProcessManifestWrites(
     mu->Unlock();
 
     if (!first_writer.edit_list.front()->IsColumnFamilyManipulation()) {
+      StopWatch sw(env_, db_options_->statistics.get(), BUILD_VERSION_TIME);
       for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
         assert(!builder_guards.empty() &&
                builder_guards.size() == versions.size());
