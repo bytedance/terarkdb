@@ -3763,8 +3763,10 @@ class HistogramTypeJni {
         return 0x21;
       case TERARKDB_NAMESPACE::Histograms::INSTALL_SUPER_VERSION_TIME:
         return 0x22;
-      case TERARKDB_NAMESPACE::Histograms::HISTOGRAM_ENUM_MAX:
+      case TERARKDB_NAMESPACE::Histograms::BUILD_VERSION_TIME:
         return 0x23;
+      case TERARKDB_NAMESPACE::Histograms::HISTOGRAM_ENUM_MAX:
+        return 0x24;
 
       default:
         // undefined/default
@@ -3848,6 +3850,8 @@ class HistogramTypeJni {
       case 0x22:
         return TERARKDB_NAMESPACE::Histograms::INSTALL_SUPER_VERSION_TIME;
       case 0x23:
+        return TERARKDB_NAMESPACE::Histograms::BUILD_VERSION_TIME;
+      case 0x24:
         return TERARKDB_NAMESPACE::Histograms::HISTOGRAM_ENUM_MAX;
 
       default:
