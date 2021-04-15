@@ -901,7 +901,8 @@ if(NOT WIN32 OR ROCKSDB_INSTALL_ON_WINDOWS)
   install(
           DIRECTORY include/rocksdb
           COMPONENT devel
-          DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+          DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+          PATTERN "*.h.in" EXCLUDE)
 
   install(
         TARGETS ${ROCKSDB_STATIC_LIB}
