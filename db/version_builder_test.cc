@@ -3,6 +3,7 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
+#include <inttypes.h>
 #include <string>
 
 #include "db/version_edit.h"
@@ -415,6 +416,78 @@ TEST_F(VersionBuilderTest, EstimatedActiveKeys) {
   // 1x for each deletion entry will actually remove one data entry.
   ASSERT_EQ(vstorage_.GetEstimatedActiveKeys(),
             (kEntriesPerFile - kDeletionsPerFile) * kNumFiles);
+}
+
+TEST_F(VersionBuilderTest, HugeLSM) {
+  const uint32_t kNumLevels = 7;
+  const uint32_t kFilesPerLevel = 64;
+  const uint32_t kFilesPerLevelMultiplier = 4;
+  const uint32_t kFilesBlobDependence = 512;
+  const uint32_t kFilesBlobInheritance = 32;
+  const uint32_t kFilesBlobCount = 32768;
+
+  Random64 _rand(301);
+  uint64_t fn = kFilesBlobCount * kFilesBlobInheritance + 1;
+  uint64_t level_file_count = kFilesPerLevel;
+
+  for (uint32_t i = 0; i < kFilesBlobCount; ++i) {
+    TablePropertyCache prop;
+    for (uint32_t j = i * 32 + 1, je = j + kFilesBlobInheritance - 1; j < je;
+         ++j) {
+      prop.inheritance_chain.emplace_back(j);
+    }
+    Add(-1, (i + 1) * 32, "0", "1", 100, 0, 0, 100, 100000, 0, 0, 100, prop);
+  }
+
+  auto make_prop = [&] {
+    TablePropertyCache prop;
+    for (uint32_t j = 0; j < kFilesBlobDependence; ++j) {
+      prop.dependence.emplace_back(Dependence{
+          (_rand.Uniform(kFilesBlobCount) * kFilesBlobInheritance) + 1, 1});
+    }
+    std::sort(prop.dependence.begin(), prop.dependence.end(),
+              [](const Dependence& l, const Dependence& r) {
+                return l.file_number < r.file_number;
+              });
+    prop.dependence.erase(
+        std::unique(prop.dependence.begin(), prop.dependence.end(),
+                    [](const Dependence& l, const Dependence& r) {
+                      return l.file_number == r.file_number;
+                    }),
+        prop.dependence.end());
+    return prop;
+  };
+  auto to_fix_string = [](uint64_t n) {
+    char buffer[32];
+    snprintf(buffer, sizeof buffer, "%012" PRIu64, n);
+    return std::string(buffer);
+  };
+
+  for (uint32_t level = 1; level < kNumLevels; ++level) {
+    for (uint32_t i = 0; i < level_file_count; ++i) {
+      Add(level, fn++, to_fix_string(i * 2).c_str(), to_fix_string(i * 2 + 1).c_str(),
+          100, 0, 0, 100, kFilesBlobDependence, 0, 0, 100, make_prop());
+    }
+    level_file_count *= kFilesPerLevelMultiplier;
+  }
+  UpdateVersionStorageInfo();
+
+  EnvOptions env_options;
+  VersionBuilder version_builder(env_options, nullptr, &vstorage_);
+  VersionStorageInfo new_vstorage(&icmp_, ucmp_, options_.num_levels,
+                                  kCompactionStyleLevel, false);
+
+  VersionEdit version_edit;
+  version_edit.AddFile(
+      1, fn, 0, 100,
+      GetInternalKey(to_fix_string(kFilesPerLevel * 2).c_str(), 0),
+      GetInternalKey(to_fix_string(kFilesPerLevel * 2 + 1).c_str(), 100),
+      0, 100, false, make_prop());
+  version_edit.DeleteFile(1, kFilesBlobCount * kFilesBlobInheritance + 1);
+
+  version_builder.Apply(&version_edit);
+
+  version_builder.SaveTo(&new_vstorage);
 }
 
 }  // namespace TERARKDB_NAMESPACE
