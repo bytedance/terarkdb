@@ -156,8 +156,7 @@ class MockTableBuilder : public TableBuilder {
     return AddToTable(key, value, file_data_.tombstone);
   }
 
-  Status Finish(const TablePropertyCache* prop,
-                const std::vector<uint64_t>*,
+  Status Finish(const TablePropertyCache* prop, const std::vector<uint64_t>*,
                 const std::vector<uint64_t>* inheritance_tree) override {
     prop_.num_entries = file_data_.table.size();
     prop_.raw_key_size = file_data_.table.size();

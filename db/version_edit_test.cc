@@ -18,11 +18,10 @@ namespace TERARKDB_NAMESPACE {
 namespace {
 TablePropertyCache GetPropCache(
     uint8_t purpose, std::initializer_list<uint64_t> dependence = {},
-    std::initializer_list<uint64_t> inheritance_chain = {}) {
+    std::initializer_list<uint64_t> inheritance = {}) {
   std::vector<Dependence> dep;
   for (auto& d : dependence) dep.emplace_back(Dependence{d, 1});
-  return TablePropertyCache{0,       0, 1, 1,   0,
-                            purpose, 0, 0, dep, inheritance_chain};
+  return TablePropertyCache{0, 0, 1, 1, 0, purpose, 0, 0, dep, inheritance};
 }
 }  // namespace
 

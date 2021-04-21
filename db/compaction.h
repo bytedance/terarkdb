@@ -537,7 +537,7 @@ extern Status BuildInheritanceTree(
     const DependenceMap& dependence_map, Version* version,
     size_t* raw_chain_length, std::vector<uint64_t>* tree);
 
-extern std::vector<uint64_t> InheritanceTreeToChain(
+extern std::vector<uint64_t> InheritanceTreeToSet(
     const std::vector<uint64_t>& tree);
 
 }  // namespace TERARKDB_NAMESPACE

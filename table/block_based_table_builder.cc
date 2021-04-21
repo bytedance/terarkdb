@@ -897,18 +897,6 @@ Status BlockBasedTableBuilder::Finish(
   if (inheritance_tree != nullptr) {
     r->props.inheritance_tree = *inheritance_tree;
   }
-  if (inheritance_tree != nullptr) {
-    r->props.inheritance_tree = *inheritance_tree;
-  }
-  if (inheritance_tree != nullptr) {
-    r->props.inheritance_tree = *inheritance_tree;
-  }
-  if (inheritance_tree != nullptr) {
-    r->props.inheritance_tree = *inheritance_tree;
-  }
-  if (inheritance_tree != nullptr) {
-    r->props.inheritance_tree = *inheritance_tree;
-  }
 
   // To make sure properties block is able to keep the accurate size of index
   // block, we will finish writing all index entries first.

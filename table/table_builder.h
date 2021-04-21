@@ -167,8 +167,6 @@ class TableBuilder {
   // Finish building the table.
   // REQUIRES: Finish(), Abandon() have not been called
   virtual Status Finish(
-      const TablePropertyCache* prop, const std::vector<uint64_t>* snapshots) = 0;
-  virtual Status Finish(
       const TablePropertyCache* prop, const std::vector<uint64_t>* snapshots,
       const std::vector<uint64_t>* inheritance_tree = nullptr) = 0;
 

@@ -880,7 +880,8 @@ Status CompactionJob::Run() {
           output.meta.prop.max_read_amp = tp->max_read_amp;
           output.meta.prop.read_amp = tp->read_amp;
           output.meta.prop.dependence = tp->dependence;
-          output.meta.prop.inheritance_chain = tp->inheritance_chain;
+          output.meta.prop.inheritance =
+              InheritanceTreeToSet(tp->inheritance_tree);
           if (iopt->ttl_extractor_factory != nullptr) {
             GetCompactionTimePoint(
                 tp->user_collected_properties,
@@ -1854,13 +1855,12 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
   if (status.ok()) {
     status = input->status();
   }
-  size_t raw_chain_length = 0;
   std::vector<uint64_t> inheritance_tree;
-  std::vector<uint64_t> inheritance_chain;
+  size_t raw_chain_length = 0;
   if (status.ok()) {
-    status = BuildInheritanceTree(
-        *sub_compact->compaction->inputs(), dependence_map, input_version,
-        &raw_chain_length, &inheritance_tree, &inheritance_chain);
+    status = BuildInheritanceTree(*sub_compact->compaction->inputs(),
+                                  dependence_map, input_version,
+                                  &raw_chain_length, &inheritance_tree);
   }
   Status s = FinishCompactionOutputBlob(status, sub_compact, inheritance_tree);
   if (status.ok()) {
@@ -1883,7 +1883,7 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
         sub_compact->compaction->num_antiquation() * 100. / counter.input,
         counter.garbage_type, counter.get_not_found,
         counter.file_number_mismatch, raw_chain_length,
-        inheritance_chain.size());
+        inheritance_tree.size() / 2);
     if ((std::find_if(files.begin(), files.end(),
                       [](FileMetaData* f) {
                         return f->marked_for_compaction;
@@ -2199,8 +2199,7 @@ Status CompactionJob::FinishCompactionOutputFile(
 
 Status CompactionJob::FinishCompactionOutputBlob(
     const Status& input_status, SubcompactionState* sub_compact,
-    const std::vector<uint64_t>& inheritance_tree,
-    const std::vector<uint64_t>& inheritance_chain) {
+    const std::vector<uint64_t>& inheritance_tree) {
   AutoThreadOperationStageUpdater stage_updater(
       ThreadStatus::STAGE_COMPACTION_SYNC_FILE);
   assert(sub_compact != nullptr);
@@ -2221,8 +2220,9 @@ Status CompactionJob::FinishCompactionOutputBlob(
   if (s.ok()) {
     meta->marked_for_compaction = sub_compact->blob_builder->NeedCompact();
     meta->prop.num_entries = sub_compact->blob_builder->NumEntries();
-    assert(std::is_sorted(inheritance_chain.begin(), inheritance_chain.end()));
-    meta->prop.inheritance_chain = inheritance_chain;
+    meta->prop.inheritance = InheritanceTreeToSet(inheritance_tree);
+    assert(std::is_sorted(meta->prop.inheritance.begin(),
+                          meta->prop.inheritance.end()));
     s = sub_compact->blob_builder->Finish(&meta->prop, nullptr,
                                           &inheritance_tree);
   } else {

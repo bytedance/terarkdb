@@ -417,11 +417,10 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
     } else if (key == TablePropertiesNames::kInheritanceChain) {
       std::vector<uint64_t> val;
       GetUint64Vector(key, &raw_val, val);
-      new_table_properties->inheritance_tree.resize(val.size() * 2);
-      size_t i = 0;
-      for (auto v : val) {
-        new_table_properties->inheritance_tree[i] = v;
-      }
+      auto& tree = new_table_properties->inheritance_tree;
+      tree.reserve(val.size() * 2);
+      tree.insert(tree.end(), val.rbegin(), val.rend());
+      tree.insert(tree.end(), val.begin(), val.end());
     } else if (key == TablePropertiesNames::kInheritanceTree) {
       GetUint64Vector(key, &raw_val, new_table_properties->inheritance_tree);
     } else {
@@ -439,8 +438,8 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
   return s;
 }
 
-Status ReadTableProperties(uint64_t file_number, RandomAccessFileReader* file,
-                           uint64_t file_size, uint64_t table_magic_number,
+Status ReadTableProperties(RandomAccessFileReader* file, uint64_t file_size,
+                           uint64_t table_magic_number,
                            const ImmutableCFOptions& ioptions,
                            TableProperties** properties,
                            bool compression_type_missing,
@@ -486,9 +485,9 @@ Status ReadTableProperties(uint64_t file_number, RandomAccessFileReader* file,
 
   TableProperties table_properties;
   if (found_properties_block == true) {
-    s = ReadProperties(meta_iter->value(), file_number, file,
-                       nullptr /* prefetch_buffer */, footer, ioptions,
-                       properties, compression_type_missing, memory_allocator);
+    s = ReadProperties(meta_iter->value(), file, nullptr /* prefetch_buffer */,
+                       footer, ioptions, properties, compression_type_missing,
+                       memory_allocator);
   } else {
     s = Status::NotFound();
   }
