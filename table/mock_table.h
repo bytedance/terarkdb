@@ -157,7 +157,8 @@ class MockTableBuilder : public TableBuilder {
   }
 
   Status Finish(const TablePropertyCache* prop,
-                const std::vector<uint64_t>*) override {
+                const std::vector<uint64_t>*,
+                const std::vector<uint64_t>* inheritance_tree) override {
     prop_.num_entries = file_data_.table.size();
     prop_.raw_key_size = file_data_.table.size();
     prop_.raw_value_size = file_data_.table.size();
@@ -166,7 +167,9 @@ class MockTableBuilder : public TableBuilder {
       prop_.max_read_amp = prop->max_read_amp;
       prop_.read_amp = prop->read_amp;
       prop_.dependence = prop->dependence;
-      prop_.inheritance_chain = prop->inheritance_chain;
+    }
+    if (inheritance_tree != nullptr) {
+      prop_.inheritance_tree = *inheritance_tree;
     }
     file_data_.prop = std::make_shared<const TableProperties>(prop_);
     MutexLock lock_guard(&file_system_->mutex);

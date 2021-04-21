@@ -1854,26 +1854,15 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
   if (status.ok()) {
     status = input->status();
   }
-  std::vector<uint64_t> inheritance_chain;
   size_t raw_chain_length = 0;
-  for (auto& level : *sub_compact->compaction->inputs()) {
-    for (auto f : level.files) {
-      raw_chain_length += f->prop.inheritance_chain.size() + 1;
-      inheritance_chain.push_back(f->fd.GetNumber());
-      for (size_t i = 0; i < f->prop.inheritance_chain.size(); ++i) {
-        if (dependence_map.count(f->prop.inheritance_chain[i]) > 0) {
-          inheritance_chain.insert(inheritance_chain.end(),
-                                   f->prop.inheritance_chain.begin() + i,
-                                   f->prop.inheritance_chain.end());
-          break;
-        }
-      }
-    }
+  std::vector<uint64_t> inheritance_tree;
+  std::vector<uint64_t> inheritance_chain;
+  if (status.ok()) {
+    status = BuildInheritanceTree(
+        *sub_compact->compaction->inputs(), dependence_map, input_version,
+        &raw_chain_length, &inheritance_tree, &inheritance_chain);
   }
-  std::sort(inheritance_chain.begin(), inheritance_chain.end());
-  assert(std::unique(inheritance_chain.begin(), inheritance_chain.end()) ==
-         inheritance_chain.end());
-  Status s = FinishCompactionOutputBlob(status, sub_compact, inheritance_chain);
+  Status s = FinishCompactionOutputBlob(status, sub_compact, inheritance_tree);
   if (status.ok()) {
     status = s;
   }
@@ -2210,6 +2199,7 @@ Status CompactionJob::FinishCompactionOutputFile(
 
 Status CompactionJob::FinishCompactionOutputBlob(
     const Status& input_status, SubcompactionState* sub_compact,
+    const std::vector<uint64_t>& inheritance_tree,
     const std::vector<uint64_t>& inheritance_chain) {
   AutoThreadOperationStageUpdater stage_updater(
       ThreadStatus::STAGE_COMPACTION_SYNC_FILE);
@@ -2233,7 +2223,8 @@ Status CompactionJob::FinishCompactionOutputBlob(
     meta->prop.num_entries = sub_compact->blob_builder->NumEntries();
     assert(std::is_sorted(inheritance_chain.begin(), inheritance_chain.end()));
     meta->prop.inheritance_chain = inheritance_chain;
-    s = sub_compact->blob_builder->Finish(&meta->prop, nullptr);
+    s = sub_compact->blob_builder->Finish(&meta->prop, nullptr,
+                                          &inheritance_tree);
   } else {
     sub_compact->blob_builder->Abandon();
   }

@@ -124,8 +124,8 @@ void PropertyBlockBuilder::AddTableProperty(const TableProperties& props) {
     }
     Add(TablePropertiesNames::kDependenceEntryCount, val);
   }
-  if (!props.inheritance_chain.empty()) {
-    Add(TablePropertiesNames::kInheritanceChain, props.inheritance_chain);
+  if (!props.inheritance_tree.empty()) {
+    Add(TablePropertiesNames::kInheritanceTree, props.inheritance_tree);
   }
 
   if (!props.filter_policy_name.empty()) {
@@ -415,7 +415,15 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
         new_table_properties->dependence[i].entry_count = val[i];
       }
     } else if (key == TablePropertiesNames::kInheritanceChain) {
-      GetUint64Vector(key, &raw_val, new_table_properties->inheritance_chain);
+      std::vector<uint64_t> val;
+      GetUint64Vector(key, &raw_val, val);
+      new_table_properties->inheritance_tree.resize(val.size() * 2);
+      size_t i = 0;
+      for (auto v : val) {
+        new_table_properties->inheritance_tree[i] = v;
+      }
+    } else if (key == TablePropertiesNames::kInheritanceTree) {
+      GetUint64Vector(key, &raw_val, new_table_properties->inheritance_tree);
     } else {
       // handle user-collected properties
       new_table_properties->user_collected_properties.insert(
@@ -431,8 +439,8 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
   return s;
 }
 
-Status ReadTableProperties(RandomAccessFileReader* file, uint64_t file_size,
-                           uint64_t table_magic_number,
+Status ReadTableProperties(uint64_t file_number, RandomAccessFileReader* file,
+                           uint64_t file_size, uint64_t table_magic_number,
                            const ImmutableCFOptions& ioptions,
                            TableProperties** properties,
                            bool compression_type_missing,
@@ -478,9 +486,9 @@ Status ReadTableProperties(RandomAccessFileReader* file, uint64_t file_size,
 
   TableProperties table_properties;
   if (found_properties_block == true) {
-    s = ReadProperties(meta_iter->value(), file, nullptr /* prefetch_buffer */,
-                       footer, ioptions, properties, compression_type_missing,
-                       memory_allocator);
+    s = ReadProperties(meta_iter->value(), file_number, file,
+                       nullptr /* prefetch_buffer */, footer, ioptions,
+                       properties, compression_type_missing, memory_allocator);
   } else {
     s = Status::NotFound();
   }

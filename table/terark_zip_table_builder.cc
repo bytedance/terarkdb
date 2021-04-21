@@ -720,7 +720,8 @@ Status TerarkZipTableBuilder::EmptyTableFinish() {
 
 Status TerarkZipTableBuilder::Finish(
     const TablePropertyCache* prop,
-    const std::vector<SequenceNumber>* snapshots) try {
+    const std::vector<SequenceNumber>* snapshots,
+    const std::vector<uint64_t>* inheritance_tree) try {
   assert(!closed_);
   closed_ = true;
 
@@ -728,10 +729,12 @@ Status TerarkZipTableBuilder::Finish(
     properties_.purpose = prop->purpose;
     properties_.read_amp = prop->read_amp;
     properties_.dependence = prop->dependence;
-    properties_.inheritance_chain = prop->inheritance_chain;
   }
   if (snapshots != nullptr) {
     properties_.snapshots = *snapshots;
+  }
+  if (inheritance_tree != nullptr) {
+    properties_.inheritance_tree = *inheritance_tree;
   }
 
   if (!r00_) {

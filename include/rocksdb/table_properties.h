@@ -68,6 +68,7 @@ struct TablePropertiesNames {
   static const std::string kDependence;
   static const std::string kDependenceEntryCount;
   static const std::string kInheritanceChain;
+  static const std::string kInheritanceTree;
   static const std::string kEarliestTimeBeginCompact;
   static const std::string kLatestTimeEndCompact;
 };
@@ -253,8 +254,8 @@ struct TablePropertiesBase {
   // Make these sst hidden
   std::vector<Dependence> dependence;
 
-  // Inheritance chain
-  std::vector<uint64_t> inheritance_chain;
+  // Inheritance tree
+  std::vector<uint64_t> inheritance_tree;
 
   // convert this object to a human readable form
   //   @prop_delim: delimiter for each property.

@@ -85,6 +85,67 @@ const char* CompactionTypeName(CompactionType type) {
   }
 }
 
+Status BuildInheritanceTree(const std::vector<CompactionInputFiles>& inputs,
+                            const DependenceMap& dependence_map,
+                            Version* version, size_t* raw_chain_length_ptr,
+                            std::vector<uint64_t>* inheritance_tree) {
+  inheritance_tree->clear();
+  // InheritanceTree serialization && deserialization
+  //   1  2   4 5 6
+  //   \ /     \ /
+  //    3      7   8
+  //     \    /   /
+  //       10    9
+  //        \   /
+  //         sst
+  //
+  // [10, 9, 0, 3, 7, 0, 1, 2, 0, 0, 0, 4, 5, 6, 0, 0, 0, 0, 8, 0, 0]
+  // [(10 3 1 1 2 2 3 7 4 4 5 5 6 6 7 10 9 8 8 9 ]
+  Status s;
+  size_t raw_chain_length = 0;
+
+  // InheritanceTree new_tree;
+  for (auto& level : inputs) {
+    for (auto f : level.files) {
+      std::shared_ptr<const TableProperties> tp;
+      s = version->GetTableProperties(&tp, f);
+      if (!s.ok()) {
+        return s;
+      }
+      raw_chain_length += f->prop.inheritance_chain.size() + 1;
+      // InheritanceTree tree;
+      // tree.deserialize(tp->inheritance_tree)
+      //
+      // def shink_tree(tree)
+      //   dropped_some_node = false
+      //   foreach tree leaf node
+      //     if (dependence_map.count(node->fild_number) == 0)
+      //       drop the leaf node
+      //       dropped_some_node = true
+      //   return dropped_some_node
+      //
+      // while(shink_tree(tree));
+      //
+      // new_tree.add_child(f->fd.GetNumber(), tree);
+    }
+  }
+  if (raw_chain_length_ptr != nullptr) {
+    *raw_chain_length_ptr = raw_chain_length;
+  }
+  // new_tree.serialize(inheritance_tree);
+}
+
+std::vector<uint64_t> InheritanceTreeToChain(
+    const std::vector<uint64_t>& tree) {
+  std::vector<uint64_t> chain;
+  chain.reserve(tree.size() / 2);
+  std::copy_if(tree.begin(), tree.end(), std::back_inserter(chain),
+               [](uint64_t v) { return v != 0; });
+  std::sort(chain.begin(), chain.end());
+  assert(std::unique(chain.begin(), chain.end()) == chain.end());
+  return chain;
+}
+
 void Compaction::SetInputVersion(Version* _input_version) {
   input_version_ = _input_version;
   cfd_ = input_version_->cfd();
