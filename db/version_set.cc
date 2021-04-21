@@ -1893,12 +1893,12 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f,
     // When this function is not set, dependence_map_ will update with subject
     // file's property.
     if (exists == nullptr) {
-      for (auto file_number : f->prop.inheritance_chain) {
+      for (auto file_number : f->prop.inheritance) {
         assert(dependence_map_.count(file_number) == 0);
         dependence_map_.emplace(file_number, f);
       }
     } else {
-      for (auto file_number : f->prop.inheritance_chain) {
+      for (auto file_number : f->prop.inheritance) {
         assert(dependence_map_.count(file_number) == 0);
         if (exists(exists_args, file_number)) {
           dependence_map_.emplace(file_number, f);

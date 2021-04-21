@@ -4,6 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include <inttypes.h>
+
 #include <string>
 
 #include "db/version_edit.h"
@@ -115,13 +116,13 @@ bool VerifyDependFiles(VersionStorageInfo* new_vstorage,
 
 TablePropertyCache GetPropCache(
     uint8_t purpose, std::initializer_list<uint64_t> dependence = {},
-    std::initializer_list<uint64_t> inheritance_chain = {}) {
+    std::initializer_list<uint64_t> inheritance = {}) {
   std::vector<Dependence> dep;
   for (auto& d : dependence) dep.emplace_back(Dependence{d, 1});
   TablePropertyCache ret;
   ret.purpose = purpose;
   ret.dependence = dep;
-  ret.inheritance_chain = inheritance_chain;
+  ret.inheritance = inheritance;
   return ret;
 }
 
@@ -434,7 +435,7 @@ TEST_F(VersionBuilderTest, HugeLSM) {
     TablePropertyCache prop;
     for (uint32_t j = i * 32 + 1, je = j + kFilesBlobInheritance - 1; j < je;
          ++j) {
-      prop.inheritance_chain.emplace_back(j);
+      prop.inheritance.emplace_back(j);
     }
     Add(-1, (i + 1) * 32, "0", "1", 100, 0, 0, 100, 100000, 0, 0, 100, prop);
   }
@@ -465,8 +466,9 @@ TEST_F(VersionBuilderTest, HugeLSM) {
 
   for (uint32_t level = 1; level < kNumLevels; ++level) {
     for (uint32_t i = 0; i < level_file_count; ++i) {
-      Add(level, fn++, to_fix_string(i * 2).c_str(), to_fix_string(i * 2 + 1).c_str(),
-          100, 0, 0, 100, kFilesBlobDependence, 0, 0, 100, make_prop());
+      Add(level, fn++, to_fix_string(i * 2).c_str(),
+          to_fix_string(i * 2 + 1).c_str(), 100, 0, 0, 100,
+          kFilesBlobDependence, 0, 0, 100, make_prop());
     }
     level_file_count *= kFilesPerLevelMultiplier;
   }
@@ -481,8 +483,8 @@ TEST_F(VersionBuilderTest, HugeLSM) {
   version_edit.AddFile(
       1, fn, 0, 100,
       GetInternalKey(to_fix_string(kFilesPerLevel * 2).c_str(), 0),
-      GetInternalKey(to_fix_string(kFilesPerLevel * 2 + 1).c_str(), 100),
-      0, 100, false, make_prop());
+      GetInternalKey(to_fix_string(kFilesPerLevel * 2 + 1).c_str(), 100), 0,
+      100, false, make_prop());
   version_edit.DeleteFile(1, kFilesBlobCount * kFilesBlobInheritance + 1);
 
   version_builder.Apply(&version_edit);

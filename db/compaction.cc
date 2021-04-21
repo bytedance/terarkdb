@@ -85,6 +85,97 @@ const char* CompactionTypeName(CompactionType type) {
   }
 }
 
+Status BuildInheritanceTree(const std::vector<CompactionInputFiles>& inputs,
+                            const DependenceMap& dependence_map,
+                            const Version* version,
+                            std::vector<uint64_t>* inheritance_tree,
+                            size_t* pruge_count_ptr) {
+  // Purging the leaf nodes recursively with inheritance tree encoded by DFS
+  // sequence.
+  //
+  //  GC job:
+  //    input sst = [10,9,11]
+  //      sst 10 = [3,1,1,2,2,3,7,4,4,5,5,6,6,7]
+  //      sst 9  = [8,8]
+  //      sst 11 = []
+  //    output sst = 12
+  //    dependence_map = {5,6,8,9,10,11}
+  //
+  //        1  2   4 5 6
+  //        \ /     \ /
+  //         3      7          8
+  //          \    /           |
+  //          sst 10    +    sst 9   +   sst 11
+  //
+  //  After purge & merge, we got output inheritance tree
+  //
+  //                5   6
+  //                 \ /
+  //                  7   8
+  //                  |   |
+  //                 10   9  11
+  //                  \  |  /
+  //                  sst 12
+  //
+  //  sst 12 = [10,7,5,5,6,6,7,10,9,8,8,9,11,11]
+
+  Status s;
+  size_t pruge_count = 0;
+
+  inheritance_tree->clear();
+
+  for (auto& level : inputs) {
+    for (auto f : level.files) {
+      std::shared_ptr<const TableProperties> tp;
+      s = version->GetTableProperties(&tp, f);
+      if (!s.ok()) {
+        return s;
+      }
+      inheritance_tree->emplace_back(f->fd.GetNumber());
+      // 1. verify input inheritance tree
+      // 2. purge unnecessary node
+      // 3. merge input inheritance tree
+      size_t size = inheritance_tree->size();
+      size_t count = 0;
+      for (auto file_number : tp->inheritance_tree) {
+        if (inheritance_tree->back() != file_number) {
+          inheritance_tree->emplace_back(file_number);
+        } else if (dependence_map.count(file_number) != 0) {
+          ++count;
+          inheritance_tree->emplace_back(file_number);
+        } else {
+          ++pruge_count;
+          inheritance_tree->pop_back();
+          if (inheritance_tree->size() < size) {
+            break;
+          }
+        }
+      }
+      if (size + count * 2 != inheritance_tree->size()) {
+        // input inheritance tree invalid !
+        return Status::Corruption(
+            "BuildInheritanceTree: bad inheritance_tree, file_number ",
+            ToString(f->fd.GetNumber()));
+      }
+      inheritance_tree->emplace_back(f->fd.GetNumber());
+    }
+  }
+  if (pruge_count_ptr != nullptr) {
+    *pruge_count_ptr = pruge_count;
+  }
+  return s;
+}
+
+std::vector<uint64_t> InheritanceTreeToSet(const std::vector<uint64_t>& tree) {
+  std::vector<uint64_t> set = tree;
+  std::sort(set.begin(), set.end());
+  auto it = std::unique(set.begin(), set.end());
+  assert(set.end() - it == it - set.begin());
+  set.resize(it - set.begin());
+  set.shrink_to_fit();
+  return set;
+}
+
 void Compaction::SetInputVersion(Version* _input_version) {
   input_version_ = _input_version;
   cfd_ = input_version_->cfd();

@@ -177,8 +177,10 @@ Status PlainTableBuilder::Add(const Slice& key, const LazyBuffer& lazy_value) {
   return Status::OK();
 }
 
-Status PlainTableBuilder::Finish(const TablePropertyCache* prop,
-                                 const std::vector<SequenceNumber>* snapshots) {
+Status PlainTableBuilder::Finish(
+    const TablePropertyCache* prop,
+    const std::vector<SequenceNumber>* snapshots,
+    const std::vector<uint64_t>* inheritance_tree) {
   assert(!closed_);
   closed_ = true;
 
@@ -187,10 +189,12 @@ Status PlainTableBuilder::Finish(const TablePropertyCache* prop,
     properties_.max_read_amp = prop->max_read_amp;
     properties_.read_amp = prop->read_amp;
     properties_.dependence = prop->dependence;
-    properties_.inheritance_chain = prop->inheritance_chain;
   }
   if (snapshots != nullptr) {
     properties_.snapshots = *snapshots;
+  }
+  if (inheritance_tree != nullptr) {
+    properties_.inheritance_tree = *inheritance_tree;
   }
 
   properties_.data_size = offset_;

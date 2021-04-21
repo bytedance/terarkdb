@@ -17,6 +17,7 @@
 #include "rocksdb/terark_namespace.h"
 #include "util/arena.h"
 #include "util/autovector.h"
+#include "util/iterator_cache.h"
 
 namespace TERARKDB_NAMESPACE {
 
@@ -530,5 +531,13 @@ class Compaction {
 extern uint64_t TotalFileSize(const std::vector<FileMetaData*>& files);
 
 extern const char* CompactionTypeName(CompactionType type);
+
+extern Status BuildInheritanceTree(
+    const std::vector<CompactionInputFiles>& inputs,
+    const DependenceMap& dependence_map, const Version* version,
+    std::vector<uint64_t>* tree, size_t* pruge_count);
+
+extern std::vector<uint64_t> InheritanceTreeToSet(
+    const std::vector<uint64_t>& tree);
 
 }  // namespace TERARKDB_NAMESPACE

@@ -73,7 +73,8 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
   Status Add(const Slice& key, const LazyBuffer& value) override;
   Status AddTombstone(const Slice& key, const LazyBuffer& value) override;
   Status Finish(const TablePropertyCache* prop,
-                const std::vector<SequenceNumber>* snapshots) override;
+                const std::vector<SequenceNumber>* snapshots,
+                const std::vector<uint64_t>* inheritance_tree) override;
   Status AbortFinish(const std::exception& ex);
   void Abandon() override;
   uint64_t NumEntries() const override { return properties_.num_entries; }

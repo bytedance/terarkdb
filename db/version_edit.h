@@ -92,16 +92,16 @@ struct TablePropertyCache {
     kHasSnapshots = 1ULL << 1,
     kNoRangeDeletions = 1ULL << 2,
   };
-  uint64_t num_entries = 0;                 // the number of entries.
-  uint64_t num_deletions = 0;               // the number of deletion entries.
-  uint64_t raw_key_size = 0;                // total uncompressed key size.
-  uint64_t raw_value_size = 0;              // total uncompressed value size.
-  uint8_t flags = 0;                        // save flags
-  uint8_t purpose = 0;                      // zero for essence sst
-  uint16_t max_read_amp = 1;                // max read amp from sst
-  float read_amp = 1;                       // expt read amp from sst
-  std::vector<Dependence> dependence;       // make these sst hidden
-  std::vector<uint64_t> inheritance_chain;  // inheritance chain
+  uint64_t num_entries = 0;            // the number of entries.
+  uint64_t num_deletions = 0;          // the number of deletion entries.
+  uint64_t raw_key_size = 0;           // total uncompressed key size.
+  uint64_t raw_value_size = 0;         // total uncompressed value size.
+  uint8_t flags = 0;                   // save flags
+  uint8_t purpose = 0;                 // zero for essence sst
+  uint16_t max_read_amp = 1;           // max read amp from sst
+  float read_amp = 1;                  // expt read amp from sst
+  std::vector<Dependence> dependence;  // make these sst hidden
+  std::vector<uint64_t> inheritance;   // inheritance set
   uint64_t earliest_time_begin_compact = port::kMaxUint64;
   uint64_t latest_time_end_compact = port::kMaxUint64;
 

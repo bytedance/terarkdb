@@ -219,7 +219,7 @@ AJSON(FileDescriptor, packed_number_and_path_id, file_size, smallest_seqno,
 
 AJSON(TablePropertyCache, num_entries, num_deletions, raw_key_size,
       raw_value_size, flags, purpose, max_read_amp, read_amp, dependence,
-      inheritance_chain);
+      inheritance);
 
 AJSON(FileMetaData, fd, smallest, largest, prop);
 

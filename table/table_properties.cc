@@ -229,6 +229,8 @@ const std::string TablePropertiesNames::kDependenceEntryCount =
     "rocksdb.sst.dependence.entry-count";
 const std::string TablePropertiesNames::kInheritanceChain =
     "rocksdb.sst.inheritance-chain";
+const std::string TablePropertiesNames::kInheritanceTree =
+    "rocksdb.sst.inheritance-tree";
 const std::string TablePropertiesNames::kEarliestTimeBeginCompact =
     "rocksdb.compact.earliest-time-begin";
 const std::string TablePropertiesNames::kLatestTimeEndCompact =

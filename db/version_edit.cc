@@ -196,8 +196,8 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
       PutVarint64(&encode_property_cache, f.prop.num_entries);
       PutVarint32Varint64(&encode_property_cache, f.prop.max_read_amp,
                           DoubleToU64(f.prop.read_amp));
-      PutVarint64(&encode_property_cache, f.prop.inheritance_chain.size());
-      for (auto file_number : f.prop.inheritance_chain) {
+      PutVarint64(&encode_property_cache, f.prop.inheritance.size());
+      for (auto file_number : f.prop.inheritance) {
         PutVarint64(&encode_property_cache, file_number);
       }
       for (auto& dependence : f.prop.dependence) {
@@ -350,13 +350,13 @@ const char* VersionEdit::DecodeNewFile4From(Slice* input) {
               }
               f.prop.max_read_amp = uint16_t(max_read_amp);
               f.prop.read_amp = U64ToDouble(read_amp);
-              f.prop.inheritance_chain.reserve(size);
+              f.prop.inheritance.reserve(size);
               for (size_t i = 0; i < size; ++i) {
                 uint64_t file_number;
                 if (!GetVarint64(&field, &file_number)) {
                   return error_msg;
                 }
-                f.prop.inheritance_chain.emplace_back(file_number);
+                f.prop.inheritance.emplace_back(file_number);
               }
             }
             if (!field.empty()) {
