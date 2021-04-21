@@ -63,7 +63,8 @@ class BlockBasedTableBuilder : public TableBuilder {
   // constructor after this function returns.
   // REQUIRES: Finish(), Abandon() have not been called
   Status Finish(const TablePropertyCache* prop,
-                const std::vector<uint64_t>* snapshots) override;
+                const std::vector<uint64_t>* snapshots,
+                const std::vector<uint64_t>* inheritance_tree) override;
 
   // Indicate that the contents of this builder should be abandoned.  Stops
   // using the file passed to the constructor after this function returns.

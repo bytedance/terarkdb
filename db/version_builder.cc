@@ -216,7 +216,7 @@ class VersionBuilder::Rep {
         }
       }
     };
-    for (auto file_number : item->f->prop.inheritance_chain) {
+    for (auto file_number : item->f->prop.inheritance) {
       emplace(file_number);
     }
     emplace(item->f->fd.GetNumber());
@@ -230,7 +230,7 @@ class VersionBuilder::Rep {
         inheritance_counter_.erase(find);
       }
     };
-    for (auto file_number : f->prop.inheritance_chain) {
+    for (auto file_number : f->prop.inheritance) {
       erase(file_number);
     }
     erase(f->fd.GetNumber());

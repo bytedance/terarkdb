@@ -674,7 +674,7 @@ class Repairer {
       t->meta.prop.max_read_amp = props->max_read_amp;
       t->meta.prop.read_amp = props->read_amp;
       t->meta.prop.dependence = props->dependence;
-      t->meta.prop.inheritance_chain = props->inheritance_chain;
+      t->meta.prop.inheritance = InheritanceTreeToSet(props->inheritance_tree);
     }
     return status;
   }

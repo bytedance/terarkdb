@@ -124,8 +124,8 @@ void PropertyBlockBuilder::AddTableProperty(const TableProperties& props) {
     }
     Add(TablePropertiesNames::kDependenceEntryCount, val);
   }
-  if (!props.inheritance_chain.empty()) {
-    Add(TablePropertiesNames::kInheritanceChain, props.inheritance_chain);
+  if (!props.inheritance_tree.empty()) {
+    Add(TablePropertiesNames::kInheritanceTree, props.inheritance_tree);
   }
 
   if (!props.filter_policy_name.empty()) {
@@ -415,7 +415,14 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
         new_table_properties->dependence[i].entry_count = val[i];
       }
     } else if (key == TablePropertiesNames::kInheritanceChain) {
-      GetUint64Vector(key, &raw_val, new_table_properties->inheritance_chain);
+      std::vector<uint64_t> val;
+      GetUint64Vector(key, &raw_val, val);
+      auto& tree = new_table_properties->inheritance_tree;
+      tree.reserve(val.size() * 2);
+      tree.insert(tree.end(), val.rbegin(), val.rend());
+      tree.insert(tree.end(), val.begin(), val.end());
+    } else if (key == TablePropertiesNames::kInheritanceTree) {
+      GetUint64Vector(key, &raw_val, new_table_properties->inheritance_tree);
     } else {
       // handle user-collected properties
       new_table_properties->user_collected_properties.insert(
