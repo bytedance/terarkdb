@@ -101,7 +101,7 @@ struct TablePropertyCache {
   uint16_t max_read_amp = 1;           // max read amp from sst
   float read_amp = 1;                  // expt read amp from sst
   std::vector<Dependence> dependence;  // make these sst hidden
-  std::vector<uint64_t> inheritance;   // inheritance chain
+  std::vector<uint64_t> inheritance;   // inheritance set
   uint64_t earliest_time_begin_compact = port::kMaxUint64;
   uint64_t latest_time_end_compact = port::kMaxUint64;
 

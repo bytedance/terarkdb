@@ -87,20 +87,40 @@ const char* CompactionTypeName(CompactionType type) {
 
 Status BuildInheritanceTree(const std::vector<CompactionInputFiles>& inputs,
                             const DependenceMap& dependence_map,
-                            Version* version, size_t* raw_chain_length_ptr,
-                            std::vector<uint64_t>* inheritance_tree) {
-  // InheritanceTree serialization && deserialization
-  //   1  2   4 5 6
-  //   \ /     \ /
-  //    3      7   8
-  //     \    /   /
-  //       10    9
-  //        \   /
-  //         sst
+                            const Version* version,
+                            std::vector<uint64_t>* inheritance_tree,
+                            size_t* pruge_count_ptr) {
+  // Purging the leaf nodes recursively with inheritance tree encoded by DFS
+  // sequence.
   //
-  // [10 3 1 1 2 2 3 7 4 4 5 5 6 6 7 10 9 8 8 9]
+  //  GC job:
+  //    input sst = [10,9,11]
+  //      sst 10 = [3,1,1,2,2,3,7,4,4,5,5,6,6,7]
+  //      sst 9  = [8,8]
+  //      sst 11 = []
+  //    output sst = 12
+  //    dependence_map = {5,6,8,9,10,11}
+  //
+  //        1  2   4 5 6
+  //        \ /     \ /
+  //         3      7          8
+  //          \    /           |
+  //          sst 10    +    sst 9   +   sst 11
+  //
+  //  After purge & merge, we got output inheritance tree
+  //
+  //                5   6
+  //                 \ /
+  //                  7   8
+  //                  |   |
+  //                 10   9  11
+  //                  \  |  /
+  //                  sst 12
+  //
+  //  sst 12 = [10,7,5,5,6,6,7,10,9,8,8,9,11,11]
+
   Status s;
-  size_t raw_chain_length = 0;
+  size_t pruge_count = 0;
 
   inheritance_tree->clear();
 
@@ -111,25 +131,37 @@ Status BuildInheritanceTree(const std::vector<CompactionInputFiles>& inputs,
       if (!s.ok()) {
         return s;
       }
-      raw_chain_length += f->prop.inheritance.size() + 1;
       inheritance_tree->emplace_back(f->fd.GetNumber());
-      for (auto& fn : tp->inheritance_tree) {
-        if (fn == inheritance_tree->front()) {
-          return Status::Corruption(
-              "BuildInheritanceTree: bad inheritance_tree, file_number = ",
-              ToString(f->fd.GetNumber()));
-        }
-        if (inheritance_tree->back() == fn && dependence_map.count(fn) == 0) {
-          inheritance_tree->pop_back();
+      // 1. verify input inheritance tree
+      // 2. purge unnecessary node
+      // 3. merge input inheritance tree
+      size_t size = inheritance_tree->size();
+      size_t count = 0;
+      for (auto file_number : tp->inheritance_tree) {
+        if (inheritance_tree->back() != file_number) {
+          inheritance_tree->emplace_back(file_number);
+        } else if (dependence_map.count(file_number) != 0) {
+          ++count;
+          inheritance_tree->emplace_back(file_number);
         } else {
-          inheritance_tree->emplace_back(fn);
+          ++pruge_count;
+          inheritance_tree->pop_back();
+          if (inheritance_tree->size() < size) {
+            break;
+          }
         }
+      }
+      if (size + count * 2 != inheritance_tree->size()) {
+        // input inheritance tree invalid !
+        return Status::Corruption(
+            "BuildInheritanceTree: bad inheritance_tree, file_number ",
+            ToString(f->fd.GetNumber()));
       }
       inheritance_tree->emplace_back(f->fd.GetNumber());
     }
   }
-  if (raw_chain_length_ptr != nullptr) {
-    *raw_chain_length_ptr = raw_chain_length;
+  if (pruge_count_ptr != nullptr) {
+    *pruge_count_ptr = pruge_count;
   }
   return s;
 }

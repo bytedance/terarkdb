@@ -1856,11 +1856,11 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
     status = input->status();
   }
   std::vector<uint64_t> inheritance_tree;
-  size_t raw_chain_length = 0;
+  size_t inheritance_tree_pruge_count = 0;
   if (status.ok()) {
-    status = BuildInheritanceTree(*sub_compact->compaction->inputs(),
-                                  dependence_map, input_version,
-                                  &raw_chain_length, &inheritance_tree);
+    status = BuildInheritanceTree(
+        *sub_compact->compaction->inputs(), dependence_map, input_version,
+        &inheritance_tree, &inheritance_tree_pruge_count);
   }
   Status s = FinishCompactionOutputBlob(status, sub_compact, inheritance_tree);
   if (status.ok()) {
@@ -1877,13 +1877,14 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
         " inputs from %zd files. %" PRIu64
         " clear, %.2f%% estimation: [ %" PRIu64 " garbage type, %" PRIu64
         " get not found, %" PRIu64
-        " file number mismatch ], inheritance chain: %" PRIu64 " -> %" PRIu64,
+        " file number mismatch ], inheritance tree: %" PRIu64 " -> %" PRIu64,
         cfd->GetName().c_str(), job_id_, meta.fd.GetNumber(), counter.input,
         files.size(), counter.input - meta.prop.num_entries,
         sub_compact->compaction->num_antiquation() * 100. / counter.input,
         counter.garbage_type, counter.get_not_found,
-        counter.file_number_mismatch, raw_chain_length,
-        inheritance_tree.size() / 2);
+        counter.file_number_mismatch,
+        meta.prop.inheritance.size() + inheritance_tree_pruge_count,
+        meta.prop.inheritance.size());
     if ((std::find_if(files.begin(), files.end(),
                       [](FileMetaData* f) {
                         return f->marked_for_compaction;

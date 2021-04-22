@@ -534,8 +534,8 @@ extern const char* CompactionTypeName(CompactionType type);
 
 extern Status BuildInheritanceTree(
     const std::vector<CompactionInputFiles>& inputs,
-    const DependenceMap& dependence_map, Version* version,
-    size_t* raw_chain_length, std::vector<uint64_t>* tree);
+    const DependenceMap& dependence_map, const Version* version,
+    std::vector<uint64_t>* tree, size_t* pruge_count);
 
 extern std::vector<uint64_t> InheritanceTreeToSet(
     const std::vector<uint64_t>& tree);
