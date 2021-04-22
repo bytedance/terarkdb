@@ -179,7 +179,7 @@ TEST_F(CuckooBuilderTest, SuccessWithEmptyFile) {
                              GetSliceHash, 0 /* column_family_id */,
                              kDefaultColumnFamilyName);
   ASSERT_EQ(0UL, builder.FileSize());
-  ASSERT_OK(builder.Finish(nullptr, nullptr));
+  ASSERT_OK(builder.Finish(nullptr, nullptr,nullptr));
   ASSERT_OK(file_writer->Close());
   CheckFileContents({}, {}, {}, "", 2, 2, false);
 }
@@ -225,7 +225,7 @@ TEST_F(CuckooBuilderTest, WriteSuccessNoCollisionFullKey) {
     }
     size_t bucket_size = keys[0].size() + values[0].size();
     ASSERT_EQ(expected_table_size * bucket_size - 1, builder.FileSize());
-    ASSERT_OK(builder.Finish(nullptr, nullptr));
+    ASSERT_OK(builder.Finish(nullptr, nullptr, nullptr));
     ASSERT_OK(file_writer->Close());
     ASSERT_LE(expected_table_size * bucket_size, builder.FileSize());
 
@@ -272,7 +272,7 @@ TEST_F(CuckooBuilderTest, WriteSuccessWithCollisionFullKey) {
   }
   size_t bucket_size = keys[0].size() + values[0].size();
   ASSERT_EQ(expected_table_size * bucket_size - 1, builder.FileSize());
-  ASSERT_OK(builder.Finish(nullptr, nullptr));
+  ASSERT_OK(builder.Finish(nullptr, nullptr, nullptr));
   ASSERT_OK(file_writer->Close());
   ASSERT_LE(expected_table_size * bucket_size, builder.FileSize());
 
@@ -319,7 +319,7 @@ TEST_F(CuckooBuilderTest, WriteSuccessWithCollisionAndCuckooBlock) {
   }
   size_t bucket_size = keys[0].size() + values[0].size();
   ASSERT_EQ(expected_table_size * bucket_size - 1, builder.FileSize());
-  ASSERT_OK(builder.Finish(nullptr, nullptr));
+  ASSERT_OK(builder.Finish(nullptr, nullptr, nullptr));
   ASSERT_OK(file_writer->Close());
   ASSERT_LE(expected_table_size * bucket_size, builder.FileSize());
 
@@ -367,7 +367,7 @@ TEST_F(CuckooBuilderTest, WithCollisionPathFullKey) {
   }
   size_t bucket_size = keys[0].size() + values[0].size();
   ASSERT_EQ(expected_table_size * bucket_size - 1, builder.FileSize());
-  ASSERT_OK(builder.Finish(nullptr, nullptr));
+  ASSERT_OK(builder.Finish(nullptr, nullptr, nullptr));
   ASSERT_OK(file_writer->Close());
   ASSERT_LE(expected_table_size * bucket_size, builder.FileSize());
 
@@ -412,7 +412,7 @@ TEST_F(CuckooBuilderTest, WithCollisionPathFullKeyAndCuckooBlock) {
   }
   size_t bucket_size = keys[0].size() + values[0].size();
   ASSERT_EQ(expected_table_size * bucket_size - 1, builder.FileSize());
-  ASSERT_OK(builder.Finish(nullptr, nullptr));
+  ASSERT_OK(builder.Finish(nullptr, nullptr, nullptr));
   ASSERT_OK(file_writer->Close());
   ASSERT_LE(expected_table_size * bucket_size, builder.FileSize());
 
@@ -454,7 +454,7 @@ TEST_F(CuckooBuilderTest, WriteSuccessNoCollisionUserKey) {
   }
   size_t bucket_size = user_keys[0].size() + values[0].size();
   ASSERT_EQ(expected_table_size * bucket_size - 1, builder.FileSize());
-  ASSERT_OK(builder.Finish(nullptr, nullptr));
+  ASSERT_OK(builder.Finish(nullptr, nullptr, nullptr));
   ASSERT_OK(file_writer->Close());
   ASSERT_LE(expected_table_size * bucket_size, builder.FileSize());
 
@@ -497,7 +497,7 @@ TEST_F(CuckooBuilderTest, WriteSuccessWithCollisionUserKey) {
   }
   size_t bucket_size = user_keys[0].size() + values[0].size();
   ASSERT_EQ(expected_table_size * bucket_size - 1, builder.FileSize());
-  ASSERT_OK(builder.Finish(nullptr, nullptr));
+  ASSERT_OK(builder.Finish(nullptr, nullptr, nullptr));
   ASSERT_OK(file_writer->Close());
   ASSERT_LE(expected_table_size * bucket_size, builder.FileSize());
 
@@ -539,7 +539,7 @@ TEST_F(CuckooBuilderTest, WithCollisionPathUserKey) {
   }
   size_t bucket_size = user_keys[0].size() + values[0].size();
   ASSERT_EQ(expected_table_size * bucket_size - 1, builder.FileSize());
-  ASSERT_OK(builder.Finish(nullptr, nullptr));
+  ASSERT_OK(builder.Finish(nullptr, nullptr, nullptr));
   ASSERT_OK(file_writer->Close());
   ASSERT_LE(expected_table_size * bucket_size, builder.FileSize());
 
@@ -578,7 +578,7 @@ TEST_F(CuckooBuilderTest, FailWhenCollisionPathTooLong) {
                           LazyBuffer("value")));
     ASSERT_EQ(builder.NumEntries(), i + 1);
   }
-  ASSERT_TRUE(builder.Finish(nullptr, nullptr).IsNotSupported());
+  ASSERT_TRUE(builder.Finish(nullptr, nullptr, nullptr).IsNotSupported());
   ASSERT_OK(file_writer->Close());
 }
 
@@ -608,7 +608,7 @@ TEST_F(CuckooBuilderTest, FailWhenSameKeyInserted) {
       builder.Add(Slice(GetInternalKey(user_key, true)), LazyBuffer("value2")));
   ASSERT_EQ(builder.NumEntries(), 2u);
 
-  ASSERT_TRUE(builder.Finish(nullptr, nullptr).IsNotSupported());
+  ASSERT_TRUE(builder.Finish(nullptr, nullptr, nullptr).IsNotSupported());
   ASSERT_OK(file_writer->Close());
 }
 }  // namespace TERARKDB_NAMESPACE
