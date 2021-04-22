@@ -300,6 +300,12 @@ class VersionStorageInfo {
            (find->second & kHasRangeDeletion) != 0;
   }
 
+  bool has_marked_for_compaction(int level) const {
+    auto find = space_amplification_.find(level);
+    return find != space_amplification_.end() &&
+           (find->second & kMarkedForCompaction) != 0;
+  }
+
   void set_read_amplification(const std::vector<double>& read_amp) {
     read_amplification_ = read_amp;
   }
@@ -585,6 +591,7 @@ class VersionStorageInfo {
   enum {
     kHasMapSst = 1ULL << 0,
     kHasRangeDeletion = 1ULL << 1,
+    kMarkedForCompaction = 1ULL << 2,
   };
   std::unordered_map<int, int> space_amplification_;
   std::vector<double> read_amplification_;

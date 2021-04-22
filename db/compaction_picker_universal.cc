@@ -395,9 +395,10 @@ Compaction* UniversalCompactionPicker::PickCompaction(
       mutable_cf_options.compaction_options_universal.allow_trivial_move;
   if (c->compaction_reason() != CompactionReason::kTrivialMoveLevel &&
       allow_trivial_move) {
-    // check level has map or link sst
+    // check level has map sst or sst marked for compaction
     for (auto& level_files : *c->inputs()) {
-      if (vstorage->has_map_sst(level_files.level)) {
+      if (vstorage->has_map_sst(level_files.level) ||
+          vstorage->has_marked_for_compaction(level_files.level)) {
         allow_trivial_move = false;
         break;
       }

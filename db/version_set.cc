@@ -1909,6 +1909,9 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f,
     if (f->prop.is_map_sst()) {
       space_amplification_[level] |= kHasMapSst;
     }
+    if (f->marked_for_compaction) {
+      space_amplification_[level] |= kMarkedForCompaction;
+    }
   }
   if (f->prop.has_range_deletions()) {
     space_amplification_[level] |= kHasRangeDeletion;
