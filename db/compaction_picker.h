@@ -262,12 +262,6 @@ class CompactionPicker {
       const std::vector<SequenceNumber>& snapshots,
       const std::vector<SortedRun>& sorted_runs, LogBuffer* log_buffer);
 
-  // Pick bottommost level for clean up snapshots
-  Compaction* PickBottommostLevelCompaction(
-      const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
-      VersionStorageInfo* vstorage,
-      const std::vector<SequenceNumber>& snapshots, LogBuffer* log_buffer);
-
   void PickFilesMarkedForCompaction(const std::string& cf_name,
                                     VersionStorageInfo* vstorage,
                                     int* start_level, int* output_level,

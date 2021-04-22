@@ -319,6 +319,32 @@ class VersionBuilder::Rep {
         }
       }
     }
+
+    struct priority_queue_cmp {
+      bool operator()(FileMetaData* l, FileMetaData* r) const {
+        return l->fd.GetNumber() < r->fd.GetNumber();
+      }
+    };
+    std::priority_queue<FileMetaData*, std::vector<FileMetaData*>,
+                        priority_queue_cmp>
+        old_file_queue;
+    constexpr size_t max_queue_size = 8;
+    auto push_old_file = [&](FileMetaData* f) {
+      if (!f->prop.is_map_sst() && !f->prop.dependence.empty()) {
+        for (auto& dependence : f->prop.dependence) {
+          auto item = TransFileNumber(dependence.file_number);
+          if (item->f->fd.GetNumber() != dependence.file_number) {
+            // item maybe invalid pointer, don't access it
+            old_file_queue.push(f);
+            if (old_file_queue.size() > max_queue_size) {
+              old_file_queue.pop();
+            }
+            break;
+          }
+        }
+      }
+    };
+
     for (auto it = dependence_map_.begin(); it != dependence_map_.end();) {
       auto& item = it->second;
       if (item.dependence_version == dependence_version_) {
@@ -330,7 +356,9 @@ class VersionBuilder::Rep {
           uint64_t num_antiquation = item.f->prop.num_entries - entry_depended;
           switch (item.f->gc_status) {
             case FileMetaData::kGarbageCollectionForbidden:
-              if (item.gc_forbidden_version != dependence_version_) {
+              if (item.gc_forbidden_version == dependence_version_) {
+                push_old_file(item.f);
+              } else {
                 if (item.f->refs > 1) {
                   // if item.f in other versions, that assigning
                   // item.f->gc_status to permitted might let this item
@@ -366,6 +394,19 @@ class VersionBuilder::Rep {
         it = dependence_map_.erase(it);
       }
     }
+
+    if (finish) {
+      size_t old_file_count = std::max<size_t>(
+          1, std::min(dependence_map_.size() / 128, old_file_queue.size()));
+      while (old_file_queue.size() > old_file_count) {
+        old_file_queue.pop();
+      }
+      while (!old_file_queue.empty()) {
+        old_file_queue.top()->marked_for_compaction = true;
+        old_file_queue.pop();
+      }
+    }
+
     new_deleted_files_ = 0;
   }
 
@@ -600,30 +641,6 @@ class VersionBuilder::Rep {
     };
 
     std::vector<double> read_amp(num_levels_);
-    struct priority_queue_cmp {
-      bool operator()(FileMetaData* l, FileMetaData* r) const {
-        return l->fd.GetNumber() < r->fd.GetNumber();
-      }
-    };
-    std::priority_queue<FileMetaData*, std::vector<FileMetaData*>,
-                        priority_queue_cmp>
-        old_file_queue;
-    constexpr size_t max_queue_size = 8;
-    auto push_old_file = [&](FileMetaData* f) {
-      if (!f->prop.is_map_sst() && !f->prop.dependence.empty()) {
-        for (auto& dependence : f->prop.dependence) {
-          auto item = TransFileNumber(dependence.file_number);
-          if (item->f->fd.GetNumber() != dependence.file_number) {
-            // item maybe invalid pointer, don't access it
-            old_file_queue.push(f);
-            if (old_file_queue.size() > max_queue_size) {
-              old_file_queue.pop();
-            }
-            break;
-          }
-        }
-      }
-    };
 
     for (int level = 0; level < num_levels_; level++) {
       auto& cmp = (level == 0) ? level_zero_cmp_ : level_nonzero_cmp_;
@@ -640,7 +657,6 @@ class VersionBuilder::Rep {
       std::sort(ordered_added_files.begin(), ordered_added_files.end(), cmp);
 
       for (auto f : ordered_added_files) {
-        push_old_file(f);
         vstorage->AddFile(level, f, c_style_callback(exists), &exists,
                           info_log_);
         if (level == 0) {
@@ -653,22 +669,10 @@ class VersionBuilder::Rep {
     for (auto& pair : dependence_map_) {
       auto& item = pair.second;
       if (item.level == -1) {
-        if (item.f->is_gc_forbidden()) {
-          push_old_file(item.f);
-        }
         vstorage->AddFile(-1, item.f, c_style_callback(exists), &exists,
                           info_log_);
       }
       vstorage->UpdateAccumulatedStats(item.f);
-    }
-    size_t old_file_count = std::max<size_t>(
-        1, std::min(dependence_map_.size() / 128, old_file_queue.size()));
-    while (old_file_queue.size() > old_file_count) {
-      old_file_queue.pop();
-    }
-    while (!old_file_queue.empty()) {
-      old_file_queue.top()->marked_for_compaction = true;
-      old_file_queue.pop();
     }
     vstorage->set_read_amplification(read_amp);
     vstorage->oldest_snapshot_seqnum(base_vstorage_->oldest_snapshot_seqnum());
