@@ -132,30 +132,32 @@ Status BuildInheritanceTree(const std::vector<CompactionInputFiles>& inputs,
         return s;
       }
       inheritance_tree->emplace_back(f->fd.GetNumber());
-      // 1. verify input inheritance tree
-      // 2. purge unnecessary node
-      // 3. merge input inheritance tree
+      // verify input inheritance tree
       size_t size = inheritance_tree->size();
-      size_t count = 0;
-      for (auto file_number : tp->inheritance_tree) {
-        if (inheritance_tree->back() != file_number) {
-          inheritance_tree->emplace_back(file_number);
-        } else if (dependence_map.count(file_number) != 0) {
-          ++count;
-          inheritance_tree->emplace_back(file_number);
-        } else {
-          ++pruge_count;
+      for (auto fn : tp->inheritance_tree) {
+        if (inheritance_tree->back() == fn) {
           inheritance_tree->pop_back();
           if (inheritance_tree->size() < size) {
             break;
           }
+        } else {
+          inheritance_tree->emplace_back(fn);
         }
       }
-      if (size + count * 2 != inheritance_tree->size()) {
+      if (inheritance_tree->size() != size) {
         // input inheritance tree invalid !
         return Status::Corruption(
             "BuildInheritanceTree: bad inheritance_tree, file_number ",
             ToString(f->fd.GetNumber()));
+      }
+      // purge unnecessary node & merge input inheritance tree
+      for (auto fn : tp->inheritance_tree) {
+        if (inheritance_tree->back() == fn && dependence_map.count(fn) == 0) {
+          ++pruge_count;
+          inheritance_tree->pop_back();
+        } else {
+          inheritance_tree->emplace_back(fn);
+        }
       }
       inheritance_tree->emplace_back(f->fd.GetNumber());
     }
@@ -163,6 +165,8 @@ Status BuildInheritanceTree(const std::vector<CompactionInputFiles>& inputs,
   if (pruge_count_ptr != nullptr) {
     *pruge_count_ptr = pruge_count;
   }
+
+  inheritance_tree->shrink_to_fit();
   return s;
 }
 
