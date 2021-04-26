@@ -76,7 +76,6 @@ ImmutableCFOptions::ImmutableCFOptions(const ImmutableDBOptions& db_options,
       new_table_reader_for_compaction_inputs(
           db_options.new_table_reader_for_compaction_inputs),
       num_levels(cf_options.num_levels),
-      optimize_filters_for_hits(cf_options.optimize_filters_for_hits),
       force_consistency_checks(cf_options.force_consistency_checks),
       allow_ingest_behind(db_options.allow_ingest_behind),
       preserve_deletes(db_options.preserve_deletes),
@@ -191,6 +190,12 @@ void MutableCFOptions::Dump(Logger* log) const {
                  blob_large_key_ratio);
   ROCKS_LOG_INFO(log, "                            blob_gc_ratio: %f",
                  blob_gc_ratio);
+  ROCKS_LOG_INFO(log, "                    target_blob_file_size: %" PRIu64,
+                 target_blob_file_size);
+  ROCKS_LOG_INFO(log, "                           max_blob_files: %zu",
+                 max_blob_files);
+  ROCKS_LOG_INFO(log, "                            blob_gc_ratio: %zu",
+                 max_dependence_blob_overlap);
   ROCKS_LOG_INFO(log, "      soft_pending_compaction_bytes_limit: %" PRIu64,
                  soft_pending_compaction_bytes_limit);
   ROCKS_LOG_INFO(log, "      hard_pending_compaction_bytes_limit: %" PRIu64,
@@ -284,6 +289,9 @@ MutableCFOptions::MutableCFOptions(const ColumnFamilyOptions& options, Env* env)
       blob_size(options.blob_size),
       blob_large_key_ratio(options.blob_large_key_ratio),
       blob_gc_ratio(options.blob_gc_ratio),
+      target_blob_file_size(options.target_blob_file_size),
+      max_blob_files(options.max_blob_files),
+      max_dependence_blob_overlap(options.max_dependence_blob_overlap),
       soft_pending_compaction_bytes_limit(
           options.soft_pending_compaction_bytes_limit),
       hard_pending_compaction_bytes_limit(
@@ -306,6 +314,8 @@ MutableCFOptions::MutableCFOptions(const ColumnFamilyOptions& options, Env* env)
           options.max_sequential_skip_in_iterations),
       paranoid_file_checks(options.paranoid_file_checks),
       report_bg_io_stats(options.report_bg_io_stats),
+      optimize_filters_for_hits(options.optimize_filters_for_hits),
+      optimize_range_deletion(options.optimize_range_deletion),
       compression(options.compression),
       ttl_gc_ratio(options.ttl_gc_ratio),
       ttl_max_scan_gap(options.ttl_max_scan_gap) {

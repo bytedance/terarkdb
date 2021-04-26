@@ -33,10 +33,11 @@ DEFINE_uint64(value_size, 16384, "batch size");
 DEFINE_int32(perf_level, TERARKDB_NAMESPACE::PerfLevel::kDisable,
              "Level of perf collection");
 
-void init_db_options(TERARKDB_NAMESPACE::DBOptions& db_options_,  // NOLINT
-                     const std::string& work_dir_,
-                     std::shared_ptr<TERARKDB_NAMESPACE::SstFileManager> sst_file_manager_,
-                     std::shared_ptr<TERARKDB_NAMESPACE::RateLimiter> rate_limiter_) {
+void init_db_options(
+    TERARKDB_NAMESPACE::DBOptions& db_options_,  // NOLINT
+    const std::string& work_dir_,
+    std::shared_ptr<TERARKDB_NAMESPACE::SstFileManager> sst_file_manager_,
+    std::shared_ptr<TERARKDB_NAMESPACE::RateLimiter> rate_limiter_) {
   db_options_.create_if_missing = true;
   db_options_.create_missing_column_families = true;
 
@@ -52,16 +53,17 @@ void init_db_options(TERARKDB_NAMESPACE::DBOptions& db_options_,  // NOLINT
   db_options_.allow_mmap_reads = true;
   db_options_.delayed_write_rate = 200ULL << 20;
 
-  // db_options_.avoid_unnecessary_blocking_io = true;
-  // rate_limiter_.reset(TERARKDB_NAMESPACE::NewGenericRateLimiter(200ULL << 20, 1000));
-  // db_options_.rate_limiter = rate_limiter_;
-  // sst_file_manager_.reset(TERARKDB_NAMESPACE::NewSstFileManager(
-  //     TERARKDB_NAMESPACE::Env::Default(), db_options_.info_log, std::string(),
-  //     200ULL << 20, true, nullptr, 1, 32 << 20));
-  // db_options_.sst_file_manager = sst_file_manager_;
+  db_options_.avoid_unnecessary_blocking_io = true;
+  rate_limiter_.reset(
+      TERARKDB_NAMESPACE::NewGenericRateLimiter(200ULL << 20, 1000));
+  db_options_.rate_limiter = rate_limiter_;
+  sst_file_manager_.reset(TERARKDB_NAMESPACE::NewSstFileManager(
+      TERARKDB_NAMESPACE::Env::Default(), db_options_.info_log, std::string(),
+      200ULL << 20, true, nullptr, 1, 32 << 20));
+  db_options_.sst_file_manager = sst_file_manager_;
 
-  // db_options_.max_wal_size = 512ULL << 20;
-  // db_options_.max_total_wal_size = 1024ULL << 20;
+  db_options_.max_wal_size = 512ULL << 20;
+  db_options_.max_total_wal_size = 1024ULL << 20;
 #ifdef WITH_TERARK_ZIP
   TERARKDB_NAMESPACE::TerarkZipDeleteTempFiles(work_dir_);  // call once
 #endif
@@ -77,7 +79,8 @@ void init_db_options(TERARKDB_NAMESPACE::DBOptions& db_options_,  // NOLINT
     // flush线程配置
     int num_high_pri =
         static_cast<int>((reserve_factor * num_db_instance + 1) * 6);
-    env->IncBackgroundThreadsIfNeeded(num_low_pri, TERARKDB_NAMESPACE::Env::Priority::LOW);
+    env->IncBackgroundThreadsIfNeeded(num_low_pri,
+                                      TERARKDB_NAMESPACE::Env::Priority::LOW);
     env->IncBackgroundThreadsIfNeeded(num_high_pri,
                                       TERARKDB_NAMESPACE::Env::Priority::HIGH);
   });
@@ -91,8 +94,10 @@ void init_cf_options(
   std::shared_ptr<TERARKDB_NAMESPACE::TableFactory> table_factory;
 
   TERARKDB_NAMESPACE::BlockBasedTableOptions table_options;
-  table_options.block_cache = TERARKDB_NAMESPACE::NewLRUCache(128ULL << 30, 8, false);
-  table_options.filter_policy.reset(TERARKDB_NAMESPACE::NewBloomFilterPolicy(10, false));
+  table_options.block_cache =
+      TERARKDB_NAMESPACE::NewLRUCache(128ULL << 30, 8, false);
+  table_options.filter_policy.reset(
+      TERARKDB_NAMESPACE::NewBloomFilterPolicy(10, false));
   table_options.block_size = 8ULL << 10;
   table_options.cache_index_and_filter_blocks = true;
   table_factory.reset(NewBlockBasedTableFactory(table_options));
@@ -129,7 +134,8 @@ void init_cf_options(
   tzto.optimizeCpuL3Cache = true;
   tzto.forceMetaInMemory = false;
 
-  table_factory.reset(TERARKDB_NAMESPACE::NewTerarkZipTableFactory(tzto, table_factory));
+  table_factory.reset(
+      TERARKDB_NAMESPACE::NewTerarkZipTableFactory(tzto, table_factory));
 #endif
   auto page_cf_option = TERARKDB_NAMESPACE::ColumnFamilyOptions();
   page_cf_option.write_buffer_size = 256ULL << 20;
@@ -142,7 +148,8 @@ void init_cf_options(
   page_cf_option.num_levels = 6;
   page_cf_option.compaction_options_universal.allow_trivial_move = true;
   page_cf_option.level_compaction_dynamic_level_bytes = true;
-  page_cf_option.compression = TERARKDB_NAMESPACE::CompressionType::kNoCompression;
+  page_cf_option.compression =
+      TERARKDB_NAMESPACE::CompressionType::kNoCompression;
   page_cf_option.enable_lazy_compaction = true;
   page_cf_option.level0_file_num_compaction_trigger = 4;
   page_cf_option.level0_slowdown_writes_trigger = 1000;
@@ -153,6 +160,7 @@ void init_cf_options(
   page_cf_option.blob_gc_ratio = 0.1;
   page_cf_option.max_subcompactions = 6;
   page_cf_option.optimize_filters_for_hits = true;
+  page_cf_option.optimize_range_deletion = true;
 
   cf_options[0] = page_cf_option;
 }
@@ -186,7 +194,8 @@ void batch_write(TERARKDB_NAMESPACE::DB* db, int record_bytes, int batch_size,
                 TERARKDB_NAMESPACE::Slice(value, FLAGS_value_size));
     }
 
-    TERARKDB_NAMESPACE::WriteOptions woptions = TERARKDB_NAMESPACE::WriteOptions();
+    TERARKDB_NAMESPACE::WriteOptions woptions =
+        TERARKDB_NAMESPACE::WriteOptions();
     woptions.sync = true;
 
     TERARKDB_NAMESPACE::get_perf_context()->Reset();
@@ -241,7 +250,8 @@ int main(int argc, char** argv) {
   std::vector<TERARKDB_NAMESPACE::ColumnFamilyOptions> cf_options;
   std::vector<TERARKDB_NAMESPACE::ColumnFamilyHandle*> cf_handles;
   std::vector<TERARKDB_NAMESPACE::ColumnFamilyDescriptor> column_families;
-  std::vector<std::string> cf_names = {TERARKDB_NAMESPACE::kDefaultColumnFamilyName};
+  std::vector<std::string> cf_names = {
+      TERARKDB_NAMESPACE::kDefaultColumnFamilyName};
 
   std::shared_ptr<TERARKDB_NAMESPACE::SstFileManager> sst_file_manager;
   std::shared_ptr<TERARKDB_NAMESPACE::RateLimiter> rate_limiter;
@@ -256,8 +266,8 @@ int main(int argc, char** argv) {
   }
 
   cf_handles.resize(1);
-  auto s = TERARKDB_NAMESPACE::DB::Open(db_options, work_dir, column_families, &cf_handles,
-                             &db);
+  auto s = TERARKDB_NAMESPACE::DB::Open(db_options, work_dir, column_families,
+                                        &cf_handles, &db);
   if (!s.ok()) {
     printf("Open db failed, code = %d, msg = %s\n", s.code(), s.getState());
     exit(0);

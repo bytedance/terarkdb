@@ -441,6 +441,15 @@ public interface AdvancedColumnFamilyOptionsInterface
   boolean optimizeFiltersForHits();
 
   /**
+   * <p>Returns the current state of the {@code optimize_range_deletion}
+   * setting.</p>
+   *
+   * @return boolean value indicating if the flag
+   *     {@code optimize_range_deletion} was set.
+   */
+  boolean optimizeRangeDeletion();
+
+  /**
    * In debug mode, RocksDB run consistency checks on the LSM every time the LSM
    * change (Flush, Compaction, AddFile). These checks are disabled in release
    * mode, use this option to enable them in release mode as well.

@@ -676,6 +676,9 @@ DEFINE_bool(optimize_filters_for_hits, false,
             "a value. For now this doesn't create bloom filters for the max "
             "level of the LSM to reduce metadata that should fit in RAM. ");
 
+DEFINE_bool(optimize_range_deletion, false,
+            "Optimizes RangeDeletion when use lazy level compaction");
+
 DEFINE_uint64(delete_obsolete_files_period_micros, 0,
               "Ignored. Left here for backward compatibility");
 
@@ -970,6 +973,12 @@ DEFINE_uint64(blob_size, size_t(-1), "Key Value Separate blob size");
 DEFINE_double(blob_large_key_ratio, 1, "Key Value Separate large key ratio");
 
 DEFINE_double(blob_gc_ratio, 0.2, "Blob SST gc ratio");
+
+DEFINE_uint64(target_blob_file_size, 0, "Blob file size");
+
+DEFINE_uint64(max_blob_files, 0, "Num total blob file count limits");
+
+DEFINE_uint64(max_dependence_blob_overlap, 0, "Max dependence blob overlap");
 
 DEFINE_uint64(wal_ttl_seconds, 0, "Set the TTL for the WAL Files in seconds.");
 DEFINE_uint64(wal_size_limit_MB, 0,
@@ -3535,7 +3544,11 @@ class Benchmark {
     options.blob_size = FLAGS_blob_size;
     options.blob_large_key_ratio = FLAGS_blob_large_key_ratio;
     options.blob_gc_ratio = FLAGS_blob_gc_ratio;
+    options.target_blob_file_size = FLAGS_target_blob_file_size;
+    options.max_blob_files = FLAGS_max_blob_files;
+    options.max_dependence_blob_overlap = FLAGS_max_dependence_blob_overlap;
     options.optimize_filters_for_hits = FLAGS_optimize_filters_for_hits;
+    options.optimize_range_deletion = FLAGS_optimize_range_deletion;
 
     // fill storage options
     options.advise_random_on_open = FLAGS_advise_random_on_open;

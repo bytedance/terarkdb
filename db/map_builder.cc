@@ -969,8 +969,9 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
                          const std::vector<Range>& deleted_range,
                          const std::vector<FileMetaData*>& added_files,
                          int output_level, uint32_t output_path_id,
-                         ColumnFamilyData* cfd, Version* version,
-                         VersionEdit* edit, FileMetaData* file_meta_ptr,
+                         ColumnFamilyData* cfd, bool optimize_range_deletion,
+                         Version* version, VersionEdit* edit,
+                         FileMetaData* file_meta_ptr,
                          std::unique_ptr<TableProperties>* prop_ptr,
                          std::set<FileMetaData*>* deleted_files) {
   assert(output_level != 0 || inputs.front().level == 0);
@@ -1136,11 +1137,6 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
       range_del_iter_vec.emplace_back(std::move(range_del_it));
     }
   }
-  bool build_range_deletion_ranges =
-      cfd->ioptions()->compaction_style ==
-          CompactionStyle::kCompactionStyleLevel &&
-      cfd->ioptions()->enable_lazy_compaction &&
-      output_level < vstorage->num_non_empty_levels() - 1;
 
   ScopedArenaIterator tombstone_iter;
   if (!tombstones.empty()) {
@@ -1153,8 +1149,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     }
     tombstone_iter.set(builder.Finish());
   }
-  if (build_range_deletion_ranges && !tombstones.empty() &&
-      !level_ranges.empty()) {
+  if (optimize_range_deletion && !tombstones.empty() && !level_ranges.empty()) {
     std::vector<RangeWithDepend> ranges;
     auto uc = icomp.user_comparator();
     Slice last_end_key;

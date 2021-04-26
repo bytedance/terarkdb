@@ -255,6 +255,7 @@ const std::string options_file_content = R"OPTIONS_FILE(
   paranoid_file_checks=false
   inplace_update_num_locks=10000
   optimize_filters_for_hits=false
+  optimize_range_deletion=false
   level_compaction_dynamic_level_bytes=false
   inplace_update_support=false
   compaction_style=kCompactionStyleUniversal

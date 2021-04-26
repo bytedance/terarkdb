@@ -213,6 +213,11 @@ ColumnFamilyOptions SanitizeOptions(const ImmutableDBOptions& db_options,
     result.num_levels = 3;
   }
 
+  if (result.compaction_style != CompactionStyle::kCompactionStyleLevel ||
+      !result.enable_lazy_compaction) {
+    result.optimize_filters_for_hits = false;
+  }
+
   if (result.max_write_buffer_number < 2) {
     result.max_write_buffer_number = 2;
   }
@@ -1254,12 +1259,21 @@ void ColumnFamilyData::ResetThreadLocalSuperVersions() {
 
 #ifndef ROCKSDB_LITE
 Status ColumnFamilyData::SetOptions(
+    const ImmutableDBOptions& db_options,
     const std::unordered_map<std::string, std::string>& options_map) {
   MutableCFOptions new_mutable_cf_options;
   Status s =
       GetMutableOptionsFromStrings(mutable_cf_options_, options_map,
                                    ioptions_.info_log, &new_mutable_cf_options);
   if (s.ok()) {
+    new_mutable_cf_options = MutableCFOptions(
+        SanitizeOptions(db_options,
+                        BuildColumnFamilyOptions(initial_cf_options_,
+                                                 new_mutable_cf_options)),
+        db_options.env);
+    optimize_filters_for_hits_.store(
+        new_mutable_cf_options.optimize_filters_for_hits,
+        std::memory_order_relaxed);
     mutable_cf_options_ = new_mutable_cf_options;
     mutable_cf_options_.RefreshDerivedOptions(ioptions_);
   }

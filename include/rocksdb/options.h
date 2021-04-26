@@ -316,6 +316,18 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // valid [0 , 0.5]
   double blob_gc_ratio = 0.05;
 
+  // Blob file size
+  // Default : same as bottommost level sst file size
+  uint64_t target_blob_file_size = 0;
+
+  // Num total blob file count limits
+  // 0 to unlimited
+  size_t max_blob_files = 0;
+
+  // Max dependence blob overlap
+  // 0 to unlimited
+  size_t max_dependence_blob_overlap = 1024;
+
   // This is a factory that provides TableFactory objects.
   // Default: a block-based table factory that provides a default
   // implementation of TableBuilder and TableReader with default

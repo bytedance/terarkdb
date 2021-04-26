@@ -309,6 +309,7 @@ void RandomInitCFOptions(ColumnFamilyOptions* cf_opt, Random* rnd) {
   cf_opt->inplace_update_support = rnd->Uniform(2);
   cf_opt->level_compaction_dynamic_level_bytes = rnd->Uniform(2);
   cf_opt->optimize_filters_for_hits = rnd->Uniform(2);
+  cf_opt->optimize_range_deletion =  rnd->Uniform(2);
   cf_opt->paranoid_file_checks = rnd->Uniform(2);
   cf_opt->purge_redundant_kvs_while_flush = rnd->Uniform(2);
   cf_opt->force_consistency_checks = rnd->Uniform(2);
