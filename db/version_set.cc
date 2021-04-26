@@ -1415,9 +1415,15 @@ void Version::GetKey(const Slice& user_key, const Slice& ikey, Status* status,
       storage_info_.files_, user_key, ikey, &storage_info_.level_files_brief_,
       storage_info_.num_non_empty_levels_, &storage_info_.file_indexer_,
       user_comparator(), internal_comparator());
+  SequenceNumber ikey_seq = GetInternalKeySeqno(ikey);
   FdWithKeyRange* f = fp.GetNextFile();
 
   while (f != nullptr) {
+    if (f->fd.smallest_seqno > ikey_seq || f->fd.largest_seqno < ikey_seq) {
+      // fast path
+      f = fp.GetNextFile();
+      continue;
+    }
     *status =
         table_cache_->Get(options, *internal_comparator(), *f->file_metadata,
                           storage_info_.dependence_map(), ikey, &get_context,
@@ -1450,7 +1456,7 @@ void Version::GetKey(const Slice& user_key, const Slice& ikey, Status* status,
 bool Version::IsFilterSkipped(int level, bool is_file_last_in_level) {
   // Reaching the bottom level implies misses at all upper levels, so we'll
   // skip checking the filters when we predict a hit.
-  return cfd_->ioptions()->optimize_filters_for_hits &&
+  return cfd_->OptimizeFiltersForHits() &&
          (level > 0 || is_file_last_in_level) &&
          level == storage_info_.num_non_empty_levels() - 1;
 }
@@ -3164,7 +3170,8 @@ Status VersionSet::ProcessManifestWrites(
                builder_guards.size() == versions.size());
         ColumnFamilyData* cfd = versions[i]->cfd_;
         builder_guards[i]->version_builder()->LoadTableHandlers(
-            cfd->internal_stats(), cfd->ioptions()->optimize_filters_for_hits,
+            cfd->internal_stats(),
+            mutable_cf_options_ptrs[i]->optimize_filters_for_hits,
             mutable_cf_options_ptrs[i]->prefix_extractor.get(),
             load_essence_sst);
       }

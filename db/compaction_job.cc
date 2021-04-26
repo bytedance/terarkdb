@@ -784,7 +784,7 @@ Status CompactionJob::Run() {
   context.output_level = c->output_level();
   context.number_levels = iopt->num_levels;
   context.skip_filters =
-      cfd->ioptions()->optimize_filters_for_hits && bottommost_level_;
+      c->mutable_cf_options()->optimize_filters_for_hits && bottommost_level_;
   context.bottommost_level = c->bottommost_level();
   context.allow_ingest_behind = iopt->allow_ingest_behind;
   context.preserve_deletes = iopt->preserve_deletes;
@@ -2430,11 +2430,13 @@ Status CompactionJob::InstallCompactionResults(
       }
     }
     db_mutex_->Unlock();
-    auto s = map_builder.Build(*compaction->inputs(), deleted_range,
-                               added_files, compaction->output_level(),
-                               compaction->output_path_id(), cfd,
-                               compaction->input_version(),
-                               compact_->compaction->edit(), &file_meta, &prop);
+    bool optimize_range_deletion = mutable_cf_options.optimize_range_deletion &&
+                                   !compaction->bottommost_level();
+    auto s = map_builder.Build(
+        *compaction->inputs(), deleted_range, added_files,
+        compaction->output_level(), compaction->output_path_id(), cfd,
+        optimize_range_deletion, compaction->input_version(),
+        compact_->compaction->edit(), &file_meta, &prop);
     if (s.ok() && file_meta.fd.file_size > 0) {
       // test map sst
       DependenceMap empty_dependence_map;
@@ -2596,8 +2598,9 @@ Status CompactionJob::OpenCompactionOutputFile(
   // If the Column family flag is to only optimize filters for hits,
   // we can skip creating filters if this is the bottommost_level where
   // data is going to be found
-  bool skip_filters =
-      cfd->ioptions()->optimize_filters_for_hits && bottommost_level_;
+  bool skip_filters = sub_compact->compaction->mutable_cf_options()
+                          ->optimize_filters_for_hits &&
+                      bottommost_level_;
 
   uint64_t output_file_creation_time =
       sub_compact->compaction->MaxInputFileCreationTime();

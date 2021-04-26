@@ -196,6 +196,10 @@ class ColumnFamilyData {
   void SetDropped();
   bool IsDropped() const { return dropped_.load(std::memory_order_relaxed); }
 
+  bool OptimizeFiltersForHits() const {
+    return optimize_filters_for_hits_.load(std::memory_order_relaxed);
+  }
+
   // thread-safe
   int NumberLevels() const { return ioptions_.num_levels; }
 
@@ -231,6 +235,7 @@ class ColumnFamilyData {
 #ifndef ROCKSDB_LITE
   // REQUIRES: DB mutex held
   Status SetOptions(
+      const ImmutableDBOptions& db_options,
       const std::unordered_map<std::string, std::string>& options_map);
 #endif  // ROCKSDB_LITE
 
@@ -429,7 +434,8 @@ class ColumnFamilyData {
 
   std::atomic<int> refs_;  // outstanding references to ColumnFamilyData
   std::atomic<bool> initialized_;
-  std::atomic<bool> dropped_;  // true if client dropped it
+  std::atomic<bool> dropped_;                    // true if client dropped it
+  std::atomic<bool> optimize_filters_for_hits_;  // for read output mutex
 
   const InternalKeyComparator internal_comparator_;
   const ColumnFamilyOptions initial_cf_options_;

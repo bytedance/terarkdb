@@ -553,6 +553,10 @@ Options DBTestBase::GetOptions(
       options.manual_wal_flush = true;
       break;
     }
+    case kOptimizeRangeDeletion: {
+      options.optimize_range_deletion = true;
+      break;
+    }
 
     default:
       break;

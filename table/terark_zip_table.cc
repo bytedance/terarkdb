@@ -51,6 +51,8 @@ void PrintVersionHashInfo(TERARKDB_NAMESPACE::Logger* info_log) {
     INFO(info_log, "fsa %s", git_version_hash_info_fsa());
     INFO(info_log, "zbs %s", git_version_hash_info_zbs());
     INFO(info_log, "idx %s", git_version_hash_info_idx());
+#else
+    (void)info_log;
 #endif
   });
 }
@@ -409,11 +411,11 @@ std::string TerarkZipTableFactory::GetPrintableTableOptions() const {
   char buffer[kBufferSize];
   const auto& tzto = table_options_;
 
-#define M_String(name)                                      \
-  ret.append(#name);                                        \
-  ret.append("                         : " + strlen(#name), \
-             27 - strlen(#name));                           \
-  ret.append(tzto.name);                                    \
+#define M_String(name)                                                   \
+  ret.append(#name);                                                     \
+  ret.append((const char*)"                         : " + strlen(#name), \
+             27 - strlen(#name));                                        \
+  ret.append(tzto.name);                                                 \
   ret.append("\n")
 
 #define M_NumFmt(name, fmt) PrintBuf("%-24s : " fmt "\n", #name, tzto.name)

@@ -61,7 +61,8 @@ class MapBuilder {
   Status Build(const std::vector<CompactionInputFiles>& inputs,
                const std::vector<Range>& deleted_range,
                const std::vector<FileMetaData*>& added_files, int output_level,
-               uint32_t output_path_id, ColumnFamilyData* cfd, Version* version,
+               uint32_t output_path_id, ColumnFamilyData* cfd,
+               bool optimize_range_deletion, Version* version,
                VersionEdit* edit, FileMetaData* file_meta = nullptr,
                std::unique_ptr<TableProperties>* porp = nullptr,
                std::set<FileMetaData*>* deleted_files = nullptr);

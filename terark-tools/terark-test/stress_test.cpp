@@ -418,6 +418,7 @@ void get_options(int argc, const char *argv[], TERARKDB_NAMESPACE::Options &opti
   options.paranoid_file_checks = false;
   options.max_bytes_for_level_multiplier = 2.000000;
   options.optimize_filters_for_hits = false;
+  options.optimize_range_deletion = false;
   options.level_compaction_dynamic_level_bytes = true;
   options.inplace_update_num_locks = 10000;
   options.inplace_update_support = false;

@@ -1115,7 +1115,7 @@ Status DBImpl::SetOptions(
   SuperVersionContext sv_context(/* create_superversion */ true);
   {
     InstrumentedMutexLock l(&mutex_);
-    s = cfd->SetOptions(options_map);
+    s = cfd->SetOptions(immutable_db_options_, options_map);
     if (s.ok()) {
       new_options = *cfd->GetLatestMutableCFOptions();
       // Append new version to recompute compaction score.
@@ -3218,8 +3218,8 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
           status = map_builder.Build(
               {CompactionInputFiles{i, vstorage->LevelFiles(i)}}, deleted_range,
               {}, i /* level */, vstorage->LevelFiles(i)[0]->fd.GetPathId(),
-              cfd, input_version, &edit, nullptr /* file_meta */,
-              nullptr /* porp */, &deleted_files);
+              cfd, false /* optimize_range_deletion */, input_version, &edit,
+              nullptr /* file_meta */, nullptr /* porp */, &deleted_files);
           if (!status.ok()) {
             break;
           }
@@ -3230,7 +3230,8 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
             }
             status = map_builder.Build(
                 {CompactionInputFiles{i, {f}}}, deleted_range, {},
-                i /* level */, f->fd.GetPathId(), cfd, input_version, &edit,
+                i /* level */, f->fd.GetPathId(), cfd,
+                false /* optimize_range_deletion */, input_version, &edit,
                 nullptr /* file_meta */, nullptr /* porp */, &deleted_files);
             if (!status.ok()) {
               break;
