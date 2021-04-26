@@ -788,8 +788,13 @@ Compaction* CompactionPicker::PickGarbageCollection(
   // Setting fragment_size as one eighth max_file_size prevents selecting
   // massive files to single compaction which would pin down the maximum
   // deletable file number for a long time resulting possible storage leakage.
-  size_t max_file_size =
-      MaxFileSizeForLevel(mutable_cf_options, 1, ioptions_.compaction_style);
+  size_t max_file_size = mutable_cf_options.target_blob_file_size;
+  if (max_file_size == 0) {
+    max_file_size =
+        MaxFileSizeForLevel(mutable_cf_options, ioptions_.num_levels - 1,
+                            ioptions_.compaction_style);
+  }
+
   size_t fragment_size = max_file_size / 8;
 
   // Traverse level -1 to filter out all blob sstables needs GC.
@@ -2344,7 +2349,8 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
         picker->AreFilesInCompaction(vstorage_->LevelFiles(i));
   }
   // if level 0 has any range deletion or map sstable, try to push them down.
-  if ((vstorage_->has_range_deletion(0) &&
+  if (((mutable_cf_options_.optimize_range_deletion &&
+        vstorage_->has_range_deletion(0)) &&
        (bottommost_level > 0 || vstorage_->LevelFiles(0).size() > 1)) ||
       vstorage_->has_map_sst(0) ||
       int(vstorage_->LevelFiles(0).size()) >=
@@ -2358,7 +2364,8 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
       start_level_ = 0;
       output_level_ = 1;
       compaction_type_ = CompactionType::kMapCompaction;
-      compaction_reason_ = vstorage_->has_range_deletion(0)
+      compaction_reason_ = mutable_cf_options_.optimize_range_deletion &&
+                                   vstorage_->has_range_deletion(0)
                                ? CompactionReason::kRangeDeletion
                                : CompactionReason::kLevelL0FilesNum;
       return GetCompaction();
@@ -2666,24 +2673,27 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
     return Status::OK();
   };
 
-  for (int i = 1; i < bottommost_level; ++i) {
-    if (!vstorage_->has_range_deletion(i)) {
-      continue;
-    }
-    if (sorted_runs[i].being_compacted || sorted_runs[i + 1].being_compacted) {
-      sorted_runs[i].skip_composite = true;
-      sorted_runs[i + 1].skip_composite = true;
-      continue;
-    }
-    auto s = pick_range_deletion(i);
-    if (!s.ok()) {
-      ROCKS_LOG_BUFFER(log_buffer_,
-                       "[%s] PickCompaction range_deletion error %s.",
-                       cf_name_.c_str(), s.getState());
-      return nullptr;
-    }
-    if (!input_range_.empty()) {
-      return GetCompaction();
+  if (mutable_cf_options_.optimize_range_deletion) {
+    for (int i = 1; i < bottommost_level; ++i) {
+      if (!vstorage_->has_range_deletion(i)) {
+        continue;
+      }
+      if (sorted_runs[i].being_compacted ||
+          sorted_runs[i + 1].being_compacted) {
+        sorted_runs[i].skip_composite = true;
+        sorted_runs[i + 1].skip_composite = true;
+        continue;
+      }
+      auto s = pick_range_deletion(i);
+      if (!s.ok()) {
+        ROCKS_LOG_BUFFER(log_buffer_,
+                         "[%s] PickCompaction range_deletion error %s.",
+                         cf_name_.c_str(), s.getState());
+        return nullptr;
+      }
+      if (!input_range_.empty()) {
+        return GetCompaction();
+      }
     }
   }
   double level_size = double(base_size);

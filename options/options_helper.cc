@@ -170,6 +170,13 @@ ColumnFamilyOptions BuildColumnFamilyOptions(
   cf_opts.blob_size = mutable_cf_options.blob_size;
   cf_opts.blob_large_key_ratio = mutable_cf_options.blob_large_key_ratio;
   cf_opts.blob_gc_ratio = mutable_cf_options.blob_gc_ratio;
+  cf_opts.target_blob_file_size = mutable_cf_options.target_blob_file_size;
+  cf_opts.max_blob_files = mutable_cf_options.max_blob_files;
+  cf_opts.max_dependence_blob_overlap =
+      mutable_cf_options.max_dependence_blob_overlap;
+  cf_opts.optimize_filters_for_hits =
+      mutable_cf_options.optimize_filters_for_hits;
+  cf_opts.optimize_range_deletion = mutable_cf_options.optimize_range_deletion;
   cf_opts.soft_pending_compaction_bytes_limit =
       mutable_cf_options.soft_pending_compaction_bytes_limit;
   cf_opts.hard_pending_compaction_bytes_limit =
@@ -192,11 +199,8 @@ ColumnFamilyOptions BuildColumnFamilyOptions(
   cf_opts.ttl_gc_ratio = mutable_cf_options.ttl_gc_ratio;
   cf_opts.ttl_max_scan_gap = mutable_cf_options.ttl_max_scan_gap;
 
-  cf_opts.max_bytes_for_level_multiplier_additional.clear();
-  for (auto value :
-       mutable_cf_options.max_bytes_for_level_multiplier_additional) {
-    cf_opts.max_bytes_for_level_multiplier_additional.emplace_back(value);
-  }
+  cf_opts.max_bytes_for_level_multiplier_additional =
+      mutable_cf_options.max_bytes_for_level_multiplier_additional;
 
   cf_opts.compaction_options_fifo = mutable_cf_options.compaction_options_fifo;
   cf_opts.compaction_options_universal =
@@ -1952,6 +1956,18 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offset_of(&ColumnFamilyOptions::blob_gc_ratio), OptionType::kDouble,
           OptionVerificationType::kNormal, true,
           offsetof(struct MutableCFOptions, blob_gc_ratio)}},
+        {"target_blob_file_size",
+         {offset_of(&ColumnFamilyOptions::target_blob_file_size),
+          OptionType::kUInt64T, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, target_blob_file_size)}},
+        {"max_blob_files",
+         {offset_of(&ColumnFamilyOptions::max_blob_files), OptionType::kSizeT,
+          OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, max_blob_files)}},
+        {"max_dependence_blob_overlap",
+         {offset_of(&ColumnFamilyOptions::max_dependence_blob_overlap),
+          OptionType::kSizeT, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, max_dependence_blob_overlap)}},
         {"filter_deletes",
          {0, OptionType::kBoolean, OptionVerificationType::kDeprecated, true,
           0}},
@@ -1969,7 +1985,12 @@ std::unordered_map<std::string, OptionTypeInfo>
           OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},
         {"optimize_filters_for_hits",
          {offset_of(&ColumnFamilyOptions::optimize_filters_for_hits),
-          OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},
+          OptionType::kBoolean, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, optimize_filters_for_hits)}},
+        {"optimize_range_deletion",
+         {offset_of(&ColumnFamilyOptions::optimize_range_deletion),
+          OptionType::kBoolean, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, optimize_range_deletion)}},
         {"paranoid_file_checks",
          {offset_of(&ColumnFamilyOptions::paranoid_file_checks),
           OptionType::kBoolean, OptionVerificationType::kNormal, true,

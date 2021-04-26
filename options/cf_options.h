@@ -115,8 +115,6 @@ struct ImmutableCFOptions {
 
   int num_levels;
 
-  bool optimize_filters_for_hits;
-
   bool force_consistency_checks;
 
   bool allow_ingest_behind;
@@ -159,6 +157,9 @@ struct MutableCFOptions {
         blob_size(0),
         blob_large_key_ratio(0),
         blob_gc_ratio(0),
+        target_blob_file_size(0),
+        max_blob_files(0),
+        max_dependence_blob_overlap(0),
         soft_pending_compaction_bytes_limit(0),
         hard_pending_compaction_bytes_limit(0),
         level0_file_num_compaction_trigger(0),
@@ -216,6 +217,9 @@ struct MutableCFOptions {
   size_t blob_size;
   double blob_large_key_ratio;
   double blob_gc_ratio;
+  uint64_t target_blob_file_size;
+  size_t max_blob_files;
+  size_t max_dependence_blob_overlap;
   uint64_t soft_pending_compaction_bytes_limit;
   uint64_t hard_pending_compaction_bytes_limit;
   int level0_file_num_compaction_trigger;
@@ -235,6 +239,9 @@ struct MutableCFOptions {
   uint64_t max_sequential_skip_in_iterations;
   bool paranoid_file_checks;
   bool report_bg_io_stats;
+
+  bool optimize_filters_for_hits;
+  bool optimize_range_deletion;
   CompressionType compression;
 
   // Derived options

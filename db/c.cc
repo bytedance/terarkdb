@@ -685,7 +685,8 @@ void rocksdb_close(rocksdb_t* db) {
 }
 
 void rocksdb_options_set_uint64add_merge_operator(rocksdb_options_t* opt) {
-  opt->rep.merge_operator = TERARKDB_NAMESPACE::MergeOperators::CreateUInt64AddOperator();
+  opt->rep.merge_operator =
+      TERARKDB_NAMESPACE::MergeOperators::CreateUInt64AddOperator();
 }
 
 rocksdb_t* rocksdb_open_column_families(
@@ -2278,16 +2279,20 @@ void rocksdb_options_set_access_hint_on_compaction_start(rocksdb_options_t* opt,
                                                          int v) {
   switch (v) {
     case 0:
-      opt->rep.access_hint_on_compaction_start = TERARKDB_NAMESPACE::Options::NONE;
+      opt->rep.access_hint_on_compaction_start =
+          TERARKDB_NAMESPACE::Options::NONE;
       break;
     case 1:
-      opt->rep.access_hint_on_compaction_start = TERARKDB_NAMESPACE::Options::NORMAL;
+      opt->rep.access_hint_on_compaction_start =
+          TERARKDB_NAMESPACE::Options::NORMAL;
       break;
     case 2:
-      opt->rep.access_hint_on_compaction_start = TERARKDB_NAMESPACE::Options::SEQUENTIAL;
+      opt->rep.access_hint_on_compaction_start =
+          TERARKDB_NAMESPACE::Options::SEQUENTIAL;
       break;
     case 3:
-      opt->rep.access_hint_on_compaction_start = TERARKDB_NAMESPACE::Options::WILLNEED;
+      opt->rep.access_hint_on_compaction_start =
+          TERARKDB_NAMESPACE::Options::WILLNEED;
       break;
   }
 }
@@ -2454,22 +2459,40 @@ void rocksdb_options_set_pin_table_properties_in_reader(rocksdb_options_t* opt,
   opt->rep.pin_table_properties_in_reader = v;
 }
 
-void rocksdb_options_set_blob_size(rocksdb_options_t* opt, size_t blob_size) {
-  opt->rep.blob_size = blob_size;
+void rocksdb_options_set_blob_size(rocksdb_options_t* opt, uint64_t v) {
+  opt->rep.blob_size = v;
 }
 
 void rocksdb_options_set_blob_large_key_ratio(rocksdb_options_t* opt,
-                                              size_t large_key_ratio) {
-  opt->rep.blob_large_key_ratio = large_key_ratio;
+                                              double v) {
+  opt->rep.blob_large_key_ratio = v;
 }
 
-void rocksdb_options_set_blob_gc_ratio(rocksdb_options_t* opt, int ratio) {
-  opt->rep.blob_gc_ratio = ratio;
+void rocksdb_options_set_blob_gc_ratio(rocksdb_options_t* opt, double v) {
+  opt->rep.blob_gc_ratio = v;
+}
+
+void rocksdb_options_target_blob_file_size(rocksdb_options_t* opt, uint64_t v) {
+  opt->rep.target_blob_file_size = v;
+}
+
+void rocksdb_options_max_blob_files(rocksdb_options_t* opt, size_t v) {
+  opt->rep.max_blob_files = v;
+}
+
+void rocksdb_options_max_dependence_blob_overlap(rocksdb_options_t* opt,
+                                                 size_t v) {
+  opt->rep.max_dependence_blob_overlap = v;
 }
 
 void rocksdb_options_set_optimize_filters_for_hits(rocksdb_options_t* opt,
-                                                   int v) {
+                                                   bool v) {
   opt->rep.optimize_filters_for_hits = v;
+}
+
+void rocksdb_options_set_optimize_range_deletion(rocksdb_options_t* opt,
+                                                 bool v) {
+  opt->rep.optimize_range_deletion = v;
 }
 
 void rocksdb_options_set_delete_obsolete_files_period_micros(
@@ -2499,8 +2522,9 @@ void rocksdb_options_set_hash_skip_list_rep(rocksdb_options_t* opt,
                                             size_t bucket_count,
                                             int32_t skiplist_height,
                                             int32_t skiplist_branching_factor) {
-  TERARKDB_NAMESPACE::MemTableRepFactory* factory = TERARKDB_NAMESPACE::NewHashSkipListRepFactory(
-      bucket_count, skiplist_height, skiplist_branching_factor);
+  TERARKDB_NAMESPACE::MemTableRepFactory* factory =
+      TERARKDB_NAMESPACE::NewHashSkipListRepFactory(
+          bucket_count, skiplist_height, skiplist_branching_factor);
   opt->rep.memtable_factory.reset(factory);
 }
 
@@ -2521,7 +2545,8 @@ void rocksdb_options_set_plain_table_factory(rocksdb_options_t* opt,
   options.hash_table_ratio = hash_table_ratio;
   options.index_sparseness = index_sparseness;
 
-  TERARKDB_NAMESPACE::TableFactory* factory = TERARKDB_NAMESPACE::NewPlainTableFactory(options);
+  TERARKDB_NAMESPACE::TableFactory* factory =
+      TERARKDB_NAMESPACE::NewPlainTableFactory(options);
   opt->rep.table_factory.reset(factory);
 }
 
@@ -2544,7 +2569,8 @@ void rocksdb_options_set_report_bg_io_stats(rocksdb_options_t* opt, int v) {
 }
 
 void rocksdb_options_set_compaction_style(rocksdb_options_t* opt, int style) {
-  opt->rep.compaction_style = static_cast<TERARKDB_NAMESPACE::CompactionStyle>(style);
+  opt->rep.compaction_style =
+      static_cast<TERARKDB_NAMESPACE::CompactionStyle>(style);
 }
 
 void rocksdb_options_set_universal_compaction_options(
@@ -3364,7 +3390,8 @@ void rocksdb_universal_compaction_options_set_compression_size_percent(
 
 void rocksdb_universal_compaction_options_set_stop_style(
     rocksdb_universal_compaction_options_t* uco, int style) {
-  uco->rep->stop_style = static_cast<TERARKDB_NAMESPACE::CompactionStopStyle>(style);
+  uco->rep->stop_style =
+      static_cast<TERARKDB_NAMESPACE::CompactionStopStyle>(style);
 }
 
 void rocksdb_universal_compaction_options_destroy(
@@ -4004,7 +4031,8 @@ const char* rocksdb_pinnableslice_value(const rocksdb_pinnableslice_t* v,
   return v->rep.data();
 }
 
-// container to keep databases and caches in order to use TERARKDB_NAMESPACE::MemoryUtil
+// container to keep databases and caches in order to use
+// TERARKDB_NAMESPACE::MemoryUtil
 struct rocksdb_memory_consumers_t {
   std::vector<rocksdb_t*> dbs;
   std::unordered_set<rocksdb_cache_t*> caches;
