@@ -32,6 +32,7 @@
 #include "port/port.h"
 #include "rocksdb/terark_namespace.h"
 #include "util/c_style_callback.h"
+#include "util/chash_map.h"
 
 #define ROCKS_VERSION_BUILDER_DEBUG 0
 
@@ -130,13 +131,17 @@ class VersionBuilder::Rep {
       return false;
     }
   };
-  struct DependenceItem {
-    size_t dependence_version;
-    size_t gc_forbidden_version;
-    bool is_estimation;
-    int level;
-    FileMetaData* f;
-    double entry_depended;
+  union DependenceItem {
+    DependenceItem* next;
+    struct {
+      uint64_t file_number;
+      size_t dependence_version;
+      size_t gc_forbidden_version;
+      bool is_estimation;
+      int level;
+      FileMetaData* f;
+      double entry_depended;
+    };
   };
   struct InheritanceItem {
     size_t depended : 1;
@@ -153,8 +158,10 @@ class VersionBuilder::Rep {
   std::unordered_map<uint64_t, FileMetaData*>* levels_;
   size_t dependence_version_;
   size_t new_deleted_files_;
-  std::unordered_map<uint64_t, DependenceItem> dependence_map_;
-  std::unordered_map<uint64_t, InheritanceItem> inheritance_counter_;
+  Arena dependence_arena_;
+  DependenceItem* dependence_free_list_;
+  chash_map<uint64_t, DependenceItem*> dependence_map_;
+  chash_map<uint64_t, InheritanceItem> inheritance_counter_;
   // Store states of levels larger than num_levels_. We do this instead of
   // storing them in levels_ to avoid regression in case there are no files
   // on invalid levels. The version is not consistent if in the end the files
@@ -178,6 +185,7 @@ class VersionBuilder::Rep {
         levels_(nullptr),
         dependence_version_(0),
         new_deleted_files_(0),
+        dependence_free_list_(nullptr),
         has_invalid_levels_(false) {
     if (enable_debugger) {
       debugger_.reset(new VersionBuilderDebugger);
@@ -186,8 +194,8 @@ class VersionBuilder::Rep {
 
   ~Rep() {
     for (auto& pair : dependence_map_) {
-      if (pair.second.f != nullptr) {
-        UnrefFile(pair.second.f);
+      if (pair.second->f != nullptr) {
+        UnrefFile(pair.second->f);
       }
     }
     delete[] levels_;
@@ -237,26 +245,41 @@ class VersionBuilder::Rep {
   }
 
   void PutSst(FileMetaData* f, int level) {
-    auto ib = dependence_map_.emplace(f->fd.GetNumber(),
-                                      DependenceItem{0, 0, false, level, f, 0});
+    uint64_t file_number = f->fd.GetNumber();
+    auto ib = dependence_map_.emplace(file_number, nullptr);
     f->Ref();
     if (ib.second) {
-      PutInheritance(&ib.first->second);
+      DependenceItem* ptr = dependence_free_list_;
+      if (ptr != nullptr) {
+        dependence_free_list_ = dependence_free_list_->next;
+      } else {
+        ptr = new (dependence_arena_.AllocateAligned(sizeof(DependenceItem)))
+            DependenceItem;
+      }
+      ptr->file_number = file_number;
+      ptr->dependence_version = 0;
+      ptr->gc_forbidden_version = 0;
+      ptr->is_estimation = false;
+      ptr->level = level;
+      ptr->f = f;
+      ptr->entry_depended = 0;
+      ib.first->second = ptr;
+      PutInheritance(ib.first->second);
     } else {
-      auto& item = ib.first->second;
+      auto& item = *ib.first->second;
       item.level = level;
       UnrefFile(item.f);
       item.f = f;
     }
     if (level >= 0) {
-      levels_[level].emplace(f->fd.GetNumber(), f);
+      levels_[level].emplace(file_number, f);
     }
   }
 
   void DelSst(uint64_t file_number, int level) {
     assert(dependence_map_.count(file_number) > 0);
     assert(level >= 0);
-    dependence_map_[file_number].level = -1;
+    dependence_map_[file_number]->level = -1;
     levels_[level].erase(file_number);
   }
 
@@ -309,7 +332,7 @@ class VersionBuilder::Rep {
         auto file_number = pair.first;
         assert(dependence_map_.count(file_number) > 0);
         assert(inheritance_counter_.count(file_number) > 0);
-        auto& item = dependence_map_[file_number];
+        auto& item = *dependence_map_[file_number];
         assert(item.level >= 0);
         item.dependence_version = dependence_version_;
         item.gc_forbidden_version = dependence_version_;
@@ -320,22 +343,15 @@ class VersionBuilder::Rep {
       }
     }
 
-    struct priority_queue_cmp {
-      bool operator()(FileMetaData* l, FileMetaData* r) const {
-        return l->fd.GetNumber() < r->fd.GetNumber();
-      }
-    };
-    std::priority_queue<FileMetaData*, std::vector<FileMetaData*>,
-                        priority_queue_cmp>
-        old_file_queue;
+    std::priority_queue<uint64_t> old_file_queue;
     constexpr size_t max_queue_size = 8;
     auto push_old_file = [&](FileMetaData* f) {
       if (!f->prop.is_map_sst() && !f->prop.dependence.empty()) {
         for (auto& dependence : f->prop.dependence) {
-          auto item = TransFileNumber(dependence.file_number);
-          if (item->f->fd.GetNumber() != dependence.file_number) {
+          if (TransFileNumber(dependence.file_number)->file_number !=
+              dependence.file_number) {
             // item maybe invalid pointer, don't access it
-            old_file_queue.push(f);
+            old_file_queue.push(f->fd.GetNumber());
             if (old_file_queue.size() > max_queue_size) {
               old_file_queue.pop();
             }
@@ -346,7 +362,7 @@ class VersionBuilder::Rep {
     };
 
     for (auto it = dependence_map_.begin(); it != dependence_map_.end();) {
-      auto& item = it->second;
+      auto& item = *it->second;
       if (item.dependence_version == dependence_version_) {
         assert(inheritance_counter_.count(it->first) > 0 &&
                inheritance_counter_.find(it->first)->second.item == &item);
@@ -391,6 +407,8 @@ class VersionBuilder::Rep {
       } else {
         DelInheritance(item.f);
         UnrefFile(item.f);
+        item.next = dependence_free_list_;
+        dependence_free_list_ = &item;
         it = dependence_map_.erase(it);
       }
     }
@@ -402,7 +420,7 @@ class VersionBuilder::Rep {
         old_file_queue.pop();
       }
       while (!old_file_queue.empty()) {
-        old_file_queue.top()->marked_for_compaction = true;
+        dependence_map_[old_file_queue.top()]->f->marked_for_compaction = true;
         old_file_queue.pop();
       }
     }
@@ -667,7 +685,7 @@ class VersionBuilder::Rep {
       }
     }
     for (auto& pair : dependence_map_) {
-      auto& item = pair.second;
+      auto& item = *pair.second;
       if (item.level == -1) {
         vstorage->AddFile(-1, item.f, c_style_callback(exists), &exists,
                           info_log_);
@@ -702,7 +720,7 @@ class VersionBuilder::Rep {
       }
     }
     for (auto& pair : dependence_map_) {
-      auto& item = pair.second;
+      auto& item = *pair.second;
       if (item.dependence_version == dependence_version_ && item.level == -1 &&
           (load_essence_sst || item.f->prop.is_map_sst()) &&
           item.f->table_reader_handle == nullptr) {
@@ -754,7 +772,7 @@ class VersionBuilder::Rep {
     assert(table_cache_ != nullptr);
     std::vector<FileMetaData*> files_meta;
     for (auto& pair : dependence_map_) {
-      auto& item = pair.second;
+      auto& item = *pair.second;
       if (item.dependence_version == dependence_version_ &&
           item.f->need_upgrade) {
         files_meta.emplace_back(item.f);
