@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+  <Type Name="contiguous_hash&lt;*&gt;">
+    <DisplayString>{{ size={root_.size - root_.free_count} }}</DisplayString>
+    <Expand>
+      <Item Name="[hasher]" ExcludeView="simple">(hasher &amp;)root_</Item>
+      <Item Name="[key_equal]" ExcludeView="simple">(key_equal &amp;)root_</Item>
+      <Item Name="[allocator]" ExcludeView="simple">(bucket_allocator_t &amp;)root_</Item>
+      <Item Name="[allocator]" ExcludeView="simple">(index_allocator_t &amp;)root_</Item>
+      <Item Name="[allocator]" ExcludeView="simple">(value_allocator_t &amp;)root_</Item>
+      <Item Name="[raw]">root_</Item>
+      <CustomListItems Condition="root_.size - root_.free_count != 0">
+        <Variable InitialValue="0" Name="index"/>
+        <Loop>
+          <If Condition="index &gt;= root_.size">
+            <Break/>
+          </If>
+          <If Condition="root_.index[index].hash.hash != ~hash_value_type(0)">
+            <Item Name="[{index}]">*(value_type *)&amp;root_.value[index].value_pod</Item>
+          </If>
+          <Exec>++index</Exec>
+        </Loop>
+      </CustomListItems>
+    </Expand>
+  </Type>
+  <Type Name="contiguous_hash&lt;*&gt;::iterator">
+    <AlternativeType Name="contiguous_hash&lt;*&gt;::const_iterator" />
+    <DisplayString Condition="offset != self-&gt;root_.size">{*(value_type *)&amp;self->root_.value[offset].value_pod}</DisplayString>
+    <DisplayString Condition="offset == self-&gt;root_.size">end</DisplayString>
+    <Expand>
+      <Item Condition="offset != self-&gt;root_.size" Name="[ptr]">*(value_type *)&amp;self->root_.value[offset].value_pod</Item>
+    </Expand>
+  </Type>
+  <Type Name="contiguous_hash&lt;*&gt;::local_iterator">
+    <AlternativeType Name="contiguous_hash&lt;*&gt;::const_local_iterator" />
+    <DisplayString Condition="offset != offset_empty">{*(value_type *)&amp;self->root_.value[offset].value_pod}</DisplayString>
+    <DisplayString Condition="offset == offset_empty">end</DisplayString>
+    <Expand>
+      <Item Condition="offset != offset_empty" Name="[ptr]">*(value_type *)&amp;self->root_.value[offset].value_pod</Item>
+    </Expand>
+  </Type>
+  <Type Name="contiguous_hash&lt;*&gt;::root_t">
+    <DisplayString>{{ bucket={bucket_count}, capacity={capacity} }}</DisplayString>
+    <Expand>
+      <Synthetic Name="[bucket]">
+        <DisplayString>{{ size={bucket_count} }}</DisplayString>
+        <Expand>
+          <ArrayItems>
+            <Size>bucket_count</Size>
+            <ValuePointer>bucket</ValuePointer>
+          </ArrayItems>
+        </Expand>
+      </Synthetic>
+      <Synthetic Name="[index]">
+        <DisplayString>{{ size={size - free_count}, capacity={capacity} }}</DisplayString>
+        <Expand>
+          <Item Name="[capacity]">capacity</Item>
+          <Item Name="[size]">size - free_count</Item>
+          <ArrayItems>
+            <Size>size</Size>
+            <ValuePointer>index</ValuePointer>
+          </ArrayItems>
+        </Expand>
+      </Synthetic>
+      <Synthetic Name="[value]">
+        <DisplayString>{{ size={size - free_count}, capacity={capacity} }}</DisplayString>
+        <Expand>
+          <Item Name="[capacity]">capacity</Item>
+          <Item Name="[size]">size - free_count</Item>
+          <ArrayItems>
+            <Size>size</Size>
+            <ValuePointer>value</ValuePointer>
+          </ArrayItems>
+        </Expand>
+      </Synthetic>
+      <Synthetic Name="[free_list]">
+        <DisplayString>{{ size={free_count} }}</DisplayString>
+        <Expand>
+          <CustomListItems>
+            <Variable InitialValue="0" Name="i"/>
+            <Variable InitialValue="free_list" Name="current"/>
+            <Loop>
+              <If Condition="current == offset_empty">
+                <Break/>
+              </If>
+              <Item Name="[{i}]">current</Item>
+              <Exec>++i</Exec>
+              <Exec>current = index[current].next</Exec>
+            </Loop>
+          </CustomListItems>
+        </Expand>
+      </Synthetic>
+      <Item Name="[used]">size</Item>
+      <Item Name="[load_factor]" Condition="bucket_count != 0">(size - free_count) / float(bucket_count)</Item>
+      <Item Name="[max_load_factor]">setting_load_factor</Item>
+    </Expand>
+  </Type>
+  <Type Name="contiguous_hash&lt;*&gt;::hash_t">
+    <DisplayString Condition="hash != ~hash_value_type(0)">{hash}</DisplayString>
+    <DisplayString Condition="hash == ~hash_value_type(0)">empty</DisplayString>
+  </Type>
+  <Type Name="contiguous_hash&lt;*&gt;::value_t">
+    <DisplayString>{*(value_type *)&amp;value_pod}</DisplayString>
+  </Type>
+</AutoVisualizer>
