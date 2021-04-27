@@ -502,6 +502,13 @@ class VersionStorageInfo {
                                      const Slice& largest_user_key,
                                      int last_level, int last_l0_idx);
 
+  VersionBuilder::Context* ReleaseVersionBuilderContext() {
+    return version_builder_context_.release();
+  }
+  void ResetVersionBuilderContext(VersionBuilder::Context* context) {
+    return version_builder_context_.reset(context);
+  }
+
  private:
   const InternalKeyComparator* internal_comparator_;
   const Comparator* user_comparator_;
@@ -623,6 +630,8 @@ class VersionStorageInfo {
   bool force_consistency_checks_;
 
   bool blob_marked_for_compaction_;
+
+  std::unique_ptr<VersionBuilder::Context> version_builder_context_;
 
   friend class Version;
   friend class VersionSet;

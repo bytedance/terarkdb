@@ -44,6 +44,10 @@ class VersionBuilder {
   void UpgradeFileMetaData(const SliceTransform* prefix_extractor,
                            int max_threads = 1);
 
+  struct Context {
+    virtual ~Context() = default;
+  };
+
  private:
   class Rep;
   Rep* rep_;
