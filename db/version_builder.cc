@@ -18,10 +18,7 @@
 #include <algorithm>
 #include <atomic>
 #include <functional>
-#include <map>
 #include <queue>
-#include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -33,6 +30,7 @@
 #include "rocksdb/terark_namespace.h"
 #include "util/c_style_callback.h"
 #include "util/chash_map.h"
+#include "util/chash_set.h"
 
 #define ROCKS_VERSION_BUILDER_DEBUG 0
 
@@ -147,7 +145,7 @@ struct VersionBuilderContextImpl : VersionBuilder::Context {
   }
 
   TableCache* table_cache;
-  std::unordered_map<uint64_t, FileMetaData*>* levels;
+  chash_map<uint64_t, FileMetaData*>* levels;
   size_t dependence_version;
   size_t new_deleted_files;
   chash_map<uint64_t, DependenceItem> dependence_map;
@@ -196,7 +194,7 @@ class VersionBuilder::Rep {
   // storing them in levels to avoid regression in case there are no files
   // on invalid levels. The version is not consistent if in the end the files
   // on invalid levels don't cancel out.
-  std::map<int, std::unordered_set<uint64_t>> invalid_levels_;
+  chash_map<int, chash_set<uint64_t>> invalid_levels_;
   // Whether there are invalid new files or invalid deletion on levels larger
   // than num_levels_.
   bool has_invalid_levels_;
@@ -589,8 +587,7 @@ class VersionBuilder::Rep {
     auto base_context = base_vstorage_->ReleaseVersionBuilderContext();
     if (base_context == nullptr) {
       context_.reset(new VersionBuilderContextImpl());
-      context_->levels =
-          new std::unordered_map<uint64_t, FileMetaData*>[num_levels_];
+      context_->levels = new chash_map<uint64_t, FileMetaData*>[num_levels_];
       context_->table_cache = table_cache_;
 
       for (int level = -1; level < num_levels_; level++) {

@@ -215,7 +215,7 @@ ColumnFamilyOptions SanitizeOptions(const ImmutableDBOptions& db_options,
 
   if (result.compaction_style != CompactionStyle::kCompactionStyleLevel ||
       !result.enable_lazy_compaction) {
-    result.optimize_filters_for_hits = false;
+    result.optimize_range_deletion = false;
   }
 
   if (result.max_write_buffer_number < 2) {

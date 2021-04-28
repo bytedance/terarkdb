@@ -6,6 +6,7 @@
 #include "db/event_helpers.h"
 
 #include "rocksdb/terark_namespace.h"
+#include "util/string_util.h"
 
 namespace TERARKDB_NAMESPACE {
 
@@ -101,6 +102,34 @@ void EventHelpers::LogAndNotifyTableFileCreationFinished(
               << "num_data_blocks" << table_properties.num_data_blocks
               << "num_entries" << table_properties.num_entries
               << "filter_policy_name" << table_properties.filter_policy_name;
+      if (!table_properties.dependence.empty()) {
+        jwriter << "dependence";
+        auto& dependence = table_properties.dependence;
+        jwriter.StartArray();
+        for (size_t i = 0; i < dependence.size(); ++i) {
+          if (i < 100) {
+            jwriter << dependence[i].file_number;
+          } else {
+            jwriter << "...(" + ToString(dependence.size() - i) + ")";
+            break;
+          }
+        }
+        jwriter.EndArray();
+      }
+      if (!table_properties.inheritance_tree.empty()) {
+        jwriter << "inheritance_tree";
+        jwriter.StartArray();
+        auto& inheritance_tree = table_properties.inheritance_tree;
+        for (size_t i = 0; i < inheritance_tree.size(); ++i) {
+          if (i < 100) {
+            jwriter << inheritance_tree[i];
+          } else {
+            jwriter << "...(" + ToString(inheritance_tree.size() - i) + ")";
+            break;
+          }
+        }
+        jwriter.EndArray();
+      }
 
       // user collected properties
       for (const auto& prop : table_properties.readable_properties) {
