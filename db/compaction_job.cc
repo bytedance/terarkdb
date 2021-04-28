@@ -742,6 +742,7 @@ Status CompactionJob::Run() {
     context.compaction_filter_factory = factory->Name();
   }
   context.blob_config = c->mutable_cf_options()->get_blob_config();
+  context.separation_type = c->separation_type();
   context.table_factory = iopt->table_factory->Name();
   s = iopt->table_factory->GetOptionString(&context.table_factory_options,
                                            "\n");
@@ -1313,7 +1314,6 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   }
 
   auto trans_to_separate = [&](const Slice& key, LazyBuffer& value) {
-    assert(value.file_number() == uint64_t(-1));
     Status status;
     TableBuilder* blob_builder = sub_compact->blob_builder.get();
     FileMetaData* blob_meta = &sub_compact->current_blob_output()->meta;

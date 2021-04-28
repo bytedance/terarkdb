@@ -238,9 +238,9 @@ AJSON(CompactionWorkerContext, user_comparator, merge_operator,
       merge_operator_data, value_meta_extractor_factory,
       value_meta_extractor_factory_options, compaction_filter,
       compaction_filter_factory, compaction_filter_context,
-      compaction_filter_data, blob_config, table_factory, table_factory_options,
-      bloom_locality, cf_paths, prefix_extractor, prefix_extractor_options,
-      has_start, has_end, start, end, last_sequence,
+      compaction_filter_data, blob_config, separation_type, table_factory,
+      table_factory_options, bloom_locality, cf_paths, prefix_extractor,
+      prefix_extractor_options, has_start, has_end, start, end, last_sequence,
       earliest_write_conflict_snapshot, preserve_deletes_seqnum, file_metadata,
       inputs, cf_name, target_file_size, compression, compression_opts,
       existing_snapshots, smallest_user_key, largest_user_key, level,
@@ -367,6 +367,7 @@ class RemoteCompactionProxy : public CompactionIterator::CompactionProxy {
  public:
   RemoteCompactionProxy(const CompactionWorkerContext* context)
       : CompactionProxy(),
+        separation_type_(static_cast<SeparationType>(context->separation_type)),
         largest_user_key_(context->largest_user_key.data),
         level_(context->level),
         number_levels_(context->number_levels),
@@ -374,6 +375,7 @@ class RemoteCompactionProxy : public CompactionIterator::CompactionProxy {
         allow_ingest_behind_(context->allow_ingest_behind),
         preserve_deletes_(context->preserve_deletes) {}
 
+  SeparationType separation_type() const override { return separation_type_; }
   int level(size_t /*compaction_input_level*/ = 0) const override {
     return level_;
   }
@@ -389,6 +391,7 @@ class RemoteCompactionProxy : public CompactionIterator::CompactionProxy {
   bool preserve_deletes() const override { return preserve_deletes_; }
 
  protected:
+  SeparationType separation_type_;
   Slice largest_user_key_;
   int level_, number_levels_;
   bool bottommost_level_, allow_ingest_behind_, preserve_deletes_;
