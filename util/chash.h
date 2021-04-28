@@ -241,6 +241,10 @@ public:
         {
             return offset != other.offset || self != other.self;
         }
+        size_type pos() const
+        {
+            return offset;
+        }
     private:
         friend class contiguous_hash;
         size_type offset;
@@ -291,6 +295,10 @@ public:
         {
             return offset != other.offset || self != other.self;
         }
+        size_type pos() const
+        {
+            return offset;
+        }
     private:
         friend class contiguous_hash;
         size_type offset;
@@ -335,6 +343,10 @@ public:
         bool operator != (local_iterator const &other) const
         {
             return offset != other.offset || self != other.self;
+        }
+        size_type pos() const
+        {
+            return offset;
         }
     private:
         friend class contiguous_hash;
@@ -385,6 +397,10 @@ public:
         bool operator != (const_local_iterator const &other) const
         {
             return offset != other.offset || self != other.self;
+        }
+        size_type pos() const
+        {
+            return offset;
         }
     private:
         friend class contiguous_hash;
@@ -770,6 +786,10 @@ public:
     {
         return iterator(root_.size, this);
     }
+    iterator pos(size_type pos)
+    {
+        return iterator(pos, this);
+    }
     const_iterator begin() const
     {
         return const_iterator(find_begin_(), this);
@@ -778,6 +798,10 @@ public:
     {
         return const_iterator(root_.size, this);
     }
+    const_iterator pos(size_type pos) const
+    {
+        return const_iterator(pos, this);
+    }
     const_iterator cbegin() const
     {
         return const_iterator(find_begin_(), this);
@@ -785,6 +809,10 @@ public:
     const_iterator cend() const
     {
         return const_iterator(root_.size, this);
+    }
+    const_iterator cpos(size_type pos) const
+    {
+        return const_iterator(pos, this);
     }
 
     bool empty() const
