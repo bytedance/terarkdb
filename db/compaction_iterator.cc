@@ -190,6 +190,15 @@ CompactionIterator::CompactionIterator(
   } else {
     ignore_snapshots_ = false;
   }
+  SeparationType separation_type = compaction_ == nullptr
+                                       ? kCompactionIngoreSeparate
+                                       : compaction_->separation_type();
+
+  do_separate_value_ = (separation_type == kCompactionTransToSeparate ||
+                          separation_type == kCompactionRebuildBlob) &&
+                         blob_config_.blob_size != size_t(-1);
+  do_rebuild_blob_ = separation_type == kCompactionRebuildBlob;
+  do_combine_value_ = separation_type == kCompactionCombineValue;
 }
 
 CompactionIterator::~CompactionIterator() {}
@@ -735,7 +744,7 @@ void CompactionIterator::PrepareOutput() {
   //
   // Can we do the same for levels above bottom level as long as
   // KeyNotExistsBeyondOutputLevel() return true?
-  if (blob_config_.blob_size < size_t(-1) &&
+  if (do_separate_value_ &&
       (ikey_.type == kTypeValue || ikey_.type == kTypeMerge)) {
     auto s = value_.fetch();
     if (!s.ok()) {
@@ -749,7 +758,7 @@ void CompactionIterator::PrepareOutput() {
     if (value_.size() >= blob_config_.blob_size &&
         (current_user_key_.size() << 16) <=
             value_.size() * blob_large_key_ratio_lsh16_) {
-      if (value_.file_number() != uint64_t(-1)) {
+      if (!do_rebuild_blob_ && value_.file_number() != uint64_t(-1)) {
         ikey_.type =
             ikey_.type == kTypeValue ? kTypeValueIndex : kTypeMergeIndex;
         current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
@@ -779,14 +788,30 @@ void CompactionIterator::PrepareOutput() {
   }
   if (ikey_.type == kTypeValueIndex || ikey_.type == kTypeMergeIndex) {
     assert(value_.file_number() != uint64_t(-1));
-    auto s = input_.separate_helper()->TransToSeparate(
-        current_key_.GetInternalKey(), value_, value_meta_,
-        ikey_.type == kTypeMergeIndex, true);
-    if (!s.ok()) {
-      valid_ = false;
-      status_ = std::move(s);
+    if (do_rebuild_blob_) {
+      auto s = input_.separate_helper()->TransToSeparate(
+          current_key_.GetInternalKey(), value_);
+      if (s.ok()) {
+        return;
+      }
+      if (!s.IsNotSupported()) {
+        valid_ = false;
+        status_ = std::move(s);
+        return;
+      }
+    } else if (do_combine_value_) {
+      ikey_.type = ikey_.type == kTypeValueIndex ? kTypeValue : kTypeMerge;
+      current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
+    } else {
+      auto s = input_.separate_helper()->TransToSeparate(
+          current_key_.GetInternalKey(), value_, value_meta_,
+          ikey_.type == kTypeMergeIndex, true);
+      if (!s.ok()) {
+        valid_ = false;
+        status_ = std::move(s);
+      }
+      return;
     }
-    return;
   }
   if ((compaction_ != nullptr && !compaction_->allow_ingest_behind()) &&
       ikeyNotNeededForIncrementalSnapshot() && bottommost_level_ && valid_ &&

@@ -77,6 +77,12 @@ enum CompactionType {
   kMapCompaction = 1,
   kGarbageCollection = 2,
 };
+enum SeparationType {
+  kCompactionIngoreSeparate = 0,
+  kCompactionTransToSeparate = 1,
+  kCompactionRebuildBlob = 2,
+  kCompactionCombineValue = 3,
+};
 
 struct CompactionParams {
   VersionStorageInfo* input_version;
@@ -97,6 +103,7 @@ struct CompactionParams {
   bool deletion_compaction = false;
   bool partial_compaction = false;
   CompactionType compaction_type = kKeyValueCompaction;
+  SeparationType separation_type = kCompactionTransToSeparate;
   std::vector<SelectedRange> input_range = {};
   CompactionReason compaction_reason = CompactionReason::kUnknown;
 
@@ -143,6 +150,7 @@ struct CompactionWorkerContext {
   EncodedString compaction_filter_data;
 
   BlobConfig blob_config;
+  uint32_t separation_type;
   std::string table_factory;
   std::string table_factory_options;
   uint32_t bloom_locality;
@@ -287,6 +295,9 @@ class Compaction {
 
   // CompactionType
   CompactionType compaction_type() const { return compaction_type_; }
+
+  // SeparationType
+  SeparationType separation_type() const { return separation_type_; }
 
   // Range limit for inputs
   std::vector<SelectedRange>& input_range() { return input_range_; };
@@ -471,8 +482,11 @@ class Compaction {
   // If true, then enable partial compaction
   const bool partial_compaction_;
 
-  // If true, then output map sst
+  //
   const CompactionType compaction_type_;
+
+  //
+  const SeparationType separation_type_;
 
   // Range limit for inputs
   std::vector<SelectedRange> input_range_;

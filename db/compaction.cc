@@ -295,6 +295,7 @@ Compaction::Compaction(CompactionParams&& params)
       deletion_compaction_(params.deletion_compaction),
       partial_compaction_(params.partial_compaction),
       compaction_type_(params.compaction_type),
+      separation_type_(params.separation_type),
       input_range_(std::move(params.input_range)),
       inputs_(std::move(params.inputs)),
       grandparents_(std::move(params.grandparents)),
