@@ -105,30 +105,28 @@ void EventHelpers::LogAndNotifyTableFileCreationFinished(
       if (!table_properties.dependence.empty()) {
         jwriter << "dependence";
         auto& dependence = table_properties.dependence;
-        jwriter.StartArray();
-        for (size_t i = 0; i < dependence.size(); ++i) {
-          if (i < 100) {
-            jwriter << dependence[i].file_number;
-          } else {
-            jwriter << "...(" + ToString(dependence.size() - i) + ")";
-            break;
+        if (event_logger->GetInfoLogLevel() == DEBUG_LEVEL) {
+          jwriter.StartArray();
+          for (auto& d : dependence) {
+            jwriter << d.file_number;
           }
+          jwriter.EndArray();
+        } else {
+          jwriter << dependence.size();
         }
-        jwriter.EndArray();
       }
       if (!table_properties.inheritance_tree.empty()) {
         jwriter << "inheritance_tree";
-        jwriter.StartArray();
         auto& inheritance_tree = table_properties.inheritance_tree;
-        for (size_t i = 0; i < inheritance_tree.size(); ++i) {
-          if (i < 100) {
-            jwriter << inheritance_tree[i];
-          } else {
-            jwriter << "...(" + ToString(inheritance_tree.size() - i) + ")";
-            break;
+        if (event_logger->GetInfoLogLevel() == DEBUG_LEVEL) {
+          jwriter.StartArray();
+          for (auto v : inheritance_tree) {
+            jwriter << v;
           }
+          jwriter.EndArray();
+        } else {
+          jwriter << inheritance_tree.size();
         }
-        jwriter.EndArray();
       }
 
       // user collected properties

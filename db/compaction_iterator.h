@@ -33,6 +33,9 @@ class CompactionIterator {
         : compaction_(compaction) {}
 
     virtual ~CompactionProxy() = default;
+    virtual SeparationType separation_type() const {
+      return compaction_->separation_type();
+    }
     virtual int level(size_t /*compaction_input_level*/ = 0) const {
       return compaction_->level();
     }
@@ -213,6 +216,10 @@ class CompactionIterator {
   // Used to avoid purging uncommitted values. The application can specify
   // uncommitted values by providing a SnapshotChecker object.
   bool current_key_committed_;
+
+  bool do_separate_value_;
+  bool do_rebuild_blob_;
+  bool do_combine_value_;
 
   size_t filter_sample_interval_ = 64;
   size_t filter_hit_count_ = 0;
