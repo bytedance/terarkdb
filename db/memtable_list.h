@@ -34,6 +34,8 @@ class InstrumentedMutex;
 class MergeIteratorBuilder;
 class MemTableList;
 
+static const uint64_t kDefaultInstallMemtableTimeoutMicros = 1000000;
+
 // keeps a list of immutable memtables in a vector. the list is immutable
 // if refcount is bigger than one. It is used as a state for Get() and
 // Iterator code paths
@@ -213,7 +215,7 @@ class MemTableList {
   // Reset status of the given memtable list back to pending state so that
   // they can get picked up again on the next round of flush.
   void RollbackMemtableFlush(const autovector<MemTable*>& mems,
-                             uint64_t file_number);
+                             uint64_t file_number, const Status& s);
 
   // Try commit a successful flush in the manifest file. It might just return
   // Status::OK letting a concurrent flush to do the actual the recording.
@@ -222,7 +224,7 @@ class MemTableList {
       const autovector<MemTable*>& m, LogsWithPrepTracker* prep_tracker,
       VersionSet* vset, InstrumentedMutex* mu, uint64_t file_number,
       autovector<MemTable*>* to_delete, Directory* db_directory,
-      LogBuffer* log_buffer);
+      LogBuffer* log_buffer, uint64_t timeout_micros = uint64_t(-1));
 
   // New memtables are inserted at the front of the list.
   // Takes ownership of the referenced held on *m by the caller of Add().

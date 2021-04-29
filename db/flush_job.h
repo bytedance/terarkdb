@@ -83,6 +83,7 @@ class FlushJob {
     return table_properties_;
   }
   const autovector<MemTable*>& GetMemTables() const { return mems_; }
+  bool IsInstallTimeout() const { return is_install_timeout_; }
 
  private:
   void ReportStartedFlush();
@@ -142,7 +143,8 @@ class FlushJob {
   autovector<MemTable*> mems_;
   VersionEdit* edit_;
   Version* base_;
-  bool pick_memtable_called;
+  bool pick_memtable_called_;
+  bool is_install_timeout_;
 };
 
 }  // namespace TERARKDB_NAMESPACE
