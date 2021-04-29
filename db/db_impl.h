@@ -1042,7 +1042,8 @@ class DBImpl : public DB {
                                    const MutableCFOptions& mutable_cf_options,
                                    bool* madeProgress, JobContext* job_context,
                                    SuperVersionContext* superversion_context,
-                                   LogBuffer* log_buffer);
+                                   LogBuffer* log_buffer,
+                                   VersionEdit::ApplyCallback apply_callback);
 
   // Argument required by background flush thread.
   struct BGFlushArg {
@@ -1213,7 +1214,6 @@ class DBImpl : public DB {
                             FlushRequest* req);
 
   void SchedulePendingFlush(const FlushRequest& req, FlushReason flush_reason);
-
   void SchedulePendingCompaction(ColumnFamilyData* cfd);
   void SchedulePendingGarbageCollection(ColumnFamilyData* cfd);
   void SchedulePendingPurge(const std::string& fname,
