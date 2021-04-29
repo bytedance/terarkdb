@@ -248,7 +248,18 @@ struct LevelFilesBrief {
 class VersionEdit {
  public:
   VersionEdit() { Clear(); }
-  ~VersionEdit() {}
+  ~VersionEdit() = default;
+
+  struct ApplyCallback {
+    void (*callback)(void*, const Status&);
+    void* args;
+
+    operator bool() const { return callback != nullptr; }
+    void operator()(const Status& s) const {
+      assert(callback != nullptr);
+      callback(args, s);
+    }
+  };
 
   void Clear();
 
@@ -319,8 +330,13 @@ class VersionEdit {
 
   void SetApplyCallback(void (*apply_callback)(void*, const Status&),
                         void* apply_callback_arg) {
-    apply_callback_ = apply_callback;
-    apply_callback_arg_ = apply_callback_arg;
+    assert(apply_callback != nullptr);
+    apply_callback_vec_.emplace_back(
+        ApplyCallback{apply_callback, apply_callback_arg});
+  }
+  void SetApplyCallback(ApplyCallback callback) {
+    assert(callback);
+    apply_callback_vec_.emplace_back(callback);
   }
 
   // Number of edits
@@ -364,8 +380,8 @@ class VersionEdit {
     return new_files_;
   }
   void DoApplyCallback(const Status& s) {
-    if (apply_callback_ != nullptr) {
-      apply_callback_(apply_callback_arg_, s);
+    for (auto& apply_callback : apply_callback_vec_) {
+      apply_callback(s);
     }
   }
 
@@ -405,8 +421,9 @@ class VersionEdit {
 
   DeletedFileSet deleted_files_;
   std::vector<std::pair<int, FileMetaData>> new_files_;
-  void (*apply_callback_)(void*, const Status&);
-  void* apply_callback_arg_;
+
+  //
+  autovector<ApplyCallback, 2> apply_callback_vec_;
 
   // Each version edit record should have column_family_ set
   // If it's not set, it is default (0)

@@ -302,7 +302,8 @@ void MemTableList::PickMemtablesToFlush(const uint64_t* max_memtable_id,
 }
 
 void MemTableList::RollbackMemtableFlush(const autovector<MemTable*>& mems,
-                                         uint64_t /*file_number*/) {
+                                         uint64_t /*file_number*/,
+                                         const Status& s) {
   AutoThreadOperationStageUpdater stage_updater(
       ThreadStatus::STAGE_MEMTABLE_ROLLBACK);
   assert(!mems.empty());
@@ -315,6 +316,7 @@ void MemTableList::RollbackMemtableFlush(const autovector<MemTable*>& mems,
 
     m->flush_in_progress_ = false;
     m->flush_completed_ = false;
+    m->edit_.DoApplyCallback(s);
     m->edit_.Clear();
     num_flush_not_started_++;
   }
@@ -328,7 +330,7 @@ Status MemTableList::TryInstallMemtableFlushResults(
     const autovector<MemTable*>& mems, LogsWithPrepTracker* prep_tracker,
     VersionSet* vset, InstrumentedMutex* mu, uint64_t file_number,
     autovector<MemTable*>* to_delete, Directory* db_directory,
-    LogBuffer* log_buffer) {
+    LogBuffer* log_buffer, uint64_t timeout_micros) {
   AutoThreadOperationStageUpdater stage_updater(
       ThreadStatus::STAGE_MEMTABLE_INSTALL_FLUSH_RESULTS);
   mu->AssertHeld();
@@ -353,6 +355,7 @@ Status MemTableList::TryInstallMemtableFlushResults(
 
   // Only a single thread can be executing this piece of code
   commit_in_progress_ = true;
+  auto start_micros = uint64_t(-1);
 
   // Retry until all completed flushes are committed. New flushes can finish
   // while the current thread is writing manifest where mutex is released.
@@ -364,6 +367,16 @@ Status MemTableList::TryInstallMemtableFlushResults(
     // assigned to flush the oldest memtable, will later wake up and does all
     // the pending writes to manifest, in order.
     if (memlist.empty() || !memlist.back()->flush_completed_) {
+      break;
+    } else if (start_micros == uint64_t(-1)) {
+      start_micros = cfd->ioptions()->env->NowMicros();
+    } else if (cfd->ioptions()->env->NowMicros() - start_micros >
+               timeout_micros) {
+      ROCKS_LOG_BUFFER(log_buffer,
+                       "[%s] MemTableList::TryInstallMemtableFlushResults "
+                       "install timeout, break",
+                       cfd->GetName().c_str());
+      s = Status::Incomplete(Status::kInstallTimeout);
       break;
     }
     // scan all memtables from the earliest, and commit those

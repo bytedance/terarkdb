@@ -77,6 +77,7 @@ class Status {
     kSpaceLimit = 8,
     kBadAlloc = 9,
     kRequireMmap = 10,
+    kInstallTimeout = 11,
     kMaxSubCode
   };
 

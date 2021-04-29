@@ -112,11 +112,9 @@ Status DBImpl::SyncClosedLogs(JobContext* job_context) {
 Status DBImpl::FlushMemTableToOutputFile(
     ColumnFamilyData* cfd, const MutableCFOptions& mutable_cf_options,
     bool* made_progress, JobContext* job_context,
-    SuperVersionContext* superversion_context, LogBuffer* log_buffer) {
+    SuperVersionContext* superversion_context, LogBuffer* log_buffer,
+    VersionEdit::ApplyCallback apply_callback) {
   mutex_.AssertHeld();
-  // TODO(ZouZhiZhang) find out Assertion reason
-  // assert(cfd->imm()->NumNotFlushed() != 0);
-  // assert(cfd->imm()->IsFlushPending());
 
   SequenceNumber earliest_write_conflict_snapshot;
   std::vector<SequenceNumber> snapshot_seqs =
@@ -143,6 +141,15 @@ Status DBImpl::FlushMemTableToOutputFile(
   TEST_SYNC_POINT("DBImpl::FlushMemTableToOutputFile:BeforePickMemtables");
   flush_job.PickMemTable();
   TEST_SYNC_POINT("DBImpl::FlushMemTableToOutputFile:AfterPickMemtables");
+
+  if (apply_callback) {
+    if (!flush_job.GetMemTables().empty()) {
+      flush_job.GetMemTables().front()->GetEdits()->SetApplyCallback(
+          apply_callback);
+    } else {
+      apply_callback(Status::OK());
+    }
+  }
 
 #ifndef ROCKSDB_LITE
   // may temporarily unlock and lock the mutex.
@@ -217,16 +224,44 @@ Status DBImpl::FlushMemTableToOutputFile(
     }
 #endif  // ROCKSDB_LITE
   }
+  if (flush_job.IsInstallTimeout()) {
+    FlushRequest flush_req;
+    GenerateFlushRequest({cfd}, &flush_req);
+    SchedulePendingFlush(flush_req, FlushReason::kInstallTimeout);
+  }
   return s;
 }
 
 Status DBImpl::FlushMemTablesToOutputFiles(
     const autovector<BGFlushArg>& bg_flush_args, bool* made_progress,
     JobContext* job_context, LogBuffer* log_buffer) {
+  assert(!bg_flush_args.empty());
   if (immutable_db_options_.atomic_flush) {
-    return AtomicFlushMemTablesToOutputFiles(bg_flush_args, made_progress,
-                                             job_context, log_buffer);
+    auto pending_outputs_inserted_elem =
+        CaptureCurrentFileNumberInPendingOutputs();
+    auto s = AtomicFlushMemTablesToOutputFiles(bg_flush_args, made_progress,
+                                               job_context, log_buffer);
+    ReleaseFileNumberFromPendingOutputs(pending_outputs_inserted_elem);
+    return s;
   }
+  struct CleanPendingOutputs {
+    std::list<uint64_t>::iterator pending_outputs_inserted_elem;
+    DBImpl* self;
+    size_t count;
+  };
+  VersionEdit::ApplyCallback apply_callback;
+  apply_callback.callback = [](void* args, const Status&) {
+    auto args_pack = static_cast<CleanPendingOutputs*>(args);
+    assert(args_pack->count > 0);
+    if (--args_pack->count == 0) {
+      args_pack->self->ReleaseFileNumberFromPendingOutputs(
+          args_pack->pending_outputs_inserted_elem);
+      delete args_pack;
+    }
+  };
+  apply_callback.args = new CleanPendingOutputs{
+      CaptureCurrentFileNumberInPendingOutputs(), this, bg_flush_args.size()};
+
   Status status;
   for (auto& arg : bg_flush_args) {
     ColumnFamilyData* cfd = arg.cfd_;
@@ -234,7 +269,7 @@ Status DBImpl::FlushMemTablesToOutputFiles(
     SuperVersionContext* superversion_context = arg.superversion_context_;
     Status s = FlushMemTableToOutputFile(cfd, mutable_cf_options, made_progress,
                                          job_context, superversion_context,
-                                         log_buffer);
+                                         log_buffer, apply_callback);
     if (!s.ok()) {
       status = s;
       if (!s.IsShutdownInProgress()) {
@@ -513,7 +548,7 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
         uint64_t file_number = jobs[i].GetFileMetas().empty()
                                    ? 0
                                    : jobs[i].GetFileMetas()[0].fd.GetNumber();
-        cfds[i]->imm()->RollbackMemtableFlush(mems, file_number);
+        cfds[i]->imm()->RollbackMemtableFlush(mems, file_number, s);
       }
     }
     Status new_bg_error = s;
@@ -2227,9 +2262,6 @@ void DBImpl::BackgroundCallFlush() {
 
     assert(bg_flush_scheduled_);
     num_running_flushes_++;
-
-    auto pending_outputs_inserted_elem =
-        CaptureCurrentFileNumberInPendingOutputs();
     FlushReason reason;
 
     Status s =
@@ -2255,7 +2287,6 @@ void DBImpl::BackgroundCallFlush() {
     }
 
     TEST_SYNC_POINT("DBImpl::BackgroundCallFlush:FlushFinish:0");
-    ReleaseFileNumberFromPendingOutputs(pending_outputs_inserted_elem);
 
     // If flush failed, we want to delete all temporary files that we might have
     // created. Thus, we force full scan in FindObsoleteFiles()

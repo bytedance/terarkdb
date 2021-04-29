@@ -592,7 +592,7 @@ TEST_F(MemTableListTest, FlushPendingTest) {
   ASSERT_FALSE(list.imm_flush_needed.load(std::memory_order_acquire));
 
   // Revert flush
-  list.RollbackMemtableFlush(to_flush, 0);
+  list.RollbackMemtableFlush(to_flush, 0, Status::OK());
   ASSERT_FALSE(list.IsFlushPending());
   ASSERT_TRUE(list.imm_flush_needed.load(std::memory_order_acquire));
   to_flush.clear();
@@ -639,7 +639,7 @@ TEST_F(MemTableListTest, FlushPendingTest) {
   ASSERT_FALSE(list.imm_flush_needed.load(std::memory_order_acquire));
 
   // Rollback first pick of tables
-  list.RollbackMemtableFlush(to_flush, 0);
+  list.RollbackMemtableFlush(to_flush, 0, Status::OK());
   ASSERT_TRUE(list.IsFlushPending());
   ASSERT_TRUE(list.imm_flush_needed.load(std::memory_order_acquire));
   to_flush.clear();
