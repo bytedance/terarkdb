@@ -14,12 +14,16 @@ IF(CMAKE_BUILD_TYPE STREQUAL "" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebug")
 ENDIF()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/modules/")
-IF(CMAKE_INSTALL_PREFIX STREQUAL "")
-  SET(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})
-ENDIF()
+
+MESSAGE("[terarkdb] cmake install prefix: ${CMAKE_INSTALL_PREFIX}")
 SET(CMAKE_INSTALL_LIBDIR ${CMAKE_INSTALL_PREFIX}/lib)
 SET(CMAKE_INSTALL_BINDIR ${CMAKE_INSTALL_PREFIX}/bin)
-SET(CMAKE_INSTALL_INCLUDEDIR ${CMAKE_INSTALL_PREFIX}/include)
+
+if (TERARK_INCLUDE_PREFIX)
+  SET(CMAKE_INSTALL_INCLUDEDIR ${CMAKE_INSTALL_PREFIX}/include/${TERARK_INCLUDE_PREFIX})
+else()
+  SET(CMAKE_INSTALL_INCLUDEDIR ${CMAKE_INSTALL_PREFIX}/include)
+endif()
 
 option(WITH_COVERAGE "build with gcov support" OFF)
 option(WITH_JEMALLOC "build with JeMalloc" ON)
@@ -910,12 +914,13 @@ if(NOT WIN32 OR ROCKSDB_INSTALL_ON_WINDOWS)
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   )
 
-  #install(
-  #  EXPORT RocksDBTargets
-  #  COMPONENT devel
-  #  DESTINATION ${package_config_destination}
-  #  NAMESPACE TERARKDB_NAMESPACE::
-  #)
+  # We should also expose terarkdb's source dir
+  INSTALL(DIRECTORY memtable monitoring env db cache options port table util utilities
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        FILES_MATCHING 
+        PATTERN "*.h"
+        PATTERN "*.hpp"
+  )
 
   install(
     FILES
@@ -1013,6 +1018,7 @@ if(WITH_TESTS)
         monitoring/histogram_test.cc
         monitoring/iostats_context_test.cc
         monitoring/statistics_test.cc
+        monitoring/stats_history_test.cc
         options/options_settable_test.cc
         options/options_test.cc
         table/block_based_filter_block_test.cc
