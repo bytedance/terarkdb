@@ -10,7 +10,6 @@
 #include <utility>
 
 #include "db/compaction.h"
-#include "db/compaction_picker_fifo.h"
 #include "db/compaction_picker_universal.h"
 #include "rocksdb/terark_namespace.h"
 #include "util/string_util.h"
@@ -41,7 +40,6 @@ class CompactionPickerTest : public testing::Test {
   CountingLogger logger_;
   LogBuffer log_buffer_;
   uint32_t file_num_;
-  CompactionOptionsFIFO fifo_options_;
   std::unique_ptr<VersionStorageInfo> vstorage_;
   std::vector<std::unique_ptr<FileMetaData>> files_;
   // does not own FileMetaData
@@ -60,7 +58,6 @@ class CompactionPickerTest : public testing::Test {
         log_buffer_(InfoLogLevel::INFO_LEVEL, &logger_),
         file_num_(1),
         vstorage_(nullptr) {
-    fifo_options_.max_table_files_size = 1;
     mutable_cf_options_.RefreshDerivedOptions(ioptions_);
     ioptions_.cf_paths.emplace_back("dummy",
                                     std::numeric_limits<uint64_t>::max());
@@ -389,7 +386,7 @@ TEST_F(CompactionPickerTest, LevelTriggerDynamic4) {
   ASSERT_EQ(num_levels - 1, compaction->output_level());
 }
 
-// Universal and FIFO Compactions are not supported in ROCKSDB_LITE
+// Universal are not supported in ROCKSDB_LITE
 #ifndef ROCKSDB_LITE
 TEST_F(CompactionPickerTest, NeedsCompactionUniversal) {
   NewVersionStorage(1, kCompactionStyleUniversal);
@@ -509,35 +506,6 @@ TEST_F(CompactionPickerTest, AllowsTrivialMoveUniversal) {
   ASSERT_TRUE(compaction->is_trivial_move());
 }
 
-TEST_F(CompactionPickerTest, NeedsCompactionFIFO) {
-  NewVersionStorage(1, kCompactionStyleFIFO);
-  const int kFileCount =
-      mutable_cf_options_.level0_file_num_compaction_trigger * 3;
-  const uint64_t kFileSize = 100000;
-  const uint64_t kMaxSize = kFileSize * kFileCount / 2;
-
-  fifo_options_.max_table_files_size = kMaxSize;
-  mutable_cf_options_.compaction_options_fifo = fifo_options_;
-  FIFOCompactionPicker fifo_compaction_picker(nullptr, env_options_, ioptions_,
-                                              &icmp_);
-  UpdateVersionStorageInfo();
-  // must return false when there's no files.
-  ASSERT_EQ(fifo_compaction_picker.NeedsCompaction(vstorage_.get()), false);
-
-  // verify whether compaction is needed based on the current
-  // size of L0 files.
-  uint64_t current_size = 0;
-  for (int i = 1; i <= kFileCount; ++i) {
-    NewVersionStorage(1, kCompactionStyleFIFO);
-    Add(0, i, ToString((i + 100) * 1000).c_str(),
-        ToString((i + 100) * 1000 + 999).c_str(), kFileSize, 0, i * 100,
-        i * 100 + 99);
-    current_size += kFileSize;
-    UpdateVersionStorageInfo();
-    ASSERT_EQ(fifo_compaction_picker.NeedsCompaction(vstorage_.get()),
-              vstorage_->CompactionScore(0) >= 1);
-  }
-}
 #endif  // ROCKSDB_LITE
 
 TEST_F(CompactionPickerTest, CompactionPriMinOverlapping1) {

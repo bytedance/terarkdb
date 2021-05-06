@@ -30,13 +30,10 @@ enum CompactionStyle : char {
   // Universal compaction style
   // Not supported in ROCKSDB_LITE.
   kCompactionStyleUniversal = 0x1,
-  // FIFO compaction style
-  // Not supported in ROCKSDB_LITE
-  kCompactionStyleFIFO = 0x2,
   // Disable background compaction. Compaction jobs are submitted
   // via CompactFiles().
   // Not supported in ROCKSDB_LITE
-  kCompactionStyleNone = 0x3,
+  kCompactionStyleNone = 0x2,
 };
 
 // In Level-based compaction, it Determines which file from a level to be
@@ -544,13 +541,6 @@ struct AdvancedColumnFamilyOptions {
   // Dynamic change example:
   // SetOptions("compaction_options_universal", "{size_ratio=2;}")
   CompactionOptionsUniversal compaction_options_universal;
-
-  // The options for FIFO compaction style
-  //
-  // Dynamically changeable through SetOptions() API
-  // Dynamic change example:
-  // SetOptions("compaction_options_fifo", "{max_table_files_size=100;ttl=2;}")
-  CompactionOptionsFIFO compaction_options_fifo;
 
   // An iteration->Next() sequentially skips over keys with the same
   // user-key unless this option is set. This number specifies the number

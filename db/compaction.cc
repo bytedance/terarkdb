@@ -292,7 +292,6 @@ Compaction::Compaction(CompactionParams&& params)
       output_path_id_(params.output_path_id),
       output_compression_(params.compression),
       output_compression_opts_(params.compression_opts),
-      deletion_compaction_(params.deletion_compaction),
       partial_compaction_(params.partial_compaction),
       compaction_type_(params.compaction_type),
       separation_type_(params.separation_type),

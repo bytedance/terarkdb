@@ -77,7 +77,6 @@ AdvancedColumnFamilyOptions::AdvancedColumnFamilyOptions(const Options& options)
       compaction_style(options.compaction_style),
       compaction_pri(options.compaction_pri),
       compaction_options_universal(options.compaction_options_universal),
-      compaction_options_fifo(options.compaction_options_fifo),
       max_sequential_skip_in_iterations(
           options.max_sequential_skip_in_iterations),
       memtable_factory(options.memtable_factory),
@@ -310,13 +309,6 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
   }
   ROCKS_LOG_HEADER(log, " Options.compaction_options_universal.stop_style: %s",
                    str_compaction_stop_style.c_str());
-  ROCKS_LOG_HEADER(
-      log, "Options.compaction_options_fifo.max_table_files_size: %" PRIu64,
-      compaction_options_fifo.max_table_files_size);
-  ROCKS_LOG_HEADER(log, "Options.compaction_options_fifo.allow_compaction: %d",
-                   compaction_options_fifo.allow_compaction);
-  ROCKS_LOG_HEADER(log, "Options.compaction_options_fifo.ttl: %" PRIu64,
-                   compaction_options_fifo.ttl);
   std::string collector_names;
   for (const auto& collector_factory : table_properties_collector_factories) {
     collector_names.append(collector_factory->Name());

@@ -158,6 +158,7 @@ struct MutableCFOptions {
         blob_large_key_ratio(0),
         blob_gc_ratio(0),
         target_blob_file_size(0),
+        blob_file_defragment_size(0),
         max_blob_files(0),
         max_dependence_blob_overlap(0),
         soft_pending_compaction_bytes_limit(0),
@@ -170,11 +171,11 @@ struct MutableCFOptions {
         target_file_size_multiplier(0),
         max_bytes_for_level_base(0),
         max_bytes_for_level_multiplier(0),
-        ttl(0),
-        compaction_options_fifo(),
         max_sequential_skip_in_iterations(0),
         paranoid_file_checks(false),
         report_bg_io_stats(false),
+        optimize_filters_for_hits(false),
+        optimize_range_deletion(false),
         compression(Snappy_Supported() ? kSnappyCompression : kNoCompression),
         ttl_gc_ratio(1.000),
         ttl_max_scan_gap(0) {}
@@ -218,6 +219,7 @@ struct MutableCFOptions {
   double blob_large_key_ratio;
   double blob_gc_ratio;
   uint64_t target_blob_file_size;
+  uint64_t blob_file_defragment_size;
   size_t max_blob_files;
   size_t max_dependence_blob_overlap;
   uint64_t soft_pending_compaction_bytes_limit;
@@ -230,9 +232,7 @@ struct MutableCFOptions {
   int target_file_size_multiplier;
   uint64_t max_bytes_for_level_base;
   double max_bytes_for_level_multiplier;
-  uint64_t ttl;
   std::vector<int> max_bytes_for_level_multiplier_additional;
-  CompactionOptionsFIFO compaction_options_fifo;
   CompactionOptionsUniversal compaction_options_universal;
 
   // Misc options

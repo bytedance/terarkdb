@@ -308,8 +308,9 @@ class ColumnFamilyData {
 
   // REQUIRES: DB mutex held
   Compaction* CompactRange(
-      const MutableCFOptions& mutable_cf_options, int input_level,
-      int output_level, uint32_t output_path_id, uint32_t max_subcompactions,
+      const MutableCFOptions& mutable_cf_options,
+      SeparationType separation_type, int input_level, int output_level,
+      uint32_t output_path_id, uint32_t max_subcompactions,
       const InternalKey* begin, const InternalKey* end,
       InternalKey** compaction_end, bool* manual_conflict,
       const std::unordered_set<uint64_t>* files_being_compact);

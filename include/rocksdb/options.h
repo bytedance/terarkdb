@@ -320,6 +320,10 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // Default : same as bottommost level sst file size
   uint64_t target_blob_file_size = 0;
 
+  // Blob file defragment threshold
+  // Default : target_blob_file_size / 8
+  uint64_t blob_file_defragment_size = 0;
+
   // Num total blob file count limits
   // 0 to unlimited
   size_t max_blob_files = 0;
@@ -1340,6 +1344,19 @@ extern Status CreateLoggerFromOptions(const std::string& dbname,
                                       const DBOptions& options,
                                       std::shared_ptr<Logger>* logger);
 
+enum SeparationType {
+  // Keep key value stay separation state
+  kCompactionIngoreSeparate = 0,
+  // Separate key value using blob_size & blob_large_key_ratio
+  kCompactionTransToSeparate = 1,
+  // Separate key value & force rebuild blob files
+  // WARNING: may be cost long time and issue double size
+  kCompactionRebuildBlob = 2,
+  // Disable key value separation, combine separated value
+  // WARNING: may be cost long time and issue double size
+  kCompactionCombineValue = 3,
+};
+
 // CompactionOptions are used in CompactFiles() call.
 struct CompactionOptions {
   // Compaction output compression type
@@ -1348,6 +1365,9 @@ struct CompactionOptions {
   // according to the `ColumnFamilyOptions`, taking into account the output
   // level if `compression_per_level` is specified.
   CompressionType compression;
+  // Key value separation control
+  // Default: kCompactionTransToSeparate
+  SeparationType separation_type;
   // Compaction will create files of size `output_file_size_limit`.
   // Default: MAX, which means that compaction will create a single file
   uint64_t output_file_size_limit;
@@ -1356,6 +1376,7 @@ struct CompactionOptions {
 
   CompactionOptions()
       : compression(kSnappyCompression),
+        separation_type(kCompactionTransToSeparate),
         output_file_size_limit(std::numeric_limits<uint64_t>::max()),
         max_subcompactions(0) {}
 };
@@ -1390,6 +1411,8 @@ struct CompactRangeOptions {
   // if there is a compaction filter
   BottommostLevelCompaction bottommost_level_compaction =
       BottommostLevelCompaction::kIfHaveCompactionFilter;
+  // Key value separation control
+  SeparationType separation_type = kCompactionTransToSeparate;
   // If true, will execute immediately even if doing so would cause the DB to
   // enter write stall mode. Otherwise, it'll sleep until load is low enough.
   bool allow_write_stall = false;
