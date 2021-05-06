@@ -557,35 +557,6 @@ TEST_F(EventListenerTest, CompactionReasonUniversal) {
   }
 }
 
-TEST_F(EventListenerTest, CompactionReasonFIFO) {
-  Options options;
-  options.env = CurrentOptions().env;
-  options.create_if_missing = true;
-  options.memtable_factory.reset(
-      new SpecialSkipListFactory(DBTestBase::kNumKeysByGenerateNewRandomFile));
-
-  TestCompactionReasonListener* listener = new TestCompactionReasonListener();
-  options.listeners.emplace_back(listener);
-
-  options.level0_file_num_compaction_trigger = 4;
-  options.compaction_style = kCompactionStyleFIFO;
-  options.compaction_options_fifo.max_table_files_size = 1;
-
-  DestroyAndReopen(options);
-  Random rnd(301);
-
-  // Write 4 files in L0
-  for (int i = 0; i < 4; i++) {
-    GenerateNewRandomFile(&rnd);
-  }
-  dbfull()->TEST_WaitForCompact();
-
-  ASSERT_GT(listener->compaction_reasons_.size(), 0);
-  for (auto compaction_reason : listener->compaction_reasons_) {
-    ASSERT_EQ(compaction_reason, CompactionReason::kFIFOMaxSize);
-  }
-}
-
 class TableFileCreationListener : public EventListener {
  public:
   class TestEnv : public EnvWrapper {

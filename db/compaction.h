@@ -14,6 +14,7 @@
 #include "options/cf_options.h"
 #include "rocksdb/compaction_filter.h"
 #include "rocksdb/listener.h"
+#include "rocksdb/options.h"
 #include "rocksdb/terark_namespace.h"
 #include "util/arena.h"
 #include "util/autovector.h"
@@ -77,12 +78,6 @@ enum CompactionType {
   kMapCompaction = 1,
   kGarbageCollection = 2,
 };
-enum SeparationType {
-  kCompactionIngoreSeparate = 0,
-  kCompactionTransToSeparate = 1,
-  kCompactionRebuildBlob = 2,
-  kCompactionCombineValue = 3,
-};
 
 struct CompactionParams {
   VersionStorageInfo* input_version;
@@ -100,7 +95,6 @@ struct CompactionParams {
   std::vector<FileMetaData*> grandparents;
   bool manual_compaction = false;
   double score = -1;
-  bool deletion_compaction = false;
   bool partial_compaction = false;
   CompactionType compaction_type = kKeyValueCompaction;
   SeparationType separation_type = kCompactionTransToSeparate;
@@ -286,9 +280,6 @@ class Compaction {
   // Is this a trivial compaction that can be implemented by just
   // moving a single input file to the next level (no merging or splitting)
   bool IsTrivialMove() const;
-
-  // If true, then the compaction can be done by simply deleting input files.
-  bool deletion_compaction() const { return deletion_compaction_; }
 
   // If true, then enable partial compaction
   bool partial_compaction() const { return partial_compaction_; }
@@ -477,8 +468,7 @@ class Compaction {
   const uint32_t output_path_id_;
   CompressionType output_compression_;
   CompressionOptions output_compression_opts_;
-  // If true, then the comaction can be done by simply deleting input files.
-  const bool deletion_compaction_;
+
   // If true, then enable partial compaction
   const bool partial_compaction_;
 

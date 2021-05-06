@@ -128,7 +128,6 @@ class VersionStorageInfo {
   // Updates internal structures that keep track of compaction scores
   // We use compaction scores to figure out which compaction to do next
   // REQUIRES: db_mutex held!!
-  // TODO find a better way to pass compaction_options_fifo.
   void ComputeCompactionScore(const ImmutableCFOptions& immutable_cf_options,
                               const MutableCFOptions& mutable_cf_options);
 
@@ -143,11 +142,6 @@ class VersionStorageInfo {
   // This computes files_marked_for_compaction_ and is called by
   // ScheduleTtlGC()
   void AddFilesMarkedForCompaction(int level, FileMetaData* meta);
-
-  // This computes ttl_expired_files_ and is called by
-  // ComputeCompactionScore()
-  void ComputeExpiredTtlFiles(const ImmutableCFOptions& ioptions,
-                              const uint64_t ttl);
 
   // This computes bottommost_files_marked_for_compaction_ and is called by
   // ComputeCompactionScore() or UpdateOldestSnapshot().
@@ -370,13 +364,6 @@ class VersionStorageInfo {
 
   // REQUIRES: This version has been saved (see VersionSet::SaveTo)
   // REQUIRES: DB mutex held during access
-  const autovector<std::pair<int, FileMetaData*>>& ExpiredTtlFiles() const {
-    assert(finalized_);
-    return expired_ttl_files_;
-  }
-
-  // REQUIRES: This version has been saved (see VersionSet::SaveTo)
-  // REQUIRES: DB mutex held during access
   const autovector<std::pair<int, FileMetaData*>>&
   BottommostFilesMarkedForCompaction() const {
     assert(finalized_);
@@ -562,8 +549,6 @@ class VersionStorageInfo {
   // currently being compacted. It is protected by DB mutex. It is calculated in
   // ComputeCompactionScore()
   autovector<std::pair<int, FileMetaData*>> files_marked_for_compaction_;
-
-  autovector<std::pair<int, FileMetaData*>> expired_ttl_files_;
 
   // These files are considered bottommost because none of their keys can exist
   // at lower levels. They are not necessarily all in the same level. The marked

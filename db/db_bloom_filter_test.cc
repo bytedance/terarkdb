@@ -120,6 +120,7 @@ TEST_P(DBBloomFilterTestDefFormatVersion, KeyMayExist) {
 
     ASSERT_OK(Flush(1));
     dbfull()->TEST_CompactRange(0, nullptr, nullptr, handles_[1],
+                                SeparationType::kCompactionTransToSeparate,
                                 true /* disallow trivial move */);
 
     numopen = TestGetTickerCount(options, NO_FILE_OPENS);

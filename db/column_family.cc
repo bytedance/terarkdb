@@ -21,7 +21,6 @@
 #include <vector>
 
 #include "db/compaction_picker.h"
-#include "db/compaction_picker_fifo.h"
 #include "db/compaction_picker_universal.h"
 #include "db/db_impl.h"
 #include "db/internal_stats.h"
@@ -235,14 +234,6 @@ ColumnFamilyOptions SanitizeOptions(const ImmutableDBOptions& db_options,
   if (!result.prefix_extractor &&
       result.memtable_factory->IsPrefixExtractorRequired()) {
     result.memtable_factory = std::make_shared<SkipListFactory>();
-  }
-
-  if (result.compaction_style == kCompactionStyleFIFO) {
-    result.num_levels = 1;
-    // since we delete level0 files in FIFO compaction when there are too many
-    // of them, these options don't really mean anything
-    result.level0_slowdown_writes_trigger = std::numeric_limits<int>::max();
-    result.level0_stop_writes_trigger = std::numeric_limits<int>::max();
   }
 
   if (result.max_bytes_for_level_multiplier <= 0) {
@@ -463,9 +454,6 @@ ColumnFamilyData::ColumnFamilyData(
 #ifndef ROCKSDB_LITE
     } else if (ioptions_.compaction_style == kCompactionStyleUniversal) {
       compaction_picker_.reset(new UniversalCompactionPicker(
-          table_cache_.get(), env_options, ioptions_, &internal_comparator_));
-    } else if (ioptions_.compaction_style == kCompactionStyleFIFO) {
-      compaction_picker_.reset(new FIFOCompactionPicker(
           table_cache_.get(), env_options, ioptions_, &internal_comparator_));
     } else if (ioptions_.compaction_style == kCompactionStyleNone) {
       compaction_picker_.reset(new NullCompactionPicker(
@@ -1097,17 +1085,17 @@ void ColumnFamilyData::PrepareManualCompaction(
 }
 
 Compaction* ColumnFamilyData::CompactRange(
-    const MutableCFOptions& mutable_cf_options, int input_level,
-    int output_level, uint32_t output_path_id, uint32_t max_subcompactions,
-    const InternalKey* begin, const InternalKey* end,
-    InternalKey** compaction_end, bool* conflict,
+    const MutableCFOptions& mutable_cf_options, SeparationType separation_type,
+    int input_level, int output_level, uint32_t output_path_id,
+    uint32_t max_subcompactions, const InternalKey* begin,
+    const InternalKey* end, InternalKey** compaction_end, bool* conflict,
     const std::unordered_set<uint64_t>* files_being_compact) {
   if (max_subcompactions == 0) {
     max_subcompactions = mutable_cf_options.max_subcompactions;
   }
   auto* result = compaction_picker_->CompactRange(
-      GetName(), mutable_cf_options, current_->storage_info(), input_level,
-      output_level, output_path_id, max_subcompactions, begin, end,
+      GetName(), mutable_cf_options, separation_type, current_->storage_info(),
+      input_level, output_level, output_path_id, max_subcompactions, begin, end,
       compaction_end, conflict, files_being_compact);
   if (result != nullptr) {
     result->SetInputVersion(current_);

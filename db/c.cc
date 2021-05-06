@@ -2476,6 +2476,11 @@ void rocksdb_options_target_blob_file_size(rocksdb_options_t* opt, uint64_t v) {
   opt->rep.target_blob_file_size = v;
 }
 
+void rocksdb_options_blob_file_defragment_size(rocksdb_options_t* opt,
+                                               uint64_t v) {
+  opt->rep.blob_file_defragment_size = v;
+}
+
 void rocksdb_options_max_blob_files(rocksdb_options_t* opt, size_t v) {
   opt->rep.max_blob_files = v;
 }
@@ -2576,11 +2581,6 @@ void rocksdb_options_set_compaction_style(rocksdb_options_t* opt, int style) {
 void rocksdb_options_set_universal_compaction_options(
     rocksdb_options_t* opt, rocksdb_universal_compaction_options_t* uco) {
   opt->rep.compaction_options_universal = *(uco->rep);
-}
-
-void rocksdb_options_set_fifo_compaction_options(
-    rocksdb_options_t* opt, rocksdb_fifo_compaction_options_t* fifo) {
-  opt->rep.compaction_options_fifo = fifo->rep;
 }
 
 char* rocksdb_options_statistics_get_string(rocksdb_options_t* opt) {

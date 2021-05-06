@@ -66,8 +66,7 @@ namespace TERARKDB_NAMESPACE {
 //   - CompressionType: valid values are "kNoCompression",
 //     "kSnappyCompression", "kZlibCompression", "kBZip2Compression", ...
 //   - CompactionStyle: valid values are "kCompactionStyleLevel",
-//     "kCompactionStyleUniversal", "kCompactionStyleFIFO", and
-//     "kCompactionStyleNone".
+//     "kCompactionStyleUniversal" and "kCompactionStyleNone".
 //
 
 // Take a default ColumnFamilyOptions "base_options" in addition to a

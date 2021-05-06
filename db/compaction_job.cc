@@ -109,8 +109,6 @@ const char* GetCompactionReasonString(CompactionReason compaction_reason) {
       return "FilesMarkedForCompaction";
     case CompactionReason::kBottommostFiles:
       return "BottommostFiles";
-    case CompactionReason::kTtl:
-      return "Ttl";
     case CompactionReason::kFlush:
       return "Flush";
     case CompactionReason::kExternalSstIngestion:
@@ -428,9 +426,7 @@ void CompactionJob::ReportStartedCompaction(Compaction* compaction) {
          compaction->is_manual_compaction() == true);
 
   ThreadStatusUtil::SetThreadOperationProperty(
-      ThreadStatus::COMPACTION_PROP_FLAGS,
-      compaction->is_manual_compaction() +
-          (compaction->deletion_compaction() << 1));
+      ThreadStatus::COMPACTION_PROP_FLAGS, compaction->is_manual_compaction());
 
   ThreadStatusUtil::SetThreadOperationProperty(
       ThreadStatus::COMPACTION_TOTAL_INPUT_BYTES,
