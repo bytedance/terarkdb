@@ -732,10 +732,10 @@ Status DBImpl::CompactRange(const CompactRangeOptions& options,
     if (immutable_db_options_.allow_ingest_behind) {
       final_output_level--;
     }
-    s = RunManualCompaction(cfd, ColumnFamilyData::kCompactAllLevels,
-                            final_output_level, options.target_path_id,
-                            options.max_subcompactions, begin, end,
-                            &files_being_compact, exclusive, false);
+    s = RunManualCompaction(
+        cfd, options.separation_type, ColumnFamilyData::kCompactAllLevels,
+        final_output_level, options.target_path_id, options.max_subcompactions,
+        begin, end, &files_being_compact, exclusive, false);
   } else {
     for (int level = 0; level <= max_level_with_files; level++) {
       int output_level;
@@ -743,8 +743,7 @@ Status DBImpl::CompactRange(const CompactRangeOptions& options,
       // bottom-most level, the output level will be the same as input one.
       // level 0 can never be the bottommost level (i.e. if all files are in
       // level 0, we will compact to level 1)
-      if (cfd->ioptions()->compaction_style == kCompactionStyleUniversal ||
-          cfd->ioptions()->compaction_style == kCompactionStyleFIFO) {
+      if (cfd->ioptions()->compaction_style == kCompactionStyleUniversal) {
         output_level = level;
       } else if (level == max_level_with_files && level > 0) {
         if (options.bottommost_level_compaction ==
@@ -768,7 +767,8 @@ Status DBImpl::CompactRange(const CompactRangeOptions& options,
           output_level = ColumnFamilyData::kCompactToBaseLevel;
         }
       }
-      s = RunManualCompaction(cfd, level, output_level, options.target_path_id,
+      s = RunManualCompaction(cfd, options.separation_type, level, output_level,
+                              options.target_path_id,
                               options.max_subcompactions, begin, end,
                               &files_being_compact, exclusive, false);
       if (!s.ok()) {
@@ -793,8 +793,9 @@ Status DBImpl::CompactRange(const CompactRangeOptions& options,
         }
         do {
           ++max_level_with_files;
-          s = RunManualCompaction(cfd, max_level_with_files,
-                                  max_level_with_files, options.target_path_id,
+          s = RunManualCompaction(cfd, options.separation_type,
+                                  max_level_with_files, max_level_with_files,
+                                  options.target_path_id,
                                   options.max_subcompactions, begin, end,
                                   &files_being_compact, exclusive, false);
         } while (max_level_with_files < bottommost_level);
@@ -981,8 +982,6 @@ Status DBImpl::CompactFilesImpl(
   assert(c != nullptr);
 
   c->SetInputVersion(version);
-  // deletion compaction currently not allowed in CompactFiles.
-  assert(!c->deletion_compaction());
 
   SequenceNumber earliest_write_conflict_snapshot;
   std::vector<SequenceNumber> snapshot_seqs =
@@ -1413,10 +1412,11 @@ Status DBImpl::Flush(const FlushOptions& flush_options,
 }
 
 Status DBImpl::RunManualCompaction(
-    ColumnFamilyData* cfd, int input_level, int output_level,
-    uint32_t output_path_id, uint32_t max_subcompactions, const Slice* begin,
-    const Slice* end, const std::unordered_set<uint64_t>* files_being_compact,
-    bool exclusive, bool disallow_trivial_move) {
+    ColumnFamilyData* cfd, SeparationType separation_type, int input_level,
+    int output_level, uint32_t output_path_id, uint32_t max_subcompactions,
+    const Slice* begin, const Slice* end,
+    const std::unordered_set<uint64_t>* files_being_compact, bool exclusive,
+    bool disallow_trivial_move) {
   assert(input_level == ColumnFamilyData::kCompactAllLevels ||
          input_level >= 0);
 
@@ -1440,8 +1440,7 @@ Status DBImpl::RunManualCompaction(
   // all files.
   if (begin == nullptr ||
       (cfd->ioptions()->compaction_style == kCompactionStyleUniversal &&
-       !enable_lazy_compaction) ||
-      cfd->ioptions()->compaction_style == kCompactionStyleFIFO) {
+       !enable_lazy_compaction)) {
     manual.begin = nullptr;
   } else {
     begin_storage.SetMinPossibleForUserKey(*begin);
@@ -1449,8 +1448,7 @@ Status DBImpl::RunManualCompaction(
   }
   if (end == nullptr ||
       (cfd->ioptions()->compaction_style == kCompactionStyleUniversal &&
-       !enable_lazy_compaction) ||
-      cfd->ioptions()->compaction_style == kCompactionStyleFIFO) {
+       !enable_lazy_compaction)) {
     manual.end = nullptr;
   } else {
     end_storage.SetMaxPossibleForUserKey(*end);
@@ -1504,10 +1502,10 @@ Status DBImpl::RunManualCompaction(
         scheduled ||
         (((manual.manual_end = &manual.tmp_storage1) != nullptr) &&
          ((compaction = manual.cfd->CompactRange(
-               *manual.cfd->GetLatestMutableCFOptions(), manual.input_level,
-               manual.output_level, manual.output_path_id, max_subcompactions,
-               manual.begin, manual.end, &manual.manual_end, &manual_conflict,
-               files_being_compact)) == nullptr &&
+               *manual.cfd->GetLatestMutableCFOptions(), separation_type,
+               manual.input_level, manual.output_level, manual.output_path_id,
+               max_subcompactions, manual.begin, manual.end, &manual.manual_end,
+               &manual_conflict, files_being_compact)) == nullptr &&
           manual_conflict))) {
       // exclusive manual compactions should not see a conflict during
       // CompactRange
@@ -2714,32 +2712,6 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
     // Nothing to do
     ROCKS_LOG_BUFFER(log_buffer, "[%s] Compaction nothing to do",
                      cf_name.c_str());
-  } else if (c->deletion_compaction()) {
-    // TODO(icanadi) Do we want to honor snapshots here? i.e. not delete old
-    // file if there is alive snapshot pointing to it
-    assert(c->num_input_files(1) == 0);
-    assert(c->level() == 0);
-    assert(c->column_family_data()->ioptions()->compaction_style ==
-           kCompactionStyleFIFO);
-
-    compaction_job_stats.num_input_files = c->num_input_files(0);
-
-    NotifyOnCompactionBegin(c->column_family_data(), c.get(), status,
-                            compaction_job_stats, job_context->job_id);
-
-    for (const auto& f : *c->inputs(0)) {
-      c->edit()->DeleteFile(c->level(), f->fd.GetNumber());
-    }
-    status = versions_->LogAndApply(c->column_family_data(),
-                                    *c->mutable_cf_options(), c->edit(),
-                                    &mutex_, directories_.GetDbDir());
-    InstallSuperVersionAndScheduleWork(
-        c->column_family_data(), &job_context->superversion_contexts[0],
-        *c->mutable_cf_options(), FlushReason::kAutoCompaction);
-    ROCKS_LOG_BUFFER(log_buffer, "[%s] Deleted %d files\n",
-                     c->column_family_data()->GetName().c_str(),
-                     c->num_input_files(0));
-    *made_progress = true;
   } else if (!trivial_move_disallowed && c->IsTrivialMove()) {
     TEST_SYNC_POINT("DBImpl::BackgroundCompaction:TrivialMove");
     // Instrument for event update
@@ -2953,7 +2925,6 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
         assert(m->cfd->ioptions()->compaction_style !=
                    kCompactionStyleUniversal ||
                m->cfd->ioptions()->num_levels > 1);
-        assert(m->cfd->ioptions()->compaction_style != kCompactionStyleFIFO);
         m->tmp_storage = *m->manual_end;
         m->begin = &m->tmp_storage;
       }

@@ -926,6 +926,8 @@ extern ROCKSDB_LIBRARY_API void rocksdb_options_set_blob_gc_ratio(
     rocksdb_options_t*, double);
 extern ROCKSDB_LIBRARY_API void rocksdb_options_set_target_blob_file_size(
     rocksdb_options_t*, uint64_t);
+extern ROCKSDB_LIBRARY_API void rocksdb_options_set_blob_file_defragment_size(
+    rocksdb_options_t*, uint64_t);
 extern ROCKSDB_LIBRARY_API void rocksdb_options_set_max_blob_files(
     rocksdb_options_t*, size_t);
 extern ROCKSDB_LIBRARY_API void rocksdb_options_set_max_dependence_blob_overlap(

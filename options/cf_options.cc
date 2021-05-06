@@ -192,6 +192,8 @@ void MutableCFOptions::Dump(Logger* log) const {
                  blob_gc_ratio);
   ROCKS_LOG_INFO(log, "                    target_blob_file_size: %" PRIu64,
                  target_blob_file_size);
+  ROCKS_LOG_INFO(log, "                blob_file_defragment_size: %" PRIu64,
+                 blob_file_defragment_size);
   ROCKS_LOG_INFO(log, "                           max_blob_files: %zu",
                  max_blob_files);
   ROCKS_LOG_INFO(log, "                            blob_gc_ratio: %zu",
@@ -216,8 +218,6 @@ void MutableCFOptions::Dump(Logger* log) const {
                  max_bytes_for_level_base);
   ROCKS_LOG_INFO(log, "           max_bytes_for_level_multiplier: %f",
                  max_bytes_for_level_multiplier);
-  ROCKS_LOG_INFO(log, "                                      ttl: %" PRIu64,
-                 ttl);
   ROCKS_LOG_INFO(log, "                             ttl_gc_ratio: %f",
                  ttl_gc_ratio);
   ROCKS_LOG_INFO(log, "                         ttl_max_scan_gap: %zd",
@@ -263,14 +263,6 @@ void MutableCFOptions::Dump(Logger* log) const {
   ROCKS_LOG_INFO(
       log, "compaction_options_universal.allow_trivial_move : %d",
       static_cast<int>(compaction_options_universal.allow_trivial_move));
-
-  // FIFO Compaction Options
-  ROCKS_LOG_INFO(log, "compaction_options_fifo.max_table_files_size : %" PRIu64,
-                 compaction_options_fifo.max_table_files_size);
-  ROCKS_LOG_INFO(log, "compaction_options_fifo.ttl : %" PRIu64,
-                 compaction_options_fifo.ttl);
-  ROCKS_LOG_INFO(log, "compaction_options_fifo.allow_compaction : %d",
-                 compaction_options_fifo.allow_compaction);
 }
 
 MutableCFOptions::MutableCFOptions(const ColumnFamilyOptions& options, Env* env)
@@ -290,6 +282,7 @@ MutableCFOptions::MutableCFOptions(const ColumnFamilyOptions& options, Env* env)
       blob_large_key_ratio(options.blob_large_key_ratio),
       blob_gc_ratio(options.blob_gc_ratio),
       target_blob_file_size(options.target_blob_file_size),
+      blob_file_defragment_size(options.blob_file_defragment_size),
       max_blob_files(options.max_blob_files),
       max_dependence_blob_overlap(options.max_dependence_blob_overlap),
       soft_pending_compaction_bytes_limit(
@@ -305,10 +298,8 @@ MutableCFOptions::MutableCFOptions(const ColumnFamilyOptions& options, Env* env)
       target_file_size_multiplier(options.target_file_size_multiplier),
       max_bytes_for_level_base(options.max_bytes_for_level_base),
       max_bytes_for_level_multiplier(options.max_bytes_for_level_multiplier),
-      ttl(options.ttl),
       max_bytes_for_level_multiplier_additional(
           options.max_bytes_for_level_multiplier_additional),
-      compaction_options_fifo(options.compaction_options_fifo),
       compaction_options_universal(options.compaction_options_universal),
       max_sequential_skip_in_iterations(
           options.max_sequential_skip_in_iterations),

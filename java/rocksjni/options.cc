@@ -2206,31 +2206,6 @@ jbyte Java_org_rocksdb_Options_compactionStyle(JNIEnv* /*env*/,
 
 /*
  * Class:     org_rocksdb_Options
- * Method:    setMaxTableFilesSizeFIFO
- * Signature: (JJ)V
- */
-void Java_org_rocksdb_Options_setMaxTableFilesSizeFIFO(
-    JNIEnv* /*env*/, jobject /*jobj*/, jlong jhandle,
-    jlong jmax_table_files_size) {
-  reinterpret_cast<TERARKDB_NAMESPACE::Options*>(jhandle)
-      ->compaction_options_fifo.max_table_files_size =
-      static_cast<uint64_t>(jmax_table_files_size);
-}
-
-/*
- * Class:     org_rocksdb_Options
- * Method:    maxTableFilesSizeFIFO
- * Signature: (J)J
- */
-jlong Java_org_rocksdb_Options_maxTableFilesSizeFIFO(JNIEnv* /*env*/,
-                                                     jobject /*jobj*/,
-                                                     jlong jhandle) {
-  return reinterpret_cast<TERARKDB_NAMESPACE::Options*>(jhandle)
-      ->compaction_options_fifo.max_table_files_size;
-}
-
-/*
- * Class:     org_rocksdb_Options
  * Method:    numLevels
  * Signature: (J)I
  */
@@ -3101,21 +3076,6 @@ void Java_org_rocksdb_Options_setCompactionOptionsUniversal(
 
 /*
  * Class:     org_rocksdb_Options
- * Method:    setCompactionOptionsFIFO
- * Signature: (JJ)V
- */
-void Java_org_rocksdb_Options_setCompactionOptionsFIFO(
-    JNIEnv* /*env*/, jobject /*jobj*/, jlong jhandle,
-    jlong jcompaction_options_fifo_handle) {
-  auto* opts = reinterpret_cast<TERARKDB_NAMESPACE::Options*>(jhandle);
-  auto* opts_fifo =
-      reinterpret_cast<TERARKDB_NAMESPACE::CompactionOptionsFIFO*>(
-          jcompaction_options_fifo_handle);
-  opts->compaction_options_fifo = *opts_fifo;
-}
-
-/*
- * Class:     org_rocksdb_Options
  * Method:    setForceConsistencyChecks
  * Signature: (JZ)V
  */
@@ -3704,30 +3664,6 @@ jbyte Java_org_rocksdb_ColumnFamilyOptions_compactionStyle(JNIEnv* /*env*/,
                                                            jlong jhandle) {
   return reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyOptions*>(jhandle)
       ->compaction_style;
-}
-
-/*
- * Class:     org_rocksdb_ColumnFamilyOptions
- * Method:    setMaxTableFilesSizeFIFO
- * Signature: (JJ)V
- */
-void Java_org_rocksdb_ColumnFamilyOptions_setMaxTableFilesSizeFIFO(
-    JNIEnv* /*env*/, jobject /*jobj*/, jlong jhandle,
-    jlong jmax_table_files_size) {
-  reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyOptions*>(jhandle)
-      ->compaction_options_fifo.max_table_files_size =
-      static_cast<uint64_t>(jmax_table_files_size);
-}
-
-/*
- * Class:     org_rocksdb_ColumnFamilyOptions
- * Method:    maxTableFilesSizeFIFO
- * Signature: (J)J
- */
-jlong Java_org_rocksdb_ColumnFamilyOptions_maxTableFilesSizeFIFO(
-    JNIEnv* /*env*/, jobject /*jobj*/, jlong jhandle) {
-  return reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyOptions*>(jhandle)
-      ->compaction_options_fifo.max_table_files_size;
 }
 
 /*
@@ -4531,22 +4467,6 @@ void Java_org_rocksdb_ColumnFamilyOptions_setCompactionOptionsUniversal(
       reinterpret_cast<TERARKDB_NAMESPACE::CompactionOptionsUniversal*>(
           jcompaction_options_universal_handle);
   cf_opts->compaction_options_universal = *opts_uni;
-}
-
-/*
- * Class:     org_rocksdb_ColumnFamilyOptions
- * Method:    setCompactionOptionsFIFO
- * Signature: (JJ)V
- */
-void Java_org_rocksdb_ColumnFamilyOptions_setCompactionOptionsFIFO(
-    JNIEnv* /*env*/, jobject /*jobj*/, jlong jhandle,
-    jlong jcompaction_options_fifo_handle) {
-  auto* cf_opts =
-      reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyOptions*>(jhandle);
-  auto* opts_fifo =
-      reinterpret_cast<TERARKDB_NAMESPACE::CompactionOptionsFIFO*>(
-          jcompaction_options_fifo_handle);
-  cf_opts->compaction_options_fifo = *opts_fifo;
 }
 
 /*

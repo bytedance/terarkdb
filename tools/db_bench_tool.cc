@@ -387,7 +387,7 @@ DEFINE_int32(max_background_flushes,
 static TERARKDB_NAMESPACE::CompactionStyle FLAGS_compaction_style_e;
 DEFINE_int32(compaction_style,
              (int32_t)TERARKDB_NAMESPACE::Options().compaction_style,
-             "style of compaction: level-based, universal and fifo");
+             "style of compaction: level-based and universal");
 
 static TERARKDB_NAMESPACE::CompactionPri FLAGS_compaction_pri_e;
 DEFINE_int32(compaction_pri,
@@ -738,15 +738,6 @@ DEFINE_string(
     "\t--dump_malloc_stats\n"
     "\t--num_multi_db\n");
 
-// FIFO Compaction Options
-DEFINE_uint64(fifo_compaction_max_table_files_size_mb, 0,
-              "The limit of total table file sizes to trigger FIFO compaction");
-
-DEFINE_bool(fifo_compaction_allow_compaction, true,
-            "Allow compaction in FIFO compaction.");
-
-DEFINE_uint64(fifo_compaction_ttl, 0, "TTL for the SST Files in seconds.");
-
 #endif  // ROCKSDB_LITE
 
 DEFINE_bool(report_bg_io_stats, false,
@@ -975,6 +966,8 @@ DEFINE_double(blob_large_key_ratio, 1, "Key Value Separate large key ratio");
 DEFINE_double(blob_gc_ratio, 0.2, "Blob SST gc ratio");
 
 DEFINE_uint64(target_blob_file_size, 0, "Blob file size");
+
+DEFINE_uint64(blob_file_defragment_size, 0, "Blob file defragment threshold");
 
 DEFINE_uint64(max_blob_files, 0, "Num total blob file count limits");
 
@@ -3243,11 +3236,6 @@ class Benchmark {
     options.use_direct_io_for_flush_and_compaction =
         FLAGS_use_direct_io_for_flush_and_compaction;
     options.use_aio_reads = FLAGS_use_aio_reads;
-#ifndef ROCKSDB_LITE
-    options.compaction_options_fifo = CompactionOptionsFIFO(
-        FLAGS_fifo_compaction_max_table_files_size_mb * 1024 * 1024,
-        FLAGS_fifo_compaction_allow_compaction, FLAGS_fifo_compaction_ttl);
-#endif  // ROCKSDB_LITE
     if (FLAGS_prefix_size != 0) {
       options.prefix_extractor.reset(
           NewFixedPrefixTransform(FLAGS_prefix_size));
@@ -3544,6 +3532,7 @@ class Benchmark {
     options.blob_large_key_ratio = FLAGS_blob_large_key_ratio;
     options.blob_gc_ratio = FLAGS_blob_gc_ratio;
     options.target_blob_file_size = FLAGS_target_blob_file_size;
+    options.blob_file_defragment_size = FLAGS_blob_file_defragment_size;
     options.max_blob_files = FLAGS_max_blob_files;
     options.max_dependence_blob_overlap = FLAGS_max_dependence_blob_overlap;
     options.optimize_filters_for_hits = FLAGS_optimize_filters_for_hits;
@@ -4069,13 +4058,9 @@ class Benchmark {
     std::vector<Options> options_list;
     for (auto db : db_list) {
       options_list.push_back(db->GetOptions());
-      if (compaction_style != kCompactionStyleFIFO) {
-        db->SetOptions({{"disable_auto_compactions", "1"},
-                        {"level0_slowdown_writes_trigger", "400000000"},
-                        {"level0_stop_writes_trigger", "400000000"}});
-      } else {
-        db->SetOptions({{"disable_auto_compactions", "1"}});
-      }
+      db->SetOptions({{"disable_auto_compactions", "1"},
+                      {"level0_slowdown_writes_trigger", "400000000"},
+                      {"level0_stop_writes_trigger", "400000000"}});
     }
 
     assert(!db_list.empty());
@@ -4201,38 +4186,6 @@ class Benchmark {
                                 : 0) /*level*/);
         }
       }
-    } else if (compaction_style == kCompactionStyleFIFO) {
-      if (num_levels != 1) {
-        return Status::InvalidArgument(
-            "num_levels should be 1 for FIFO compaction");
-      }
-      if (FLAGS_num_multi_db != 0) {
-        return Status::InvalidArgument("Doesn't support multiDB");
-      }
-      auto db = db_list[0];
-      std::vector<std::string> file_names;
-      while (true) {
-        if (sorted_runs[0].empty()) {
-          DoWrite(thread, write_mode);
-        } else {
-          DoWrite(thread, UNIQUE_RANDOM);
-        }
-        db->Flush(FlushOptions());
-        db->GetColumnFamilyMetaData(&meta);
-        auto total_size = meta.levels[0].size;
-        if (total_size >=
-            db->GetOptions().compaction_options_fifo.max_table_files_size) {
-          for (auto file_meta : meta.levels[0].files) {
-            file_names.emplace_back(file_meta.name);
-          }
-          break;
-        }
-      }
-      // TODO(shuzhang1989): Investigate why CompactFiles not working
-      // auto compactionOptions = CompactionOptions();
-      // db->CompactFiles(compactionOptions, file_names, 0);
-      auto compactionOptions = CompactRangeOptions();
-      db->CompactRange(compactionOptions, nullptr, nullptr);
     } else {
       fprintf(stdout,
               "%-12s : skipped (-compaction_stype=kCompactionStyleNone)\n",
@@ -4253,13 +4206,6 @@ class Benchmark {
       } else if (compaction_style == kCompactionStyleUniversal) {
         assert(meta.levels[0].files.size() + num_levels - 1 ==
                sorted_runs[k].size());
-      } else if (compaction_style == kCompactionStyleFIFO) {
-        // TODO(gzh): FIFO compaction
-        db->GetColumnFamilyMetaData(&meta);
-        auto total_size = meta.levels[0].size;
-        assert(total_size <=
-               db->GetOptions().compaction_options_fifo.max_table_files_size);
-        break;
       }
 
       // verify smallest/largest seqno and key range of each sorted run

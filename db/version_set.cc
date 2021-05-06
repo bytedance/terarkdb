@@ -1649,33 +1649,6 @@ void VersionStorageInfo::EstimateCompactionBytesNeeded(
   }
 }
 
-namespace {
-uint32_t GetExpiredTtlFilesCount(const ImmutableCFOptions& ioptions,
-                                 const MutableCFOptions& mutable_cf_options,
-                                 const std::vector<FileMetaData*>& files) {
-  uint32_t ttl_expired_files_count = 0;
-
-  int64_t _current_time;
-  auto status = ioptions.env->GetCurrentTime(&_current_time);
-  if (status.ok()) {
-    const uint64_t current_time = static_cast<uint64_t>(_current_time);
-    for (auto f : files) {
-      if (!f->being_compacted && f->fd.table_reader != nullptr &&
-          f->fd.table_reader->GetTableProperties() != nullptr) {
-        auto creation_time =
-            f->fd.table_reader->GetTableProperties()->creation_time;
-        if (creation_time > 0 &&
-            creation_time < (current_time -
-                             mutable_cf_options.compaction_options_fifo.ttl)) {
-          ttl_expired_files_count++;
-        }
-      }
-    }
-  }
-  return ttl_expired_files_count;
-}
-}  // anonymous namespace
-
 void VersionStorageInfo::ComputeCompactionScore(
     const ImmutableCFOptions& immutable_cf_options,
     const MutableCFOptions& mutable_cf_options) {
@@ -1712,33 +1685,15 @@ void VersionStorageInfo::ComputeCompactionScore(
         }
       }
 
-      if (compaction_style_ == kCompactionStyleFIFO) {
-        score = static_cast<double>(total_size) /
-                mutable_cf_options.compaction_options_fifo.max_table_files_size;
-        if (mutable_cf_options.compaction_options_fifo.allow_compaction) {
-          score = std::max(
-              static_cast<double>(num_sorted_runs) /
-                  mutable_cf_options.level0_file_num_compaction_trigger,
-              score);
-        }
-        if (mutable_cf_options.compaction_options_fifo.ttl > 0) {
-          score = std::max(
-              static_cast<double>(GetExpiredTtlFilesCount(
-                  immutable_cf_options, mutable_cf_options, files_[level])),
-              score);
-        }
-
-      } else {
-        score = static_cast<double>(num_sorted_runs) /
-                mutable_cf_options.level0_file_num_compaction_trigger;
-        if (compaction_style_ == kCompactionStyleLevel && num_levels() > 1) {
-          // Level-based involves L0->L0 compactions that can lead to oversized
-          // L0 files. Take into account size as well to avoid later giant
-          // compactions to the base level.
-          score =
-              std::max(score, static_cast<double>(total_size) /
-                                  mutable_cf_options.max_bytes_for_level_base);
-        }
+      score = static_cast<double>(num_sorted_runs) /
+              mutable_cf_options.level0_file_num_compaction_trigger;
+      if (compaction_style_ == kCompactionStyleLevel && num_levels() > 1) {
+        // Level-based involves L0->L0 compactions that can lead to oversized
+        // L0 files. Take into account size as well to avoid later giant
+        // compactions to the base level.
+        score =
+            std::max(score, static_cast<double>(total_size) /
+                                mutable_cf_options.max_bytes_for_level_base);
       }
     } else {
       // Compute the ratio of current size to size limit.
@@ -1789,9 +1744,6 @@ void VersionStorageInfo::ComputeCompactionScore(
   is_pick_compaction_fail = false;
   ComputeFilesMarkedForCompaction();
   ComputeBottommostFilesMarkedForCompaction();
-  if (mutable_cf_options.ttl > 0) {
-    ComputeExpiredTtlFiles(immutable_cf_options, mutable_cf_options.ttl);
-  }
   EstimateCompactionBytesNeeded(mutable_cf_options);
 }
 
@@ -1825,33 +1777,6 @@ void VersionStorageInfo::AddFilesMarkedForCompaction(int level,
   } else {
     assert(level == num_non_empty_levels_ - 1);
     bottommost_files_marked_for_compaction_.emplace_back(level, meta);
-  }
-}
-
-void VersionStorageInfo::ComputeExpiredTtlFiles(
-    const ImmutableCFOptions& ioptions, const uint64_t ttl) {
-  assert(ttl > 0);
-
-  expired_ttl_files_.clear();
-
-  int64_t _current_time;
-  auto status = ioptions.env->GetCurrentTime(&_current_time);
-  if (!status.ok()) {
-    return;
-  }
-  const uint64_t current_time = static_cast<uint64_t>(_current_time);
-
-  for (int level = 0; level < num_levels() - 1; level++) {
-    for (auto f : files_[level]) {
-      if (!f->being_compacted && f->fd.table_reader != nullptr &&
-          f->fd.table_reader->GetTableProperties() != nullptr) {
-        auto creation_time =
-            f->fd.table_reader->GetTableProperties()->creation_time;
-        if (creation_time > 0 && creation_time < (current_time - ttl)) {
-          expired_ttl_files_.emplace_back(level, f);
-        }
-      }
-    }
   }
 }
 
@@ -2072,7 +1997,6 @@ void SortFileByOverlappingRatio(
 void VersionStorageInfo::UpdateFilesByCompactionPri(
     CompactionPri compaction_pri) {
   if (compaction_style_ == kCompactionStyleNone ||
-      compaction_style_ == kCompactionStyleFIFO ||
       compaction_style_ == kCompactionStyleUniversal) {
     // don't need this
     return;

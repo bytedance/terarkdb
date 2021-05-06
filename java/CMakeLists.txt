@@ -11,7 +11,6 @@ set(JNI_NATIVE_SOURCES
         rocksjni/compaction_filter.cc
         rocksjni/compaction_filter_factory.cc
         rocksjni/compaction_filter_factory_jnicallback.cc
-        rocksjni/compaction_options_fifo.cc
         rocksjni/compaction_options_universal.cc
         rocksjni/compact_range_options.cc
         rocksjni/comparator.cc

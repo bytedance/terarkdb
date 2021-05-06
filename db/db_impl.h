@@ -384,10 +384,11 @@ class DBImpl : public DB {
   virtual Status CheckConsistency(bool read_only);
 
   Status RunManualCompaction(
-      ColumnFamilyData* cfd, int input_level, int output_level,
-      uint32_t output_path_id, uint32_t max_subcompactions, const Slice* begin,
-      const Slice* end, const std::unordered_set<uint64_t>* files_being_compact,
-      bool exclusive, bool disallow_trivial_move = false);
+      ColumnFamilyData* cfd, SeparationType separation_type, int input_level,
+      int output_level, uint32_t output_path_id, uint32_t max_subcompactions,
+      const Slice* begin, const Slice* end,
+      const std::unordered_set<uint64_t>* files_being_compact, bool exclusive,
+      bool disallow_trivial_move = false);
 
   // Return an internal iterator over the current state of the database.
   // The keys of this iterator are internal keys (see format.h).
@@ -408,6 +409,8 @@ class DBImpl : public DB {
   // Compact any files in the named level that overlap [*begin, *end]
   Status TEST_CompactRange(int level, const Slice* begin, const Slice* end,
                            ColumnFamilyHandle* column_family = nullptr,
+                           SeparationType separation_type =
+                               SeparationType::kCompactionTransToSeparate,
                            bool disallow_trivial_move = false);
 
   void TEST_SwitchWAL();

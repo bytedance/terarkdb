@@ -200,19 +200,6 @@ static Status ValidateOptions(
     if (!s.ok()) {
       return s;
     }
-
-    if (cfd.options.ttl > 0 || cfd.options.compaction_options_fifo.ttl > 0) {
-      if (db_options.max_open_files != -1) {
-        return Status::NotSupported(
-            "TTL is only supported when files are always "
-            "kept open (set max_open_files = -1). ");
-      }
-      if (cfd.options.table_factory->Name() !=
-          BlockBasedTableFactory().Name()) {
-        return Status::NotSupported(
-            "TTL is only supported in Block-Based Table format. ");
-      }
-    }
   }
 
   if (db_options.db_paths.size() > 4) {
@@ -1420,18 +1407,6 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
 
   if (s.ok()) {
     for (auto cfd : *impl->versions_->GetColumnFamilySet()) {
-      if (cfd->ioptions()->compaction_style == kCompactionStyleFIFO) {
-        auto* vstorage = cfd->current()->storage_info();
-        for (int i = 1; i < vstorage->num_levels(); ++i) {
-          int num_files = vstorage->NumLevelFiles(i);
-          if (num_files > 0) {
-            s = Status::InvalidArgument(
-                "Not all files are at level 0. Cannot "
-                "open with FIFO compaction style.");
-            break;
-          }
-        }
-      }
       if (!cfd->mem()->IsSnapshotSupported()) {
         impl->is_snapshot_supported_ = false;
       }

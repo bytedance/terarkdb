@@ -65,7 +65,6 @@ enum class OptionType {
   kComparator,
   kCompactionFilter,
   kCompactionFilterFactory,
-  kCompactionOptionsFIFO,
   kCompactionOptionsUniversal,
   kCompactionStopStyle,
   kMergeOperator,
@@ -163,8 +162,6 @@ struct OptionsHelper {
 #ifndef ROCKSDB_LITE
   static std::unordered_map<std::string, OptionTypeInfo> cf_options_type_info;
   static std::unordered_map<std::string, OptionTypeInfo>
-      fifo_compaction_options_type_info;
-  static std::unordered_map<std::string, OptionTypeInfo>
       universal_compaction_options_type_info;
   static std::unordered_map<std::string, CompactionStopStyle>
       compaction_stop_style_string_map;
@@ -209,8 +206,6 @@ static auto& compaction_stop_style_to_string =
 static auto& checksum_type_string_map = OptionsHelper::checksum_type_string_map;
 #ifndef ROCKSDB_LITE
 static auto& cf_options_type_info = OptionsHelper::cf_options_type_info;
-static auto& fifo_compaction_options_type_info =
-    OptionsHelper::fifo_compaction_options_type_info;
 static auto& universal_compaction_options_type_info =
     OptionsHelper::universal_compaction_options_type_info;
 static auto& compaction_stop_style_string_map =

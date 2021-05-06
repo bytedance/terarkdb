@@ -126,18 +126,20 @@ class CompactionPicker {
   // *compaction_end should point to valid InternalKey!
   virtual Compaction* CompactRange(
       const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
-      VersionStorageInfo* vstorage, int input_level, int output_level,
-      uint32_t output_path_id, uint32_t max_subcompactions,
-      const InternalKey* begin, const InternalKey* end,
-      InternalKey** compaction_end, bool* manual_conflict,
+      SeparationType separation_type, VersionStorageInfo* vstorage,
+      int input_level, int output_level, uint32_t output_path_id,
+      uint32_t max_subcompactions, const InternalKey* begin,
+      const InternalKey* end, InternalKey** compaction_end,
+      bool* manual_conflict,
       const std::unordered_set<uint64_t>* files_being_compact);
 
   // Pick compaction which pointed range files
   // range use internal keys
   Compaction* PickRangeCompaction(
       const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
-      VersionStorageInfo* vstorage, int level, const InternalKey* begin,
-      const InternalKey* end, uint32_t max_subcompactions,
+      SeparationType separation_type, VersionStorageInfo* vstorage, int level,
+      const InternalKey* begin, const InternalKey* end,
+      uint32_t max_subcompactions,
       const std::unordered_set<uint64_t>* files_being_compact,
       bool* manual_conflict, LogBuffer* log_buffer);
 
@@ -346,8 +348,8 @@ class NullCompactionPicker : public CompactionPicker {
   Compaction* CompactRange(
       const std::string& /*cf_name*/,
       const MutableCFOptions& /*mutable_cf_options*/,
-      VersionStorageInfo* /*vstorage*/, int /*input_level*/,
-      int /*output_level*/, uint32_t /*output_path_id*/,
+      SeparationType /*separation_type*/, VersionStorageInfo* /*vstorage*/,
+      int /*input_level*/, int /*output_level*/, uint32_t /*output_path_id*/,
       uint32_t /*max_subcompactions*/, const InternalKey* /*begin*/,
       const InternalKey* /*end*/, InternalKey** /*compaction_end*/,
       bool* /*manual_conflict*/,

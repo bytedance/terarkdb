@@ -5,6 +5,7 @@
 
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
+#include "rocksdb/options.h"
 #include "rocksdb/terark_namespace.h"
 #include "util/testutil.h"
 #include "utilities/merge_operators.h"
@@ -65,6 +66,7 @@ TEST_F(DBRangeDelTest, CompactionOutputHasOnlyRangeTombstone) {
     ASSERT_EQ(1, NumTableFilesAtLevel(0));
     ASSERT_EQ(0, NumTableFilesAtLevel(1));
     dbfull()->TEST_CompactRange(0, nullptr, nullptr, nullptr,
+                                SeparationType::kCompactionTransToSeparate,
                                 true /* disallow_trivial_move */);
     ASSERT_EQ(0, NumTableFilesAtLevel(0));
     ASSERT_EQ(1, NumTableFilesAtLevel(1));
@@ -116,6 +118,7 @@ TEST_F(DBRangeDelTest, CompactionOutputFilesExactlyFilled) {
   ASSERT_EQ(0, NumTableFilesAtLevel(1));
 
   dbfull()->TEST_CompactRange(0, nullptr, nullptr, nullptr,
+                              SeparationType::kCompactionTransToSeparate,
                               true /* disallow_trivial_move */);
   ASSERT_EQ(0, NumTableFilesAtLevel(0));
   ASSERT_EQ(2, NumTableFilesAtLevel(1));
@@ -160,6 +163,7 @@ TEST_F(DBRangeDelTest, MaxCompactionBytesCutsOutputFiles) {
   }
 
   dbfull()->TEST_CompactRange(0, nullptr, nullptr, nullptr,
+                              SeparationType::kCompactionTransToSeparate,
                               true /* disallow_trivial_move */);
   ASSERT_EQ(0, NumTableFilesAtLevel(0));
   ASSERT_GE(NumTableFilesAtLevel(1), 2);
@@ -233,6 +237,7 @@ TEST_F(DBRangeDelTest, CompactRangeDelsSameStartKey) {
   for (int i = 0; i < 2; ++i) {
     if (i > 0) {
       dbfull()->TEST_CompactRange(0, nullptr, nullptr, nullptr,
+                                  SeparationType::kCompactionTransToSeparate,
                                   true /* disallow_trivial_move */);
       ASSERT_EQ(0, NumTableFilesAtLevel(0));
       ASSERT_EQ(1, NumTableFilesAtLevel(1));
@@ -440,10 +445,10 @@ TEST_F(DBRangeDelTest, ValidUniversalSubcompactionBoundaries) {
   ASSERT_OK(dbfull()->RunManualCompaction(
       reinterpret_cast<ColumnFamilyHandleImpl*>(db_->DefaultColumnFamily())
           ->cfd(),
-      1 /* input_level */, 2 /* output_level */, 0 /* output_path_id */,
-      0 /* max_subcompactions */, nullptr /* begin */, nullptr /* end */,
-      nullptr /* files_being_compact */, true /* exclusive */,
-      true /* disallow_trivial_move */));
+      SeparationType::kCompactionTransToSeparate, 1 /* input_level */,
+      2 /* output_level */, 0 /* output_path_id */, 0 /* max_subcompactions */,
+      nullptr /* begin */, nullptr /* end */, nullptr /* files_being_compact */,
+      true /* exclusive */, true /* disallow_trivial_move */));
 }
 #endif  // ROCKSDB_LITE
 
@@ -1201,6 +1206,7 @@ TEST_F(DBRangeDelTest, KeyAtOverlappingEndpointReappears) {
   // tighter endpoints, so we can verify that doesn't mess anything up.
   dbfull()->TEST_CompactRange(1 /* level */, nullptr /* begin */,
                               nullptr /* end */, nullptr /* column_family */,
+                              SeparationType::kCompactionTransToSeparate,
                               true /* disallow_trivial_move */);
   ASSERT_EQ(NumTableFilesAtLevel(2), 1);
   ASSERT_TRUE(db_->Get(ReadOptions(), "key", &value).IsNotFound());
@@ -1477,6 +1483,7 @@ TEST_F(DBRangeDelTest, RangeTombstoneWrittenToMinimalSsts) {
   Slice end_key(end_key_storage);
   dbfull()->TEST_CompactRange(0 /* level */, &begin_key /* begin */,
                               &end_key /* end */, nullptr /* column_family */,
+                              SeparationType::kCompactionTransToSeparate,
                               true /* disallow_trivial_move */);
   ASSERT_EQ(2, NumTableFilesAtLevel(1));
 

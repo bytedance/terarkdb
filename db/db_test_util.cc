@@ -480,10 +480,6 @@ Options DBTestBase::GetOptions(
       table_options.checksum = kxxHash64;
       break;
     }
-    case kFIFOCompaction: {
-      options.compaction_style = kCompactionStyleFIFO;
-      break;
-    }
     case kBlockBasedTableWithPrefixHashIndex: {
       table_options.index_type = BlockBasedTableOptions::kHashSearch;
       options.prefix_extractor.reset(NewFixedPrefixTransform(1));
