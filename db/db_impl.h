@@ -54,6 +54,7 @@
 #include "rocksdb/write_buffer_manager.h"
 #include "table/scoped_arena_iterator.h"
 #include "util/autovector.h"
+#include "util/chash_set.h"
 #include "util/event_logger.h"
 #include "util/hash.h"
 #include "util/repeatable_thread.h"
@@ -383,12 +384,14 @@ class DBImpl : public DB {
   // match to our in-memory records
   virtual Status CheckConsistency(bool read_only);
 
-  Status RunManualCompaction(
-      ColumnFamilyData* cfd, SeparationType separation_type, int input_level,
-      int output_level, uint32_t output_path_id, uint32_t max_subcompactions,
-      const Slice* begin, const Slice* end,
-      const std::unordered_set<uint64_t>* files_being_compact, bool exclusive,
-      bool disallow_trivial_move = false);
+  Status RunManualCompaction(ColumnFamilyData* cfd,
+                             SeparationType separation_type, int input_level,
+                             int output_level, uint32_t output_path_id,
+                             uint32_t max_subcompactions, const Slice* begin,
+                             const Slice* end,
+                             const chash_set<uint64_t>* files_being_compact,
+                             bool exclusive,
+                             bool disallow_trivial_move = false);
 
   // Return an internal iterator over the current state of the database.
   // The keys of this iterator are internal keys (see format.h).

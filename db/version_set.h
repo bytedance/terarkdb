@@ -139,10 +139,6 @@ class VersionStorageInfo {
   // ComputeCompactionScore()
   void ComputeFilesMarkedForCompaction();
 
-  // This computes files_marked_for_compaction_ and is called by
-  // ScheduleTtlGC()
-  void AddFilesMarkedForCompaction(int level, FileMetaData* meta);
-
   // This computes bottommost_files_marked_for_compaction_ and is called by
   // ComputeCompactionScore() or UpdateOldestSnapshot().
   //

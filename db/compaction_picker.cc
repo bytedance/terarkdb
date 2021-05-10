@@ -24,6 +24,7 @@
 #include "db/map_builder.h"
 #include "rocksdb/terark_namespace.h"
 #include "util/c_style_callback.h"
+#include "util/chash_set.h"
 #include "util/filename.h"
 #include "util/log_buffer.h"
 #include "util/random.h"
@@ -883,7 +884,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
 void CompactionPicker::InitFilesBeingCompact(
     const MutableCFOptions& mutable_cf_options, VersionStorageInfo* vstorage,
     const InternalKey* begin, const InternalKey* end,
-    std::unordered_set<uint64_t>* files_being_compact) {
+    chash_set<uint64_t>* files_being_compact) {
   if (!ioptions_.enable_lazy_compaction) {
     return;
   }
@@ -952,7 +953,7 @@ Compaction* CompactionPicker::CompactRange(
     int input_level, int output_level, uint32_t output_path_id,
     uint32_t max_subcompactions, const InternalKey* begin,
     const InternalKey* end, InternalKey** compaction_end, bool* manual_conflict,
-    const std::unordered_set<uint64_t>* files_being_compact) {
+    const chash_set<uint64_t>* files_being_compact) {
   CompactionInputFiles inputs;
   inputs.level = input_level;
   bool covering_the_whole_range = true;
@@ -1156,8 +1157,7 @@ Compaction* CompactionPicker::PickRangeCompaction(
     const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
     SeparationType separation_type, VersionStorageInfo* vstorage, int level,
     const InternalKey* begin, const InternalKey* end,
-    uint32_t max_subcompactions,
-    const std::unordered_set<uint64_t>* files_being_compact,
+    uint32_t max_subcompactions, const chash_set<uint64_t>* files_being_compact,
     bool* manual_conflict, LogBuffer* log_buffer) {
   assert(ioptions_.enable_lazy_compaction);
   auto& level_files = vstorage->LevelFiles(level);
@@ -1776,7 +1776,18 @@ Compaction* CompactionPicker::PickCompositeCompaction(
     return IsPerfectRange(r, f, *icmp_);
   };
 
-  std::unordered_map<uint64_t, FileUseInfo> file_used;
+  auto file_number_score = [vstorage](const MapSstElement& e) -> double {
+    if (e.link.size() != 1) {
+      return 0;
+    }
+    auto& dependence_map = vstorage->dependence_map();
+    auto find = dependence_map.find(e.link.front().file_number);
+    if (find == dependence_map.end()) {
+      // TODO log error
+      return 0;
+    }
+    return 1.0 / find->second->fd.GetNumber();
+  };
   MapSstElement map_element;
   SelectedRange range;
   auto uc = ioptions_.internal_comparator.user_comparator();
@@ -1784,181 +1795,130 @@ Compaction* CompactionPicker::PickCompositeCompaction(
 
   auto set_include_limit = [&] {
     range.include_limit = true;
-    auto uend = input.files.front()->largest.user_key();
+    auto uend = input.files.back()->largest.user_key();
     assert(uc->Compare(range.limit, uend) <= 0);
     range.limit.assign(uend.data(), uend.size());
   };
 
-  if (max_read_amp_ratio > 0) {
-    for (auto& dependence : input.files.front()->prop.dependence) {
+  std::vector<PickerCompositeHeapItem> priority_heap;
+  for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
+    if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
+      return nullptr;
+    }
+    if (is_perfect(map_element)) {
+      continue;
+    }
+    double p = map_element.link.size();
+    uint64_t total_file_size = 0, total_garbage = 0;
+    for (auto& l : map_element.link) {
       auto& dependence_map = vstorage->dependence_map();
-      FileUseInfo info;
-      auto find = dependence_map.find(dependence.file_number);
+      auto find = dependence_map.find(l.file_number);
       if (find == dependence_map.end()) {
         // TODO log error
         continue;
       }
       auto f = find->second;
-      info.size = f->fd.GetFileSize();
-      info.used = info.size - info.size * f->num_antiquation /
-                                  std::max<uint64_t>(1, f->prop.num_entries);
-      file_used.emplace(dependence.file_number, info);
-    }
-    std::vector<PickerCompositeHeapItem> priority_heap;
-    for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
-      if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
-        return nullptr;
-      }
-      if (is_perfect(map_element)) {
+      if (f->prop.is_map_sst()) {
+        // TODO log error
         continue;
       }
-      double p = map_element.link.size();
-      size_t size = 0, used = 0;
-      for (auto& l : map_element.link) {
-        auto find = file_used.find(l.file_number);
-        if (find == file_used.end()) {
-          // TODO log error
-          continue;
-        }
-        size += find->second.size;
-        used += find->second.used;
-      }
-      p *= (1 + double(size - std::min(used, size)) / size);
-      if (p <= 2.0) {
-        continue;
-      }
-      PickerCompositeHeapItem item = {
-          ArenaPinSlice(map_element.largest_key, &arena), p};
-      priority_heap.push_back(item);
+      uint64_t file_size = f->fd.GetFileSize();
+      assert(file_size > 0);
+      total_file_size += file_size;
+      total_garbage += file_size * f->num_antiquation /
+                       std::max<uint64_t>(1, f->prop.num_entries);
     }
-    std::make_heap(priority_heap.begin(), priority_heap.end(),
-                   std::less<double>());
-    struct Comp {
-      const InternalKeyComparator* c;
-      bool operator()(const Slice& a, const Slice& b) const {
-        return c->Compare(a, b) < 0;
-      }
-    } c = {icmp_};
-    std::set<Slice, Comp> unique_check(c);
-    auto push_unique = [&](const Slice& key) {
-      unique_check.emplace(ArenaPinSlice(key, &arena));
-    };
-    uint64_t pick_size =
-        size_t(MaxFileSizeForLevel(mutable_cf_options, std::max(1, input.level),
-                                   ioptions_.compaction_style) *
-               2);
-    auto estimate_size = [](const MapSstElement& element) {
-      uint64_t sum = 0;
-      for (auto& l : element.link) {
-        sum += l.size;
-      }
-      return sum;
-    };
-    while (!priority_heap.empty()) {
-      auto key = priority_heap.front().k;
-      auto weight = priority_heap.front().s;
-      std::pop_heap(priority_heap.begin(), priority_heap.end(),
-                    std::less<double>());
-      priority_heap.pop_back();
-      iter->Seek(key);
-      assert(iter->Valid());
-      if (unique_check.count(iter->key()) > 0) {
-        continue;
-      }
-      if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
-        return nullptr;
-      }
-      AssignUserKey(range.start, map_element.smallest_key);
-      AssignUserKey(range.limit, map_element.largest_key);
-      range.include_start = true;
-      range.include_limit = false;
-      uint64_t sum = estimate_size(map_element);
-      push_unique(iter->key());
-      while (sum < pick_size) {
-        iter->Next();
-        if (!iter->Valid()) {
-          set_include_limit();
-          break;
-        }
-        if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
-          return nullptr;
-        }
-        if (unique_check.count(iter->key()) > 0 || is_perfect(map_element)) {
-          AssignUserKey(range.limit, map_element.smallest_key);
-          break;
-        } else {
-          AssignUserKey(range.limit, map_element.largest_key);
-          sum += estimate_size(map_element);
-          push_unique(iter->key());
-        }
-      }
-      // always try pick prev range
-      iter->SeekForPrev(key);
-      assert(iter->Valid());
-      do {
-        iter->Prev();
-        if (!iter->Valid() || unique_check.count(iter->key()) > 0) {
-          break;
-        }
-        if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
-          return nullptr;
-        }
-        if (is_perfect(map_element)) {
-          break;
-        }
-        AssignUserKey(range.start, map_element.smallest_key);
-        sum += estimate_size(map_element);
-        push_unique(iter->key());
-      } while (sum < pick_size);
-      input_range.emplace_back(SelectedRange(std::move(range), weight));
-      if (input_range.size() >= max_subcompactions) {
-        break;
-      }
-    }
-    if (!input_range.empty()) {
-      if (CompactionPicker::FixInputRange(input_range,
-                                          ioptions_.internal_comparator,
-                                          true /* sort */, false /* merge */)) {
-        compaction_type = kKeyValueCompaction;
-        return new_compaction();
-      }
-    }
+    p *= 1 + 1.0 * total_garbage / total_file_size;
+    p += file_number_score(map_element);
+    PickerCompositeHeapItem item = {
+        ArenaPinSlice(map_element.largest_key, &arena), p};
+    priority_heap.push_back(item);
   }
-  bool has_start = false;
-  for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
+  std::make_heap(priority_heap.begin(), priority_heap.end(),
+                 std::less<double>());
+  chash_set<Slice, SliceHasher> unique_check;
+  auto push_unique = [&](const Slice& key) {
+    unique_check.emplace(ArenaPinSlice(key, &arena));
+  };
+  uint64_t pick_size =
+      size_t(MaxFileSizeForLevel(mutable_cf_options, std::max(1, input.level),
+                                 ioptions_.compaction_style) *
+             2);
+  auto estimate_size = [](const MapSstElement& element) {
+    uint64_t sum = 0;
+    for (auto& l : element.link) {
+      sum += l.size;
+    }
+    return sum;
+  };
+  while (!priority_heap.empty()) {
+    auto key = priority_heap.front().k;
+    auto weight = priority_heap.front().s;
+    std::pop_heap(priority_heap.begin(), priority_heap.end(),
+                  std::less<double>());
+    priority_heap.pop_back();
+    iter->Seek(key);
+    assert(iter->Valid());
+    if (unique_check.count(iter->key()) > 0) {
+      continue;
+    }
     if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
       return nullptr;
     }
-
-    if (has_start) {
-      if (is_perfect(map_element)) {
-        has_start = false;
+    AssignUserKey(range.start, map_element.smallest_key);
+    AssignUserKey(range.limit, map_element.largest_key);
+    range.include_start = true;
+    range.include_limit = false;
+    uint64_t sum = estimate_size(map_element);
+    push_unique(iter->key());
+    while (sum < pick_size) {
+      iter->Next();
+      if (!iter->Valid()) {
+        set_include_limit();
+        break;
+      }
+      if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
+        return nullptr;
+      }
+      if (unique_check.count(iter->key()) > 0 || is_perfect(map_element)) {
         AssignUserKey(range.limit, map_element.smallest_key);
-        range.include_start = true;
-        range.include_limit = false;
-        input_range.emplace_back(std::move(range), 0);
-        if (input_range.size() >= max_subcompactions) {
-          break;
-        }
+        break;
       } else {
         AssignUserKey(range.limit, map_element.largest_key);
+        sum += estimate_size(map_element);
+        push_unique(iter->key());
       }
-    } else if (!is_perfect(map_element)) {
-      has_start = true;
+    }
+    // always try pick prev range
+    iter->SeekForPrev(key);
+    assert(iter->Valid());
+    do {
+      iter->Prev();
+      if (!iter->Valid() || unique_check.count(iter->key()) > 0) {
+        break;
+      }
+      if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
+        return nullptr;
+      }
+      if (is_perfect(map_element)) {
+        break;
+      }
       AssignUserKey(range.start, map_element.smallest_key);
-      AssignUserKey(range.limit, map_element.largest_key);
+      sum += estimate_size(map_element);
+      push_unique(iter->key());
+    } while (sum < pick_size);
+    input_range.emplace_back(SelectedRange(std::move(range), weight));
+    if (input_range.size() >= max_subcompactions) {
+      break;
     }
   }
-  if (has_start) {
-    range.include_start = true;
-    set_include_limit();
-    input_range.emplace_back(std::move(range));
-  }
-  if (CompactionPicker::FixInputRange(input_range,
-                                      ioptions_.internal_comparator,
-                                      false /* sort */, false /* merge */)) {
-    compaction_type = kKeyValueCompaction;
-    return new_compaction();
+  if (!input_range.empty()) {
+    if (CompactionPicker::FixInputRange(input_range,
+                                        ioptions_.internal_comparator,
+                                        true /* sort */, false /* merge */)) {
+      compaction_type = kKeyValueCompaction;
+      return new_compaction();
+    }
   }
   // for unmap level 0
   if (input.level != 0) {
@@ -1994,16 +1954,8 @@ void CompactionPicker::PickFilesMarkedForCompaction(
     return ExpandInputsToCleanCut(cf_name, vstorage, start_level_inputs);
   };
 
-  // take a chance on a random file first
-  Random64 rnd(/* seed */ reinterpret_cast<uint64_t>(vstorage));
-  size_t random_file_index = static_cast<size_t>(rnd.Uniform(
-      static_cast<uint64_t>(vstorage->FilesMarkedForCompaction().size())));
-
-  if (continuation(vstorage->FilesMarkedForCompaction()[random_file_index])) {
-    // found the compaction!
-    return;
-  }
-
+  // FilesMarkedForCompaction sorted by file_number.
+  // let's pick oldest sst first
   for (auto& level_file : vstorage->FilesMarkedForCompaction()) {
     if (continuation(level_file)) {
       // found the compaction!
@@ -2193,6 +2145,8 @@ void LevelCompactionBuilder::SetupInitialFiles() {
       return;
     }
 
+    // BottommostFilesMarkedForCompaction sorted by file_number.
+    // let's pick oldest sst first
     size_t i;
     for (i = 0; i < vstorage_->BottommostFilesMarkedForCompaction().size();
          ++i) {

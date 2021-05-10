@@ -34,7 +34,7 @@ class UniversalCompactionPicker : public CompactionPicker {
       uint32_t max_subcompactions, const InternalKey* begin,
       const InternalKey* end, InternalKey** compaction_end,
       bool* manual_conflict,
-      const std::unordered_set<uint64_t>* files_being_compact) override;
+      const chash_set<uint64_t>* files_being_compact) override;
 
   int MaxOutputLevel() const override { return NumberLevels() - 1; }
 
