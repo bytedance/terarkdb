@@ -22,6 +22,7 @@
 #include "rocksdb/options.h"
 #include "rocksdb/status.h"
 #include "rocksdb/terark_namespace.h"
+#include "util/chash_set.h"
 
 namespace TERARKDB_NAMESPACE {
 
@@ -108,10 +109,11 @@ class CompactionPicker {
                                     VersionStorageInfo* vstorage,
                                     LogBuffer* log_buffer);
 
-  virtual void InitFilesBeingCompact(
-      const MutableCFOptions& mutable_cf_options, VersionStorageInfo* vstorage,
-      const InternalKey* begin, const InternalKey* end,
-      std::unordered_set<uint64_t>* files_being_compact);
+  virtual void InitFilesBeingCompact(const MutableCFOptions& mutable_cf_options,
+                                     VersionStorageInfo* vstorage,
+                                     const InternalKey* begin,
+                                     const InternalKey* end,
+                                     chash_set<uint64_t>* files_being_compact);
 
   // Return a compaction object for compacting the range [begin,end] in
   // the specified level.  Returns nullptr if there is nothing in that
@@ -130,8 +132,7 @@ class CompactionPicker {
       int input_level, int output_level, uint32_t output_path_id,
       uint32_t max_subcompactions, const InternalKey* begin,
       const InternalKey* end, InternalKey** compaction_end,
-      bool* manual_conflict,
-      const std::unordered_set<uint64_t>* files_being_compact);
+      bool* manual_conflict, const chash_set<uint64_t>* files_being_compact);
 
   // Pick compaction which pointed range files
   // range use internal keys
@@ -140,8 +141,8 @@ class CompactionPicker {
       SeparationType separation_type, VersionStorageInfo* vstorage, int level,
       const InternalKey* begin, const InternalKey* end,
       uint32_t max_subcompactions,
-      const std::unordered_set<uint64_t>* files_being_compact,
-      bool* manual_conflict, LogBuffer* log_buffer);
+      const chash_set<uint64_t>* files_being_compact, bool* manual_conflict,
+      LogBuffer* log_buffer);
 
   // The maximum allowed output level.  Default value is NumberLevels() - 1.
   virtual int MaxOutputLevel() const { return NumberLevels() - 1; }
@@ -353,7 +354,7 @@ class NullCompactionPicker : public CompactionPicker {
       uint32_t /*max_subcompactions*/, const InternalKey* /*begin*/,
       const InternalKey* /*end*/, InternalKey** /*compaction_end*/,
       bool* /*manual_conflict*/,
-      const std::unordered_set<uint64_t>* /*files_being_compact*/) override {
+      const chash_set<uint64_t>* /*files_being_compact*/) override {
     return nullptr;
   }
 

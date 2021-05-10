@@ -935,11 +935,11 @@ void DBImpl::ScheduleTtlGC() {
   };
   mutex_.Lock();
   for (auto cfd : *versions_->GetColumnFamilySet()) {
-    uint64_t mark_count = 0;
-    uint64_t marked_count = 0;
-    uint64_t total_cnt = 0;
-    if (!cfd->initialized() ||
-        cfd->GetLatestCFOptions().ttl_extractor_factory == nullptr) {
+    uint64_t new_mark_count = 0;
+    uint64_t old_mark_count = 0;
+    uint64_t total_count = 0;
+    if (!cfd->initialized() || cfd->IsDropped() ||
+        cfd->ioptions()->ttl_extractor_factory == nullptr) {
       continue;
     }
     VersionStorageInfo* vstorage = cfd->current()->storage_info();
@@ -948,31 +948,34 @@ void DBImpl::ScheduleTtlGC() {
         if (meta->being_compacted) {
           continue;
         }
-        ++total_cnt;
-        marked_count += meta->marked_for_compaction;
+        ++total_count;
+        old_mark_count += meta->marked_for_compaction;
         TEST_SYNC_POINT("DBImpl:Exist-SST");
         if (!meta->marked_for_compaction &&
             should_marked_for_compacted(
                 l, meta->fd.GetNumber(), meta->prop.earliest_time_begin_compact,
                 meta->prop.latest_time_end_compact, nowSeconds)) {
           meta->marked_for_compaction = true;
-          vstorage->AddFilesMarkedForCompaction(l, meta);
         }
         if (meta->marked_for_compaction) {
-          mark_count++;
+          new_mark_count++;
           TEST_SYNC_POINT("DBImpl:ScheduleTtlGC-mark");
         }
       }
     }
-    if (mark_count > marked_count && !cfd->queued_for_compaction()) {
-      AddToCompactionQueue(cfd);
-      unscheduled_compactions_++;
+    if (new_mark_count > old_mark_count) {
+      vstorage->ComputeCompactionScore(*cfd->ioptions(),
+                                       *cfd->GetLatestMutableCFOptions());
+      if (!cfd->queued_for_compaction()) {
+        AddToCompactionQueue(cfd);
+        unscheduled_compactions_++;
+      }
     }
     ROCKS_LOG_BUFFER(&log_buffer_debug,
                      "[%s] SSTs total marked = %" PRIu64
                      ", new marked = %" PRIu64 ", file count: %" PRIu64,
-                     cfd->GetName().c_str(), marked_count, mark_count,
-                     total_cnt);
+                     cfd->GetName().c_str(), old_mark_count, new_mark_count,
+                     total_count);
   }
   if (unscheduled_compactions_ > 0) {
     MaybeScheduleFlushOrCompaction();

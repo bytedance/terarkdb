@@ -26,6 +26,7 @@
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
 #include "rocksdb/terark_namespace.h"
+#include "util/chash_set.h"
 #include "util/thread_local.h"
 
 namespace TERARKDB_NAMESPACE {
@@ -302,18 +303,18 @@ class ColumnFamilyData {
   static const int kCompactToBaseLevel;
 
   // REQUIRES: DB mutex held
-  void PrepareManualCompaction(
-      const MutableCFOptions& mutable_cf_options, const Slice* begin,
-      const Slice* end, std::unordered_set<uint64_t>* files_being_compact);
+  void PrepareManualCompaction(const MutableCFOptions& mutable_cf_options,
+                               const Slice* begin, const Slice* end,
+                               chash_set<uint64_t>* files_being_compact);
 
   // REQUIRES: DB mutex held
-  Compaction* CompactRange(
-      const MutableCFOptions& mutable_cf_options,
-      SeparationType separation_type, int input_level, int output_level,
-      uint32_t output_path_id, uint32_t max_subcompactions,
-      const InternalKey* begin, const InternalKey* end,
-      InternalKey** compaction_end, bool* manual_conflict,
-      const std::unordered_set<uint64_t>* files_being_compact);
+  Compaction* CompactRange(const MutableCFOptions& mutable_cf_options,
+                           SeparationType separation_type, int input_level,
+                           int output_level, uint32_t output_path_id,
+                           uint32_t max_subcompactions,
+                           const InternalKey* begin, const InternalKey* end,
+                           InternalKey** compaction_end, bool* manual_conflict,
+                           const chash_set<uint64_t>* files_being_compact);
 
   CompactionPicker* compaction_picker() { return compaction_picker_.get(); }
   // thread-safe
