@@ -1067,7 +1067,7 @@ const int ColumnFamilyData::kCompactToBaseLevel = -2;
 
 void ColumnFamilyData::PrepareManualCompaction(
     const MutableCFOptions& mutable_cf_options, const Slice* begin,
-    const Slice* end, std::unordered_set<uint64_t>* files_being_compact) {
+    const Slice* end, chash_set<uint64_t>* files_being_compact) {
   InternalKey ibegin, iend;
   InternalKey* ibegin_ptr = nullptr;
   InternalKey* iend_ptr = nullptr;
@@ -1089,7 +1089,7 @@ Compaction* ColumnFamilyData::CompactRange(
     int input_level, int output_level, uint32_t output_path_id,
     uint32_t max_subcompactions, const InternalKey* begin,
     const InternalKey* end, InternalKey** compaction_end, bool* conflict,
-    const std::unordered_set<uint64_t>* files_being_compact) {
+    const chash_set<uint64_t>* files_being_compact) {
   if (max_subcompactions == 0) {
     max_subcompactions = mutable_cf_options.max_subcompactions;
   }

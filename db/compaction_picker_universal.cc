@@ -511,7 +511,7 @@ Compaction* UniversalCompactionPicker::CompactRange(
     int input_level, int output_level, uint32_t output_path_id,
     uint32_t max_subcompactions, const InternalKey* begin,
     const InternalKey* end, InternalKey** compaction_end, bool* manual_conflict,
-    const std::unordered_set<uint64_t>* files_being_compact) {
+    const chash_set<uint64_t>* files_being_compact) {
   if (input_level == ColumnFamilyData::kCompactAllLevels &&
       ioptions_.enable_lazy_compaction) {
     auto hit_sst = [&](const FileMetaData* f) {

@@ -1768,16 +1768,8 @@ void VersionStorageInfo::ComputeFilesMarkedForCompaction() {
       }
     }
   }
-}
-
-void VersionStorageInfo::AddFilesMarkedForCompaction(int level,
-                                                     FileMetaData* meta) {
-  if (level < num_non_empty_levels_ - 1) {
-    files_marked_for_compaction_.emplace_back(level, meta);
-  } else {
-    assert(level == num_non_empty_levels_ - 1);
-    bottommost_files_marked_for_compaction_.emplace_back(level, meta);
-  }
+  std::sort(files_marked_for_compaction_.begin(),
+            files_marked_for_compaction_.end());
 }
 
 namespace {
@@ -2127,6 +2119,8 @@ void VersionStorageInfo::ComputeBottommostFilesMarkedForCompaction() {
       }
     }
   }
+  std::sort(bottommost_files_marked_for_compaction_.begin(),
+            bottommost_files_marked_for_compaction_.end());
 }
 
 void Version::Ref() { ++refs_; }

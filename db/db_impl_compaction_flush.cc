@@ -707,7 +707,7 @@ Status DBImpl::CompactRange(const CompactRangeOptions& options,
   }
 
   int max_level_with_files = 0;
-  std::unordered_set<uint64_t> files_being_compact;
+  chash_set<uint64_t> files_being_compact;
   {
     InstrumentedMutexLock l(&mutex_);
     Version* base = cfd->current();
@@ -1415,7 +1415,7 @@ Status DBImpl::RunManualCompaction(
     ColumnFamilyData* cfd, SeparationType separation_type, int input_level,
     int output_level, uint32_t output_path_id, uint32_t max_subcompactions,
     const Slice* begin, const Slice* end,
-    const std::unordered_set<uint64_t>* files_being_compact, bool exclusive,
+    const chash_set<uint64_t>* files_being_compact, bool exclusive,
     bool disallow_trivial_move) {
   assert(input_level == ColumnFamilyData::kCompactAllLevels ||
          input_level >= 0);
