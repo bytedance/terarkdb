@@ -1730,10 +1730,10 @@ void VersionStorageInfo::ComputeCompactionScore(
   uint64_t num_entries = 0;
   bool marked = false;
   for (auto& f : LevelFiles(-1)) {
-    if (f->is_gc_forbidden()) {
+    if (!f->is_gc_permitted()) {
       continue;
     }
-    // if a file being_compacted, gc_status must be kGarbageCollectionForbidden
+    // if a file being_compacted, gc_status must be kGarbageCollectionCandidate
     marked |= f->marked_for_compaction;
     num_antiquation += f->num_antiquation;
     num_entries += f->prop.num_entries;

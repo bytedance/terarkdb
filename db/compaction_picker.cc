@@ -878,7 +878,9 @@ Compaction* CompactionPicker::PickGarbageCollection(
   params.compaction_type = kGarbageCollection;
   params.compaction_reason = CompactionReason::kGarbageCollection;
 
-  return RegisterCompaction(new Compaction(std::move(params)));
+  auto c = RegisterCompaction(new Compaction(std::move(params)));
+  vstorage->ComputeCompactionScore(ioptions_, mutable_cf_options);
+  return c;
 }
 
 void CompactionPicker::InitFilesBeingCompact(
@@ -2674,9 +2676,12 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
     }
   }
   sorted_runs.erase(sorted_runs.begin());
-  return picker->PickCompositeCompaction(cf_name_, mutable_cf_options_,
-                                         vstorage_, snapshots, sorted_runs,
-                                         log_buffer_);
+  auto c =
+      picker->PickCompositeCompaction(cf_name_, mutable_cf_options_, vstorage_,
+                                      snapshots, sorted_runs, log_buffer_);
+  picker->RegisterCompaction(c);
+  vstorage_->ComputeCompactionScore(ioptions_, mutable_cf_options_);
+  return c;
 }
 
 Compaction* LevelCompactionBuilder::GetCompaction() {
