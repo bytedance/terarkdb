@@ -552,7 +552,11 @@ Status ZenEnv::DeleteFile(const std::string& fname) {
   Debug(logger_, "Delete file: %s \n", fname.c_str());
 
   if (zoneFile == nullptr) {
-    return target()->DeleteFile(ToAuxPath(fname));
+    s = target()->DeleteFile(ToAuxPath(fname));
+    if (s == Status::IOError(Slice("while unlink() file: " + fname), strerror(2))) {
+      return Status::OK();
+    }
+    return s;
   }
 
   if (zoneFile->IsOpenForWR()) {
