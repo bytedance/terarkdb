@@ -50,6 +50,7 @@ class ZoneFile {
   uint64_t file_id_;
 
   uint32_t nr_synced_extents_;
+  bool open_for_wr_ = false;
 
  public:
   explicit ZoneFile(ZonedBlockDevice* zbd, std::string filename,
@@ -57,9 +58,14 @@ class ZoneFile {
 
   virtual ~ZoneFile();
 
+  void OpenWR();
   void CloseWR();
-  Status Append(void* data, int data_size, int valid_size);
+  bool IsOpenForWR();
+
+  Status Append(void* data, int data_size, int valid_sizem, bool async = false);
   Status SetWriteLifeTimeHint(Env::WriteLifeTimeHint lifetime);
+  Status Sync();
+
   std::string GetFilename();
   void Rename(std::string name);
   uint64_t GetFileSize();
@@ -116,6 +122,9 @@ class ZonedWritableFile : public WritableFile {
     return zoneFile_->GetBlockSize();
   }
   void SetWriteLifeTimeHint(Env::WriteLifeTimeHint hint) override;
+  virtual Env::WriteLifeTimeHint GetWriteLifeTimeHint() override {
+    return zoneFile_->GetWriteLifeTimeHint();
+  }
 
  private:
   Status BufferedWrite(const Slice& data);
@@ -123,6 +132,8 @@ class ZonedWritableFile : public WritableFile {
 
   bool buffered;
   char* buffer;
+  char *b1;
+  char *b2;
   size_t buffer_sz;
   uint32_t block_sz;
   uint32_t buffer_pos;
@@ -150,9 +161,7 @@ class ZonedSequentialFile : public SequentialFile {
                           Slice* result, char* scratch) override;
   Status Skip(uint64_t n);
 
-  bool use_direct_io() const override { /*return target_->use_direct_io(); */
-    return true;
-  }
+  bool use_direct_io() const override { return direct_; }
 
   size_t GetRequiredBufferAlignment() const override {
     return zoneFile_->GetBlockSize();
@@ -175,6 +184,10 @@ class ZonedRandomAccessFile : public RandomAccessFile {
 
   Status Read(uint64_t offset, size_t n,
                 Slice* result, char* scratch) const override;
+
+  Status Prefetch(uint64_t /*offset*/, size_t /*n*/) override {
+    return Status::OK();
+  }
 
   bool use_direct_io() const override { return true; }
 
