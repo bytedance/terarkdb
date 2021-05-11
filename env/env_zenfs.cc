@@ -256,7 +256,7 @@ void ZenEnv::LogFiles() {
 
 void ZenEnv::ClearFiles() {
   std::map<std::string, ZoneFile*>::iterator it;
-  std::unique_lock<std::mutex> lk(&files_mtx_);
+  std::unique_lock<std::mutex> lk(files_mtx_);
   for (it = files_.begin(); it != files_.end(); it++) delete it->second;
   files_.clear();
 }
@@ -319,7 +319,7 @@ Status ZenEnv::RollMetaZoneLocked() {
     return Status::IOError("Failed writing a new superblock");
   }
 
-  s = WriteSnapshot(meta_log_.get());
+  s = WriteSnapshotLocked(meta_log_.get());
 
   /* We've rolled successfully, we can reset the old zone now */
   if (s.ok()) old_meta_zone->Reset();
@@ -423,44 +423,44 @@ Status ZenEnv::DeleteFile_Internal(std::string fname) {
 
 Status ZenEnv::NewSequentialFile(const std::string& fname,
                                   std::unique_ptr<SequentialFile>* result,
-                                  const EnvOptions& options) {
+                                  const EnvOptions& opts) {
   ZoneFile* zoneFile = GetFile(fname);
 
   Debug(logger_, "New sequential file: %s direct: %d\n", fname.c_str(),
-        options.use_direct_reads);
+        opts.use_direct_reads);
 
   if (zoneFile == nullptr) {
     return Status::IOError("File does not exist!\n");
   }
 
-  result->reset(new ZonedSequentialFile(zoneFile, options));
+  result->reset(new ZonedSequentialFile(zoneFile, opts));
   return Status::OK();
 }
 
 Status ZenEnv::NewRandomAccessFile(const std::string& fname,
                                     std::unique_ptr<RandomAccessFile>* result,
-                                    const EnvOptions& options) {
+                                    const EnvOptions& opts) {
   ZoneFile* zoneFile = GetFile(fname);
 
   Debug(logger_, "New random access file: %s direct: %d\n", fname.c_str(),
-        options.use_direct_reads);
+        opts.use_direct_reads);
 
   if (zoneFile == nullptr) {
-    return target()->NewRandomAccessFile(ToAuxPath(fname), result);
+    return target()->NewRandomAccessFile(ToAuxPath(fname), result, opts);
   }
 
-  result->reset(new ZonedRandomAccessFile(files_[fname], options));
+  result->reset(new ZonedRandomAccessFile(files_[fname], opts));
   return Status::OK();
 }
 
 Status ZenEnv::NewWritableFile(const std::string& fname,
                                 std::unique_ptr<WritableFile>* result,
-                                const EnvOptions& options) {
+                                const EnvOptions& opts) {
   ZoneFile* zoneFile;
   Status s;
 
   Debug(logger_, "New writable file: %s direct: %d\n", fname.c_str(),
-        options.use_direct_writes);
+        opts.use_direct_writes);
 
   if (GetFile(fname) != nullptr) {
     s = DeleteFile(fname);
@@ -481,14 +481,14 @@ Status ZenEnv::NewWritableFile(const std::string& fname,
 Status ZenEnv::ReuseWritableFile(const std::string& fname,
                                   const std::string& old_fname,
                                   std::unique_ptr<WritableFile>* result,
-                                  const EnvOptions& options) {
+                                  const EnvOptions& opts) {
   Debug(logger_, "Reuse writable file: %s old name: %s\n", fname.c_str(),
         old_fname.c_str());
 
   if (GetFile(fname) == nullptr)
     return Status::NotFound("Old file does not exist");
 
-  return NewWritableFile(fname, result, options);
+  return NewWritableFile(fname, result, opts);
 }
 
 Status ZenEnv::FileExists(const std::string& fname) {
@@ -502,15 +502,14 @@ Status ZenEnv::FileExists(const std::string& fname) {
 }
 
 Status ZenEnv::ReopenWritableFile(const std::string& fname,
-                                   const FileOptions& options,
-                                   std::unique_ptr<FSWritableFile>* result,
-                                   IODebugContext* dbg) {
+                                   std::unique_ptr<WritableFile>* result,
+                                   const EnvOptions& opts) {
   Debug(logger_, "Reopen writable file: %s \n", fname.c_str());
 
   if (GetFile(fname) != nullptr)
-    return NewWritableFile(fname, options, result, dbg);
+    return NewWritableFile(fname, result, opts);
 
-  return target()->NewWritableFile(fname, options, result, dbg);
+  return target()->NewWritableFile(fname, result, opts);
 }
  
 
@@ -970,7 +969,8 @@ Status ZenEnv::MkFS(std::string aux_fs_path, uint32_t finish_threshold,
 
   log.reset(new ZenMetaLog(zbd_, meta_zone));
 
-  Superblock* super = new Superblock(zbd_, aux_fs_path, finish_threshold);
+  Superblock* super = new Superblock(zbd_, aux_fs_path, finish_threshold,
+                                     max_open_limit, max_active_limit);
   std::string super_string;
   super->EncodeTo(&super_string);
 

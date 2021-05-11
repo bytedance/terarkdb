@@ -8,6 +8,13 @@
 #if defined(GFLAGS) && !defined(ROCKSDB_LITE) && defined(LIBZBD)
 
 #include <cstdio>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <dirent.h>
+#include <iostream>
+#include <fstream>
+#include <streambuf>
 
 #include "env/env_zenfs.h"
 #include "util/gflags_compat.h"
@@ -138,8 +145,8 @@ int zenfs_tool_df() {
   ZonedBlockDevice *zbd = zbd_open(true);
   if (zbd == nullptr) return 1;
 
-  ZenFS *zenFS;
-  s = zenfs_mount(zbd, &zenFS, true);
+  ZenEnv *zenEnv;
+  s = zenfs_mount(zbd, &zenEnv, true);
   if (!s.ok()) {
     fprintf(stderr, "Failed to mount filesystem, error: %s\n",
             s.ToString().c_str());
@@ -214,26 +221,24 @@ void ReadWriteLifeTimeHints() {
   wlth_file.close();
 }
 
-Status zenfs_tool_copy_file(FileSystem *f_fs, std::string f, FileSystem *t_fs, std::string t) {
-  FileOptions fopts;
-  IOOptions iopts;
-  IODebugContext dbg;
+Status zenfs_tool_copy_file(Env *f_fs, std::string f, Env *t_fs, std::string t) {
+  EnvOptions eopt;
   Status s;
-  std::unique_ptr<FSSequentialFile> f_file;
-  std::unique_ptr<FSWritableFile> t_file;
+  std::unique_ptr<SequentialFile> f_file;
+  std::unique_ptr<WritableFile> t_file;
   size_t buffer_sz = 1024 * 1024;
   uint64_t to_copy;
   char *buffer;
  
   fprintf(stdout, "%s\n", f.c_str());
  
-  s = f_fs->GetFileSize(f, iopts, &to_copy, &dbg);
+  s = f_fs->GetFileSize(f, &to_copy);
   if (!s.ok()) { return s; }
 
-  s = f_fs->NewSequentialFile(f, fopts, &f_file, &dbg);
+  s = f_fs->NewSequentialFile(f, &f_file, eopt);
   if (!s.ok()) { return s; }
   
-  s = t_fs->NewWritableFile(t, fopts, &t_file, &dbg);
+  s = t_fs->NewWritableFile(t, &t_file, eopt);
   if (!s.ok()) { return s; }
 
   t_file->SetWriteLifeTimeHint(GetWriteLifeTimeHint(t));
@@ -250,26 +255,24 @@ Status zenfs_tool_copy_file(FileSystem *f_fs, std::string f, FileSystem *t_fs, s
     if (chunk_sz > buffer_sz)
       chunk_sz = buffer_sz;
   
-    s = f_file->Read(chunk_sz, iopts, &chunk_slice, buffer, &dbg);
+    s = f_file->Read(chunk_sz, &chunk_slice, buffer);
     if (!s.ok()) { break; }
     
-    s = t_file->Append(chunk_slice, iopts, &dbg);
+    s = t_file->Append(chunk_slice);
     to_copy -= chunk_slice.size();
   }
   
   free(buffer);
   if (!s.ok()) { return s; }
   
-  return t_file->Fsync(iopts, &dbg);
+  return t_file->Fsync();
 }
 
-Status zenfs_tool_copy_dir(FileSystem *f_fs, std::string f_dir, FileSystem *t_fs, std::string t_dir) {
-  IOOptions opts;
-  IODebugContext dbg;
+Status zenfs_tool_copy_dir(Env *f_fs, std::string f_dir, Env *t_fs, std::string t_dir) {
   Status s;
   std::vector<std::string> files;
 
-  s = f_fs->GetChildren(f_dir, opts, &files, &dbg);
+  s = f_fs->GetChildren(f_dir, &files);
   if (!s.ok()) { return s; }
   
   for (const auto f : files) {
@@ -279,7 +282,7 @@ Status zenfs_tool_copy_dir(FileSystem *f_fs, std::string f_dir, FileSystem *t_fs
     if (f == "." || f == ".." || f == "write_lifetime_hints.dat")
       continue;
 
-    // s = f_fs->IsDirectory(filename, opts, &is_dir, &dbg);
+    // s = f_fs->IsDirectory(filename, &is_dir);
     // if (!s.ok()) { return s; }
     
     std::string dest_filename;
@@ -291,7 +294,7 @@ Status zenfs_tool_copy_dir(FileSystem *f_fs, std::string f_dir, FileSystem *t_fs
     }
    
     if (is_dir) {
-      s = t_fs->CreateDir(dest_filename, opts, &dbg);
+      s = t_fs->CreateDir(dest_filename);
       if (!s.ok()) { return s; }
       s =  zenfs_tool_copy_dir(f_fs, filename + "/", t_fs, dest_filename);
       if (!s.ok()) { return s; }
@@ -308,52 +311,50 @@ int zenfs_tool_backup() {
   Status status;
   Status io_status;
   ZonedBlockDevice *zbd;
-  ZenFS *zenFS;
+  ZenEnv *zenEnv;
 
   zbd = zbd_open(false);
   if (zbd == nullptr) return 1;
 
-  status = zenfs_mount(zbd, &zenFS, false);
+  status = zenfs_mount(zbd, &zenEnv, false);
   if (!status.ok()) {
     fprintf(stderr, "Failed to mount filesystem, error: %s\n",
             status.ToString().c_str());
     return 1;
   }
 
-  io_status = zenfs_tool_copy_dir(zenFS, "", FileSystem::Default().get(), FLAGS_path);
+  io_status = zenfs_tool_copy_dir(zenEnv, "", Env::Default(), FLAGS_path);
   if (!io_status.ok()) {
     fprintf(stderr, "Copy failed, error: %s\n", io_status.ToString().c_str());
     return 1;
   }
 
-  wlth_map = zenFS->GetWriteLifeTimeHints();
+  wlth_map = zenEnv->GetWriteLifeTimeHints();
   return SaveWriteLifeTimeHints();
 }
 
 int zenfs_tool_restore() {
   Status status;
-  Status io_status;
   ZonedBlockDevice *zbd;
-  ZenFS *zenFS;
+  ZenEnv *zenEnv;
 
   ReadWriteLifeTimeHints();
 
   zbd = zbd_open(false);
   if (zbd == nullptr) return 1;
 
-  status = zenfs_mount(zbd, &zenFS, false);
+  status = zenfs_mount(zbd, &zenEnv, false);
   if (!status.ok()) {
     fprintf(stderr, "Failed to mount filesystem, error: %s\n",
             status.ToString().c_str());
     return 1;
   }
   
-  io_status = zenfs_tool_copy_dir(FileSystem::Default().get(), FLAGS_path, zenFS, "");
-  if (!io_status.ok()) {
-    fprintf(stderr, "Copy failed, error: %s\n", io_status.ToString().c_str());
+  status = zenfs_tool_copy_dir(Env::Default(), FLAGS_path, zenEnv, "");
+  if (!status.ok()) {
+    fprintf(stderr, "Copy failed, error: %s\n", status.ToString().c_str());
     return 1;
   }
-
   return 0;
 }
 }  // namespace TERARKDB_NAMESPACE
@@ -374,17 +375,17 @@ int zenfs_tool(int argc, char **argv) {
     return 1;
   }
   if (subcmd == "mkfs") {
-    return ROCKSDB_NAMESPACE::zenfs_tool_mkfs();
+    return TERARKDB_NAMESPACE::zenfs_tool_mkfs();
   } else if (subcmd == "list") {
-    return ROCKSDB_NAMESPACE::zenfs_tool_list();
+    return TERARKDB_NAMESPACE::zenfs_tool_list();
   } else if (subcmd == "ls-uuid") {
-    return ROCKSDB_NAMESPACE::zenfs_tool_lsuuid();
+    return TERARKDB_NAMESPACE::zenfs_tool_lsuuid();
   } else if (subcmd == "df") {
-    return ROCKSDB_NAMESPACE::zenfs_tool_df();
+    return TERARKDB_NAMESPACE::zenfs_tool_df();
   } else if (subcmd == "backup") {
-    return ROCKSDB_NAMESPACE::zenfs_tool_backup();
+    return TERARKDB_NAMESPACE::zenfs_tool_backup();
   } else if (subcmd == "restore") {
-    return ROCKSDB_NAMESPACE::zenfs_tool_restore();
+    return TERARKDB_NAMESPACE::zenfs_tool_restore();
   } else {
     fprintf(stderr, "Subcommand not recognized: %s\n", subcmd.c_str());
     return 1;
