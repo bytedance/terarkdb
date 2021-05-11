@@ -26,9 +26,11 @@ class Superblock {
   uint32_t block_size_ = 0; /* in bytes */
   uint32_t zone_size_ = 0;  /* in blocks */
   uint32_t nr_zones_ = 0;
-  char aux_fs_path_[256] = {0};
   uint32_t finish_treshold_ = 0;
-  char reserved_[187] = {0};
+  char aux_fs_path_[256] = {0};
+  uint32_t max_active_limit_ = 0;
+  uint32_t max_open_limit_ = 0;
+  char reserved_[179] = {0};
 
  public:
   const uint32_t MAGIC = 0x5a454e46; /* ZENF */
@@ -40,8 +42,9 @@ class Superblock {
 
   /* Create a superblock for a filesystem covering the entire zoned block device
    */
-  Superblock(ZonedBlockDevice* zbd, std::string aux_fs_path = "",
-             uint32_t finish_threshold = 0) {
+  Superblock(ZonedBlockDevice* zbd, std::string aux_fs_path,
+             uint32_t finish_threshold,
+             uint32_t max_open_limit, uint32_t max_active_limit) {
     std::string uuid = Env::Default()->GenerateUniqueId();
     int uuid_len =
         std::min(uuid.length(),
@@ -56,74 +59,30 @@ class Superblock {
     zone_size_ = zbd->GetZoneSize() / block_size_;
     nr_zones_ = zbd->GetNrZones();
 
-    assert(aux_fs_path.length() < sizeof(aux_fs_path_));
-    strcpy(aux_fs_path_, aux_fs_path.c_str());
-  }
-
-  Status DecodeFrom(Slice* input) {
-    if (input->size() != ENCODED_SIZE) {
-      return Status::Corruption("ZenFS Superblock",
-                                "Error: Superblock size missmatch");
+  if (max_open_limit == 0) {
+      max_open_limit_ = zbd->GetMaxOpenZones();
+    } else {
+      max_open_limit_ = max_open_limit;
+    }
+    
+    if (max_active_limit == 0) {
+      max_active_limit_ = zbd->GetMaxActiveZones();
+    } else {
+      max_active_limit_ = max_active_limit;
     }
 
-    GetFixed32(input, &magic_);
-    memcpy(&uuid_, input->data(), sizeof(uuid_));
-    input->remove_prefix(sizeof(uuid_));
-    GetFixed32(input, &sequence_);
-    GetFixed32(input, &version_);
-    GetFixed32(input, &flags_);
-    GetFixed32(input, &block_size_);
-    GetFixed32(input, &zone_size_);
-    GetFixed32(input, &nr_zones_);
-    GetFixed32(input, &finish_treshold_);
-    memcpy(&aux_fs_path_, input->data(), sizeof(aux_fs_path_));
-    input->remove_prefix(sizeof(aux_fs_path_));
-    memcpy(&reserved_, input->data(), sizeof(reserved_));
-    input->remove_prefix(sizeof(reserved_));
-    assert(input->size() == 0);
-
-    if (magic_ != MAGIC)
-      return Status::Corruption("ZenFS Superblock", "Error: Magic missmatch");
-    if (version_ != CURRENT_VERSION)
-      return Status::Corruption("ZenFS Superblock", "Error: Version missmatch");
-
-    return Status::OK();
+    strncpy(aux_fs_path_, aux_fs_path.c_str(), sizeof(aux_fs_path_) - 1);
   }
 
-  void EncodeTo(std::string* output) {
-    sequence_++; /* Ensure that this superblock representation is unique */
-    output->clear();
-    PutFixed32(output, magic_);
-    output->append(uuid_, sizeof(uuid_));
-    PutFixed32(output, sequence_);
-    PutFixed32(output, version_);
-    PutFixed32(output, flags_);
-    PutFixed32(output, block_size_);
-    PutFixed32(output, zone_size_);
-    PutFixed32(output, nr_zones_);
-    PutFixed32(output, finish_treshold_);
-    output->append(aux_fs_path_, sizeof(aux_fs_path_));
-    output->append(reserved_, sizeof(reserved_));
-    assert(output->length() == ENCODED_SIZE);
-  }
-
-  Status CompatibleWith(ZonedBlockDevice* zbd) {
-    if (block_size_ != zbd->GetBlockSize())
-      return Status::Corruption("ZenFS Superblock",
-                                "Error: block size missmatch");
-    if (zone_size_ != (zbd->GetZoneSize() / block_size_))
-      return Status::Corruption("ZenFS Superblock",
-                                "Error: zone size missmatch");
-    if (nr_zones_ > zbd->GetNrZones())
-      return Status::Corruption("ZenFS Superblock",
-                                "Error: nr of zones missmatch");
-
-    return Status::OK();
-  }
+  Status DecodeFrom(Slice* input);
+  void EncodeTo(std::string* output);
+  Status CompatibleWith(ZonedBlockDevice* zbd);
 
   uint32_t GetSeq() { return sequence_; }
   std::string GetAuxFsPath() { return std::string(aux_fs_path_); }
   uint32_t GetFinishTreshold() { return finish_treshold_; }
+  uint32_t GetMaxOpenZoneLimit() { return max_open_limit_; }
+  uint32_t GetMaxActiveZoneLimit() { return max_active_limit_; }
   std::string GetUUID() { return std::string(uuid_); }
 };
 
@@ -182,7 +141,7 @@ class ZenEnv : public EnvWrapper {
 
   MetadataWriter metadata_writer_;
 
-  enum ZenFSTag : uint32_t {
+  enum ZenEnvTag : uint32_t {
     kCompleteFilesSnapshot = 1,
     kFileUpdate = 2,
     kFileDeletion = 3,
@@ -191,7 +150,7 @@ class ZenEnv : public EnvWrapper {
 
   void LogFiles();
   void ClearFiles();
-  Status WriteSnapshot(ZenMetaLog* meta_log);
+  Status WriteSnapshotLocked(ZenMetaLog* meta_log);
   Status WriteEndRecord(ZenMetaLog* meta_log);
   Status RollMetaZone();
   Status PersistSnapshot(ZenMetaLog* meta_writer);
@@ -211,21 +170,21 @@ class ZenEnv : public EnvWrapper {
     return superblock_->GetAuxFsPath() + path;
   }
 
-  std::string ToZenFSPath(std::string aux_path) {
+  std::string ToZenEnvPath(std::string aux_path) {
     std::string path = aux_path;
     path.erase(0, superblock_->GetAuxFsPath().length());
     return path;
   }
 
   ZoneFile* GetFile(std::string fname);
-  Status DeleteFile_Internal(std::string fname);
+  Status DeleteFile(std::string fname);
 
  public:
   explicit ZenEnv(ZonedBlockDevice* zbd, Env* env,
                   std::shared_ptr<Logger> logger);
   ~ZenEnv();
 
-  Status Mount();
+  Status Mount(bool readonly);
   Status MkFS(std::string aux_fs_path, uint32_t finish_threshold);
 
   virtual Status NewSequentialFile(const std::string& fname,
@@ -263,6 +222,14 @@ class ZenEnv : public EnvWrapper {
   }
 
   // The directory structure is stored in the aux file system
+
+  Status IsDirectory(const std::string& path, bool* is_dir) override {
+    if (GetFile(path) != nullptr) {
+      *is_dir = false;
+      return Status::OK();
+    }
+    return target()->IsDirectory(ToAuxPath(path), options, is_dir, dbg);
+  }
 
   Status NewDirectory(const std::string& name,
                         std::unique_ptr<Directory>* result) override {
@@ -324,7 +291,7 @@ class ZenEnv : public EnvWrapper {
 
   // Not supported (at least not yet)
   Status Truncate(const std::string& /*fname*/, size_t /*size*/) override {
-    return Status::NotSupported("Truncate is not implemented in ZenFS");
+    return Status::NotSupported("Truncate is not implemented in ZenEnv");
   }
 
   virtual Status ReopenWritableFile(const std::string& fname,
@@ -336,36 +303,36 @@ class ZenEnv : public EnvWrapper {
   virtual Status NewRandomRWFile(const std::string& /*fname*/,
                                  std::unique_ptr<RandomRWFile>* /*result*/,
                                  const EnvOptions& ) override {
-    return Status::NotSupported("RandomRWFile is not implemented in ZenFS");
+    return Status::NotSupported("RandomRWFile is not implemented in ZenEnv");
   }
 
   virtual Status NewMemoryMappedFileBuffer(
       const std::string& /*fname*/,
       std::unique_ptr<MemoryMappedFileBuffer>* /*result*/) override {
     return Status::NotSupported(
-        "MemoryMappedFileBuffer is not implemented in ZenFS");
+        "MemoryMappedFileBuffer is not implemented in ZenEnv");
   }
 
   Status GetFileModificationTime(const std::string& /*fname*/,
                                    uint64_t* /*file_mtime*/) override {
     return Status::NotSupported(
-        "GetFileModificationTime is not implemented in ZenFS");
+        "GetFileModificationTime is not implemented in ZenEnv");
   }
 
   virtual Status LinkFile(const std::string& /*src*/,
                             const std::string& /*target*/) {
-    return Status::NotSupported("LinkFile is not supported in ZenFS");
+    return Status::NotSupported("LinkFile is not supported in ZenEnv");
   }
 
   virtual Status NumFileLinks(const std::string& /*fname*/,
                                 uint64_t* /*count*/) {
     return Status::NotSupported(
-        "Getting number of file links is not supported in ZenFS");
+        "Getting number of file links is not supported in ZenEnv");
   }
 
   virtual Status AreFilesSame(const std::string& /*first*/,
                                 const std::string& /*second*/, bool* /*res*/) {
-    return Status::NotSupported("AreFilesSame is not supported in ZenFS");
+    return Status::NotSupported("AreFilesSame is not supported in ZenEnv");
   }
 };
 #endif  // !defined(ROCKSDB_LITE) && defined(OS_LINUX) && defined(LIBZBD)
