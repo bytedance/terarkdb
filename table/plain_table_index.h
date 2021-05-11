@@ -14,11 +14,12 @@
 #include "monitoring/histogram.h"
 #include "options/cf_options.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/arena.h"
 #include "util/hash.h"
 #include "util/murmurhash.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // PlainTableIndex contains buckets size of index_size_, each is a
 // 32-bit integer. The lower 31 bits contain an offset value (explained below)
@@ -169,8 +170,8 @@ class PlainTableIndexBuilder {
              num_records_in_current_group_;
     }
     IndexRecord* At(size_t index) {
-      return &(groups_[index / kNumRecordsPerGroup]
-                      [index % kNumRecordsPerGroup]);
+      return &(
+          groups_[index / kNumRecordsPerGroup][index % kNumRecordsPerGroup]);
     }
 
    private:
@@ -224,6 +225,6 @@ class PlainTableIndexBuilder {
   static const size_t kRecordsPerGroup = 256;
 };
 
-};  // namespace rocksdb
+};  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

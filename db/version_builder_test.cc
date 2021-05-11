@@ -3,16 +3,19 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
+#include <inttypes.h>
+
 #include <string>
 
 #include "db/version_edit.h"
 #include "db/version_set.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/logging.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class VersionBuilderTest : public testing::Test {
  public:
@@ -113,13 +116,13 @@ bool VerifyDependFiles(VersionStorageInfo* new_vstorage,
 
 TablePropertyCache GetPropCache(
     uint8_t purpose, std::initializer_list<uint64_t> dependence = {},
-    std::initializer_list<uint64_t> inheritance_chain = {}) {
+    std::initializer_list<uint64_t> inheritance = {}) {
   std::vector<Dependence> dep;
   for (auto& d : dependence) dep.emplace_back(Dependence{d, 1});
   TablePropertyCache ret;
   ret.purpose = purpose;
   ret.dependence = dep;
-  ret.inheritance_chain = inheritance_chain;
+  ret.inheritance = inheritance;
   return ret;
 }
 
@@ -156,7 +159,8 @@ TEST_F(VersionBuilderTest, ApplyAndSaveTo) {
 
   ASSERT_EQ(400U, new_vstorage.NumLevelBytes(2));
   ASSERT_EQ(300U, new_vstorage.NumLevelBytes(3));
-  ASSERT_TRUE(VerifyDependFiles(&new_vstorage, {1U, 66U, 88U, 6U, 7U, 8U, 26U, 27U, 28U, 29U, 666}));
+  ASSERT_TRUE(VerifyDependFiles(
+      &new_vstorage, {1U, 66U, 88U, 6U, 7U, 8U, 26U, 27U, 28U, 29U, 666}));
 
   UnrefFilesInVersion(&new_vstorage);
 }
@@ -195,7 +199,8 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic) {
   ASSERT_EQ(100U, new_vstorage.NumLevelBytes(3));
   ASSERT_EQ(300U, new_vstorage.NumLevelBytes(4));
   ASSERT_EQ(200U, new_vstorage.NumLevelBytes(5));
-  ASSERT_TRUE(VerifyDependFiles(&new_vstorage, {1U, 6U, 7U, 8U, 26U, 27U, 666}));
+  ASSERT_TRUE(
+      VerifyDependFiles(&new_vstorage, {1U, 6U, 7U, 8U, 26U, 27U, 666}));
 
   UnrefFilesInVersion(&new_vstorage);
 }
@@ -403,10 +408,10 @@ TEST_F(VersionBuilderTest, EstimatedActiveKeys) {
     Add(static_cast<int>(i / kFilesPerLevel), i + 1,
         ToString((i + 100) * 1000).c_str(),
         ToString((i + 100) * 1000 + 999).c_str(), 100U, 0, 100, 100,
-        kEntriesPerFile, kDeletionsPerFile, kNumFiles-i, kNumFiles-i);
+        kEntriesPerFile, kDeletionsPerFile, kNumFiles - i, kNumFiles - i);
   }
   UpdateVersionStorageInfo();
-  
+
   // minus 2X for the number of deletion entries because:
   // 1x for deletion entry does not count as a data entry.
   // 1x for each deletion entry will actually remove one data entry.
@@ -414,7 +419,80 @@ TEST_F(VersionBuilderTest, EstimatedActiveKeys) {
             (kEntriesPerFile - kDeletionsPerFile) * kNumFiles);
 }
 
-}  // namespace rocksdb
+TEST_F(VersionBuilderTest, HugeLSM) {
+  const uint32_t kNumLevels = 7;
+  const uint32_t kFilesPerLevel = 64;
+  const uint32_t kFilesPerLevelMultiplier = 4;
+  const uint32_t kFilesBlobDependence = 512;
+  const uint32_t kFilesBlobInheritance = 32;
+  const uint32_t kFilesBlobCount = 32768;
+
+  Random64 _rand(301);
+  uint64_t fn = kFilesBlobCount * kFilesBlobInheritance + 1;
+  uint64_t level_file_count = kFilesPerLevel;
+
+  for (uint32_t i = 0; i < kFilesBlobCount; ++i) {
+    TablePropertyCache prop;
+    for (uint32_t j = i * 32 + 1, je = j + kFilesBlobInheritance - 1; j < je;
+         ++j) {
+      prop.inheritance.emplace_back(j);
+    }
+    Add(-1, (i + 1) * 32, "0", "1", 100, 0, 0, 100, 100000, 0, 0, 100, prop);
+  }
+
+  auto make_prop = [&] {
+    TablePropertyCache prop;
+    for (uint32_t j = 0; j < kFilesBlobDependence; ++j) {
+      prop.dependence.emplace_back(Dependence{
+          (_rand.Uniform(kFilesBlobCount) * kFilesBlobInheritance) + 1, 1});
+    }
+    std::sort(prop.dependence.begin(), prop.dependence.end(),
+              [](const Dependence& l, const Dependence& r) {
+                return l.file_number < r.file_number;
+              });
+    prop.dependence.erase(
+        std::unique(prop.dependence.begin(), prop.dependence.end(),
+                    [](const Dependence& l, const Dependence& r) {
+                      return l.file_number == r.file_number;
+                    }),
+        prop.dependence.end());
+    return prop;
+  };
+  auto to_fix_string = [](uint64_t n) {
+    char buffer[32];
+    snprintf(buffer, sizeof buffer, "%012" PRIu64, n);
+    return std::string(buffer);
+  };
+
+  for (uint32_t level = 1; level < kNumLevels; ++level) {
+    for (uint32_t i = 0; i < level_file_count; ++i) {
+      Add(level, fn++, to_fix_string(i * 2).c_str(),
+          to_fix_string(i * 2 + 1).c_str(), 100, 0, 0, 100,
+          kFilesBlobDependence, 0, 0, 100, make_prop());
+    }
+    level_file_count *= kFilesPerLevelMultiplier;
+  }
+  UpdateVersionStorageInfo();
+
+  EnvOptions env_options;
+  VersionBuilder version_builder(env_options, nullptr, &vstorage_);
+  VersionStorageInfo new_vstorage(&icmp_, ucmp_, options_.num_levels,
+                                  kCompactionStyleLevel, false);
+
+  VersionEdit version_edit;
+  version_edit.AddFile(
+      1, fn, 0, 100,
+      GetInternalKey(to_fix_string(kFilesPerLevel * 2).c_str(), 0),
+      GetInternalKey(to_fix_string(kFilesPerLevel * 2 + 1).c_str(), 100), 0,
+      100, false, make_prop());
+  version_edit.DeleteFile(1, kFilesBlobCount * kFilesBlobInheritance + 1);
+
+  version_builder.Apply(&version_edit);
+
+  version_builder.SaveTo(&new_vstorage);
+}
+
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

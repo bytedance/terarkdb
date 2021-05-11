@@ -4,7 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 // This file implements the "bridge" between Java and C++ and enables
-// calling c++ rocksdb::TtlDB methods.
+// calling c++ TERARKDB_NAMESPACE::TtlDB methods.
 // from Java side.
 
 #include <jni.h>
@@ -32,10 +32,10 @@ jlong Java_org_rocksdb_TtlDB_open(JNIEnv* env, jclass /*jcls*/,
     return 0;
   }
 
-  auto* opt = reinterpret_cast<rocksdb::Options*>(joptions_handle);
-  rocksdb::DBWithTTL* db = nullptr;
-  rocksdb::Status s =
-      rocksdb::DBWithTTL::Open(*opt, db_path, &db, jttl, jread_only);
+  auto* opt = reinterpret_cast<TERARKDB_NAMESPACE::Options*>(joptions_handle);
+  TERARKDB_NAMESPACE::DBWithTTL* db = nullptr;
+  TERARKDB_NAMESPACE::Status s =
+      TERARKDB_NAMESPACE::DBWithTTL::Open(*opt, db_path, &db, jttl, jread_only);
   env->ReleaseStringUTFChars(jdb_path, db_path);
 
   // as TTLDB extends RocksDB on the java side, we can reuse
@@ -43,7 +43,7 @@ jlong Java_org_rocksdb_TtlDB_open(JNIEnv* env, jclass /*jcls*/,
   if (s.ok()) {
     return reinterpret_cast<jlong>(db);
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
     return 0;
   }
 }
@@ -72,18 +72,18 @@ jlongArray Java_org_rocksdb_TtlDB_openCF(JNIEnv* env, jclass /*jcls*/,
     return nullptr;
   }
 
-  std::vector<rocksdb::ColumnFamilyDescriptor> column_families;
+  std::vector<TERARKDB_NAMESPACE::ColumnFamilyDescriptor> column_families;
   jboolean has_exception = JNI_FALSE;
-  rocksdb::JniUtil::byteStrings<std::string>(
+  TERARKDB_NAMESPACE::JniUtil::byteStrings<std::string>(
       env, jcolumn_names,
       [](const char* str_data, const size_t str_len) {
         return std::string(str_data, str_len);
       },
       [&jco, &column_families](size_t idx, std::string cf_name) {
-        rocksdb::ColumnFamilyOptions* cf_options =
-            reinterpret_cast<rocksdb::ColumnFamilyOptions*>(jco[idx]);
+        TERARKDB_NAMESPACE::ColumnFamilyOptions* cf_options =
+            reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyOptions*>(jco[idx]);
         column_families.push_back(
-            rocksdb::ColumnFamilyDescriptor(cf_name, *cf_options));
+            TERARKDB_NAMESPACE::ColumnFamilyDescriptor(cf_name, *cf_options));
       },
       &has_exception);
 
@@ -108,10 +108,10 @@ jlongArray Java_org_rocksdb_TtlDB_openCF(JNIEnv* env, jclass /*jcls*/,
   }
   env->ReleaseIntArrayElements(jttls, jttlv, JNI_ABORT);
 
-  auto* opt = reinterpret_cast<rocksdb::DBOptions*>(jopt_handle);
-  std::vector<rocksdb::ColumnFamilyHandle*> handles;
-  rocksdb::DBWithTTL* db = nullptr;
-  rocksdb::Status s = rocksdb::DBWithTTL::Open(
+  auto* opt = reinterpret_cast<TERARKDB_NAMESPACE::DBOptions*>(jopt_handle);
+  std::vector<TERARKDB_NAMESPACE::ColumnFamilyHandle*> handles;
+  TERARKDB_NAMESPACE::DBWithTTL* db = nullptr;
+  TERARKDB_NAMESPACE::Status s = TERARKDB_NAMESPACE::DBWithTTL::Open(
       *opt, db_path, column_families, &handles, &db, ttl_values, jread_only);
 
   // we have now finished with db_path
@@ -142,7 +142,7 @@ jlongArray Java_org_rocksdb_TtlDB_openCF(JNIEnv* env, jclass /*jcls*/,
 
     return jresults;
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
     return NULL;
   }
 }
@@ -163,11 +163,11 @@ jlong Java_org_rocksdb_TtlDB_createColumnFamilyWithTtl(
   const jsize len = env->GetArrayLength(jcolumn_name);
 
   auto* cfOptions =
-      reinterpret_cast<rocksdb::ColumnFamilyOptions*>(jcolumn_options);
+      reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyOptions*>(jcolumn_options);
 
-  auto* db_handle = reinterpret_cast<rocksdb::DBWithTTL*>(jdb_handle);
-  rocksdb::ColumnFamilyHandle* handle;
-  rocksdb::Status s = db_handle->CreateColumnFamilyWithTtl(
+  auto* db_handle = reinterpret_cast<TERARKDB_NAMESPACE::DBWithTTL*>(jdb_handle);
+  TERARKDB_NAMESPACE::ColumnFamilyHandle* handle;
+  TERARKDB_NAMESPACE::Status s = db_handle->CreateColumnFamilyWithTtl(
       *cfOptions, std::string(reinterpret_cast<char*>(cfname), len), &handle,
       jttl);
 
@@ -176,6 +176,6 @@ jlong Java_org_rocksdb_TtlDB_createColumnFamilyWithTtl(
   if (s.ok()) {
     return reinterpret_cast<jlong>(handle);
   }
-  rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   return 0;
 }

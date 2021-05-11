@@ -27,9 +27,10 @@
 
 #include "rocksdb/env.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "utilities/util/function.hpp"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 const std::string kNullptrString = "nullptr";
 
@@ -379,4 +380,4 @@ bool SerializeIntVector(const std::vector<int>& vec, std::string* value) {
   return true;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

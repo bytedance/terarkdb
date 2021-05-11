@@ -18,6 +18,7 @@
 #include "rocksdb/db.h"
 #include "rocksdb/snapshot.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/transaction_db.h"
 #include "util/cast_util.h"
 #include "util/string_util.h"
@@ -25,7 +26,7 @@
 #include "utilities/transactions/pessimistic_transaction_db.h"
 #include "utilities/transactions/transaction_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct WriteOptions;
 
@@ -38,8 +39,8 @@ TransactionID PessimisticTransaction::GenTxnID() {
 PessimisticTransaction::PessimisticTransaction(
     TransactionDB* txn_db, const WriteOptions& write_options,
     const TransactionOptions& txn_options)
-    : TransactionBaseImpl(txn_db->GetRootDB(),
-                          write_options, txn_options.index_type),
+    : TransactionBaseImpl(txn_db->GetRootDB(), write_options,
+                          txn_options.index_type),
       txn_db_impl_(nullptr),
       expiration_time_(0),
       txn_id_(0),
@@ -365,7 +366,7 @@ Status WriteCommittedTxn::CommitInternal() {
   auto s =
       db_impl_->WriteImpl(write_options_, working_batch, /*callback*/ nullptr,
                           /*log_used*/ nullptr, /*log_ref*/ log_number_,
-                          /*disable_memtable*/ false, &seq_used);  
+                          /*disable_memtable*/ false, &seq_used);
   assert(!s.ok() || seq_used != kMaxSequenceNumber);
   if (s.ok()) {
     SetId(seq_used);
@@ -673,6 +674,6 @@ Status PessimisticTransaction::SetName(const TransactionName& name) {
   return s;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

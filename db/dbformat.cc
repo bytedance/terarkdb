@@ -17,10 +17,11 @@
 
 #include "monitoring/perf_context_imp.h"
 #include "port/port.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // kValueTypeForSeek defines the ValueType that should be passed when
 // constructing a ParsedInternalKey object for seeking to a particular
@@ -243,4 +244,4 @@ Slice ArenaPinInternalKey(const Slice& user_key, SequenceNumber seq,
   return Slice(buf, key_size);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

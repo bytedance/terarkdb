@@ -5,10 +5,12 @@
 
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
+#include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/testutil.h"
 #include "utilities/merge_operators.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class DBRangeDelTest : public DBTestBase {
  public:
@@ -64,6 +66,7 @@ TEST_F(DBRangeDelTest, CompactionOutputHasOnlyRangeTombstone) {
     ASSERT_EQ(1, NumTableFilesAtLevel(0));
     ASSERT_EQ(0, NumTableFilesAtLevel(1));
     dbfull()->TEST_CompactRange(0, nullptr, nullptr, nullptr,
+                                SeparationType::kCompactionTransToSeparate,
                                 true /* disallow_trivial_move */);
     ASSERT_EQ(0, NumTableFilesAtLevel(0));
     ASSERT_EQ(1, NumTableFilesAtLevel(1));
@@ -115,6 +118,7 @@ TEST_F(DBRangeDelTest, CompactionOutputFilesExactlyFilled) {
   ASSERT_EQ(0, NumTableFilesAtLevel(1));
 
   dbfull()->TEST_CompactRange(0, nullptr, nullptr, nullptr,
+                              SeparationType::kCompactionTransToSeparate,
                               true /* disallow_trivial_move */);
   ASSERT_EQ(0, NumTableFilesAtLevel(0));
   ASSERT_EQ(2, NumTableFilesAtLevel(1));
@@ -159,6 +163,7 @@ TEST_F(DBRangeDelTest, MaxCompactionBytesCutsOutputFiles) {
   }
 
   dbfull()->TEST_CompactRange(0, nullptr, nullptr, nullptr,
+                              SeparationType::kCompactionTransToSeparate,
                               true /* disallow_trivial_move */);
   ASSERT_EQ(0, NumTableFilesAtLevel(0));
   ASSERT_GE(NumTableFilesAtLevel(1), 2);
@@ -181,7 +186,8 @@ TEST_F(DBRangeDelTest, SentinelsOmittedFromOutputFile) {
   const Snapshot* snapshot = db_->GetSnapshot();
 
   // gaps between ranges creates sentinels in our internal representation
-  std::vector<std::pair<std::string, std::string>> range_dels = {{"a", "b"}, {"c", "d"}, {"e", "f"}};
+  std::vector<std::pair<std::string, std::string>> range_dels = {
+      {"a", "b"}, {"c", "d"}, {"e", "f"}};
   for (const auto& range_del : range_dels) {
     ASSERT_OK(db_->DeleteRange(WriteOptions(), db_->DefaultColumnFamily(),
                                range_del.first, range_del.second));
@@ -231,6 +237,7 @@ TEST_F(DBRangeDelTest, CompactRangeDelsSameStartKey) {
   for (int i = 0; i < 2; ++i) {
     if (i > 0) {
       dbfull()->TEST_CompactRange(0, nullptr, nullptr, nullptr,
+                                  SeparationType::kCompactionTransToSeparate,
                                   true /* disallow_trivial_move */);
       ASSERT_EQ(0, NumTableFilesAtLevel(0));
       ASSERT_EQ(1, NumTableFilesAtLevel(1));
@@ -438,10 +445,10 @@ TEST_F(DBRangeDelTest, ValidUniversalSubcompactionBoundaries) {
   ASSERT_OK(dbfull()->RunManualCompaction(
       reinterpret_cast<ColumnFamilyHandleImpl*>(db_->DefaultColumnFamily())
           ->cfd(),
-      1 /* input_level */, 2 /* output_level */, 0 /* output_path_id */,
-      0 /* max_subcompactions */, nullptr /* begin */, nullptr /* end */,
-      nullptr /* files_being_compact */, true /* exclusive */,
-      true /* disallow_trivial_move */));
+      SeparationType::kCompactionTransToSeparate, 1 /* input_level */,
+      2 /* output_level */, 0 /* output_path_id */, 0 /* max_subcompactions */,
+      nullptr /* begin */, nullptr /* end */, nullptr /* files_being_compact */,
+      true /* exclusive */, true /* disallow_trivial_move */));
 }
 #endif  // ROCKSDB_LITE
 
@@ -503,8 +510,8 @@ TEST_F(DBRangeDelTest, PutDeleteRangeMergeFlush) {
   std::string val;
   PutFixed64(&val, 1);
   ASSERT_OK(db_->Put(WriteOptions(), "key", val));
-  ASSERT_OK(db_->DeleteRange(WriteOptions(), db_->DefaultColumnFamily(),
-                             "key", "key_"));
+  ASSERT_OK(db_->DeleteRange(WriteOptions(), db_->DefaultColumnFamily(), "key",
+                             "key_"));
   ASSERT_OK(db_->Merge(WriteOptions(), "key", val));
   ASSERT_OK(db_->Flush(FlushOptions()));
 
@@ -918,7 +925,8 @@ TEST_F(DBRangeDelTest, MemtableBloomFilter) {
   Options options = CurrentOptions();
   options.memtable_prefix_bloom_size_ratio =
       static_cast<double>(kMemtablePrefixFilterSize) / kMemtableSize;
-  options.prefix_extractor.reset(rocksdb::NewFixedPrefixTransform(kPrefixLen));
+  options.prefix_extractor.reset(
+      TERARKDB_NAMESPACE::NewFixedPrefixTransform(kPrefixLen));
   options.write_buffer_size = kMemtableSize;
   Reopen(options);
 
@@ -1032,8 +1040,8 @@ TEST_F(DBRangeDelTest, RangeTombstoneEndKeyAsSstableUpperBound) {
   // A snapshot protects the range tombstone from dropping due to
   // becoming obsolete.
   const Snapshot* snapshot = db_->GetSnapshot();
-  db_->DeleteRange(WriteOptions(), db_->DefaultColumnFamily(),
-                   Key(0), Key(2 * kNumFilesPerLevel));
+  db_->DeleteRange(WriteOptions(), db_->DefaultColumnFamily(), Key(0),
+                   Key(2 * kNumFilesPerLevel));
 
   // Create 2 additional sstables in L0. Note that the first sstable
   // contains the range tombstone.
@@ -1071,7 +1079,7 @@ TEST_F(DBRangeDelTest, RangeTombstoneEndKeyAsSstableUpperBound) {
     // endpoint (key000002#6,1) to disappear.
     ASSERT_EQ(value, Get(Key(2)));
     auto begin_str = Key(3);
-    const rocksdb::Slice begin = begin_str;
+    const TERARKDB_NAMESPACE::Slice begin = begin_str;
     dbfull()->TEST_CompactRange(1, &begin, nullptr);
     ASSERT_EQ(1, NumTableFilesAtLevel(1));
     ASSERT_EQ(2, NumTableFilesAtLevel(2));
@@ -1090,7 +1098,7 @@ TEST_F(DBRangeDelTest, RangeTombstoneEndKeyAsSstableUpperBound) {
     //     [key000001#5,1, key000002#72057594037927935,15]
     //     [key000002#6,1, key000004#72057594037927935,15]
     auto begin_str = Key(0);
-    const rocksdb::Slice begin = begin_str;
+    const TERARKDB_NAMESPACE::Slice begin = begin_str;
     dbfull()->TEST_CompactRange(1, &begin, &begin);
     ASSERT_EQ(0, NumTableFilesAtLevel(1));
     ASSERT_EQ(3, NumTableFilesAtLevel(2));
@@ -1198,6 +1206,7 @@ TEST_F(DBRangeDelTest, KeyAtOverlappingEndpointReappears) {
   // tighter endpoints, so we can verify that doesn't mess anything up.
   dbfull()->TEST_CompactRange(1 /* level */, nullptr /* begin */,
                               nullptr /* end */, nullptr /* column_family */,
+                              SeparationType::kCompactionTransToSeparate,
                               true /* disallow_trivial_move */);
   ASSERT_EQ(NumTableFilesAtLevel(2), 1);
   ASSERT_TRUE(db_->Get(ReadOptions(), "key", &value).IsNotFound());
@@ -1231,7 +1240,7 @@ TEST_F(DBRangeDelTest, UntruncatedTombstoneDoesNotDeleteNewerKey) {
   const int kFileBytes = 1 << 20;
   const int kValueBytes = 1 << 10;
   const int kNumFiles = 4;
-  const int kMaxKey = kNumFiles* kFileBytes / kValueBytes;
+  const int kMaxKey = kNumFiles * kFileBytes / kValueBytes;
   const int kKeysOverwritten = 10;
 
   Options options = CurrentOptions();
@@ -1474,6 +1483,7 @@ TEST_F(DBRangeDelTest, RangeTombstoneWrittenToMinimalSsts) {
   Slice end_key(end_key_storage);
   dbfull()->TEST_CompactRange(0 /* level */, &begin_key /* begin */,
                               &end_key /* end */, nullptr /* column_family */,
+                              SeparationType::kCompactionTransToSeparate,
                               true /* disallow_trivial_move */);
   ASSERT_EQ(2, NumTableFilesAtLevel(1));
 
@@ -1503,7 +1513,8 @@ TEST_F(DBRangeDelTest, RangeTombstoneWrittenToMinimalSsts) {
     const auto& table_props = name_and_table_props.second;
     // The range tombstone should only be output to the second L1 SST.
     if (name.size() >= l1_metadata[1].name.size() &&
-        name.substr(name.size() - l1_metadata[1].name.size()).compare(l1_metadata[1].name) == 0) {
+        name.substr(name.size() - l1_metadata[1].name.size())
+                .compare(l1_metadata[1].name) == 0) {
       ASSERT_EQ(1, table_props->num_range_deletions);
       ++num_range_deletions;
     } else {
@@ -1515,10 +1526,10 @@ TEST_F(DBRangeDelTest, RangeTombstoneWrittenToMinimalSsts) {
 
 #endif  // ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

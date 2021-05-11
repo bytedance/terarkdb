@@ -2,15 +2,17 @@
 //  This source code is licensed under both the GPLv2 (found in the
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
+#include "table/data_block_hash_index.h"
+
 #include <string>
 #include <vector>
 
 #include "rocksdb/slice.h"
-#include "table/data_block_hash_index.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/hash.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 void DataBlockHashIndexBuilder::Add(const Slice& key,
                                     const size_t restart_index) {
@@ -90,4 +92,4 @@ uint8_t DataBlockHashIndex::Lookup(const char* data, uint32_t map_offset,
   return static_cast<uint8_t>(*(bucket_table + idx * sizeof(uint8_t)));
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

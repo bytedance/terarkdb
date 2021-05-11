@@ -8,9 +8,10 @@
 #include "db/snapshot_checker.h"
 #include "port/likely.h"
 #include "rocksdb/listener.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class CompactionIteratorToInternalIterator : public InternalIterator {
   CompactionIterator* (*new_compaction_iter_callback_)(void*);
@@ -36,7 +37,9 @@ class CompactionIteratorToInternalIterator : public InternalIterator {
     }
   }
   virtual void SeekToLast() override { assert(false); }
-  virtual void SeekForPrev(const rocksdb::Slice&) override { assert(false); }
+  virtual void SeekForPrev(const TERARKDB_NAMESPACE::Slice&) override {
+    assert(false);
+  }
   virtual void Seek(const Slice& target) override;
   virtual void Next() override { c_iter_->Next(); }
   virtual void Prev() override { abort(); }  // do not support
@@ -187,6 +190,15 @@ CompactionIterator::CompactionIterator(
   } else {
     ignore_snapshots_ = false;
   }
+  SeparationType separation_type = compaction_ == nullptr
+                                       ? kCompactionIngoreSeparate
+                                       : compaction_->separation_type();
+
+  do_separate_value_ = (separation_type == kCompactionTransToSeparate ||
+                        separation_type == kCompactionRebuildBlob) &&
+                       blob_config_.blob_size != size_t(-1);
+  do_rebuild_blob_ = separation_type == kCompactionRebuildBlob;
+  do_combine_value_ = separation_type == kCompactionCombineValue;
 }
 
 CompactionIterator::~CompactionIterator() {}
@@ -732,8 +744,27 @@ void CompactionIterator::PrepareOutput() {
   //
   // Can we do the same for levels above bottom level as long as
   // KeyNotExistsBeyondOutputLevel() return true?
-  if (blob_config_.blob_size < size_t(-1) &&
-      (ikey_.type == kTypeValue || ikey_.type == kTypeMerge)) {
+
+  auto zero_sequence = [this] {
+    if ((compaction_ != nullptr && !compaction_->allow_ingest_behind()) &&
+        ikeyNotNeededForIncrementalSnapshot() && bottommost_level_ && valid_ &&
+        ikey_.sequence <= earliest_snapshot_ &&
+        (snapshot_checker_ == nullptr ||
+         LIKELY(snapshot_checker_->IsInSnapshot(ikey_.sequence,
+                                                earliest_snapshot_))) &&
+        ikey_.type != kTypeMerge) {
+      assert(ikey_.type != kTypeDeletion && ikey_.type != kTypeSingleDeletion &&
+             ikey_.type != kTypeValueIndex && ikey_.type != kTypeMergeIndex);
+      ikey_.sequence = 0;
+      current_key_.UpdateInternalKey(0, ikey_.type);
+    }
+  };
+
+  if (ikey_.type == kTypeValue || ikey_.type == kTypeMerge) {
+    if (!do_separate_value_) {
+      zero_sequence();
+      return;
+    }
     auto s = value_.fetch();
     if (!s.ok()) {
       valid_ = false;
@@ -742,59 +773,74 @@ void CompactionIterator::PrepareOutput() {
     }
     assert(value_.size() < (1ull << 49));
     assert(blob_large_key_ratio_lsh16_ < (1ull << 17));
-    // (key.size << 16) <= value.size * large_key_ratio_lsh16
-    if (value_.size() >= blob_config_.blob_size &&
-        (current_user_key_.size() << 16) <=
+    // (key.size << 16) > value.size * large_key_ratio_lsh16
+    if (value_.size() < blob_config_.blob_size ||
+        (current_user_key_.size() << 16) >
             value_.size() * blob_large_key_ratio_lsh16_) {
-      if (value_.file_number() != uint64_t(-1)) {
-        ikey_.type =
-            ikey_.type == kTypeValue ? kTypeValueIndex : kTypeMergeIndex;
-        current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
-        s = input_.separate_helper()->TransToSeparate(
-            current_key_.GetInternalKey(), value_, value_meta_,
-            ikey_.type == kTypeMergeIndex, false);
-        if (!s.ok()) {
-          valid_ = false;
-          status_ = std::move(s);
-        }
-        return;
-      }
+      // Keep value combined. value too small or key too large
+      zero_sequence();
+    } else if (do_rebuild_blob_ || value_.file_number() == uint64_t(-1)) {
+      // 1. We want rebuild blob, don't use input as blob ...
+      // 2. Value is build from MergeOperator
+      // 3. CompactionFilter change value
+      // Write blob, try zero the sequence first
+      zero_sequence();
       s = input_.separate_helper()->TransToSeparate(
           current_key_.GetInternalKey(), value_);
       if (s.ok()) {
         ikey_.type =
             ikey_.type == kTypeValue ? kTypeValueIndex : kTypeMergeIndex;
         current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
-        return;
-      }
-      if (!s.IsNotSupported()) {
+      } else if (!s.IsNotSupported()) {
         valid_ = false;
         status_ = std::move(s);
-        return;
+      }
+      // Not supported is ok, keep value combined.
+    } else {
+      // Use input sst as blob, don't zero the sequence
+      ikey_.type = ikey_.type == kTypeValue ? kTypeValueIndex : kTypeMergeIndex;
+      current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
+      s = input_.separate_helper()->TransToSeparate(
+          current_key_.GetInternalKey(), value_, value_meta_,
+          ikey_.type == kTypeMergeIndex, false);
+      if (!s.ok()) {
+        valid_ = false;
+        status_ = std::move(s);
       }
     }
-  }
-  if (ikey_.type == kTypeValueIndex || ikey_.type == kTypeMergeIndex) {
+  } else if (ikey_.type == kTypeValueIndex || ikey_.type == kTypeMergeIndex) {
     assert(value_.file_number() != uint64_t(-1));
-    auto s = input_.separate_helper()->TransToSeparate(
-        current_key_.GetInternalKey(), value_, value_meta_,
-        ikey_.type == kTypeMergeIndex, true);
-    if (!s.ok()) {
-      valid_ = false;
-      status_ = std::move(s);
+    if (do_rebuild_blob_) {
+      // Prepare key type for write blob
+      ValueType backup_type = ikey_.type;
+      ikey_.type = ikey_.type == kTypeValueIndex ? kTypeValue : kTypeMerge;
+      current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
+      // Aah, we write value into new blob, so we can zero the sequence
+      zero_sequence();
+      auto s = input_.separate_helper()->TransToSeparate(
+          current_key_.GetInternalKey(), value_);
+      if (s.ok()) {
+        // Restore key type
+        ikey_.type = backup_type;
+        current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
+      } else if (!s.IsNotSupported()) {
+        valid_ = false;
+        status_ = std::move(s);
+      }
+      // Not supported, fallback to combine the value ...
+    } else if (do_combine_value_) {
+      ikey_.type = ikey_.type == kTypeValueIndex ? kTypeValue : kTypeMerge;
+      current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
+      zero_sequence();
+    } else {
+      auto s = input_.separate_helper()->TransToSeparate(
+          current_key_.GetInternalKey(), value_, value_meta_,
+          ikey_.type == kTypeMergeIndex, true);
+      if (!s.ok()) {
+        valid_ = false;
+        status_ = std::move(s);
+      }
     }
-    return;
-  }
-  if ((compaction_ != nullptr && !compaction_->allow_ingest_behind()) &&
-      ikeyNotNeededForIncrementalSnapshot() && bottommost_level_ && valid_ &&
-      ikey_.sequence <= earliest_snapshot_ &&
-      (snapshot_checker_ == nullptr ||
-       LIKELY(snapshot_checker_->IsInSnapshot(ikey_.sequence,
-                                              earliest_snapshot_))) &&
-      ikey_.type != kTypeMerge) {
-    assert(ikey_.type != kTypeDeletion && ikey_.type != kTypeSingleDeletion);
-    ikey_.sequence = 0;
-    current_key_.UpdateInternalKey(0, ikey_.type);
   }
 }
 
@@ -828,4 +874,4 @@ inline bool CompactionIterator::ikeyNotNeededForIncrementalSnapshot() {
          (ikey_.sequence < preserve_deletes_seqnum_);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -45,8 +45,9 @@
 #include "options/db_options.h"
 #include "port/port.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 namespace log {
 class Writer;
@@ -127,7 +128,6 @@ class VersionStorageInfo {
   // Updates internal structures that keep track of compaction scores
   // We use compaction scores to figure out which compaction to do next
   // REQUIRES: db_mutex held!!
-  // TODO find a better way to pass compaction_options_fifo.
   void ComputeCompactionScore(const ImmutableCFOptions& immutable_cf_options,
                               const MutableCFOptions& mutable_cf_options);
 
@@ -138,11 +138,6 @@ class VersionStorageInfo {
   // This computes files_marked_for_compaction_ and is called by
   // ComputeCompactionScore()
   void ComputeFilesMarkedForCompaction();
-
-  // This computes ttl_expired_files_ and is called by
-  // ComputeCompactionScore()
-  void ComputeExpiredTtlFiles(const ImmutableCFOptions& ioptions,
-                              const uint64_t ttl);
 
   // This computes bottommost_files_marked_for_compaction_ and is called by
   // ComputeCompactionScore() or UpdateOldestSnapshot().
@@ -295,6 +290,12 @@ class VersionStorageInfo {
            (find->second & kHasRangeDeletion) != 0;
   }
 
+  bool has_marked_for_compaction(int level) const {
+    auto find = space_amplification_.find(level);
+    return find != space_amplification_.end() &&
+           (find->second & kMarkedForCompaction) != 0;
+  }
+
   void set_read_amplification(const std::vector<double>& read_amp) {
     read_amplification_ = read_amp;
   }
@@ -338,7 +339,7 @@ class VersionStorageInfo {
   // REQUIRES: This version has been saved (see VersionSet::SaveTo)
   const DependenceMap& dependence_map() const { return dependence_map_; }
 
-  const rocksdb::LevelFilesBrief& LevelFilesBrief(int level) const {
+  const TERARKDB_NAMESPACE::LevelFilesBrief& LevelFilesBrief(int level) const {
     assert(level < static_cast<int>(level_files_brief_.size()));
     return level_files_brief_[level];
   }
@@ -355,13 +356,6 @@ class VersionStorageInfo {
       const {
     assert(finalized_);
     return files_marked_for_compaction_;
-  }
-
-  // REQUIRES: This version has been saved (see VersionSet::SaveTo)
-  // REQUIRES: DB mutex held during access
-  const autovector<std::pair<int, FileMetaData*>>& ExpiredTtlFiles() const {
-    assert(finalized_);
-    return expired_ttl_files_;
   }
 
   // REQUIRES: This version has been saved (see VersionSet::SaveTo)
@@ -491,6 +485,13 @@ class VersionStorageInfo {
                                      const Slice& largest_user_key,
                                      int last_level, int last_l0_idx);
 
+  VersionBuilder::Context* ReleaseVersionBuilderContext() {
+    return version_builder_context_.release();
+  }
+  void ResetVersionBuilderContext(VersionBuilder::Context* context) {
+    return version_builder_context_.reset(context);
+  }
+
  private:
   const InternalKeyComparator* internal_comparator_;
   const Comparator* user_comparator_;
@@ -501,7 +502,7 @@ class VersionStorageInfo {
   std::vector<uint64_t> level_max_bytes_;
 
   // A short brief metadata of files per level
-  autovector<rocksdb::LevelFilesBrief> level_files_brief_;
+  autovector<TERARKDB_NAMESPACE::LevelFilesBrief> level_files_brief_;
   FileIndexer file_indexer_;
   Arena arena_;  // Used to allocate space for file_levels_
 
@@ -545,8 +546,6 @@ class VersionStorageInfo {
   // ComputeCompactionScore()
   autovector<std::pair<int, FileMetaData*>> files_marked_for_compaction_;
 
-  autovector<std::pair<int, FileMetaData*>> expired_ttl_files_;
-
   // These files are considered bottommost because none of their keys can exist
   // at lower levels. They are not necessarily all in the same level. The marked
   // ones are eligible for compaction because they contain duplicate key
@@ -580,6 +579,7 @@ class VersionStorageInfo {
   enum {
     kHasMapSst = 1ULL << 0,
     kHasRangeDeletion = 1ULL << 1,
+    kMarkedForCompaction = 1ULL << 2,
   };
   std::unordered_map<int, int> space_amplification_;
   std::vector<double> read_amplification_;
@@ -611,6 +611,8 @@ class VersionStorageInfo {
   bool force_consistency_checks_;
 
   bool blob_marked_for_compaction_;
+
+  std::unique_ptr<VersionBuilder::Context> version_builder_context_;
 
   friend class Version;
   friend class VersionSet;
@@ -1023,7 +1025,7 @@ class VersionSet {
   // file, except data from `cfd_to_skip`.
   uint64_t PreComputeMinLogNumberWithUnflushedData(
       const ColumnFamilyData* cfd_to_skip) const {
-    uint64_t min_log_num = std::numeric_limits<uint64_t>::max();
+    uint64_t min_log_num = port::kMaxUint64;
     for (auto cfd : *column_family_set_) {
       if (cfd == cfd_to_skip) {
         continue;
@@ -1197,4 +1199,4 @@ class VersionSet {
                          bool apply = true);
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

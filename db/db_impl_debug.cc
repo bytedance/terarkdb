@@ -11,9 +11,11 @@
 
 #include "db/db_impl.h"
 #include "db/error_handler.h"
+#include "db/periodic_work_scheduler.h"
 #include "monitoring/thread_status_updater.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 uint64_t DBImpl::TEST_GetLevel0TotalSize() {
   InstrumentedMutexLock l(&mutex_);
@@ -80,6 +82,7 @@ uint64_t DBImpl::TEST_Current_Next_FileNo() {
 Status DBImpl::TEST_CompactRange(int level, const Slice* begin,
                                  const Slice* end,
                                  ColumnFamilyHandle* column_family,
+                                 SeparationType separation_type,
                                  bool disallow_trivial_move) {
   ColumnFamilyData* cfd;
   if (column_family == nullptr) {
@@ -89,12 +92,11 @@ Status DBImpl::TEST_CompactRange(int level, const Slice* begin,
     cfd = cfh->cfd();
   }
   int output_level =
-      (cfd->ioptions()->compaction_style == kCompactionStyleUniversal ||
-       cfd->ioptions()->compaction_style == kCompactionStyleFIFO)
+      cfd->ioptions()->compaction_style == kCompactionStyleUniversal
           ? level
           : level + 1;
-  return RunManualCompaction(cfd, level, output_level, 0, 0, begin, end,
-                             nullptr, true, disallow_trivial_move);
+  return RunManualCompaction(cfd, separation_type, level, output_level, 0, 0,
+                             begin, end, nullptr, true, disallow_trivial_move);
 }
 
 Status DBImpl::TEST_SwitchMemtable(ColumnFamilyData* cfd) {
@@ -250,10 +252,21 @@ size_t DBImpl::TEST_GetWalPreallocateBlockSize(
   return GetWalPreallocateBlockSize(write_buffer_size);
 }
 
-void DBImpl::TEST_WaitForTimedTaskRun(std::function<void()> callback) const {
-  if (thread_dump_stats_ != nullptr) {
-    thread_dump_stats_->TEST_WaitForRun(callback);
+#ifndef ROCKSDB_LITE
+void DBImpl::TEST_WaitForStatsDumpRun(std::function<void()> callback) const {
+  if (periodic_work_scheduler_ != nullptr) {
+    static_cast<PeriodicWorkTestScheduler*>(periodic_work_scheduler_)
+        ->TEST_WaitForRun(callback);
   }
 }
-}  // namespace rocksdb
+
+PeriodicWorkTestScheduler* DBImpl::TEST_GetPeriodicWorkScheduler() const {
+  return static_cast<PeriodicWorkTestScheduler*>(periodic_work_scheduler_);
+}
+#endif  // !ROCKSDB_LITE
+
+size_t DBImpl::TEST_EstimateInMemoryStatsHistorySize() const {
+  return EstimateInMemoryStatsHistorySize();
+}
+}  // namespace TERARKDB_NAMESPACE
 #endif  // NDEBUG

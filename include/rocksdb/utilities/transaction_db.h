@@ -12,6 +12,7 @@
 
 #include "rocksdb/comparator.h"
 #include "rocksdb/db.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/stackable_db.h"
 #include "rocksdb/utilities/transaction.h"
 #include "rocksdb/utilities/write_batch_with_index.h"
@@ -20,7 +21,7 @@
 //
 // See transaction.h and examples/transaction_example.cc
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class TransactionDBMutexFactory;
 
@@ -118,7 +119,6 @@ struct TransactionOptions {
   // return 0 if
   // a.compare(b) returns 0.
 
-
   // If positive, specifies the wait timeout in milliseconds when
   // a transaction attempts to lock a key.
   //
@@ -140,7 +140,7 @@ struct TransactionOptions {
   size_t max_write_batch_size = 0;
 
   // Set index factory for WriteBatchWithIndex
-  const rocksdb::WriteBatchEntryIndexFactory* index_type = nullptr;
+  const TERARKDB_NAMESPACE::WriteBatchEntryIndexFactory* index_type = nullptr;
 
   // Skip Concurrency Control. This could be as an optimization if the
   // application knows that the transaction would not have any conflict with
@@ -280,6 +280,6 @@ class TransactionDB : public StackableDB {
   void operator=(const TransactionDB&);
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

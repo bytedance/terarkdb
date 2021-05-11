@@ -16,9 +16,10 @@
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/sst_file_writer.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/autovector.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct IngestedFileInfo {
   // External file path
@@ -158,4 +159,4 @@ class ExternalSstFileIngestionJob {
   uint64_t job_start_time_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

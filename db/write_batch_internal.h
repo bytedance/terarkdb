@@ -9,14 +9,16 @@
 
 #pragma once
 #include <vector>
+
 #include "db/write_thread.h"
-#include "rocksdb/types.h"
-#include "rocksdb/write_batch.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
+#include "rocksdb/types.h"
+#include "rocksdb/write_batch.h"
 #include "util/autovector.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class MemTable;
 class FlushScheduler;
@@ -63,7 +65,6 @@ class ColumnFamilyMemTablesDefault : public ColumnFamilyMemTables {
 // WriteBatch that we don't want in the public WriteBatch interface.
 class WriteBatchInternal {
  public:
-
   // WriteBatch header has an 8-byte sequence number followed by a 4-byte count.
   static const size_t kHeader = 12;
 
@@ -126,13 +127,9 @@ class WriteBatchInternal {
   // This offset is only valid if the batch is not empty.
   static size_t GetFirstOffset(WriteBatch* batch);
 
-  static Slice Contents(const WriteBatch* batch) {
-    return Slice(batch->rep_);
-  }
+  static Slice Contents(const WriteBatch* batch) { return Slice(batch->rep_); }
 
-  static size_t ByteSize(const WriteBatch* batch) {
-    return batch->rep_.size();
-  }
+  static size_t ByteSize(const WriteBatch* batch) { return batch->rep_.size(); }
 
   static Status SetContents(WriteBatch* batch, const Slice& contents);
 
@@ -234,4 +231,4 @@ class LocalSavePoint {
 #endif
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

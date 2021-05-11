@@ -8,9 +8,10 @@
 
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/optimistic_transaction_db.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class OptimisticTransactionDBImpl : public OptimisticTransactionDB {
  public:
@@ -30,8 +31,7 @@ class OptimisticTransactionDBImpl : public OptimisticTransactionDB {
                                 Transaction* old_txn) override;
 
  private:
-
-   bool db_owner_;
+  bool db_owner_;
 
   void ReinitializeTransaction(Transaction* txn,
                                const WriteOptions& write_options,
@@ -39,5 +39,5 @@ class OptimisticTransactionDBImpl : public OptimisticTransactionDB {
                                    OptimisticTransactionOptions());
 };
 
-}  //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

@@ -12,7 +12,6 @@ LIB_SOURCES =                                                   \
   db/compaction_iterator.cc                                     \
   db/compaction_job.cc                                          \
   db/compaction_picker.cc                                       \
-  db/compaction_picker_fifo.cc                                  \
   db/compaction_picker_universal.cc                             \
   db/compaction_dispatcher.cc                                   \
   db/convenience.cc                                             \
@@ -47,6 +46,7 @@ LIB_SOURCES =                                                   \
   db/memtable_list.cc                                           \
   db/merge_helper.cc                                            \
   db/merge_operator.cc                                          \
+  db/periodic_work_scheduler.cc                                 \
   db/range_del_aggregator.cc                                    \
   db/range_tombstone_fragmenter.cc                              \
   db/repair.cc                                                  \
@@ -71,6 +71,7 @@ LIB_SOURCES =                                                   \
   env/io_posix.cc                                               \
   env/mock_env.cc                                               \
   memtable/alloc_tracker.cc                                     \
+  memtable/concurrent_hashduallist_rep.cc                       \
   memtable/hash_cuckoo_rep.cc                                   \
   memtable/hash_linklist_rep.cc                                 \
   memtable/hash_skiplist_rep.cc                                 \
@@ -81,10 +82,12 @@ LIB_SOURCES =                                                   \
   memtable/write_buffer_manager.cc                              \
   monitoring/histogram.cc                                       \
   monitoring/histogram_windowing.cc                             \
+  monitoring/in_memory_stats_history.cc                         \
   monitoring/instrumented_mutex.cc                              \
   monitoring/iostats_context.cc                                 \
   monitoring/perf_context.cc                                    \
   monitoring/perf_level.cc                                      \
+  monitoring/persistent_stats_history.cc                        \
   monitoring/statistics.cc                                      \
   monitoring/thread_status_impl.cc                              \
   monitoring/thread_status_updater.cc                           \
@@ -105,6 +108,10 @@ LIB_SOURCES =                                                   \
   table/block_based_table_builder.cc                            \
   table/block_based_table_factory.cc                            \
   table/block_based_table_reader.cc                             \
+  table/terark_zip_config.cc                                    \
+  table/terark_zip_table_builder.cc                             \
+  table/terark_zip_table_reader.cc                              \
+  table/terark_zip_table.cc                                     \
   table/block_builder.cc                                        \
   table/block_fetcher.cc                                        \
   table/block_prefix_index.cc                                   \
@@ -247,7 +254,7 @@ LIB_SOURCES_ASM =
 LIB_SOURCES_C =
 endif
 
-TOOL_LIB_SOURCES = \
+TOOL_LIB_SOURCES =                                              \
   tools/ldb_cmd.cc                                              \
   tools/ldb_tool.cc                                             \
   tools/sst_dump_tool.cc                                        \
@@ -259,7 +266,7 @@ MOCK_LIB_SOURCES = \
   table/mock_table.cc \
   util/fault_injection_test_env.cc
 
-BENCH_LIB_SOURCES = \
+BENCH_LIB_SOURCES =                                             \
   tools/db_bench_tool.cc                                        \
 
 EXP_LIB_SOURCES = \
@@ -340,6 +347,7 @@ MAIN_SOURCES =                                                          \
   db/partitioned_filter_block_test.cc                                   \
   db/perf_context_test.cc                                               \
   db/persistent_cache_test.cc                                           \
+  db/periodic_work_scheduler_test.cc                                    \
   db/plain_table_db_test.cc                                             \
   db/prefix_test.cc                                                     \
   db/redis_test.cc                                                      \
@@ -368,6 +376,8 @@ MAIN_SOURCES =                                                          \
   monitoring/histogram_test.cc                                          \
   monitoring/iostats_context_test.cc                                    \
   monitoring/statistics_test.cc                                         \
+  monitoring/stats_history_test.cc                                      \
+  options/options_settable_test.cc                                      \
   options/options_test.cc                                               \
   table/block_based_filter_block_test.cc                                \
   table/block_test.cc                                                   \
@@ -406,6 +416,7 @@ MAIN_SOURCES =                                                          \
   util/repeatable_thread_test.cc                                        \
   util/slice_transform_test.cc                                          \
   util/timer_queue_test.cc                                              \
+  util/timer_test.cc                                                    \
   util/thread_list_test.cc                                              \
   util/thread_local_test.cc                                             \
   utilities/backupable/backupable_db_test.cc                            \
@@ -448,7 +459,6 @@ JNI_NATIVE_SOURCES =                                          \
   java/rocksjni/compaction_filter_factory.cc                  \
   java/rocksjni/compaction_filter_factory_jnicallback.cc      \
   java/rocksjni/compact_range_options.cc                      \
-  java/rocksjni/compaction_options_fifo.cc                    \
   java/rocksjni/compaction_options_universal.cc               \
   java/rocksjni/comparator.cc                                 \
   java/rocksjni/comparatorjnicallback.cc                      \

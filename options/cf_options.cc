@@ -10,15 +10,18 @@
 #endif
 
 #include <inttypes.h>
+
 #include <cassert>
 #include <limits>
 #include <string>
+
 #include "options/db_options.h"
 #include "port/port.h"
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 ImmutableCFOptions::ImmutableCFOptions(const Options& options)
     : ImmutableCFOptions(ImmutableDBOptions(options), options) {}
@@ -30,7 +33,9 @@ ImmutableCFOptions::ImmutableCFOptions(const ImmutableDBOptions& db_options,
       user_comparator(cf_options.comparator),
       internal_comparator(InternalKeyComparator(cf_options.comparator)),
       merge_operator(cf_options.merge_operator.get()),
-      value_meta_extractor_factory(cf_options.value_meta_extractor_factory.get()),
+      value_meta_extractor_factory(
+          cf_options.value_meta_extractor_factory.get()),
+      ttl_extractor_factory(cf_options.ttl_extractor_factory.get()),
       compaction_filter(cf_options.compaction_filter),
       compaction_filter_factory(cf_options.compaction_filter_factory.get()),
       compaction_dispatcher(cf_options.compaction_dispatcher.get()),
@@ -71,7 +76,6 @@ ImmutableCFOptions::ImmutableCFOptions(const ImmutableDBOptions& db_options,
       new_table_reader_for_compaction_inputs(
           db_options.new_table_reader_for_compaction_inputs),
       num_levels(cf_options.num_levels),
-      optimize_filters_for_hits(cf_options.optimize_filters_for_hits),
       force_consistency_checks(cf_options.force_consistency_checks),
       allow_ingest_behind(db_options.allow_ingest_behind),
       preserve_deletes(db_options.preserve_deletes),
@@ -79,7 +83,16 @@ ImmutableCFOptions::ImmutableCFOptions(const ImmutableDBOptions& db_options,
       row_cache(db_options.row_cache),
       memtable_insert_with_hint_prefix_extractor(
           cf_options.memtable_insert_with_hint_prefix_extractor.get()),
-      cf_paths(cf_options.cf_paths) {}
+      cf_paths(cf_options.cf_paths) {
+  if (ttl_extractor_factory != nullptr) {
+    int_tbl_prop_collector_factories_for_blob = std::make_shared<
+        std::vector<std::unique_ptr<IntTblPropCollectorFactory>>>();
+    for (auto& f : table_properties_collector_factories) {
+      int_tbl_prop_collector_factories_for_blob->emplace_back(
+          new UserKeyTablePropertiesCollectorFactory(f));
+    }
+  }
+}
 
 // Multiple two operands. If they overflow, return op1.
 uint64_t MultiplyCheckOverflow(uint64_t op1, double op2) {
@@ -125,6 +138,24 @@ void MutableCFOptions::RefreshDerivedOptions(int num_levels) {
   }
 }
 
+void MutableCFOptions::RefreshDerivedOptions(
+    const ImmutableCFOptions& ioptions) {
+  RefreshDerivedOptions(ioptions.num_levels);
+
+  int_tbl_prop_collector_factories = std::make_shared<
+      std::vector<std::unique_ptr<IntTblPropCollectorFactory>>>();
+  for (auto& f : ioptions.table_properties_collector_factories) {
+    int_tbl_prop_collector_factories->emplace_back(
+        new UserKeyTablePropertiesCollectorFactory(f));
+  }
+  if (ioptions.ttl_extractor_factory != nullptr) {
+    int_tbl_prop_collector_factories->emplace_back(
+        NewTtlIntTblPropCollectorFactory(ioptions.ttl_extractor_factory,
+                                         ioptions.env, ttl_gc_ratio,
+                                         ttl_max_scan_gap));
+  }
+}
+
 void MutableCFOptions::Dump(Logger* log) const {
   // Memtable related options
   ROCKS_LOG_INFO(log,
@@ -159,6 +190,14 @@ void MutableCFOptions::Dump(Logger* log) const {
                  blob_large_key_ratio);
   ROCKS_LOG_INFO(log, "                            blob_gc_ratio: %f",
                  blob_gc_ratio);
+  ROCKS_LOG_INFO(log, "                    target_blob_file_size: %" PRIu64,
+                 target_blob_file_size);
+  ROCKS_LOG_INFO(log, "                blob_file_defragment_size: %" PRIu64,
+                 blob_file_defragment_size);
+  ROCKS_LOG_INFO(log, "                           max_blob_files: %zu",
+                 max_blob_files);
+  ROCKS_LOG_INFO(log, "                            blob_gc_ratio: %zu",
+                 max_dependence_blob_overlap);
   ROCKS_LOG_INFO(log, "      soft_pending_compaction_bytes_limit: %" PRIu64,
                  soft_pending_compaction_bytes_limit);
   ROCKS_LOG_INFO(log, "      hard_pending_compaction_bytes_limit: %" PRIu64,
@@ -179,8 +218,10 @@ void MutableCFOptions::Dump(Logger* log) const {
                  max_bytes_for_level_base);
   ROCKS_LOG_INFO(log, "           max_bytes_for_level_multiplier: %f",
                  max_bytes_for_level_multiplier);
-  ROCKS_LOG_INFO(log, "                                      ttl: %" PRIu64,
-                 ttl);
+  ROCKS_LOG_INFO(log, "                             ttl_gc_ratio: %f",
+                 ttl_gc_ratio);
+  ROCKS_LOG_INFO(log, "                         ttl_max_scan_gap: %zd",
+                 ttl_max_scan_gap);
   std::string result;
   char buf[10];
   for (const auto m : max_bytes_for_level_multiplier_additional) {
@@ -222,17 +263,69 @@ void MutableCFOptions::Dump(Logger* log) const {
   ROCKS_LOG_INFO(
       log, "compaction_options_universal.allow_trivial_move : %d",
       static_cast<int>(compaction_options_universal.allow_trivial_move));
+}
 
-  // FIFO Compaction Options
-  ROCKS_LOG_INFO(log, "compaction_options_fifo.max_table_files_size : %" PRIu64,
-                 compaction_options_fifo.max_table_files_size);
-  ROCKS_LOG_INFO(log, "compaction_options_fifo.ttl : %" PRIu64,
-                 compaction_options_fifo.ttl);
-  ROCKS_LOG_INFO(log, "compaction_options_fifo.allow_compaction : %d",
-                 compaction_options_fifo.allow_compaction);
+MutableCFOptions::MutableCFOptions(const ColumnFamilyOptions& options, Env* env)
+    : write_buffer_size(options.write_buffer_size),
+      max_write_buffer_number(options.max_write_buffer_number),
+      arena_block_size(options.arena_block_size),
+      memtable_factory(options.memtable_factory),
+      memtable_prefix_bloom_size_ratio(
+          options.memtable_prefix_bloom_size_ratio),
+      memtable_huge_page_size(options.memtable_huge_page_size),
+      max_successive_merges(options.max_successive_merges),
+      inplace_update_num_locks(options.inplace_update_num_locks),
+      prefix_extractor(options.prefix_extractor),
+      disable_auto_compactions(options.disable_auto_compactions),
+      max_subcompactions(options.max_subcompactions),
+      blob_size(options.blob_size),
+      blob_large_key_ratio(options.blob_large_key_ratio),
+      blob_gc_ratio(options.blob_gc_ratio),
+      target_blob_file_size(options.target_blob_file_size),
+      blob_file_defragment_size(options.blob_file_defragment_size),
+      max_blob_files(options.max_blob_files),
+      max_dependence_blob_overlap(options.max_dependence_blob_overlap),
+      soft_pending_compaction_bytes_limit(
+          options.soft_pending_compaction_bytes_limit),
+      hard_pending_compaction_bytes_limit(
+          options.hard_pending_compaction_bytes_limit),
+      level0_file_num_compaction_trigger(
+          options.level0_file_num_compaction_trigger),
+      level0_slowdown_writes_trigger(options.level0_slowdown_writes_trigger),
+      level0_stop_writes_trigger(options.level0_stop_writes_trigger),
+      max_compaction_bytes(options.max_compaction_bytes),
+      target_file_size_base(options.target_file_size_base),
+      target_file_size_multiplier(options.target_file_size_multiplier),
+      max_bytes_for_level_base(options.max_bytes_for_level_base),
+      max_bytes_for_level_multiplier(options.max_bytes_for_level_multiplier),
+      max_bytes_for_level_multiplier_additional(
+          options.max_bytes_for_level_multiplier_additional),
+      compaction_options_universal(options.compaction_options_universal),
+      max_sequential_skip_in_iterations(
+          options.max_sequential_skip_in_iterations),
+      paranoid_file_checks(options.paranoid_file_checks),
+      report_bg_io_stats(options.report_bg_io_stats),
+      optimize_filters_for_hits(options.optimize_filters_for_hits),
+      optimize_range_deletion(options.optimize_range_deletion),
+      compression(options.compression),
+      ttl_gc_ratio(options.ttl_gc_ratio),
+      ttl_max_scan_gap(options.ttl_max_scan_gap) {
+  RefreshDerivedOptions(options.num_levels);
+
+  int_tbl_prop_collector_factories = std::make_shared<
+      std::vector<std::unique_ptr<IntTblPropCollectorFactory>>>();
+  for (auto& f : options.table_properties_collector_factories) {
+    int_tbl_prop_collector_factories->emplace_back(
+        new UserKeyTablePropertiesCollectorFactory(f));
+  }
+  if (options.ttl_extractor_factory != nullptr) {
+    int_tbl_prop_collector_factories->emplace_back(
+        NewTtlIntTblPropCollectorFactory(options.ttl_extractor_factory.get(),
+                                         env, ttl_gc_ratio, ttl_max_scan_gap));
+  }
 }
 
 MutableCFOptions::MutableCFOptions(const Options& options)
-    : MutableCFOptions(ColumnFamilyOptions(options)) {}
+    : MutableCFOptions(ColumnFamilyOptions(options), options.env) {}
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

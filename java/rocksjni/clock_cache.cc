@@ -4,7 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 // This file implements the "bridge" between Java and C++ for
-// rocksdb::ClockCache.
+// TERARKDB_NAMESPACE::ClockCache.
 
 #include <jni.h>
 
@@ -20,7 +20,7 @@ jlong Java_org_rocksdb_ClockCache_newClockCache(
     JNIEnv* /*env*/, jclass /*jcls*/, jlong jcapacity, jint jnum_shard_bits,
     jboolean jstrict_capacity_limit) {
   auto* sptr_clock_cache =
-      new std::shared_ptr<rocksdb::Cache>(rocksdb::NewClockCache(
+      new std::shared_ptr<TERARKDB_NAMESPACE::Cache>(TERARKDB_NAMESPACE::NewClockCache(
           static_cast<size_t>(jcapacity), static_cast<int>(jnum_shard_bits),
           static_cast<bool>(jstrict_capacity_limit)));
   return reinterpret_cast<jlong>(sptr_clock_cache);
@@ -35,6 +35,6 @@ void Java_org_rocksdb_ClockCache_disposeInternal(JNIEnv* /*env*/,
                                                  jobject /*jobj*/,
                                                  jlong jhandle) {
   auto* sptr_clock_cache =
-      reinterpret_cast<std::shared_ptr<rocksdb::Cache>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::Cache>*>(jhandle);
   delete sptr_clock_cache;  // delete std::shared_ptr
 }

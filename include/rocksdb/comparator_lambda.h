@@ -1,8 +1,10 @@
 // Copyright (c) 2020-present, Bytedance Inc.  All rights reserved.
 // This source code is licensed under Apache 2.0 License.
 #pragma once
+#include "rocksdb/terark_namespace.h"
 #include "utilities/util/function.hpp"
-namespace rocksdb {
+
+namespace TERARKDB_NAMESPACE {
 
 template <class Comp>
 struct StdComparareLessType {
@@ -49,23 +51,21 @@ static const char SFINAE_STR[1] = "";
 template <class KeyExtractor, class KeyComparator>
 auto operator<(const KeyExtractor& ex, const KeyComparator& cmp)
     -> decltype(cmp.Compare(SFINAE_STR, SFINAE_STR),
-                terark::ExtractorComparator(ex,
-                                                      StdCompareLess(&cmp))) {
+                terark::ExtractorComparator(ex, StdCompareLess(&cmp))) {
   return terark::ExtractorComparator(ex, StdCompareLess(&cmp));
 }
 
 template <class KeyExtractor, class KeyComparator>
-auto operator>(const KeyExtractor& ex, const KeyComparator& cmp) -> decltype(
-    cmp.Compare(SFINAE_STR, SFINAE_STR),
-    terark::ExtractorComparator(ex, StdCompareGreater(&cmp))) {
+auto operator>(const KeyExtractor& ex, const KeyComparator& cmp)
+    -> decltype(cmp.Compare(SFINAE_STR, SFINAE_STR),
+                terark::ExtractorComparator(ex, StdCompareGreater(&cmp))) {
   return terark::ExtractorComparator(ex, StdCompareGreater(&cmp));
 }
 
 template <class KeyExtractor, class KeyComparator>
 auto operator==(const KeyExtractor& ex, const KeyComparator& cmp)
     -> decltype(cmp.Compare(SFINAE_STR, SFINAE_STR),
-                terark::ExtractorComparator(ex,
-                                                      StdCompareEqual(&cmp))) {
+                terark::ExtractorComparator(ex, StdCompareEqual(&cmp))) {
   return terark::ExtractorComparator(ex, StdCompareEqual(&cmp));
 }
 
@@ -126,4 +126,4 @@ auto operator>(const char (&)[1], const Cmp3& cmp)
   return Cmp3_to_Equal<Cmp3>{&cmp};
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

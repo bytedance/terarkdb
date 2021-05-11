@@ -1,6 +1,8 @@
 #pragma once
 #ifdef BOOSTLIB
 #include <boost/noncopyable.hpp>
+#elif __has_include("boost/noncopyable.hpp")
+#include <boost/noncopyable.hpp>
 #else
 namespace boost {
 

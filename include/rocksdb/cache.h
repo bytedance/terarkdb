@@ -31,8 +31,9 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Cache;
 
@@ -60,6 +61,10 @@ struct LRUCacheOptions {
   // See also
   // BlockBasedTableOptions::cache_index_and_filter_blocks_with_high_priority.
   double high_pri_pool_ratio = 0.0;
+
+  bool is_diagnose = false;
+
+  size_t topk = 10;
 
   // If non-nullptr will use this allocator instead of system allocator when
   // allocating memory for cache blocks. Call this method before you start using
@@ -112,6 +117,14 @@ extern std::shared_ptr<Cache> NewLRUCache(
     std::shared_ptr<MemoryAllocator> memory_allocator = nullptr);
 
 extern std::shared_ptr<Cache> NewLRUCache(const LRUCacheOptions& cache_opts);
+
+std::shared_ptr<Cache> NewDiagnosableLRUCache(
+    const LRUCacheOptions& cache_opts);
+
+std::shared_ptr<Cache> NewDiagnosableLRUCache(
+    size_t capacity, int num_shard_bits, bool strict_capacity_limit,
+    double high_pri_pool_ratio,
+    std::shared_ptr<MemoryAllocator> memory_allocator, size_t topk);
 
 extern std::shared_ptr<Cache> NewLIRSCache(
     size_t capacity, int num_shard_bits = -1,
@@ -277,4 +290,4 @@ class Cache {
   std::shared_ptr<MemoryAllocator> memory_allocator_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

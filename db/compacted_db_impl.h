@@ -5,11 +5,13 @@
 
 #pragma once
 #ifndef ROCKSDB_LITE
-#include "db/db_impl.h"
-#include <vector>
 #include <string>
+#include <vector>
 
-namespace rocksdb {
+#include "db/db_impl.h"
+#include "rocksdb/terark_namespace.h"
+
+namespace TERARKDB_NAMESPACE {
 
 class CompactedDBImpl : public DBImpl {
  public:
@@ -26,10 +28,9 @@ class CompactedDBImpl : public DBImpl {
                      LazyBuffer* value) override;
   using DB::MultiGet;
   virtual std::vector<Status> MultiGet(
-      const ReadOptions& options,
-      const std::vector<ColumnFamilyHandle*>&,
-      const std::vector<Slice>& keys, std::vector<std::string>* values)
-    override;
+      const ReadOptions& options, const std::vector<ColumnFamilyHandle*>&,
+      const std::vector<Slice>& keys,
+      std::vector<std::string>* values) override;
 
   using DBImpl::Put;
   virtual Status Put(const WriteOptions& /*options*/,
@@ -100,5 +101,5 @@ class CompactedDBImpl : public DBImpl {
   CompactedDBImpl(const CompactedDBImpl&);
   void operator=(const CompactedDBImpl&);
 };
-}
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

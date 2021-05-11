@@ -8,18 +8,21 @@
 
 #include "db/db_impl.h"
 #include "db/version_set.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/get_context.h"
+
 #if !defined(_MSC_VER) && !defined(__APPLE__)
 #include <sys/unistd.h>
 
 #ifdef WITH_TERARK_ZIP
 #include <table/terark_zip_table.h>
+
 #include <terark/valvec.hpp>
 #endif
 
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 extern void MarkKeyMayExist(void* arg);
 extern bool SaveValue(void* arg, const ParsedInternalKey& parsed_key,
@@ -170,6 +173,7 @@ Status CompactedDBImpl::Init(const Options& options) {
 Status CompactedDBImpl::Open(const Options& options, const std::string& dbname,
                              DB** dbptr) {
   *dbptr = nullptr;
+#ifdef WITH_TERARK_ZIP
 #if !defined(_MSC_VER) && !defined(__APPLE__)
   const char* terarkdb_localTempDir = getenv("TerarkZipTable_localTempDir");
   const char* terarkConfigString = getenv("TerarkConfigString");
@@ -181,8 +185,6 @@ Status CompactedDBImpl::Open(const Options& options, const std::string& dbname,
           "env TerarkZipTable_localTempDir",
           terarkdb_localTempDir);
     }
-    
-    #ifdef WITH_TERARK_ZIP
     if (!TerarkZipIsBlackListCF(kDefaultColumnFamilyName)) {
       const ColumnFamilyOptions& cf_options = options;
       const DBOptions& db_options = options;
@@ -193,9 +195,8 @@ Status CompactedDBImpl::Open(const Options& options, const std::string& dbname,
       Status s = factory->SanitizeOptions(db_options, cf_options);
       if (!s.ok()) return s;
     }
-    #endif
-
   }
+#endif
 #endif
   if (options.max_open_files != -1) {
     return Status::InvalidArgument("require max_open_files = -1");
@@ -207,7 +208,7 @@ Status CompactedDBImpl::Open(const Options& options, const std::string& dbname,
   std::unique_ptr<CompactedDBImpl> db(new CompactedDBImpl(db_options, dbname));
   Status s = db->Init(options);
   if (s.ok()) {
-    db->StartTimedTasks();
+    db->StartPeriodicWorkScheduler();
     ROCKS_LOG_INFO(db->immutable_db_options_.info_log,
                    "Opened the db as fully compacted mode");
     LogFlush(db->immutable_db_options_.info_log);
@@ -216,5 +217,5 @@ Status CompactedDBImpl::Open(const Options& options, const std::string& dbname,
   return s;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

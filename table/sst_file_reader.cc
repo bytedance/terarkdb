@@ -9,12 +9,13 @@
 
 #include "db/db_iter.h"
 #include "options/cf_options.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/get_context.h"
 #include "table/table_builder.h"
 #include "table/table_reader.h"
 #include "util/file_reader_writer.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct SstFileReader::Rep {
   Options options;
@@ -28,7 +29,7 @@ struct SstFileReader::Rep {
       : options(opts),
         soptions(options),
         ioptions(options),
-        moptions(ColumnFamilyOptions(options)) {}
+        moptions(options) {}
 };
 
 SstFileReader::SstFileReader(const Options& options) : rep_(new Rep(options)) {}
@@ -80,6 +81,6 @@ Status SstFileReader::VerifyChecksum() {
   return rep_->table_reader->VerifyChecksum();
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // !ROCKSDB_LITE

@@ -11,7 +11,9 @@
 #include <atomic>
 #include <memory>
 #include <utility>
+
 #include "port/likely.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/allocator.h"
 #include "util/arena.h"
 #include "util/core_local.h"
@@ -26,7 +28,7 @@
 #define ROCKSDB_FIELD_UNUSED
 #endif  // __clang__
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Logger;
 
@@ -212,4 +214,4 @@ class ConcurrentArena : public Allocator {
   ConcurrentArena& operator=(const ConcurrentArena&) = delete;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

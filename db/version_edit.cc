@@ -11,12 +11,13 @@
 
 #include "db/version_set.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/event_logger.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Tag numbers for serialized VersionEdit.  These numbers are written to
 // disk and should not be changed.
@@ -93,8 +94,7 @@ void VersionEdit::Clear() {
   has_min_log_number_to_keep_ = false;
   deleted_files_.clear();
   new_files_.clear();
-  apply_callback_ = nullptr;
-  apply_callback_arg_ = nullptr;
+  apply_callback_vec_.clear();
   column_family_ = 0;
   is_column_family_add_ = 0;
   is_column_family_drop_ = 0;
@@ -195,8 +195,8 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
       PutVarint64(&encode_property_cache, f.prop.num_entries);
       PutVarint32Varint64(&encode_property_cache, f.prop.max_read_amp,
                           DoubleToU64(f.prop.read_amp));
-      PutVarint64(&encode_property_cache, f.prop.inheritance_chain.size());
-      for (auto file_number : f.prop.inheritance_chain) {
+      PutVarint64(&encode_property_cache, f.prop.inheritance.size());
+      for (auto file_number : f.prop.inheritance) {
         PutVarint64(&encode_property_cache, file_number);
       }
       for (auto& dependence : f.prop.dependence) {
@@ -206,6 +206,8 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
       encode_property_cache.push_back(char(f.prop.flags));
       PutVarint64Varint64(&encode_property_cache, f.prop.raw_key_size,
                           f.prop.raw_value_size);
+      PutVarint64(&encode_property_cache, f.prop.earliest_time_begin_compact);
+      PutVarint64(&encode_property_cache, f.prop.latest_time_end_compact);
       PutLengthPrefixedSlice(dst, encode_property_cache);
     }
     TEST_SYNC_POINT_CALLBACK("VersionEdit::EncodeTo:NewFile4:CustomizeFields",
@@ -347,13 +349,13 @@ const char* VersionEdit::DecodeNewFile4From(Slice* input) {
               }
               f.prop.max_read_amp = uint16_t(max_read_amp);
               f.prop.read_amp = U64ToDouble(read_amp);
-              f.prop.inheritance_chain.reserve(size);
+              f.prop.inheritance.reserve(size);
               for (size_t i = 0; i < size; ++i) {
                 uint64_t file_number;
                 if (!GetVarint64(&field, &file_number)) {
                   return error_msg;
                 }
-                f.prop.inheritance_chain.emplace_back(file_number);
+                f.prop.inheritance.emplace_back(file_number);
               }
             }
             if (!field.empty()) {
@@ -374,6 +376,12 @@ const char* VersionEdit::DecodeNewFile4From(Slice* input) {
             if (!field.empty()) {
               if (!GetVarint64(&field, &f.prop.raw_key_size) ||
                   !GetVarint64(&field, &f.prop.raw_value_size)) {
+                return error_msg;
+              }
+            }
+            if (!field.empty()) {
+              if (!GetVarint64(&field, &f.prop.earliest_time_begin_compact) ||
+                  !GetVarint64(&field, &f.prop.latest_time_end_compact)) {
                 return error_msg;
               }
             }
@@ -756,4 +764,4 @@ std::string VersionEdit::DebugJSON(int edit_num, bool hex_key) const {
   return jw.Get();
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -10,14 +10,15 @@
 // A portable implementation of crc32c, optimized to handle
 // four bytes at a time.
 #include "util/crc32c.h"
+
 #include <stdint.h>
 #ifdef HAVE_SSE42
 #include <nmmintrin.h>
 #include <wmmintrin.h>
 #endif
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/util.h"
-
 #ifdef __powerpc64__
 #include "util/crc32c_ppc.h"
 #include "util/crc32c_ppc_constants.h"
@@ -37,7 +38,7 @@
 
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace crc32c {
 
 #if defined(HAVE_POWER8) && defined(HAS_ALTIVEC)
@@ -1228,4 +1229,4 @@ uint32_t Extend(uint32_t crc, const char* buf, size_t size) {
 
 
 }  // namespace crc32c
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

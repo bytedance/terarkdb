@@ -11,8 +11,9 @@
 
 #pragma once
 #include <stdint.h>
-#include <unordered_map>
+
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "options/db_options.h"
@@ -20,9 +21,10 @@
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/transaction_log.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Env;
 class Directory;
@@ -53,8 +55,7 @@ extern std::string ArchivalDirectory(const std::string& dbname);
 
 //  Return the name of the archived log file with the specified number
 //  in the db named by "dbname". The result will be prefixed with "dbname".
-extern std::string ArchivedLogFileName(const std::string& dbname,
-                                       uint64_t num);
+extern std::string ArchivedLogFileName(const std::string& dbname, uint64_t num);
 
 extern std::string MakeTableFileName(const std::string& name, uint64_t number);
 
@@ -73,7 +74,7 @@ extern std::string TableFileName(const std::vector<DbPath>& db_paths,
                                  uint64_t number, uint32_t path_id);
 
 // Sufficient buffer size for FormatFileNumber.
-const size_t kFormatFileNumberBufSize = 38;
+const size_t kFormatFileNumberBufSize = 128;
 
 extern void FormatFileNumber(uint64_t number, uint32_t path_id, char* out_buf,
                              size_t out_buf_size);
@@ -132,8 +133,7 @@ extern std::string TempOptionsFileName(const std::string& dbname,
 
 // Return the name to use for a metadatabase. The result will be prefixed with
 // "dbname".
-extern std::string MetaDatabaseName(const std::string& dbname,
-                                    uint64_t number);
+extern std::string MetaDatabaseName(const std::string& dbname, uint64_t number);
 
 // Return the name of the Identity file which stores a unique number for the db
 // that will get regenerated if the db loses all its data and is recreated fresh
@@ -164,4 +164,4 @@ extern Status SetIdentityFile(Env* env, const std::string& dbname);
 extern Status SyncManifest(Env* env, const ImmutableDBOptions* db_options,
                            WritableFileWriter* file);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

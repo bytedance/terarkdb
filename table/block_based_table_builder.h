@@ -9,6 +9,7 @@
 
 #pragma once
 #include <stdint.h>
+
 #include <limits>
 #include <string>
 #include <utility>
@@ -18,11 +19,12 @@
 #include "rocksdb/listener.h"
 #include "rocksdb/options.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/meta_blocks.h"
 #include "table/table_builder.h"
 #include "util/compression.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class BlockBuilder;
 class BlockHandle;
@@ -61,7 +63,8 @@ class BlockBasedTableBuilder : public TableBuilder {
   // constructor after this function returns.
   // REQUIRES: Finish(), Abandon() have not been called
   Status Finish(const TablePropertyCache* prop,
-                const std::vector<uint64_t>* snapshots) override;
+                const std::vector<uint64_t>* snapshots,
+                const std::vector<uint64_t>* inheritance_tree) override;
 
   // Indicate that the contents of this builder should be abandoned.  Stops
   // using the file passed to the constructor after this function returns.
@@ -129,4 +132,4 @@ Slice CompressBlock(const Slice& raw, const CompressionContext& compression_ctx,
                     CompressionType* type, uint32_t format_version,
                     std::string* compressed_output);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

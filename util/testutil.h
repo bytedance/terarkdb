@@ -20,13 +20,19 @@
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
+#include "rocksdb/ttl_extractor.h"
+#include "rocksdb/types.h"
+#include "table/block_based_table_builder.h"
 #include "table/block_based_table_factory.h"
 #include "table/internal_iterator.h"
 #include "table/plain_table_factory.h"
 #include "util/mutexlock.h"
 #include "util/random.h"
+#include "util/testharness.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
+
 class SequentialFile;
 class SequentialFileReader;
 
@@ -59,9 +65,10 @@ class ErrorEnv : public EnvWrapper {
   bool writable_file_error_;
   int num_writable_file_errors_;
 
-  ErrorEnv() : EnvWrapper(Env::Default()),
-               writable_file_error_(false),
-               num_writable_file_errors_(0) { }
+  ErrorEnv()
+      : EnvWrapper(Env::Default()),
+        writable_file_error_(false),
+        num_writable_file_errors_(0) {}
 
   virtual Status NewWritableFile(const std::string& fname,
                                  std::unique_ptr<WritableFile>* result,
@@ -133,7 +140,7 @@ class SimpleSuffixReverseComparator : public Comparator {
 extern const Comparator* Uint64Comparator();
 
 // Iterator over a vector of keys/values
-template<class TValue>
+template <class TValue>
 class VectorIteratorBase : public InternalIteratorBase<TValue> {
  public:
   explicit VectorIteratorBase(const std::vector<std::string>& keys)
@@ -143,8 +150,8 @@ class VectorIteratorBase : public InternalIteratorBase<TValue> {
   }
 
   VectorIteratorBase(const std::vector<std::string>& keys,
-      const std::vector<std::string>& values)
-    : keys_(keys), values_(values), current_(keys.size()) {
+                     const std::vector<std::string>& values)
+      : keys_(keys), values_(values), current_(keys.size()) {
     assert(keys_.size() == values_.size());
   }
 
@@ -191,15 +198,15 @@ extern RandomAccessFileReader* GetRandomAccessFileReader(RandomAccessFile* raf);
 extern SequentialFileReader* GetSequentialFileReader(SequentialFile* se,
                                                      const std::string& fname);
 
-class StringSink: public WritableFile {
+class StringSink : public WritableFile {
  public:
   std::string contents_;
 
-  explicit StringSink(Slice* reader_contents = nullptr) :
-      WritableFile(),
-      contents_(""),
-      reader_contents_(reader_contents),
-      last_flush_(0) {
+  explicit StringSink(Slice* reader_contents = nullptr)
+      : WritableFile(),
+        contents_(""),
+        reader_contents_(reader_contents),
+        last_flush_(0) {
     if (reader_contents_ != nullptr) {
       *reader_contents_ = Slice(contents_.data(), 0);
     }
@@ -216,9 +223,8 @@ class StringSink: public WritableFile {
     if (reader_contents_ != nullptr) {
       assert(reader_contents_->size() <= last_flush_);
       size_t offset = last_flush_ - reader_contents_->size();
-      *reader_contents_ = Slice(
-          contents_.data() + offset,
-          contents_.size() - offset);
+      *reader_contents_ =
+          Slice(contents_.data() + offset, contents_.size() - offset);
       last_flush_ = contents_.size();
     }
 
@@ -232,8 +238,8 @@ class StringSink: public WritableFile {
   void Drop(size_t bytes) {
     if (reader_contents_ != nullptr) {
       contents_.resize(contents_.size() - bytes);
-      *reader_contents_ = Slice(
-          reader_contents_->data(), reader_contents_->size() - bytes);
+      *reader_contents_ =
+          Slice(reader_contents_->data(), reader_contents_->size() - bytes);
       last_flush_ = contents_.size();
     }
   }
@@ -281,13 +287,11 @@ class RandomRWStringSink : public RandomRWFile {
   StringSink* ss_;
 };
 
-
 // A helper class that converts internal format keys into user keys
-template<bool ConvertKey, class InnerIter>
+template <bool ConvertKey, class InnerIter>
 class ConvertingIterator : public InternalIterator {
  public:
-  explicit ConvertingIterator(InnerIter* iter,
-                              bool arena_mode = false)
+  explicit ConvertingIterator(InnerIter* iter, bool arena_mode = false)
       : iter_(iter), arena_mode_(arena_mode) {}
   virtual ~ConvertingIterator() {
     if (arena_mode_) {
@@ -346,7 +350,6 @@ class ConvertingIterator : public InternalIterator {
   operator bool() const { return !!iter_; }
   bool operator!() const { return !iter_; }
 
-
  private:
   mutable Status status_;
   InnerIter* iter_;
@@ -400,7 +403,7 @@ class OverwritingStringSink : public WritableFile {
   size_t last_flush_;
 };
 
-class StringSource: public RandomAccessFile {
+class StringSource : public RandomAccessFile {
  public:
   explicit StringSource(const Slice& contents, uint64_t uniq_id = 0,
                         bool mmap = false)
@@ -409,12 +412,12 @@ class StringSource: public RandomAccessFile {
         mmap_(mmap),
         total_reads_(0) {}
 
-  virtual ~StringSource() { }
+  virtual ~StringSource() {}
 
   uint64_t Size() const { return contents_.size(); }
 
   virtual Status Read(uint64_t offset, size_t n, Slice* result,
-      char* scratch) const override {
+                      char* scratch) const override {
     total_reads_++;
     if (offset > contents_.size()) {
       return Status::InvalidArgument("invalid Read offset");
@@ -439,7 +442,7 @@ class StringSource: public RandomAccessFile {
     char* rid = id;
     rid = EncodeVarint64(rid, uniq_id_);
     rid = EncodeVarint64(rid, 0);
-    return static_cast<size_t>(rid-id);
+    return static_cast<size_t>(rid - id);
   }
 
   int total_reads() const { return total_reads_; }
@@ -537,8 +540,9 @@ class FilterNumber : public CompactionFilter {
 
   std::string last_merge_operand_key() { return last_merge_operand_key_; }
 
-  bool Filter(int /*level*/, const rocksdb::Slice& /*key*/,
-              const rocksdb::Slice& value, std::string* /*new_value*/,
+  bool Filter(int /*level*/, const TERARKDB_NAMESPACE::Slice& /*key*/,
+              const TERARKDB_NAMESPACE::Slice& value,
+              std::string* /*new_value*/,
               bool* /*value_changed*/) const override {
     if (value.size() == sizeof(uint64_t)) {
       return num_ == DecodeFixed64(value.data());
@@ -546,8 +550,9 @@ class FilterNumber : public CompactionFilter {
     return true;
   }
 
-  bool FilterMergeOperand(int /*level*/, const rocksdb::Slice& key,
-                          const rocksdb::Slice& value) const override {
+  bool FilterMergeOperand(
+      int /*level*/, const TERARKDB_NAMESPACE::Slice& key,
+      const TERARKDB_NAMESPACE::Slice& value) const override {
     last_merge_operand_key_ = key.ToString();
     if (value.size() == sizeof(uint64_t)) {
       return num_ == DecodeFixed64(value.data());
@@ -807,6 +812,64 @@ class ChanglingCompactionFilterFactory : public CompactionFilterFactory {
   std::string name_;
 };
 
+class TestTtlExtractor : public TtlExtractor {
+ public:
+  TestTtlExtractor(Env* env) : env_(env) {}
+  TestTtlExtractor() {}
+
+ private:
+  Status Extract(EntryType entry_type, const Slice& user_key,
+                 const Slice& value_or_meta, bool* has_ttl,
+                 std::chrono::seconds* ttl) const {
+    if (entry_type == EntryType::kEntryPut ||
+        entry_type == EntryType::kEntryMerge) {
+      *has_ttl = true;
+      assert(value_or_meta.size() > kTtlLength);
+      uint64_t ttl_expect = DecodeFixed64(value_or_meta.data() +
+                                          value_or_meta.size() - kTtlLength);
+      if (env_ != nullptr) {
+        uint64_t now_time = env_->NowMicros() / 1000000;
+        if (now_time >= ttl_expect) {
+          *ttl = static_cast<std::chrono::seconds>(0);
+        } else {
+          *ttl = static_cast<std::chrono::seconds>(ttl_expect - now_time);
+        }
+      } else {
+        *ttl = static_cast<std::chrono::seconds>(ttl_expect);
+      }
+
+    } else {
+      *has_ttl = false;
+    }
+    return Status::OK();
+  }
+
+ private:
+  int kTtlLength = sizeof(uint64_t);
+  Env* env_ = nullptr;
+};
+
+class TestTtlExtractorFactory : public TtlExtractorFactory {
+ public:
+  TestTtlExtractorFactory(Env* env) : env_(env) {}
+  TestTtlExtractorFactory() {}
+
+ private:
+  using TtlContext = TtlExtractorContext;
+
+  virtual std::unique_ptr<TtlExtractor> CreateTtlExtractor(
+      const TtlContext& context) const {
+    return std::make_unique<TestTtlExtractor>(env_);
+  }
+
+  virtual const char* Name() const { return "TestTtlExtractorFactor"; }
+
+  virtual Status Serialize(std::string* /*bytes*/) const {
+    return Status::NotSupported();
+  }
+  Env* env_ = nullptr;
+};
+
 CompressionType RandomCompressionType(Random* rnd);
 
 void RandomCompressionTypeVector(const size_t count,
@@ -826,4 +889,5 @@ Status DestroyDir(Env* env, const std::string& dir);
 bool IsDirectIOSupported(Env* env, const std::string& dir);
 
 }  // namespace test
-}  // namespace rocksdb
+
+}  // namespace TERARKDB_NAMESPACE

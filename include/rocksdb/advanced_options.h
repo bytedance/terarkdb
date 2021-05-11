@@ -11,9 +11,10 @@
 #include <memory>
 
 #include "rocksdb/memtablerep.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/universal_compaction.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Slice;
 class SliceTransform;
@@ -29,13 +30,10 @@ enum CompactionStyle : char {
   // Universal compaction style
   // Not supported in ROCKSDB_LITE.
   kCompactionStyleUniversal = 0x1,
-  // FIFO compaction style
-  // Not supported in ROCKSDB_LITE
-  kCompactionStyleFIFO = 0x2,
   // Disable background compaction. Compaction jobs are submitted
   // via CompactFiles().
   // Not supported in ROCKSDB_LITE
-  kCompactionStyleNone = 0x3,
+  kCompactionStyleNone = 0x2,
 };
 
 // In Level-based compaction, it Determines which file from a level to be
@@ -155,12 +153,11 @@ struct CompressionOptions {
         enabled(_enabled) {}
 };
 
-enum UpdateStatus {    // Return status For inplace update callback
-  UPDATE_FAILED   = 0, // Nothing to update
-  UPDATED_INPLACE = 1, // Value updated inplace
-  UPDATED         = 2, // No inplace update. Merged value set
+enum UpdateStatus {     // Return status For inplace update callback
+  UPDATE_FAILED = 0,    // Nothing to update
+  UPDATED_INPLACE = 1,  // Value updated inplace
+  UPDATED = 2,          // No inplace update. Merged value set
 };
-
 
 struct AdvancedColumnFamilyOptions {
   // The maximum number of write buffers that are built up in memory.
@@ -211,8 +208,8 @@ struct AdvancedColumnFamilyOptions {
   // set by the user.  Otherwise, the default is 0.
   int max_write_buffer_number_to_maintain = 0;
 
-  // LazyCompaction
-  bool enable_lazy_compaction = true;
+  // LazyCompaction, default false
+  bool enable_lazy_compaction = false;
 
   // Read TableProperties from file if false
   bool pin_table_properties_in_reader = true;
@@ -545,13 +542,6 @@ struct AdvancedColumnFamilyOptions {
   // SetOptions("compaction_options_universal", "{size_ratio=2;}")
   CompactionOptionsUniversal compaction_options_universal;
 
-  // The options for FIFO compaction style
-  //
-  // Dynamically changeable through SetOptions() API
-  // Dynamic change example:
-  // SetOptions("compaction_options_fifo", "{max_table_files_size=100;ttl=2;}")
-  CompactionOptionsFIFO compaction_options_fifo;
-
   // An iteration->Next() sequentially skips over keys with the same
   // user-key unless this option is set. This number specifies the number
   // of keys (with the same userkey) that will be sequentially
@@ -618,6 +608,12 @@ struct AdvancedColumnFamilyOptions {
   // Default: false
   bool optimize_filters_for_hits = false;
 
+  // Enable lazy level compaction fast push range_deletions
+  // It is recommended to disabled when RangeDeletion writes frequently
+  //
+  // Default: false
+  bool optimize_range_deletion = false;
+
   // After writing every SST file, reopen it and read all the keys.
   //
   // Default: false
@@ -678,4 +674,4 @@ struct AdvancedColumnFamilyOptions {
   bool purge_redundant_kvs_while_flush = true;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

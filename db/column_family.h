@@ -25,9 +25,11 @@
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
+#include "util/chash_set.h"
 #include "util/thread_local.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Version;
 class VersionSet;
@@ -146,13 +148,6 @@ extern Status CheckCFPathsSupported(const DBOptions& db_options,
 
 extern ColumnFamilyOptions SanitizeOptions(const ImmutableDBOptions& db_options,
                                            const ColumnFamilyOptions& src);
-// Wrap user defined table proproties collector factories `from cf_options`
-// into internal ones in int_tbl_prop_collector_factories. Add a system internal
-// one too.
-extern void GetIntTblPropCollectorFactory(
-    const ImmutableCFOptions& ioptions,
-    std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
-        int_tbl_prop_collector_factories);
 
 class ColumnFamilySet;
 
@@ -202,6 +197,10 @@ class ColumnFamilyData {
   void SetDropped();
   bool IsDropped() const { return dropped_.load(std::memory_order_relaxed); }
 
+  bool OptimizeFiltersForHits() const {
+    return optimize_filters_for_hits_.load(std::memory_order_relaxed);
+  }
+
   // thread-safe
   int NumberLevels() const { return ioptions_.num_levels; }
 
@@ -237,6 +236,7 @@ class ColumnFamilyData {
 #ifndef ROCKSDB_LITE
   // REQUIRES: DB mutex held
   Status SetOptions(
+      const ImmutableDBOptions& db_options,
       const std::unordered_map<std::string, std::string>& options_map);
 #endif  // ROCKSDB_LITE
 
@@ -303,17 +303,18 @@ class ColumnFamilyData {
   static const int kCompactToBaseLevel;
 
   // REQUIRES: DB mutex held
-  void PrepareManualCompaction(
-      const MutableCFOptions& mutable_cf_options, const Slice* begin,
-      const Slice* end, std::unordered_set<uint64_t>* files_being_compact);
+  void PrepareManualCompaction(const MutableCFOptions& mutable_cf_options,
+                               const Slice* begin, const Slice* end,
+                               chash_set<uint64_t>* files_being_compact);
 
   // REQUIRES: DB mutex held
-  Compaction* CompactRange(
-      const MutableCFOptions& mutable_cf_options, int input_level,
-      int output_level, uint32_t output_path_id, uint32_t max_subcompactions,
-      const InternalKey* begin, const InternalKey* end,
-      InternalKey** compaction_end, bool* manual_conflict,
-      const std::unordered_set<uint64_t>* files_being_compact);
+  Compaction* CompactRange(const MutableCFOptions& mutable_cf_options,
+                           SeparationType separation_type, int input_level,
+                           int output_level, uint32_t output_path_id,
+                           uint32_t max_subcompactions,
+                           const InternalKey* begin, const InternalKey* end,
+                           InternalKey** compaction_end, bool* manual_conflict,
+                           const chash_set<uint64_t>* files_being_compact);
 
   CompactionPicker* compaction_picker() { return compaction_picker_.get(); }
   // thread-safe
@@ -326,8 +327,15 @@ class ColumnFamilyData {
   }
 
   const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
-  int_tbl_prop_collector_factories() const {
-    return &int_tbl_prop_collector_factories_;
+  int_tbl_prop_collector_factories(const MutableCFOptions& moptions) const {
+    return moptions.int_tbl_prop_collector_factories.get();
+  }
+  const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
+  int_tbl_prop_collector_factories_for_blob(
+      const MutableCFOptions& moptions) const {
+    return ioptions_.int_tbl_prop_collector_factories_for_blob == nullptr
+               ? moptions.int_tbl_prop_collector_factories.get()
+               : ioptions_.int_tbl_prop_collector_factories_for_blob.get();
   }
 
   SuperVersion* GetSuperVersion() { return super_version_; }
@@ -428,12 +436,10 @@ class ColumnFamilyData {
 
   std::atomic<int> refs_;  // outstanding references to ColumnFamilyData
   std::atomic<bool> initialized_;
-  std::atomic<bool> dropped_;  // true if client dropped it
+  std::atomic<bool> dropped_;                    // true if client dropped it
+  std::atomic<bool> optimize_filters_for_hits_;  // for read output mutex
 
   const InternalKeyComparator internal_comparator_;
-  std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
-      int_tbl_prop_collector_factories_;
-
   const ColumnFamilyOptions initial_cf_options_;
   const ImmutableCFOptions ioptions_;
   MutableCFOptions mutable_cf_options_;
@@ -657,4 +663,4 @@ extern uint32_t GetColumnFamilyID(ColumnFamilyHandle* column_family);
 extern const Comparator* GetColumnFamilyUserComparator(
     ColumnFamilyHandle* column_family);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

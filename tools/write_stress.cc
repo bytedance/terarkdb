@@ -58,9 +58,10 @@ int main() {
 
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
-#endif // __STDC_FORMAT_MACROS
+#endif  // __STDC_FORMAT_MACROS
 
 #include <inttypes.h>
+
 #include <atomic>
 #include <random>
 #include <set>
@@ -72,6 +73,7 @@ int main() {
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/filename.h"
 #include "util/gflags_compat.h"
 
@@ -108,7 +110,7 @@ DEFINE_bool(low_open_files_mode, false,
             "If true, we set max_open_files to 20, so that every file access "
             "needs to reopen it");
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 static const int kPrefixSize = 3;
 
@@ -209,17 +211,19 @@ class WriteStress {
     std::uniform_real_distribution<double> dist(0, 1);
     std::uniform_int_distribution<int> char_dist('a', 'z');
     while (!stop_.load(std::memory_order_relaxed)) {
-      Env::Default()->SleepForMicroseconds(static_cast<int>(
-                                           FLAGS_prefix_mutate_period_sec *
-                                           1000 * 1000LL));
+      Env::Default()->SleepForMicroseconds(
+          static_cast<int>(FLAGS_prefix_mutate_period_sec * 1000 * 1000LL));
       if (dist(rng) < FLAGS_first_char_mutate_probability) {
-        key_prefix_[0].store(static_cast<char>(char_dist(rng)), std::memory_order_relaxed);
+        key_prefix_[0].store(static_cast<char>(char_dist(rng)),
+                             std::memory_order_relaxed);
       }
       if (dist(rng) < FLAGS_second_char_mutate_probability) {
-        key_prefix_[1].store(static_cast<char>(char_dist(rng)), std::memory_order_relaxed);
+        key_prefix_[1].store(static_cast<char>(char_dist(rng)),
+                             std::memory_order_relaxed);
       }
       if (dist(rng) < FLAGS_third_char_mutate_probability) {
-        key_prefix_[2].store(static_cast<char>(char_dist(rng)), std::memory_order_relaxed);
+        key_prefix_[2].store(static_cast<char>(char_dist(rng)),
+                             std::memory_order_relaxed);
       }
     }
   }
@@ -297,13 +301,13 @@ class WriteStress {
   std::unique_ptr<DB> db_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   SetUsageMessage(std::string("\nUSAGE:\n") + std::string(argv[0]) +
                   " [OPTIONS]...");
   ParseCommandLineFlags(&argc, &argv, true);
-  rocksdb::WriteStress write_stress;
+  TERARKDB_NAMESPACE::WriteStress write_stress;
   return write_stress.Run();
 }
 

@@ -12,6 +12,7 @@
 #include "utilities/transactions/write_prepared_txn_db.h"
 
 #include <inttypes.h>
+
 #include <algorithm>
 #include <string>
 #include <unordered_set>
@@ -20,6 +21,7 @@
 #include "db/db_impl.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/transaction_db.h"
 #include "util/cast_util.h"
 #include "util/mutexlock.h"
@@ -28,7 +30,7 @@
 #include "utilities/transactions/pessimistic_transaction.h"
 #include "utilities/transactions/transaction_db_mutex_impl.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 Status WritePreparedTxnDB::Initialize(
     const std::vector<size_t>& compaction_enabled_cf_indices,
@@ -217,9 +219,10 @@ Status WritePreparedTxnDB::Get(const ReadOptions& options,
   SequenceNumber min_uncommitted = 0;
   if (options.snapshot != nullptr) {
     seq = options.snapshot->GetSequenceNumber();
-    min_uncommitted = static_cast_with_check<const SnapshotImpl, const Snapshot>(
-                        options.snapshot)
-                        ->min_uncommitted_;
+    min_uncommitted =
+        static_cast_with_check<const SnapshotImpl, const Snapshot>(
+            options.snapshot)
+            ->min_uncommitted_;
   } else {
     min_uncommitted = SmallestUnCommittedSeq();
   }
@@ -268,7 +271,6 @@ void WritePreparedTxnDB::UpdateCFComparatorMap(ColumnFamilyHandle* h) {
   cf_map_.reset(cf_map);
   handle_map_.reset(handle_map);
 }
-
 
 std::vector<Status> WritePreparedTxnDB::MultiGet(
     const ReadOptions& options,
@@ -329,9 +331,8 @@ Iterator* WritePreparedTxnDB::NewIterator(const ReadOptions& options,
   auto* cfd = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family)->cfd();
   auto* state =
       new IteratorState(this, snapshot_seq, own_snapshot, min_uncommitted);
-  auto* db_iter =
-      db_impl_->NewIteratorImpl(options, cfd, snapshot_seq, &state->callback,
-                                !ALLOW_REFRESH);
+  auto* db_iter = db_impl_->NewIteratorImpl(options, cfd, snapshot_seq,
+                                            &state->callback, !ALLOW_REFRESH);
   db_iter->RegisterCleanup(CleanupWritePreparedTxnDBIterator, state, nullptr);
   return db_iter;
 }
@@ -346,9 +347,10 @@ Status WritePreparedTxnDB::NewIterators(
   SequenceNumber min_uncommitted = 0;
   if (options.snapshot != nullptr) {
     snapshot_seq = options.snapshot->GetSequenceNumber();
-    min_uncommitted = static_cast_with_check<const SnapshotImpl, const Snapshot>(
-                        options.snapshot)
-                        ->min_uncommitted_;
+    min_uncommitted =
+        static_cast_with_check<const SnapshotImpl, const Snapshot>(
+            options.snapshot)
+            ->min_uncommitted_;
   } else {
     auto* snapshot = GetSnapshot();
     // We take a snapshot to make sure that the related data in the commit map
@@ -365,9 +367,8 @@ Status WritePreparedTxnDB::NewIterators(
     auto* cfd = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family)->cfd();
     auto* state =
         new IteratorState(this, snapshot_seq, own_snapshot, min_uncommitted);
-    auto* db_iter =
-        db_impl_->NewIteratorImpl(options, cfd, snapshot_seq, &state->callback,
-                                  !ALLOW_REFRESH);
+    auto* db_iter = db_impl_->NewIteratorImpl(options, cfd, snapshot_seq,
+                                              &state->callback, !ALLOW_REFRESH);
     db_iter->RegisterCleanup(CleanupWritePreparedTxnDBIterator, state, nullptr);
     iterators->push_back(db_iter);
   }
@@ -460,7 +461,8 @@ void WritePreparedTxnDB::RemovePrepared(const uint64_t prepare_seq,
 bool WritePreparedTxnDB::GetCommitEntry(const uint64_t indexed_seq,
                                         CommitEntry64b* entry_64b,
                                         CommitEntry* entry) const {
-  *entry_64b = commit_cache_[static_cast<size_t>(indexed_seq)].load(std::memory_order_acquire);
+  *entry_64b = commit_cache_[static_cast<size_t>(indexed_seq)].load(
+      std::memory_order_acquire);
   bool valid = entry_64b->Parse(indexed_seq, entry, FORMAT);
   return valid;
 }
@@ -469,8 +471,9 @@ bool WritePreparedTxnDB::AddCommitEntry(const uint64_t indexed_seq,
                                         const CommitEntry& new_entry,
                                         CommitEntry* evicted_entry) {
   CommitEntry64b new_entry_64b(new_entry, FORMAT);
-  CommitEntry64b evicted_entry_64b = commit_cache_[static_cast<size_t>(indexed_seq)].exchange(
-      new_entry_64b, std::memory_order_acq_rel);
+  CommitEntry64b evicted_entry_64b =
+      commit_cache_[static_cast<size_t>(indexed_seq)].exchange(
+          new_entry_64b, std::memory_order_acq_rel);
   bool valid = evicted_entry_64b.Parse(indexed_seq, evicted_entry, FORMAT);
   return valid;
 }
@@ -794,5 +797,5 @@ void SubBatchCounter::AddKey(const uint32_t cf, const Slice& key) {
   }
 }
 
-}  //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

@@ -13,9 +13,11 @@
 #pragma once
 #include <cerrno>
 #include <cstddef>
+
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/write_buffer_manager.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Logger;
 
@@ -54,4 +56,4 @@ class AllocTracker {
   void operator=(const AllocTracker&);
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

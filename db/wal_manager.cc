@@ -27,8 +27,8 @@
 #include "port/port.h"
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/write_batch.h"
-#include "utilities/util/valvec.hpp"
 #include "util/cast_util.h"
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
@@ -37,8 +37,9 @@
 #include "util/mutexlock.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
+#include "utilities/util/valvec.hpp"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE
 
@@ -507,4 +508,4 @@ void WalManager::PurgeObsoleteWALFilesImpl(uint64_t now_seconds) {
 }
 
 #endif  // ROCKSDB_LITE
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

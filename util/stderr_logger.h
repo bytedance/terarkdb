@@ -9,8 +9,9 @@
 #include <stdio.h>
 
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Prints logs to stderr for faster debugging
 class StderrLogger : public Logger {
@@ -28,4 +29,4 @@ class StderrLogger : public Logger {
   }
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -34,6 +34,7 @@
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/memtablerep.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/transaction_log.h"
 #include "table/scoped_arena_iterator.h"
 #include "util/autovector.h"
@@ -41,7 +42,7 @@
 #include "util/stop_watch.h"
 #include "util/thread_local.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class DBImpl;
 class MemTable;
@@ -82,6 +83,7 @@ class FlushJob {
     return table_properties_;
   }
   const autovector<MemTable*>& GetMemTables() const { return mems_; }
+  bool IsInstallTimeout() const { return is_install_timeout_; }
 
  private:
   void ReportStartedFlush();
@@ -141,7 +143,8 @@ class FlushJob {
   autovector<MemTable*> mems_;
   VersionEdit* edit_;
   Version* base_;
-  bool pick_memtable_called;
+  bool pick_memtable_called_;
+  bool is_install_timeout_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

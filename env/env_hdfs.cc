@@ -4,20 +4,24 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 
-#include "rocksdb/env.h"
 #include "hdfs/env_hdfs.h"
+
+#include "rocksdb/env.h"
 
 #ifdef USE_HDFS
 #ifndef ROCKSDB_HDFS_FILE_C
 #define ROCKSDB_HDFS_FILE_C
 
-#include <algorithm>
 #include <stdio.h>
 #include <sys/time.h>
 #include <time.h>
+
+#include <algorithm>
 #include <iostream>
 #include <sstream>
+
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/string_util.h"
 
 #define HDFS_EXISTS 0
@@ -30,15 +34,15 @@
 // will reside on the same HDFS cluster.
 //
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 
 // Log error message
 static Status IOError(const std::string& context, int err_number) {
-  return (err_number == ENOSPC) ?
-      Status::NoSpace(context, strerror(err_number)) :
-      Status::IOError(context, strerror(err_number));
+  return (err_number == ENOSPC)
+             ? Status::NoSpace(context, strerror(err_number))
+             : Status::IOError(context, strerror(err_number));
 }
 
 // assume that there is one global logger for now. It is not thread-safe,
@@ -74,9 +78,7 @@ class HdfsReadableFile : virtual public SequentialFile,
     hfile_ = nullptr;
   }
 
-  bool isValid() {
-    return hfile_ != nullptr;
-  }
+  bool isValid() { return hfile_ != nullptr; }
 
   // sequential access, read data at current offset in file
   virtual Status Read(size_t n, Slice* result, char* scratch) {
@@ -121,8 +123,8 @@ class HdfsReadableFile : virtual public SequentialFile,
     Status s;
     ROCKS_LOG_DEBUG(mylog, "[hdfs] HdfsReadableFile preading %s\n",
                     filename_.c_str());
-    ssize_t bytes_read = hdfsPread(fileSys_, hfile_, offset,
-                                   (void*)scratch, (tSize)n);
+    ssize_t bytes_read =
+        hdfsPread(fileSys_, hfile_, offset, (void*)scratch, (tSize)n);
     ROCKS_LOG_DEBUG(mylog, "[hdfs] HdfsReadableFile pread %s\n",
                     filename_.c_str());
     *result = Slice(scratch, (bytes_read < 0) ? 0 : bytes_read);
@@ -151,7 +153,6 @@ class HdfsReadableFile : virtual public SequentialFile,
   }
 
  private:
-
   // returns true if we are at the end of file, false otherwise
   bool feof() {
     ROCKS_LOG_DEBUG(mylog, "[hdfs] HdfsReadableFile feof %s\n",
@@ -179,7 +180,7 @@ class HdfsReadableFile : virtual public SequentialFile,
 };
 
 // Appends to an existing file in HDFS.
-class HdfsWritableFile: public WritableFile {
+class HdfsWritableFile : public WritableFile {
  private:
   hdfsFS fileSys_;
   std::string filename_;
@@ -187,7 +188,7 @@ class HdfsWritableFile: public WritableFile {
 
  public:
   HdfsWritableFile(hdfsFS fileSys, const std::string& fname)
-      : fileSys_(fileSys), filename_(fname) , hfile_(nullptr) {
+      : fileSys_(fileSys), filename_(fname), hfile_(nullptr) {
     ROCKS_LOG_DEBUG(mylog, "[hdfs] HdfsWritableFile opening %s\n",
                     filename_.c_str());
     hfile_ = hdfsOpenFile(fileSys_, filename_.c_str(), O_WRONLY, 0, 0, 0);
@@ -208,14 +209,10 @@ class HdfsWritableFile: public WritableFile {
 
   // If the file was successfully created, then this returns true.
   // Otherwise returns false.
-  bool isValid() {
-    return hfile_ != nullptr;
-  }
+  bool isValid() { return hfile_ != nullptr; }
 
   // The name of the file, mostly needed for debug logging.
-  const std::string& getName() {
-    return filename_;
-  }
+  const std::string& getName() { return filename_; }
 
   virtual Status Append(const Slice& data) {
     ROCKS_LOG_DEBUG(mylog, "[hdfs] HdfsWritableFile Append %s\n",
@@ -231,9 +228,7 @@ class HdfsWritableFile: public WritableFile {
     return Status::OK();
   }
 
-  virtual Status Flush() {
-    return Status::OK();
-  }
+  virtual Status Flush() { return Status::OK(); }
 
   virtual Status Sync() {
     Status s;
@@ -328,15 +323,9 @@ class HdfsLogger : public Logger {
       const time_t seconds = now_tv.tv_sec;
       struct tm t;
       localtime_r(&seconds, &t);
-      p += snprintf(p, limit - p,
-                    "%04d/%02d/%02d-%02d:%02d:%02d.%06d %llx ",
-                    t.tm_year + 1900,
-                    t.tm_mon + 1,
-                    t.tm_mday,
-                    t.tm_hour,
-                    t.tm_min,
-                    t.tm_sec,
-                    static_cast<int>(now_tv.tv_usec),
+      p += snprintf(p, limit - p, "%04d/%02d/%02d-%02d:%02d:%02d.%06d %llx ",
+                    t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour,
+                    t.tm_min, t.tm_sec, static_cast<int>(now_tv.tv_usec),
                     static_cast<long long unsigned int>(thread_id));
 
       // Print the message
@@ -350,7 +339,7 @@ class HdfsLogger : public Logger {
       // Truncate to available space if necessary
       if (p >= limit) {
         if (iter == 0) {
-          continue;       // Try again with larger buffer
+          continue;  // Try again with larger buffer
         } else {
           p = limit - 1;
         }
@@ -362,7 +351,7 @@ class HdfsLogger : public Logger {
       }
 
       assert(p <= limit);
-      file_->Append(base, p-base);
+      file_->Append(base, p - base);
       file_->Flush();
       if (base != buffer) {
         delete[] base;
@@ -446,8 +435,7 @@ Status HdfsEnv::NewDirectory(const std::string& name,
     default:  // fail if the directory doesn't exist
       ROCKS_LOG_FATAL(mylog, "NewDirectory hdfsExists call failed");
       throw HdfsFatalException("hdfsExists call failed with error " +
-                               ToString(value) + " on path " + name +
-                               ".\n");
+                               ToString(value) + " on path " + name + ".\n");
   }
 }
 
@@ -470,34 +458,34 @@ Status HdfsEnv::GetChildren(const std::string& path,
   int value = hdfsExists(fileSys_, path.c_str());
   switch (value) {
     case HDFS_EXISTS: {  // directory exists
-    int numEntries = 0;
-    hdfsFileInfo* pHdfsFileInfo = 0;
-    pHdfsFileInfo = hdfsListDirectory(fileSys_, path.c_str(), &numEntries);
-    if (numEntries >= 0) {
-      for(int i = 0; i < numEntries; i++) {
-        char* pathname = pHdfsFileInfo[i].mName;
-        char* filename = std::rindex(pathname, '/');
-        if (filename != nullptr) {
-          result->push_back(filename+1);
+      int numEntries = 0;
+      hdfsFileInfo* pHdfsFileInfo = 0;
+      pHdfsFileInfo = hdfsListDirectory(fileSys_, path.c_str(), &numEntries);
+      if (numEntries >= 0) {
+        for (int i = 0; i < numEntries; i++) {
+          char* pathname = pHdfsFileInfo[i].mName;
+          char* filename = std::rindex(pathname, '/');
+          if (filename != nullptr) {
+            result->push_back(filename + 1);
+          }
         }
+        if (pHdfsFileInfo != nullptr) {
+          hdfsFreeFileInfo(pHdfsFileInfo, numEntries);
+        }
+      } else {
+        // numEntries < 0 indicates error
+        ROCKS_LOG_FATAL(mylog, "hdfsListDirectory call failed with error ");
+        throw HdfsFatalException(
+            "hdfsListDirectory call failed negative error.\n");
       }
-      if (pHdfsFileInfo != nullptr) {
-        hdfsFreeFileInfo(pHdfsFileInfo, numEntries);
-      }
-    } else {
-      // numEntries < 0 indicates error
-      ROCKS_LOG_FATAL(mylog, "hdfsListDirectory call failed with error ");
-      throw HdfsFatalException(
-          "hdfsListDirectory call failed negative error.\n");
+      break;
     }
-    break;
-  }
-  case HDFS_DOESNT_EXIST:  // directory does not exist, exit
-    return Status::NotFound();
-  default:          // anything else should be an error
-    ROCKS_LOG_FATAL(mylog, "GetChildren hdfsExists call failed");
-    throw HdfsFatalException("hdfsExists call failed with error " +
-                             ToString(value) + ".\n");
+    case HDFS_DOESNT_EXIST:  // directory does not exist, exit
+      return Status::NotFound();
+    default:  // anything else should be an error
+      ROCKS_LOG_FATAL(mylog, "GetChildren hdfsExists call failed");
+      throw HdfsFatalException("hdfsExists call failed with error " +
+                               ToString(value) + ".\n");
   }
   return Status::OK();
 }
@@ -521,9 +509,9 @@ Status HdfsEnv::CreateDirIfMissing(const std::string& name) {
   //  Not atomic. state might change b/w hdfsExists and CreateDir.
   switch (value) {
     case HDFS_EXISTS:
-    return Status::OK();
+      return Status::OK();
     case HDFS_DOESNT_EXIST:
-    return CreateDir(name);
+      return CreateDir(name);
     default:  // anything else should be an error
       ROCKS_LOG_FATAL(mylog, "CreateDirIfMissing hdfsExists call failed");
       throw HdfsFatalException("hdfsExists call failed with error " +
@@ -531,9 +519,7 @@ Status HdfsEnv::CreateDirIfMissing(const std::string& name) {
   }
 };
 
-Status HdfsEnv::DeleteDir(const std::string& name) {
-  return DeleteFile(name);
-};
+Status HdfsEnv::DeleteDir(const std::string& name) { return DeleteFile(name); };
 
 Status HdfsEnv::GetFileSize(const std::string& fname, uint64_t* size) {
   *size = 0L;
@@ -555,7 +541,6 @@ Status HdfsEnv::GetFileModificationTime(const std::string& fname,
     return Status::OK();
   }
   return IOError(fname, errno);
-
 }
 
 // The rename is not atomic. HDFS does not allow a renaming if the
@@ -576,9 +561,7 @@ Status HdfsEnv::LockFile(const std::string& fname, FileLock** lock) {
   return Status::OK();
 }
 
-Status HdfsEnv::UnlockFile(FileLock* lock) {
-  return Status::OK();
-}
+Status HdfsEnv::UnlockFile(FileLock* lock) { return Status::OK(); }
 
 Status HdfsEnv::NewLogger(const std::string& fname,
                           std::shared_ptr<Logger>* result) {
@@ -601,23 +584,23 @@ Status NewHdfsEnv(Env** hdfs_env, const std::string& fsname) {
   *hdfs_env = new HdfsEnv(fsname);
   return Status::OK();
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
-#endif // ROCKSDB_HDFS_FILE_C
+#endif  // ROCKSDB_HDFS_FILE_C
 
-#else // USE_HDFS
+#else  // USE_HDFS
 
 // dummy placeholders used when HDFS is not available
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 Status HdfsEnv::NewSequentialFile(const std::string& /*fname*/,
                                   std::unique_ptr<SequentialFile>* /*result*/,
                                   const EnvOptions& /*options*/) {
   return Status::NotSupported("Not compiled with hdfs support");
 }
 
- Status NewHdfsEnv(Env** /*hdfs_env*/, const std::string& /*fsname*/) {
-   return Status::NotSupported("Not compiled with hdfs support");
- }
+Status NewHdfsEnv(Env** /*hdfs_env*/, const std::string& /*fsname*/) {
+  return Status::NotSupported("Not compiled with hdfs support");
 }
+}  // namespace TERARKDB_NAMESPACE
 
 #endif

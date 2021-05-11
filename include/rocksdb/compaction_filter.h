@@ -15,9 +15,10 @@
 
 #include "rocksdb/lazy_buffer.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "utilities/util/factory.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Slice;
 class SliceTransform;
@@ -45,8 +46,7 @@ class CompactionFilter
     : public
       /// CompactionFilter can also be created by new factory mechanism.
       /// CompactionFilterFactory the old factory mechanism are also kept.
-      terark::Factoryable<CompactionFilter*, Slice,
-                                    CompactionFilterContext> {
+      terark::Factoryable<CompactionFilter*, Slice, CompactionFilterContext> {
  public:
   enum ValueType {
     kValue,
@@ -231,4 +231,4 @@ class CompactionFilterFactory
   }
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

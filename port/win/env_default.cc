@@ -7,15 +7,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
+#include <rocksdb/env.h>
+
 #include <mutex>
 
-#include <rocksdb/env.h>
 #include "port/win/env_win.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/compression_context_cache.h"
 #include "util/sync_point.h"
 #include "util/thread_local.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace port {
 
 // We choose not to destroy the env because joining the threads from the
@@ -24,10 +26,10 @@ namespace port {
 //    dead-lock.
 //    in this manner any remaining threads are terminated OK.
 namespace {
-  std::once_flag winenv_once_flag;
-  Env* envptr;
-};
-}
+std::once_flag winenv_once_flag;
+Env* envptr;
+};  // namespace
+}  // namespace port
 
 Env* Env::Default() {
   using namespace port;
@@ -38,4 +40,4 @@ Env* Env::Default() {
   return envptr;
 }
 
-}
+}  // namespace TERARKDB_NAMESPACE

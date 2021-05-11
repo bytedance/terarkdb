@@ -13,9 +13,10 @@
 #include "monitoring/instrumented_mutex.h"
 #include "options/cf_options.h"
 #include "rocksdb/db.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/date_tiered_db.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Implementation of DateTieredDB.
 class DateTieredDBImpl : public DateTieredDB {
@@ -89,5 +90,5 @@ class DateTieredDBImpl : public DateTieredDB {
   static bool IsStale(int64_t keytime, int64_t ttl, Env* env);
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

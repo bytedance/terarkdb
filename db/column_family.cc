@@ -21,7 +21,6 @@
 #include <vector>
 
 #include "db/compaction_picker.h"
-#include "db/compaction_picker_fifo.h"
 #include "db/compaction_picker_universal.h"
 #include "db/db_impl.h"
 #include "db/internal_stats.h"
@@ -33,13 +32,13 @@
 #include "memtable/hash_skiplist_rep.h"
 #include "monitoring/thread_status_util.h"
 #include "options/options_helper.h"
-#include "table/block_based_table_factory.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/merging_iterator.h"
 #include "util/autovector.h"
 #include "util/compression.h"
 #include "util/sst_file_manager_impl.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 ColumnFamilyHandleImpl::ColumnFamilyHandleImpl(
     ColumnFamilyData* column_family_data, DBImpl* db, InstrumentedMutex* mutex)
@@ -102,19 +101,6 @@ Status ColumnFamilyHandleImpl::GetDescriptor(ColumnFamilyDescriptor* desc) {
 
 const Comparator* ColumnFamilyHandleImpl::GetComparator() const {
   return cfd()->user_comparator();
-}
-
-void GetIntTblPropCollectorFactory(
-    const ImmutableCFOptions& ioptions,
-    std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
-        int_tbl_prop_collector_factories) {
-  auto& collector_factories = ioptions.table_properties_collector_factories;
-  for (size_t i = 0; i < ioptions.table_properties_collector_factories.size();
-       ++i) {
-    assert(collector_factories[i]);
-    int_tbl_prop_collector_factories->emplace_back(
-        new UserKeyTablePropertiesCollectorFactory(collector_factories[i]));
-  }
 }
 
 Status CheckCompressionSupported(const ColumnFamilyOptions& cf_options) {
@@ -226,6 +212,11 @@ ColumnFamilyOptions SanitizeOptions(const ImmutableDBOptions& db_options,
     result.num_levels = 3;
   }
 
+  if (result.compaction_style != CompactionStyle::kCompactionStyleLevel ||
+      !result.enable_lazy_compaction) {
+    result.optimize_range_deletion = false;
+  }
+
   if (result.max_write_buffer_number < 2) {
     result.max_write_buffer_number = 2;
   }
@@ -239,21 +230,10 @@ ColumnFamilyOptions SanitizeOptions(const ImmutableDBOptions& db_options,
     result.memtable_prefix_bloom_size_ratio = 0;
   }
 
-  if (!result.prefix_extractor) {
-    assert(result.memtable_factory);
-    Slice name = result.memtable_factory->Name();
-    if (name.compare("HashSkipListRepFactory") == 0 ||
-        name.compare("HashLinkListRepFactory") == 0) {
-      result.memtable_factory = std::make_shared<SkipListFactory>();
-    }
-  }
-
-  if (result.compaction_style == kCompactionStyleFIFO) {
-    result.num_levels = 1;
-    // since we delete level0 files in FIFO compaction when there are too many
-    // of them, these options don't really mean anything
-    result.level0_slowdown_writes_trigger = std::numeric_limits<int>::max();
-    result.level0_stop_writes_trigger = std::numeric_limits<int>::max();
+  assert(result.prefix_extractor || result.memtable_factory);
+  if (!result.prefix_extractor &&
+      result.memtable_factory->IsPrefixExtractorRequired()) {
+    result.memtable_factory = std::make_shared<SkipListFactory>();
   }
 
   if (result.max_bytes_for_level_multiplier <= 0) {
@@ -440,7 +420,7 @@ ColumnFamilyData::ColumnFamilyData(
       internal_comparator_(cf_options.comparator),
       initial_cf_options_(SanitizeOptions(db_options, cf_options)),
       ioptions_(db_options, initial_cf_options_),
-      mutable_cf_options_(initial_cf_options_),
+      mutable_cf_options_(initial_cf_options_, db_options.env),
       is_delete_range_supported_(
           cf_options.table_factory->IsDeleteRangeSupported()),
       write_buffer_manager_(write_buffer_manager),
@@ -463,9 +443,6 @@ ColumnFamilyData::ColumnFamilyData(
       last_memtable_id_(0) {
   Ref();
 
-  // Convert user defined table properties collector factories to internal ones.
-  GetIntTblPropCollectorFactory(ioptions_, &int_tbl_prop_collector_factories_);
-
   // if _dummy_versions is nullptr, then this is a dummy column family.
   if (_dummy_versions != nullptr) {
     internal_stats_.reset(
@@ -477,9 +454,6 @@ ColumnFamilyData::ColumnFamilyData(
 #ifndef ROCKSDB_LITE
     } else if (ioptions_.compaction_style == kCompactionStyleUniversal) {
       compaction_picker_.reset(new UniversalCompactionPicker(
-          table_cache_.get(), env_options, ioptions_, &internal_comparator_));
-    } else if (ioptions_.compaction_style == kCompactionStyleFIFO) {
-      compaction_picker_.reset(new FIFOCompactionPicker(
           table_cache_.get(), env_options, ioptions_, &internal_comparator_));
     } else if (ioptions_.compaction_style == kCompactionStyleNone) {
       compaction_picker_.reset(new NullCompactionPicker(
@@ -1093,7 +1067,7 @@ const int ColumnFamilyData::kCompactToBaseLevel = -2;
 
 void ColumnFamilyData::PrepareManualCompaction(
     const MutableCFOptions& mutable_cf_options, const Slice* begin,
-    const Slice* end, std::unordered_set<uint64_t>* files_being_compact) {
+    const Slice* end, chash_set<uint64_t>* files_being_compact) {
   InternalKey ibegin, iend;
   InternalKey* ibegin_ptr = nullptr;
   InternalKey* iend_ptr = nullptr;
@@ -1111,17 +1085,17 @@ void ColumnFamilyData::PrepareManualCompaction(
 }
 
 Compaction* ColumnFamilyData::CompactRange(
-    const MutableCFOptions& mutable_cf_options, int input_level,
-    int output_level, uint32_t output_path_id, uint32_t max_subcompactions,
-    const InternalKey* begin, const InternalKey* end,
-    InternalKey** compaction_end, bool* conflict,
-    const std::unordered_set<uint64_t>* files_being_compact) {
+    const MutableCFOptions& mutable_cf_options, SeparationType separation_type,
+    int input_level, int output_level, uint32_t output_path_id,
+    uint32_t max_subcompactions, const InternalKey* begin,
+    const InternalKey* end, InternalKey** compaction_end, bool* conflict,
+    const chash_set<uint64_t>* files_being_compact) {
   if (max_subcompactions == 0) {
     max_subcompactions = mutable_cf_options.max_subcompactions;
   }
   auto* result = compaction_picker_->CompactRange(
-      GetName(), mutable_cf_options, current_->storage_info(), input_level,
-      output_level, output_path_id, max_subcompactions, begin, end,
+      GetName(), mutable_cf_options, separation_type, current_->storage_info(),
+      input_level, output_level, output_path_id, max_subcompactions, begin, end,
       compaction_end, conflict, files_being_compact);
   if (result != nullptr) {
     result->SetInputVersion(current_);
@@ -1273,12 +1247,21 @@ void ColumnFamilyData::ResetThreadLocalSuperVersions() {
 
 #ifndef ROCKSDB_LITE
 Status ColumnFamilyData::SetOptions(
+    const ImmutableDBOptions& db_options,
     const std::unordered_map<std::string, std::string>& options_map) {
   MutableCFOptions new_mutable_cf_options;
   Status s =
       GetMutableOptionsFromStrings(mutable_cf_options_, options_map,
                                    ioptions_.info_log, &new_mutable_cf_options);
   if (s.ok()) {
+    new_mutable_cf_options = MutableCFOptions(
+        SanitizeOptions(db_options,
+                        BuildColumnFamilyOptions(initial_cf_options_,
+                                                 new_mutable_cf_options)),
+        db_options.env);
+    optimize_filters_for_hits_.store(
+        new_mutable_cf_options.optimize_filters_for_hits,
+        std::memory_order_relaxed);
     mutable_cf_options_ = new_mutable_cf_options;
     mutable_cf_options_.RefreshDerivedOptions(ioptions_);
   }
@@ -1495,4 +1478,4 @@ const Comparator* GetColumnFamilyUserComparator(
   return nullptr;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

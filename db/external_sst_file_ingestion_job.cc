@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "db/version_edit.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/merging_iterator.h"
 #include "table/scoped_arena_iterator.h"
 #include "table/sst_file_writer_collectors.h"
@@ -28,7 +29,7 @@
 #include "util/sync_point.h"
 #include "utilities/util/function.hpp"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 Status ExternalSstFileIngestionJob::Prepare(
     const std::vector<std::string>& external_files_paths,
@@ -584,6 +585,6 @@ bool ExternalSstFileIngestionJob::IngestedFileFitInLevel(
   return true;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // !ROCKSDB_LITE

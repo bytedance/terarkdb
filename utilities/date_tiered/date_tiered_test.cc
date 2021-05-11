@@ -11,14 +11,15 @@
 #include <map>
 #include <memory>
 
-#include "rocksdb/compaction_filter.h"
-#include "rocksdb/utilities/date_tiered_db.h"
 #include "port/port.h"
+#include "rocksdb/compaction_filter.h"
+#include "rocksdb/terark_namespace.h"
+#include "rocksdb/utilities/date_tiered_db.h"
 #include "util/logging.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 
@@ -450,7 +451,7 @@ TEST_F(DateTieredTest, IteratorMerge) {
   CloseDateTieredDB();
 }
 
-}  //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE
 
 // A black-box test for the DateTieredDB around rocksdb
 int main(int argc, char** argv) {

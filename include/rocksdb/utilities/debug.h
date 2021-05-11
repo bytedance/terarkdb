@@ -8,9 +8,10 @@
 #ifndef ROCKSDB_LITE
 
 #include "rocksdb/db.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/types.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Data associated with a particular version of a key. A database may internally
 // store multiple versions of a same user key due to snapshots, compaction not
@@ -40,6 +41,6 @@ Status GetAllKeyVersions(DB* db, Slice begin_key, Slice end_key,
                          size_t max_num_ikeys,
                          std::vector<KeyVersion>* key_versions);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

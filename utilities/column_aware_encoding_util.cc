@@ -14,13 +14,17 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+
 #include <algorithm>
 #include <utility>
 #include <vector>
+
 #include "include/rocksdb/comparator.h"
 #include "include/rocksdb/slice.h"
+#include "port/port.h"
 #include "rocksdb/env.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block_based_table_builder.h"
 #include "table/block_based_table_factory.h"
 #include "table/format.h"
@@ -30,9 +34,7 @@
 #include "utilities/col_buf_decoder.h"
 #include "utilities/col_buf_encoder.h"
 
-#include "port/port.h"
-
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 ColumnAwareEncodingReader::ColumnAwareEncodingReader(
     const std::string& file_path)
@@ -198,7 +200,9 @@ void ColumnAwareEncodingReader::DumpDataColumns(
   FILE* fp = fopen(filename.c_str(), "w");
   size_t block_id = 1;
   for (auto& kv_pairs : kv_pair_blocks) {
-    fprintf(fp, "---------------- Block: %-4" ROCKSDB_PRIszt " ----------------\n", block_id);
+    fprintf(fp,
+            "---------------- Block: %-4" ROCKSDB_PRIszt " ----------------\n",
+            block_id);
     for (auto& kv_pair : kv_pairs) {
       const auto& key = kv_pair.first;
       const auto& value = kv_pair.second;
@@ -422,13 +426,15 @@ Status ColumnAwareEncodingReader::EncodeBlocks(
     total_size += value_checksum_size;
 
     for (size_t i = 0; i < key_col_sizes.size(); ++i)
-      printf("Key col %" ROCKSDB_PRIszt " size: %" ROCKSDB_PRIszt " percentage %lf%%\n", i, key_col_sizes[i],
-             100.0 * key_col_sizes[i] / total_size);
+      printf("Key col %" ROCKSDB_PRIszt " size: %" ROCKSDB_PRIszt
+             " percentage %lf%%\n",
+             i, key_col_sizes[i], 100.0 * key_col_sizes[i] / total_size);
     for (size_t i = 0; i < value_col_sizes.size(); ++i)
-      printf("Value col %" ROCKSDB_PRIszt " size: %" ROCKSDB_PRIszt " percentage %lf%%\n", i,
-             value_col_sizes[i], 100.0 * value_col_sizes[i] / total_size);
-    printf("Value checksum size: %" ROCKSDB_PRIszt " percentage %lf%%\n", value_checksum_size,
-           100.0 * value_checksum_size / total_size);
+      printf("Value col %" ROCKSDB_PRIszt " size: %" ROCKSDB_PRIszt
+             " percentage %lf%%\n",
+             i, value_col_sizes[i], 100.0 * value_col_sizes[i] / total_size);
+    printf("Value checksum size: %" ROCKSDB_PRIszt " percentage %lf%%\n",
+           value_checksum_size, 100.0 * value_checksum_size / total_size);
   }
   return Status::OK();
 }
@@ -486,6 +492,6 @@ void ColumnAwareEncodingReader::GetColDeclarationsSecondary(
       true /* nullable */);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

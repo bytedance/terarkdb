@@ -4,7 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 // This file implements the "bridge" between Java and C++ and enables
-// calling c++ rocksdb::DB methods from Java side.
+// calling c++ TERARKDB_NAMESPACE::DB methods from Java side.
 
 #include <jni.h>
 #include <stdio.h>
@@ -28,11 +28,11 @@
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
-// rocksdb::DB::Open
+// TERARKDB_NAMESPACE::DB::Open
 jlong rocksdb_open_helper(
     JNIEnv* env, jlong jopt_handle, jstring jdb_path,
-    std::function<rocksdb::Status(const rocksdb::Options&, const std::string&,
-                                  rocksdb::DB**)>
+    std::function<TERARKDB_NAMESPACE::Status(const TERARKDB_NAMESPACE::Options&, const std::string&,
+                                  TERARKDB_NAMESPACE::DB**)>
         open_fn) {
   const char* db_path = env->GetStringUTFChars(jdb_path, nullptr);
   if (db_path == nullptr) {
@@ -40,16 +40,16 @@ jlong rocksdb_open_helper(
     return 0;
   }
 
-  auto* opt = reinterpret_cast<rocksdb::Options*>(jopt_handle);
-  rocksdb::DB* db = nullptr;
-  rocksdb::Status s = open_fn(*opt, db_path, &db);
+  auto* opt = reinterpret_cast<TERARKDB_NAMESPACE::Options*>(jopt_handle);
+  TERARKDB_NAMESPACE::DB* db = nullptr;
+  TERARKDB_NAMESPACE::Status s = open_fn(*opt, db_path, &db);
 
   env->ReleaseStringUTFChars(jdb_path, db_path);
 
   if (s.ok()) {
     return reinterpret_cast<jlong>(db);
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
     return 0;
   }
 }
@@ -65,9 +65,9 @@ jlong Java_org_rocksdb_RocksDB_open__JLjava_lang_String_2(JNIEnv* env,
                                                           jstring jdb_path) {
   return rocksdb_open_helper(
       env, jopt_handle, jdb_path,
-      (rocksdb::Status(*)(const rocksdb::Options&, const std::string&,
-                          rocksdb::DB**)) &
-          rocksdb::DB::Open);
+      (TERARKDB_NAMESPACE::Status(*)(const TERARKDB_NAMESPACE::Options&, const std::string&,
+                          TERARKDB_NAMESPACE::DB**)) &
+          TERARKDB_NAMESPACE::DB::Open);
 }
 
 /*
@@ -78,9 +78,9 @@ jlong Java_org_rocksdb_RocksDB_open__JLjava_lang_String_2(JNIEnv* env,
 jlong Java_org_rocksdb_RocksDB_openROnly__JLjava_lang_String_2(
     JNIEnv* env, jclass /*jcls*/, jlong jopt_handle, jstring jdb_path) {
   return rocksdb_open_helper(env, jopt_handle, jdb_path,
-                             [](const rocksdb::Options& options,
-                                const std::string& db_path, rocksdb::DB** db) {
-                               return rocksdb::DB::OpenForReadOnly(options,
+                             [](const TERARKDB_NAMESPACE::Options& options,
+                                const std::string& db_path, TERARKDB_NAMESPACE::DB** db) {
+                               return TERARKDB_NAMESPACE::DB::OpenForReadOnly(options,
                                                                    db_path, db);
                              });
 }
@@ -88,10 +88,10 @@ jlong Java_org_rocksdb_RocksDB_openROnly__JLjava_lang_String_2(
 jlongArray rocksdb_open_helper(
     JNIEnv* env, jlong jopt_handle, jstring jdb_path,
     jobjectArray jcolumn_names, jlongArray jcolumn_options,
-    std::function<rocksdb::Status(
-        const rocksdb::DBOptions&, const std::string&,
-        const std::vector<rocksdb::ColumnFamilyDescriptor>&,
-        std::vector<rocksdb::ColumnFamilyHandle*>*, rocksdb::DB**)>
+    std::function<TERARKDB_NAMESPACE::Status(
+        const TERARKDB_NAMESPACE::DBOptions&, const std::string&,
+        const std::vector<TERARKDB_NAMESPACE::ColumnFamilyDescriptor>&,
+        std::vector<TERARKDB_NAMESPACE::ColumnFamilyHandle*>*, TERARKDB_NAMESPACE::DB**)>
         open_fn) {
   const char* db_path = env->GetStringUTFChars(jdb_path, nullptr);
   if (db_path == nullptr) {
@@ -107,18 +107,18 @@ jlongArray rocksdb_open_helper(
     return nullptr;
   }
 
-  std::vector<rocksdb::ColumnFamilyDescriptor> column_families;
+  std::vector<TERARKDB_NAMESPACE::ColumnFamilyDescriptor> column_families;
   jboolean has_exception = JNI_FALSE;
-  rocksdb::JniUtil::byteStrings<std::string>(
+  TERARKDB_NAMESPACE::JniUtil::byteStrings<std::string>(
       env, jcolumn_names,
       [](const char* str_data, const size_t str_len) {
         return std::string(str_data, str_len);
       },
       [&jco, &column_families](size_t idx, std::string cf_name) {
-        rocksdb::ColumnFamilyOptions* cf_options =
-            reinterpret_cast<rocksdb::ColumnFamilyOptions*>(jco[idx]);
+        TERARKDB_NAMESPACE::ColumnFamilyOptions* cf_options =
+            reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyOptions*>(jco[idx]);
         column_families.push_back(
-            rocksdb::ColumnFamilyDescriptor(cf_name, *cf_options));
+            TERARKDB_NAMESPACE::ColumnFamilyDescriptor(cf_name, *cf_options));
       },
       &has_exception);
 
@@ -130,10 +130,10 @@ jlongArray rocksdb_open_helper(
     return nullptr;
   }
 
-  auto* opt = reinterpret_cast<rocksdb::DBOptions*>(jopt_handle);
-  std::vector<rocksdb::ColumnFamilyHandle*> handles;
-  rocksdb::DB* db = nullptr;
-  rocksdb::Status s = open_fn(*opt, db_path, column_families, &handles, &db);
+  auto* opt = reinterpret_cast<TERARKDB_NAMESPACE::DBOptions*>(jopt_handle);
+  std::vector<TERARKDB_NAMESPACE::ColumnFamilyHandle*> handles;
+  TERARKDB_NAMESPACE::DB* db = nullptr;
+  TERARKDB_NAMESPACE::Status s = open_fn(*opt, db_path, column_families, &handles, &db);
 
   // we have now finished with db_path
   env->ReleaseStringUTFChars(jdb_path, db_path);
@@ -163,7 +163,7 @@ jlongArray rocksdb_open_helper(
 
     return jresults;
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
     return nullptr;
   }
 }
@@ -178,10 +178,10 @@ jlongArray Java_org_rocksdb_RocksDB_openROnly__JLjava_lang_String_2_3_3B_3J(
     jobjectArray jcolumn_names, jlongArray jcolumn_options) {
   return rocksdb_open_helper(
       env, jopt_handle, jdb_path, jcolumn_names, jcolumn_options,
-      [](const rocksdb::DBOptions& options, const std::string& db_path,
-         const std::vector<rocksdb::ColumnFamilyDescriptor>& column_families,
-         std::vector<rocksdb::ColumnFamilyHandle*>* handles, rocksdb::DB** db) {
-        return rocksdb::DB::OpenForReadOnly(options, db_path, column_families,
+      [](const TERARKDB_NAMESPACE::DBOptions& options, const std::string& db_path,
+         const std::vector<TERARKDB_NAMESPACE::ColumnFamilyDescriptor>& column_families,
+         std::vector<TERARKDB_NAMESPACE::ColumnFamilyHandle*>* handles, TERARKDB_NAMESPACE::DB** db) {
+        return TERARKDB_NAMESPACE::DB::OpenForReadOnly(options, db_path, column_families,
                                             handles, db);
       });
 }
@@ -196,15 +196,15 @@ jlongArray Java_org_rocksdb_RocksDB_open__JLjava_lang_String_2_3_3B_3J(
     jobjectArray jcolumn_names, jlongArray jcolumn_options) {
   return rocksdb_open_helper(
       env, jopt_handle, jdb_path, jcolumn_names, jcolumn_options,
-      (rocksdb::Status(*)(const rocksdb::DBOptions&, const std::string&,
-                          const std::vector<rocksdb::ColumnFamilyDescriptor>&,
-                          std::vector<rocksdb::ColumnFamilyHandle*>*,
-                          rocksdb::DB**)) &
-          rocksdb::DB::Open);
+      (TERARKDB_NAMESPACE::Status(*)(const TERARKDB_NAMESPACE::DBOptions&, const std::string&,
+                          const std::vector<TERARKDB_NAMESPACE::ColumnFamilyDescriptor>&,
+                          std::vector<TERARKDB_NAMESPACE::ColumnFamilyHandle*>*,
+                          TERARKDB_NAMESPACE::DB**)) &
+          TERARKDB_NAMESPACE::DB::Open);
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// rocksdb::DB::ListColumnFamilies
+// TERARKDB_NAMESPACE::DB::ListColumnFamilies
 
 /*
  * Class:     org_rocksdb_RocksDB
@@ -222,27 +222,27 @@ jobjectArray Java_org_rocksdb_RocksDB_listColumnFamilies(JNIEnv* env,
     return nullptr;
   }
 
-  auto* opt = reinterpret_cast<rocksdb::Options*>(jopt_handle);
-  rocksdb::Status s =
-      rocksdb::DB::ListColumnFamilies(*opt, db_path, &column_family_names);
+  auto* opt = reinterpret_cast<TERARKDB_NAMESPACE::Options*>(jopt_handle);
+  TERARKDB_NAMESPACE::Status s =
+      TERARKDB_NAMESPACE::DB::ListColumnFamilies(*opt, db_path, &column_family_names);
 
   env->ReleaseStringUTFChars(jdb_path, db_path);
 
   jobjectArray jcolumn_family_names =
-      rocksdb::JniUtil::stringsBytes(env, column_family_names);
+      TERARKDB_NAMESPACE::JniUtil::stringsBytes(env, column_family_names);
 
   return jcolumn_family_names;
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// rocksdb::DB::Put
+// TERARKDB_NAMESPACE::DB::Put
 
 /**
  * @return true if the put succeeded, false if a Java Exception was thrown
  */
-bool rocksdb_put_helper(JNIEnv* env, rocksdb::DB* db,
-                        const rocksdb::WriteOptions& write_options,
-                        rocksdb::ColumnFamilyHandle* cf_handle, jbyteArray jkey,
+bool rocksdb_put_helper(JNIEnv* env, TERARKDB_NAMESPACE::DB* db,
+                        const TERARKDB_NAMESPACE::WriteOptions& write_options,
+                        TERARKDB_NAMESPACE::ColumnFamilyHandle* cf_handle, jbyteArray jkey,
                         jint jkey_off, jint jkey_len, jbyteArray jval,
                         jint jval_off, jint jval_len) {
   jbyte* key = new jbyte[jkey_len];
@@ -262,10 +262,10 @@ bool rocksdb_put_helper(JNIEnv* env, rocksdb::DB* db,
     return false;
   }
 
-  rocksdb::Slice key_slice(reinterpret_cast<char*>(key), jkey_len);
-  rocksdb::Slice value_slice(reinterpret_cast<char*>(value), jval_len);
+  TERARKDB_NAMESPACE::Slice key_slice(reinterpret_cast<char*>(key), jkey_len);
+  TERARKDB_NAMESPACE::Slice value_slice(reinterpret_cast<char*>(value), jval_len);
 
-  rocksdb::Status s;
+  TERARKDB_NAMESPACE::Status s;
   if (cf_handle != nullptr) {
     s = db->Put(write_options, cf_handle, key_slice, value_slice);
   } else {
@@ -280,7 +280,7 @@ bool rocksdb_put_helper(JNIEnv* env, rocksdb::DB* db,
   if (s.ok()) {
     return true;
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
     return false;
   }
 }
@@ -295,9 +295,9 @@ void Java_org_rocksdb_RocksDB_put__J_3BII_3BII(JNIEnv* env, jobject /*jdb*/,
                                                jbyteArray jkey, jint jkey_off,
                                                jint jkey_len, jbyteArray jval,
                                                jint jval_off, jint jval_len) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  static const rocksdb::WriteOptions default_write_options =
-      rocksdb::WriteOptions();
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  static const TERARKDB_NAMESPACE::WriteOptions default_write_options =
+      TERARKDB_NAMESPACE::WriteOptions();
 
   rocksdb_put_helper(env, db, default_write_options, nullptr, jkey, jkey_off,
                      jkey_len, jval, jval_off, jval_len);
@@ -314,16 +314,16 @@ void Java_org_rocksdb_RocksDB_put__J_3BII_3BIIJ(JNIEnv* env, jobject /*jdb*/,
                                                 jint jkey_len, jbyteArray jval,
                                                 jint jval_off, jint jval_len,
                                                 jlong jcf_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  static const rocksdb::WriteOptions default_write_options =
-      rocksdb::WriteOptions();
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  static const TERARKDB_NAMESPACE::WriteOptions default_write_options =
+      TERARKDB_NAMESPACE::WriteOptions();
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   if (cf_handle != nullptr) {
     rocksdb_put_helper(env, db, default_write_options, cf_handle, jkey,
                        jkey_off, jkey_len, jval, jval_off, jval_len);
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(
-        env, rocksdb::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(
+        env, TERARKDB_NAMESPACE::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
   }
 }
 
@@ -338,9 +338,9 @@ void Java_org_rocksdb_RocksDB_put__JJ_3BII_3BII(JNIEnv* env, jobject /*jdb*/,
                                                 jbyteArray jkey, jint jkey_off,
                                                 jint jkey_len, jbyteArray jval,
                                                 jint jval_off, jint jval_len) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   auto* write_options =
-      reinterpret_cast<rocksdb::WriteOptions*>(jwrite_options_handle);
+      reinterpret_cast<TERARKDB_NAMESPACE::WriteOptions*>(jwrite_options_handle);
 
   rocksdb_put_helper(env, db, *write_options, nullptr, jkey, jkey_off, jkey_len,
                      jval, jval_off, jval_len);
@@ -355,21 +355,21 @@ void Java_org_rocksdb_RocksDB_put__JJ_3BII_3BIIJ(
     JNIEnv* env, jobject /*jdb*/, jlong jdb_handle, jlong jwrite_options_handle,
     jbyteArray jkey, jint jkey_off, jint jkey_len, jbyteArray jval,
     jint jval_off, jint jval_len, jlong jcf_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   auto* write_options =
-      reinterpret_cast<rocksdb::WriteOptions*>(jwrite_options_handle);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+      reinterpret_cast<TERARKDB_NAMESPACE::WriteOptions*>(jwrite_options_handle);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   if (cf_handle != nullptr) {
     rocksdb_put_helper(env, db, *write_options, cf_handle, jkey, jkey_off,
                        jkey_len, jval, jval_off, jval_len);
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(
-        env, rocksdb::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(
+        env, TERARKDB_NAMESPACE::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
   }
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// rocksdb::DB::Write
+// TERARKDB_NAMESPACE::DB::Write
 /*
  * Class:     org_rocksdb_RocksDB
  * Method:    write0
@@ -379,15 +379,15 @@ void Java_org_rocksdb_RocksDB_write0(JNIEnv* env, jobject /*jdb*/,
                                      jlong jdb_handle,
                                      jlong jwrite_options_handle,
                                      jlong jwb_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   auto* write_options =
-      reinterpret_cast<rocksdb::WriteOptions*>(jwrite_options_handle);
-  auto* wb = reinterpret_cast<rocksdb::WriteBatch*>(jwb_handle);
+      reinterpret_cast<TERARKDB_NAMESPACE::WriteOptions*>(jwrite_options_handle);
+  auto* wb = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatch*>(jwb_handle);
 
-  rocksdb::Status s = db->Write(*write_options, wb);
+  TERARKDB_NAMESPACE::Status s = db->Write(*write_options, wb);
 
   if (!s.ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   }
 }
 
@@ -400,24 +400,24 @@ void Java_org_rocksdb_RocksDB_write1(JNIEnv* env, jobject /*jdb*/,
                                      jlong jdb_handle,
                                      jlong jwrite_options_handle,
                                      jlong jwbwi_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   auto* write_options =
-      reinterpret_cast<rocksdb::WriteOptions*>(jwrite_options_handle);
-  auto* wbwi = reinterpret_cast<rocksdb::WriteBatchWithIndex*>(jwbwi_handle);
+      reinterpret_cast<TERARKDB_NAMESPACE::WriteOptions*>(jwrite_options_handle);
+  auto* wbwi = reinterpret_cast<TERARKDB_NAMESPACE::WriteBatchWithIndex*>(jwbwi_handle);
   auto* wb = wbwi->GetWriteBatch();
 
-  rocksdb::Status s = db->Write(*write_options, wb);
+  TERARKDB_NAMESPACE::Status s = db->Write(*write_options, wb);
 
   if (!s.ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   }
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// rocksdb::DB::KeyMayExist
-jboolean key_may_exist_helper(JNIEnv* env, rocksdb::DB* db,
-                              const rocksdb::ReadOptions& read_opt,
-                              rocksdb::ColumnFamilyHandle* cf_handle,
+// TERARKDB_NAMESPACE::DB::KeyMayExist
+jboolean key_may_exist_helper(JNIEnv* env, TERARKDB_NAMESPACE::DB* db,
+                              const TERARKDB_NAMESPACE::ReadOptions& read_opt,
+                              TERARKDB_NAMESPACE::ColumnFamilyHandle* cf_handle,
                               jbyteArray jkey, jint jkey_off, jint jkey_len,
                               jobject jstring_builder, bool* has_exception) {
   jbyte* key = new jbyte[jkey_len];
@@ -429,7 +429,7 @@ jboolean key_may_exist_helper(JNIEnv* env, rocksdb::DB* db,
     return false;
   }
 
-  rocksdb::Slice key_slice(reinterpret_cast<char*>(key), jkey_len);
+  TERARKDB_NAMESPACE::Slice key_slice(reinterpret_cast<char*>(key), jkey_len);
 
   std::string value;
   bool value_found = false;
@@ -447,7 +447,7 @@ jboolean key_may_exist_helper(JNIEnv* env, rocksdb::DB* db,
   // extract the value
   if (value_found && !value.empty()) {
     jobject jresult_string_builder =
-        rocksdb::StringBuilderJni::append(env, jstring_builder, value.c_str());
+        TERARKDB_NAMESPACE::StringBuilderJni::append(env, jstring_builder, value.c_str());
     if (jresult_string_builder == nullptr) {
       *has_exception = true;
       return false;
@@ -466,9 +466,9 @@ jboolean key_may_exist_helper(JNIEnv* env, rocksdb::DB* db,
 jboolean Java_org_rocksdb_RocksDB_keyMayExist__J_3BIILjava_lang_StringBuilder_2(
     JNIEnv* env, jobject /*jdb*/, jlong jdb_handle, jbyteArray jkey,
     jint jkey_off, jint jkey_len, jobject jstring_builder) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   bool has_exception = false;
-  return key_may_exist_helper(env, db, rocksdb::ReadOptions(), nullptr, jkey,
+  return key_may_exist_helper(env, db, TERARKDB_NAMESPACE::ReadOptions(), nullptr, jkey,
                               jkey_off, jkey_len, jstring_builder,
                               &has_exception);
 }
@@ -482,16 +482,16 @@ jboolean
 Java_org_rocksdb_RocksDB_keyMayExist__J_3BIIJLjava_lang_StringBuilder_2(
     JNIEnv* env, jobject /*jdb*/, jlong jdb_handle, jbyteArray jkey,
     jint jkey_off, jint jkey_len, jlong jcf_handle, jobject jstring_builder) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   if (cf_handle != nullptr) {
     bool has_exception = false;
-    return key_may_exist_helper(env, db, rocksdb::ReadOptions(), cf_handle,
+    return key_may_exist_helper(env, db, TERARKDB_NAMESPACE::ReadOptions(), cf_handle,
                                 jkey, jkey_off, jkey_len, jstring_builder,
                                 &has_exception);
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(
-        env, rocksdb::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(
+        env, TERARKDB_NAMESPACE::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
     return true;
   }
 }
@@ -505,9 +505,9 @@ jboolean
 Java_org_rocksdb_RocksDB_keyMayExist__JJ_3BIILjava_lang_StringBuilder_2(
     JNIEnv* env, jobject /*jdb*/, jlong jdb_handle, jlong jread_options_handle,
     jbyteArray jkey, jint jkey_off, jint jkey_len, jobject jstring_builder) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   auto& read_options =
-      *reinterpret_cast<rocksdb::ReadOptions*>(jread_options_handle);
+      *reinterpret_cast<TERARKDB_NAMESPACE::ReadOptions*>(jread_options_handle);
   bool has_exception = false;
   return key_may_exist_helper(env, db, read_options, nullptr, jkey, jkey_off,
                               jkey_len, jstring_builder, &has_exception);
@@ -523,28 +523,28 @@ Java_org_rocksdb_RocksDB_keyMayExist__JJ_3BIIJLjava_lang_StringBuilder_2(
     JNIEnv* env, jobject /*jdb*/, jlong jdb_handle, jlong jread_options_handle,
     jbyteArray jkey, jint jkey_off, jint jkey_len, jlong jcf_handle,
     jobject jstring_builder) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   auto& read_options =
-      *reinterpret_cast<rocksdb::ReadOptions*>(jread_options_handle);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+      *reinterpret_cast<TERARKDB_NAMESPACE::ReadOptions*>(jread_options_handle);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   if (cf_handle != nullptr) {
     bool has_exception = false;
     return key_may_exist_helper(env, db, read_options, cf_handle, jkey,
                                 jkey_off, jkey_len, jstring_builder,
                                 &has_exception);
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(
-        env, rocksdb::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(
+        env, TERARKDB_NAMESPACE::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
     return true;
   }
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// rocksdb::DB::Get
+// TERARKDB_NAMESPACE::DB::Get
 
-jbyteArray rocksdb_get_helper(JNIEnv* env, rocksdb::DB* db,
-                              const rocksdb::ReadOptions& read_opt,
-                              rocksdb::ColumnFamilyHandle* column_family_handle,
+jbyteArray rocksdb_get_helper(JNIEnv* env, TERARKDB_NAMESPACE::DB* db,
+                              const TERARKDB_NAMESPACE::ReadOptions& read_opt,
+                              TERARKDB_NAMESPACE::ColumnFamilyHandle* column_family_handle,
                               jbyteArray jkey, jint jkey_off, jint jkey_len) {
   jbyte* key = new jbyte[jkey_len];
   env->GetByteArrayRegion(jkey, jkey_off, jkey_len, key);
@@ -554,10 +554,10 @@ jbyteArray rocksdb_get_helper(JNIEnv* env, rocksdb::DB* db,
     return nullptr;
   }
 
-  rocksdb::Slice key_slice(reinterpret_cast<char*>(key), jkey_len);
+  TERARKDB_NAMESPACE::Slice key_slice(reinterpret_cast<char*>(key), jkey_len);
 
   std::string value;
-  rocksdb::Status s;
+  TERARKDB_NAMESPACE::Status s;
   if (column_family_handle != nullptr) {
     s = db->Get(read_opt, column_family_handle, key_slice, &value);
   } else {
@@ -573,7 +573,7 @@ jbyteArray rocksdb_get_helper(JNIEnv* env, rocksdb::DB* db,
   }
 
   if (s.ok()) {
-    jbyteArray jret_value = rocksdb::JniUtil::copyBytes(env, value);
+    jbyteArray jret_value = TERARKDB_NAMESPACE::JniUtil::copyBytes(env, value);
     if (jret_value == nullptr) {
       // exception occurred
       return nullptr;
@@ -581,7 +581,7 @@ jbyteArray rocksdb_get_helper(JNIEnv* env, rocksdb::DB* db,
     return jret_value;
   }
 
-  rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   return nullptr;
 }
 
@@ -594,8 +594,8 @@ jbyteArray Java_org_rocksdb_RocksDB_get__J_3BII(JNIEnv* env, jobject /*jdb*/,
                                                 jlong jdb_handle,
                                                 jbyteArray jkey, jint jkey_off,
                                                 jint jkey_len) {
-  return rocksdb_get_helper(env, reinterpret_cast<rocksdb::DB*>(jdb_handle),
-                            rocksdb::ReadOptions(), nullptr, jkey, jkey_off,
+  return rocksdb_get_helper(env, reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle),
+                            TERARKDB_NAMESPACE::ReadOptions(), nullptr, jkey, jkey_off,
                             jkey_len);
 }
 
@@ -609,14 +609,14 @@ jbyteArray Java_org_rocksdb_RocksDB_get__J_3BIIJ(JNIEnv* env, jobject /*jdb*/,
                                                  jbyteArray jkey, jint jkey_off,
                                                  jint jkey_len,
                                                  jlong jcf_handle) {
-  auto db_handle = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  auto cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+  auto db_handle = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  auto cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   if (cf_handle != nullptr) {
-    return rocksdb_get_helper(env, db_handle, rocksdb::ReadOptions(), cf_handle,
+    return rocksdb_get_helper(env, db_handle, TERARKDB_NAMESPACE::ReadOptions(), cf_handle,
                               jkey, jkey_off, jkey_len);
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(
-        env, rocksdb::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(
+        env, TERARKDB_NAMESPACE::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
     return nullptr;
   }
 }
@@ -632,8 +632,8 @@ jbyteArray Java_org_rocksdb_RocksDB_get__JJ_3BII(JNIEnv* env, jobject /*jdb*/,
                                                  jbyteArray jkey, jint jkey_off,
                                                  jint jkey_len) {
   return rocksdb_get_helper(
-      env, reinterpret_cast<rocksdb::DB*>(jdb_handle),
-      *reinterpret_cast<rocksdb::ReadOptions*>(jropt_handle), nullptr, jkey,
+      env, reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle),
+      *reinterpret_cast<TERARKDB_NAMESPACE::ReadOptions*>(jropt_handle), nullptr, jkey,
       jkey_off, jkey_len);
 }
 
@@ -645,22 +645,22 @@ jbyteArray Java_org_rocksdb_RocksDB_get__JJ_3BII(JNIEnv* env, jobject /*jdb*/,
 jbyteArray Java_org_rocksdb_RocksDB_get__JJ_3BIIJ(
     JNIEnv* env, jobject /*jdb*/, jlong jdb_handle, jlong jropt_handle,
     jbyteArray jkey, jint jkey_off, jint jkey_len, jlong jcf_handle) {
-  auto* db_handle = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  auto& ro_opt = *reinterpret_cast<rocksdb::ReadOptions*>(jropt_handle);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+  auto* db_handle = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  auto& ro_opt = *reinterpret_cast<TERARKDB_NAMESPACE::ReadOptions*>(jropt_handle);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   if (cf_handle != nullptr) {
     return rocksdb_get_helper(env, db_handle, ro_opt, cf_handle, jkey, jkey_off,
                               jkey_len);
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(
-        env, rocksdb::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(
+        env, TERARKDB_NAMESPACE::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
     return nullptr;
   }
 }
 
-jint rocksdb_get_helper(JNIEnv* env, rocksdb::DB* db,
-                        const rocksdb::ReadOptions& read_options,
-                        rocksdb::ColumnFamilyHandle* column_family_handle,
+jint rocksdb_get_helper(JNIEnv* env, TERARKDB_NAMESPACE::DB* db,
+                        const TERARKDB_NAMESPACE::ReadOptions& read_options,
+                        TERARKDB_NAMESPACE::ColumnFamilyHandle* column_family_handle,
                         jbyteArray jkey, jint jkey_off, jint jkey_len,
                         jbyteArray jval, jint jval_off, jint jval_len,
                         bool* has_exception) {
@@ -675,12 +675,12 @@ jint rocksdb_get_helper(JNIEnv* env, rocksdb::DB* db,
     *has_exception = true;
     return kStatusError;
   }
-  rocksdb::Slice key_slice(reinterpret_cast<char*>(key), jkey_len);
+  TERARKDB_NAMESPACE::Slice key_slice(reinterpret_cast<char*>(key), jkey_len);
 
   // TODO(yhchiang): we might save one memory allocation here by adding
   // a DB::Get() function which takes preallocated jbyte* as input.
   std::string cvalue;
-  rocksdb::Status s;
+  TERARKDB_NAMESPACE::Status s;
   if (column_family_handle != nullptr) {
     s = db->Get(read_options, column_family_handle, key_slice, &cvalue);
   } else {
@@ -701,7 +701,7 @@ jint rocksdb_get_helper(JNIEnv* env, rocksdb::DB* db,
     // throwing an exception.  As a result, the execution flow will
     // not stop here, and codes after this throw will still be
     // executed.
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
 
     // Return a dummy const value to avoid compilation error, although
     // java side might not have a chance to get the return value :)
@@ -739,12 +739,12 @@ inline void multi_get_helper_release_keys(
  *
  * @return byte[][] of values or nullptr if an exception occurs
  */
-jobjectArray multi_get_helper(JNIEnv* env, jobject /*jdb*/, rocksdb::DB* db,
-                              const rocksdb::ReadOptions& rOpt,
+jobjectArray multi_get_helper(JNIEnv* env, jobject /*jdb*/, TERARKDB_NAMESPACE::DB* db,
+                              const TERARKDB_NAMESPACE::ReadOptions& rOpt,
                               jobjectArray jkeys, jintArray jkey_offs,
                               jintArray jkey_lens,
                               jlongArray jcolumn_family_handles) {
-  std::vector<rocksdb::ColumnFamilyHandle*> cf_handles;
+  std::vector<TERARKDB_NAMESPACE::ColumnFamilyHandle*> cf_handles;
   if (jcolumn_family_handles != nullptr) {
     const jsize len_cols = env->GetArrayLength(jcolumn_family_handles);
 
@@ -755,7 +755,7 @@ jobjectArray multi_get_helper(JNIEnv* env, jobject /*jdb*/, rocksdb::DB* db,
     }
 
     for (jsize i = 0; i < len_cols; i++) {
-      auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcfh[i]);
+      auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcfh[i]);
       cf_handles.push_back(cf_handle);
     }
     env->ReleaseLongArrayElements(jcolumn_family_handles, jcfh, JNI_ABORT);
@@ -780,7 +780,7 @@ jobjectArray multi_get_helper(JNIEnv* env, jobject /*jdb*/, rocksdb::DB* db,
     return nullptr;
   }
 
-  std::vector<rocksdb::Slice> keys;
+  std::vector<TERARKDB_NAMESPACE::Slice> keys;
   std::vector<std::pair<jbyte*, jobject>> keys_to_free;
   for (jsize i = 0; i < len_keys; i++) {
     jobject jkey = env->GetObjectArrayElement(jkeys, i);
@@ -807,7 +807,7 @@ jobjectArray multi_get_helper(JNIEnv* env, jobject /*jdb*/, rocksdb::DB* db,
       return nullptr;
     }
 
-    rocksdb::Slice key_slice(reinterpret_cast<char*>(key), len_key);
+    TERARKDB_NAMESPACE::Slice key_slice(reinterpret_cast<char*>(key), len_key);
     keys.push_back(key_slice);
 
     keys_to_free.push_back(std::pair<jbyte*, jobject>(key, jkey));
@@ -818,7 +818,7 @@ jobjectArray multi_get_helper(JNIEnv* env, jobject /*jdb*/, rocksdb::DB* db,
   env->ReleaseIntArrayElements(jkey_offs, jkey_off, JNI_ABORT);
 
   std::vector<std::string> values;
-  std::vector<rocksdb::Status> s;
+  std::vector<TERARKDB_NAMESPACE::Status> s;
   if (cf_handles.size() == 0) {
     s = db->MultiGet(rOpt, keys, &values);
   } else {
@@ -830,7 +830,7 @@ jobjectArray multi_get_helper(JNIEnv* env, jobject /*jdb*/, rocksdb::DB* db,
 
   // prepare the results
   jobjectArray jresults =
-      rocksdb::ByteJni::new2dByteArray(env, static_cast<jsize>(s.size()));
+      TERARKDB_NAMESPACE::ByteJni::new2dByteArray(env, static_cast<jsize>(s.size()));
   if (jresults == nullptr) {
     // exception occurred
     return nullptr;
@@ -843,7 +843,7 @@ jobjectArray multi_get_helper(JNIEnv* env, jobject /*jdb*/, rocksdb::DB* db,
     return nullptr;
   }
   // add to the jresults
-  for (std::vector<rocksdb::Status>::size_type i = 0; i != s.size(); i++) {
+  for (std::vector<TERARKDB_NAMESPACE::Status>::size_type i = 0; i != s.size(); i++) {
     if (s[i].ok()) {
       std::string* value = &values[i];
       const jsize jvalue_len = static_cast<jsize>(value->size());
@@ -884,8 +884,8 @@ jobjectArray multi_get_helper(JNIEnv* env, jobject /*jdb*/, rocksdb::DB* db,
 jobjectArray Java_org_rocksdb_RocksDB_multiGet__J_3_3B_3I_3I(
     JNIEnv* env, jobject jdb, jlong jdb_handle, jobjectArray jkeys,
     jintArray jkey_offs, jintArray jkey_lens) {
-  return multi_get_helper(env, jdb, reinterpret_cast<rocksdb::DB*>(jdb_handle),
-                          rocksdb::ReadOptions(), jkeys, jkey_offs, jkey_lens,
+  return multi_get_helper(env, jdb, reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle),
+                          TERARKDB_NAMESPACE::ReadOptions(), jkeys, jkey_offs, jkey_lens,
                           nullptr);
 }
 
@@ -898,8 +898,8 @@ jobjectArray Java_org_rocksdb_RocksDB_multiGet__J_3_3B_3I_3I_3J(
     JNIEnv* env, jobject jdb, jlong jdb_handle, jobjectArray jkeys,
     jintArray jkey_offs, jintArray jkey_lens,
     jlongArray jcolumn_family_handles) {
-  return multi_get_helper(env, jdb, reinterpret_cast<rocksdb::DB*>(jdb_handle),
-                          rocksdb::ReadOptions(), jkeys, jkey_offs, jkey_lens,
+  return multi_get_helper(env, jdb, reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle),
+                          TERARKDB_NAMESPACE::ReadOptions(), jkeys, jkey_offs, jkey_lens,
                           jcolumn_family_handles);
 }
 
@@ -912,8 +912,8 @@ jobjectArray Java_org_rocksdb_RocksDB_multiGet__JJ_3_3B_3I_3I(
     JNIEnv* env, jobject jdb, jlong jdb_handle, jlong jropt_handle,
     jobjectArray jkeys, jintArray jkey_offs, jintArray jkey_lens) {
   return multi_get_helper(
-      env, jdb, reinterpret_cast<rocksdb::DB*>(jdb_handle),
-      *reinterpret_cast<rocksdb::ReadOptions*>(jropt_handle), jkeys, jkey_offs,
+      env, jdb, reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle),
+      *reinterpret_cast<TERARKDB_NAMESPACE::ReadOptions*>(jropt_handle), jkeys, jkey_offs,
       jkey_lens, nullptr);
 }
 
@@ -927,8 +927,8 @@ jobjectArray Java_org_rocksdb_RocksDB_multiGet__JJ_3_3B_3I_3I_3J(
     jobjectArray jkeys, jintArray jkey_offs, jintArray jkey_lens,
     jlongArray jcolumn_family_handles) {
   return multi_get_helper(
-      env, jdb, reinterpret_cast<rocksdb::DB*>(jdb_handle),
-      *reinterpret_cast<rocksdb::ReadOptions*>(jropt_handle), jkeys, jkey_offs,
+      env, jdb, reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle),
+      *reinterpret_cast<TERARKDB_NAMESPACE::ReadOptions*>(jropt_handle), jkeys, jkey_offs,
       jkey_lens, jcolumn_family_handles);
 }
 
@@ -943,8 +943,8 @@ jint Java_org_rocksdb_RocksDB_get__J_3BII_3BII(JNIEnv* env, jobject /*jdb*/,
                                                jint jkey_len, jbyteArray jval,
                                                jint jval_off, jint jval_len) {
   bool has_exception = false;
-  return rocksdb_get_helper(env, reinterpret_cast<rocksdb::DB*>(jdb_handle),
-                            rocksdb::ReadOptions(), nullptr, jkey, jkey_off,
+  return rocksdb_get_helper(env, reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle),
+                            TERARKDB_NAMESPACE::ReadOptions(), nullptr, jkey, jkey_off,
                             jkey_len, jval, jval_off, jval_len, &has_exception);
 }
 
@@ -959,16 +959,16 @@ jint Java_org_rocksdb_RocksDB_get__J_3BII_3BIIJ(JNIEnv* env, jobject /*jdb*/,
                                                 jint jkey_len, jbyteArray jval,
                                                 jint jval_off, jint jval_len,
                                                 jlong jcf_handle) {
-  auto* db_handle = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+  auto* db_handle = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   if (cf_handle != nullptr) {
     bool has_exception = false;
-    return rocksdb_get_helper(env, db_handle, rocksdb::ReadOptions(), cf_handle,
+    return rocksdb_get_helper(env, db_handle, TERARKDB_NAMESPACE::ReadOptions(), cf_handle,
                               jkey, jkey_off, jkey_len, jval, jval_off,
                               jval_len, &has_exception);
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(
-        env, rocksdb::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(
+        env, TERARKDB_NAMESPACE::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
     // will never be evaluated
     return 0;
   }
@@ -987,8 +987,8 @@ jint Java_org_rocksdb_RocksDB_get__JJ_3BII_3BII(JNIEnv* env, jobject /*jdb*/,
                                                 jint jval_off, jint jval_len) {
   bool has_exception = false;
   return rocksdb_get_helper(
-      env, reinterpret_cast<rocksdb::DB*>(jdb_handle),
-      *reinterpret_cast<rocksdb::ReadOptions*>(jropt_handle), nullptr, jkey,
+      env, reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle),
+      *reinterpret_cast<TERARKDB_NAMESPACE::ReadOptions*>(jropt_handle), nullptr, jkey,
       jkey_off, jkey_len, jval, jval_off, jval_len, &has_exception);
 }
 
@@ -1001,31 +1001,31 @@ jint Java_org_rocksdb_RocksDB_get__JJ_3BII_3BIIJ(
     JNIEnv* env, jobject /*jdb*/, jlong jdb_handle, jlong jropt_handle,
     jbyteArray jkey, jint jkey_off, jint jkey_len, jbyteArray jval,
     jint jval_off, jint jval_len, jlong jcf_handle) {
-  auto* db_handle = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  auto& ro_opt = *reinterpret_cast<rocksdb::ReadOptions*>(jropt_handle);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+  auto* db_handle = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  auto& ro_opt = *reinterpret_cast<TERARKDB_NAMESPACE::ReadOptions*>(jropt_handle);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   if (cf_handle != nullptr) {
     bool has_exception = false;
     return rocksdb_get_helper(env, db_handle, ro_opt, cf_handle, jkey, jkey_off,
                               jkey_len, jval, jval_off, jval_len,
                               &has_exception);
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(
-        env, rocksdb::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(
+        env, TERARKDB_NAMESPACE::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
     // will never be evaluated
     return 0;
   }
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// rocksdb::DB::Delete()
+// TERARKDB_NAMESPACE::DB::Delete()
 
 /**
  * @return true if the delete succeeded, false if a Java Exception was thrown
  */
-bool rocksdb_delete_helper(JNIEnv* env, rocksdb::DB* db,
-                           const rocksdb::WriteOptions& write_options,
-                           rocksdb::ColumnFamilyHandle* cf_handle,
+bool rocksdb_delete_helper(JNIEnv* env, TERARKDB_NAMESPACE::DB* db,
+                           const TERARKDB_NAMESPACE::WriteOptions& write_options,
+                           TERARKDB_NAMESPACE::ColumnFamilyHandle* cf_handle,
                            jbyteArray jkey, jint jkey_off, jint jkey_len) {
   jbyte* key = new jbyte[jkey_len];
   env->GetByteArrayRegion(jkey, jkey_off, jkey_len, key);
@@ -1034,9 +1034,9 @@ bool rocksdb_delete_helper(JNIEnv* env, rocksdb::DB* db,
     delete[] key;
     return false;
   }
-  rocksdb::Slice key_slice(reinterpret_cast<char*>(key), jkey_len);
+  TERARKDB_NAMESPACE::Slice key_slice(reinterpret_cast<char*>(key), jkey_len);
 
-  rocksdb::Status s;
+  TERARKDB_NAMESPACE::Status s;
   if (cf_handle != nullptr) {
     s = db->Delete(write_options, cf_handle, key_slice);
   } else {
@@ -1051,7 +1051,7 @@ bool rocksdb_delete_helper(JNIEnv* env, rocksdb::DB* db,
     return true;
   }
 
-  rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   return false;
 }
 
@@ -1063,9 +1063,9 @@ bool rocksdb_delete_helper(JNIEnv* env, rocksdb::DB* db,
 void Java_org_rocksdb_RocksDB_delete__J_3BII(JNIEnv* env, jobject /*jdb*/,
                                              jlong jdb_handle, jbyteArray jkey,
                                              jint jkey_off, jint jkey_len) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  static const rocksdb::WriteOptions default_write_options =
-      rocksdb::WriteOptions();
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  static const TERARKDB_NAMESPACE::WriteOptions default_write_options =
+      TERARKDB_NAMESPACE::WriteOptions();
   rocksdb_delete_helper(env, db, default_write_options, nullptr, jkey, jkey_off,
                         jkey_len);
 }
@@ -1079,16 +1079,16 @@ void Java_org_rocksdb_RocksDB_delete__J_3BIIJ(JNIEnv* env, jobject /*jdb*/,
                                               jlong jdb_handle, jbyteArray jkey,
                                               jint jkey_off, jint jkey_len,
                                               jlong jcf_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  static const rocksdb::WriteOptions default_write_options =
-      rocksdb::WriteOptions();
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  static const TERARKDB_NAMESPACE::WriteOptions default_write_options =
+      TERARKDB_NAMESPACE::WriteOptions();
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   if (cf_handle != nullptr) {
     rocksdb_delete_helper(env, db, default_write_options, cf_handle, jkey,
                           jkey_off, jkey_len);
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(
-        env, rocksdb::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(
+        env, TERARKDB_NAMESPACE::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
   }
 }
 
@@ -1102,9 +1102,9 @@ void Java_org_rocksdb_RocksDB_delete__JJ_3BII(JNIEnv* env, jobject /*jdb*/,
                                               jlong jwrite_options,
                                               jbyteArray jkey, jint jkey_off,
                                               jint jkey_len) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   auto* write_options =
-      reinterpret_cast<rocksdb::WriteOptions*>(jwrite_options);
+      reinterpret_cast<TERARKDB_NAMESPACE::WriteOptions*>(jwrite_options);
   rocksdb_delete_helper(env, db, *write_options, nullptr, jkey, jkey_off,
                         jkey_len);
 }
@@ -1117,37 +1117,37 @@ void Java_org_rocksdb_RocksDB_delete__JJ_3BII(JNIEnv* env, jobject /*jdb*/,
 void Java_org_rocksdb_RocksDB_delete__JJ_3BIIJ(
     JNIEnv* env, jobject /*jdb*/, jlong jdb_handle, jlong jwrite_options,
     jbyteArray jkey, jint jkey_off, jint jkey_len, jlong jcf_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   auto* write_options =
-      reinterpret_cast<rocksdb::WriteOptions*>(jwrite_options);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+      reinterpret_cast<TERARKDB_NAMESPACE::WriteOptions*>(jwrite_options);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   if (cf_handle != nullptr) {
     rocksdb_delete_helper(env, db, *write_options, cf_handle, jkey, jkey_off,
                           jkey_len);
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(
-        env, rocksdb::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(
+        env, TERARKDB_NAMESPACE::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
   }
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// rocksdb::DB::SingleDelete()
+// TERARKDB_NAMESPACE::DB::SingleDelete()
 /**
  * @return true if the single delete succeeded, false if a Java Exception
  *     was thrown
  */
-bool rocksdb_single_delete_helper(JNIEnv* env, rocksdb::DB* db,
-                                  const rocksdb::WriteOptions& write_options,
-                                  rocksdb::ColumnFamilyHandle* cf_handle,
+bool rocksdb_single_delete_helper(JNIEnv* env, TERARKDB_NAMESPACE::DB* db,
+                                  const TERARKDB_NAMESPACE::WriteOptions& write_options,
+                                  TERARKDB_NAMESPACE::ColumnFamilyHandle* cf_handle,
                                   jbyteArray jkey, jint jkey_len) {
   jbyte* key = env->GetByteArrayElements(jkey, nullptr);
   if (key == nullptr) {
     // exception thrown: OutOfMemoryError
     return false;
   }
-  rocksdb::Slice key_slice(reinterpret_cast<char*>(key), jkey_len);
+  TERARKDB_NAMESPACE::Slice key_slice(reinterpret_cast<char*>(key), jkey_len);
 
-  rocksdb::Status s;
+  TERARKDB_NAMESPACE::Status s;
   if (cf_handle != nullptr) {
     s = db->SingleDelete(write_options, cf_handle, key_slice);
   } else {
@@ -1164,7 +1164,7 @@ bool rocksdb_single_delete_helper(JNIEnv* env, rocksdb::DB* db,
     return true;
   }
 
-  rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   return false;
 }
 
@@ -1177,9 +1177,9 @@ void Java_org_rocksdb_RocksDB_singleDelete__J_3BI(JNIEnv* env, jobject /*jdb*/,
                                                   jlong jdb_handle,
                                                   jbyteArray jkey,
                                                   jint jkey_len) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  static const rocksdb::WriteOptions default_write_options =
-      rocksdb::WriteOptions();
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  static const TERARKDB_NAMESPACE::WriteOptions default_write_options =
+      TERARKDB_NAMESPACE::WriteOptions();
   rocksdb_single_delete_helper(env, db, default_write_options, nullptr, jkey,
                                jkey_len);
 }
@@ -1194,16 +1194,16 @@ void Java_org_rocksdb_RocksDB_singleDelete__J_3BIJ(JNIEnv* env, jobject /*jdb*/,
                                                    jbyteArray jkey,
                                                    jint jkey_len,
                                                    jlong jcf_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  static const rocksdb::WriteOptions default_write_options =
-      rocksdb::WriteOptions();
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  static const TERARKDB_NAMESPACE::WriteOptions default_write_options =
+      TERARKDB_NAMESPACE::WriteOptions();
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   if (cf_handle != nullptr) {
     rocksdb_single_delete_helper(env, db, default_write_options, cf_handle,
                                  jkey, jkey_len);
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(
-        env, rocksdb::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(
+        env, TERARKDB_NAMESPACE::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
   }
 }
 
@@ -1217,9 +1217,9 @@ void Java_org_rocksdb_RocksDB_singleDelete__JJ_3BI(JNIEnv* env, jobject /*jdb*/,
                                                    jlong jwrite_options,
                                                    jbyteArray jkey,
                                                    jint jkey_len) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   auto* write_options =
-      reinterpret_cast<rocksdb::WriteOptions*>(jwrite_options);
+      reinterpret_cast<TERARKDB_NAMESPACE::WriteOptions*>(jwrite_options);
   rocksdb_single_delete_helper(env, db, *write_options, nullptr, jkey,
                                jkey_len);
 }
@@ -1232,28 +1232,28 @@ void Java_org_rocksdb_RocksDB_singleDelete__JJ_3BI(JNIEnv* env, jobject /*jdb*/,
 void Java_org_rocksdb_RocksDB_singleDelete__JJ_3BIJ(
     JNIEnv* env, jobject /*jdb*/, jlong jdb_handle, jlong jwrite_options,
     jbyteArray jkey, jint jkey_len, jlong jcf_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   auto* write_options =
-      reinterpret_cast<rocksdb::WriteOptions*>(jwrite_options);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+      reinterpret_cast<TERARKDB_NAMESPACE::WriteOptions*>(jwrite_options);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   if (cf_handle != nullptr) {
     rocksdb_single_delete_helper(env, db, *write_options, cf_handle, jkey,
                                  jkey_len);
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(
-        env, rocksdb::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(
+        env, TERARKDB_NAMESPACE::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
   }
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// rocksdb::DB::DeleteRange()
+// TERARKDB_NAMESPACE::DB::DeleteRange()
 /**
  * @return true if the delete range succeeded, false if a Java Exception
  *     was thrown
  */
-bool rocksdb_delete_range_helper(JNIEnv* env, rocksdb::DB* db,
-                                 const rocksdb::WriteOptions& write_options,
-                                 rocksdb::ColumnFamilyHandle* cf_handle,
+bool rocksdb_delete_range_helper(JNIEnv* env, TERARKDB_NAMESPACE::DB* db,
+                                 const TERARKDB_NAMESPACE::WriteOptions& write_options,
+                                 TERARKDB_NAMESPACE::ColumnFamilyHandle* cf_handle,
                                  jbyteArray jbegin_key, jint jbegin_key_off,
                                  jint jbegin_key_len, jbyteArray jend_key,
                                  jint jend_key_off, jint jend_key_len) {
@@ -1265,7 +1265,7 @@ bool rocksdb_delete_range_helper(JNIEnv* env, rocksdb::DB* db,
     delete[] begin_key;
     return false;
   }
-  rocksdb::Slice begin_key_slice(reinterpret_cast<char*>(begin_key),
+  TERARKDB_NAMESPACE::Slice begin_key_slice(reinterpret_cast<char*>(begin_key),
                                  jbegin_key_len);
 
   jbyte* end_key = new jbyte[jend_key_len];
@@ -1276,9 +1276,9 @@ bool rocksdb_delete_range_helper(JNIEnv* env, rocksdb::DB* db,
     delete[] end_key;
     return false;
   }
-  rocksdb::Slice end_key_slice(reinterpret_cast<char*>(end_key), jend_key_len);
+  TERARKDB_NAMESPACE::Slice end_key_slice(reinterpret_cast<char*>(end_key), jend_key_len);
 
-  rocksdb::Status s =
+  TERARKDB_NAMESPACE::Status s =
       db->DeleteRange(write_options, cf_handle, begin_key_slice, end_key_slice);
 
   // cleanup
@@ -1289,7 +1289,7 @@ bool rocksdb_delete_range_helper(JNIEnv* env, rocksdb::DB* db,
     return true;
   }
 
-  rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   return false;
 }
 
@@ -1302,9 +1302,9 @@ void Java_org_rocksdb_RocksDB_deleteRange__J_3BII_3BII(
     JNIEnv* env, jobject /*jdb*/, jlong jdb_handle, jbyteArray jbegin_key,
     jint jbegin_key_off, jint jbegin_key_len, jbyteArray jend_key,
     jint jend_key_off, jint jend_key_len) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  static const rocksdb::WriteOptions default_write_options =
-      rocksdb::WriteOptions();
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  static const TERARKDB_NAMESPACE::WriteOptions default_write_options =
+      TERARKDB_NAMESPACE::WriteOptions();
   rocksdb_delete_range_helper(env, db, default_write_options, nullptr,
                               jbegin_key, jbegin_key_off, jbegin_key_len,
                               jend_key, jend_key_off, jend_key_len);
@@ -1319,17 +1319,17 @@ void Java_org_rocksdb_RocksDB_deleteRange__J_3BII_3BIIJ(
     JNIEnv* env, jobject /*jdb*/, jlong jdb_handle, jbyteArray jbegin_key,
     jint jbegin_key_off, jint jbegin_key_len, jbyteArray jend_key,
     jint jend_key_off, jint jend_key_len, jlong jcf_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  static const rocksdb::WriteOptions default_write_options =
-      rocksdb::WriteOptions();
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  static const TERARKDB_NAMESPACE::WriteOptions default_write_options =
+      TERARKDB_NAMESPACE::WriteOptions();
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   if (cf_handle != nullptr) {
     rocksdb_delete_range_helper(env, db, default_write_options, cf_handle,
                                 jbegin_key, jbegin_key_off, jbegin_key_len,
                                 jend_key, jend_key_off, jend_key_len);
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(
-        env, rocksdb::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(
+        env, TERARKDB_NAMESPACE::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
   }
 }
 
@@ -1342,9 +1342,9 @@ void Java_org_rocksdb_RocksDB_deleteRange__JJ_3BII_3BII(
     JNIEnv* env, jobject /*jdb*/, jlong jdb_handle, jlong jwrite_options,
     jbyteArray jbegin_key, jint jbegin_key_off, jint jbegin_key_len,
     jbyteArray jend_key, jint jend_key_off, jint jend_key_len) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   auto* write_options =
-      reinterpret_cast<rocksdb::WriteOptions*>(jwrite_options);
+      reinterpret_cast<TERARKDB_NAMESPACE::WriteOptions*>(jwrite_options);
   rocksdb_delete_range_helper(env, db, *write_options, nullptr, jbegin_key,
                               jbegin_key_off, jbegin_key_len, jend_key,
                               jend_key_off, jend_key_len);
@@ -1360,29 +1360,29 @@ void Java_org_rocksdb_RocksDB_deleteRange__JJ_3BII_3BIIJ(
     jbyteArray jbegin_key, jint jbegin_key_off, jint jbegin_key_len,
     jbyteArray jend_key, jint jend_key_off, jint jend_key_len,
     jlong jcf_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   auto* write_options =
-      reinterpret_cast<rocksdb::WriteOptions*>(jwrite_options);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+      reinterpret_cast<TERARKDB_NAMESPACE::WriteOptions*>(jwrite_options);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   if (cf_handle != nullptr) {
     rocksdb_delete_range_helper(env, db, *write_options, cf_handle, jbegin_key,
                                 jbegin_key_off, jbegin_key_len, jend_key,
                                 jend_key_off, jend_key_len);
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(
-        env, rocksdb::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(
+        env, TERARKDB_NAMESPACE::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
   }
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// rocksdb::DB::Merge
+// TERARKDB_NAMESPACE::DB::Merge
 
 /**
  * @return true if the merge succeeded, false if a Java Exception was thrown
  */
-bool rocksdb_merge_helper(JNIEnv* env, rocksdb::DB* db,
-                          const rocksdb::WriteOptions& write_options,
-                          rocksdb::ColumnFamilyHandle* cf_handle,
+bool rocksdb_merge_helper(JNIEnv* env, TERARKDB_NAMESPACE::DB* db,
+                          const TERARKDB_NAMESPACE::WriteOptions& write_options,
+                          TERARKDB_NAMESPACE::ColumnFamilyHandle* cf_handle,
                           jbyteArray jkey, jint jkey_off, jint jkey_len,
                           jbyteArray jval, jint jval_off, jint jval_len) {
   jbyte* key = new jbyte[jkey_len];
@@ -1392,7 +1392,7 @@ bool rocksdb_merge_helper(JNIEnv* env, rocksdb::DB* db,
     delete[] key;
     return false;
   }
-  rocksdb::Slice key_slice(reinterpret_cast<char*>(key), jkey_len);
+  TERARKDB_NAMESPACE::Slice key_slice(reinterpret_cast<char*>(key), jkey_len);
 
   jbyte* value = new jbyte[jval_len];
   env->GetByteArrayRegion(jval, jval_off, jval_len, value);
@@ -1402,9 +1402,9 @@ bool rocksdb_merge_helper(JNIEnv* env, rocksdb::DB* db,
     delete[] key;
     return false;
   }
-  rocksdb::Slice value_slice(reinterpret_cast<char*>(value), jval_len);
+  TERARKDB_NAMESPACE::Slice value_slice(reinterpret_cast<char*>(value), jval_len);
 
-  rocksdb::Status s;
+  TERARKDB_NAMESPACE::Status s;
   if (cf_handle != nullptr) {
     s = db->Merge(write_options, cf_handle, key_slice, value_slice);
   } else {
@@ -1419,7 +1419,7 @@ bool rocksdb_merge_helper(JNIEnv* env, rocksdb::DB* db,
     return true;
   }
 
-  rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   return false;
 }
 
@@ -1433,9 +1433,9 @@ void Java_org_rocksdb_RocksDB_merge__J_3BII_3BII(JNIEnv* env, jobject /*jdb*/,
                                                  jbyteArray jkey, jint jkey_off,
                                                  jint jkey_len, jbyteArray jval,
                                                  jint jval_off, jint jval_len) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  static const rocksdb::WriteOptions default_write_options =
-      rocksdb::WriteOptions();
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  static const TERARKDB_NAMESPACE::WriteOptions default_write_options =
+      TERARKDB_NAMESPACE::WriteOptions();
 
   rocksdb_merge_helper(env, db, default_write_options, nullptr, jkey, jkey_off,
                        jkey_len, jval, jval_off, jval_len);
@@ -1450,16 +1450,16 @@ void Java_org_rocksdb_RocksDB_merge__J_3BII_3BIIJ(
     JNIEnv* env, jobject /*jdb*/, jlong jdb_handle, jbyteArray jkey,
     jint jkey_off, jint jkey_len, jbyteArray jval, jint jval_off, jint jval_len,
     jlong jcf_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  static const rocksdb::WriteOptions default_write_options =
-      rocksdb::WriteOptions();
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  static const TERARKDB_NAMESPACE::WriteOptions default_write_options =
+      TERARKDB_NAMESPACE::WriteOptions();
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   if (cf_handle != nullptr) {
     rocksdb_merge_helper(env, db, default_write_options, cf_handle, jkey,
                          jkey_off, jkey_len, jval, jval_off, jval_len);
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(
-        env, rocksdb::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(
+        env, TERARKDB_NAMESPACE::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
   }
 }
 
@@ -1472,9 +1472,9 @@ void Java_org_rocksdb_RocksDB_merge__JJ_3BII_3BII(
     JNIEnv* env, jobject /*jdb*/, jlong jdb_handle, jlong jwrite_options_handle,
     jbyteArray jkey, jint jkey_off, jint jkey_len, jbyteArray jval,
     jint jval_off, jint jval_len) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   auto* write_options =
-      reinterpret_cast<rocksdb::WriteOptions*>(jwrite_options_handle);
+      reinterpret_cast<TERARKDB_NAMESPACE::WriteOptions*>(jwrite_options_handle);
 
   rocksdb_merge_helper(env, db, *write_options, nullptr, jkey, jkey_off,
                        jkey_len, jval, jval_off, jval_len);
@@ -1489,21 +1489,21 @@ void Java_org_rocksdb_RocksDB_merge__JJ_3BII_3BIIJ(
     JNIEnv* env, jobject /*jdb*/, jlong jdb_handle, jlong jwrite_options_handle,
     jbyteArray jkey, jint jkey_off, jint jkey_len, jbyteArray jval,
     jint jval_off, jint jval_len, jlong jcf_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   auto* write_options =
-      reinterpret_cast<rocksdb::WriteOptions*>(jwrite_options_handle);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+      reinterpret_cast<TERARKDB_NAMESPACE::WriteOptions*>(jwrite_options_handle);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   if (cf_handle != nullptr) {
     rocksdb_merge_helper(env, db, *write_options, cf_handle, jkey, jkey_off,
                          jkey_len, jval, jval_off, jval_len);
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(
-        env, rocksdb::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(
+        env, TERARKDB_NAMESPACE::Status::InvalidArgument("Invalid ColumnFamilyHandle."));
   }
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// rocksdb::DB::~DB()
+// TERARKDB_NAMESPACE::DB::~DB()
 
 /*
  * Class:     org_rocksdb_RocksDB
@@ -1513,15 +1513,15 @@ void Java_org_rocksdb_RocksDB_merge__JJ_3BII_3BIIJ(
 void Java_org_rocksdb_RocksDB_disposeInternal(JNIEnv* /*env*/,
                                               jobject /*java_db*/,
                                               jlong jhandle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jhandle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jhandle);
   assert(db != nullptr);
   delete db;
 }
 
-jlong rocksdb_iterator_helper(rocksdb::DB* db,
-                              rocksdb::ReadOptions read_options,
-                              rocksdb::ColumnFamilyHandle* cf_handle) {
-  rocksdb::Iterator* iterator = nullptr;
+jlong rocksdb_iterator_helper(TERARKDB_NAMESPACE::DB* db,
+                              TERARKDB_NAMESPACE::ReadOptions read_options,
+                              TERARKDB_NAMESPACE::ColumnFamilyHandle* cf_handle) {
+  TERARKDB_NAMESPACE::Iterator* iterator = nullptr;
   if (cf_handle != nullptr) {
     iterator = db->NewIterator(read_options, cf_handle);
   } else {
@@ -1537,8 +1537,8 @@ jlong rocksdb_iterator_helper(rocksdb::DB* db,
  */
 jlong Java_org_rocksdb_RocksDB_iterator__J(JNIEnv* /*env*/, jobject /*jdb*/,
                                            jlong db_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(db_handle);
-  return rocksdb_iterator_helper(db, rocksdb::ReadOptions(), nullptr);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(db_handle);
+  return rocksdb_iterator_helper(db, TERARKDB_NAMESPACE::ReadOptions(), nullptr);
 }
 
 /*
@@ -1549,9 +1549,9 @@ jlong Java_org_rocksdb_RocksDB_iterator__J(JNIEnv* /*env*/, jobject /*jdb*/,
 jlong Java_org_rocksdb_RocksDB_iterator__JJ(JNIEnv* /*env*/, jobject /*jdb*/,
                                             jlong db_handle,
                                             jlong jread_options_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(db_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(db_handle);
   auto& read_options =
-      *reinterpret_cast<rocksdb::ReadOptions*>(jread_options_handle);
+      *reinterpret_cast<TERARKDB_NAMESPACE::ReadOptions*>(jread_options_handle);
   return rocksdb_iterator_helper(db, read_options, nullptr);
 }
 
@@ -1563,9 +1563,9 @@ jlong Java_org_rocksdb_RocksDB_iterator__JJ(JNIEnv* /*env*/, jobject /*jdb*/,
 jlong Java_org_rocksdb_RocksDB_iteratorCF__JJ(JNIEnv* /*env*/, jobject /*jdb*/,
                                               jlong db_handle,
                                               jlong jcf_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(db_handle);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
-  return rocksdb_iterator_helper(db, rocksdb::ReadOptions(), cf_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(db_handle);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
+  return rocksdb_iterator_helper(db, TERARKDB_NAMESPACE::ReadOptions(), cf_handle);
 }
 
 /*
@@ -1577,10 +1577,10 @@ jlong Java_org_rocksdb_RocksDB_iteratorCF__JJJ(JNIEnv* /*env*/, jobject /*jdb*/,
                                                jlong db_handle,
                                                jlong jcf_handle,
                                                jlong jread_options_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(db_handle);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(db_handle);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   auto& read_options =
-      *reinterpret_cast<rocksdb::ReadOptions*>(jread_options_handle);
+      *reinterpret_cast<TERARKDB_NAMESPACE::ReadOptions*>(jread_options_handle);
   return rocksdb_iterator_helper(db, read_options, cf_handle);
 }
 
@@ -1593,11 +1593,11 @@ jlongArray Java_org_rocksdb_RocksDB_iterators(JNIEnv* env, jobject /*jdb*/,
                                               jlong db_handle,
                                               jlongArray jcolumn_family_handles,
                                               jlong jread_options_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(db_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(db_handle);
   auto& read_options =
-      *reinterpret_cast<rocksdb::ReadOptions*>(jread_options_handle);
+      *reinterpret_cast<TERARKDB_NAMESPACE::ReadOptions*>(jread_options_handle);
 
-  std::vector<rocksdb::ColumnFamilyHandle*> cf_handles;
+  std::vector<TERARKDB_NAMESPACE::ColumnFamilyHandle*> cf_handles;
   if (jcolumn_family_handles != nullptr) {
     const jsize len_cols = env->GetArrayLength(jcolumn_family_handles);
     jlong* jcfh = env->GetLongArrayElements(jcolumn_family_handles, nullptr);
@@ -1607,15 +1607,15 @@ jlongArray Java_org_rocksdb_RocksDB_iterators(JNIEnv* env, jobject /*jdb*/,
     }
 
     for (jsize i = 0; i < len_cols; i++) {
-      auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcfh[i]);
+      auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcfh[i]);
       cf_handles.push_back(cf_handle);
     }
 
     env->ReleaseLongArrayElements(jcolumn_family_handles, jcfh, JNI_ABORT);
   }
 
-  std::vector<rocksdb::Iterator*> iterators;
-  rocksdb::Status s = db->NewIterators(read_options, cf_handles, &iterators);
+  std::vector<TERARKDB_NAMESPACE::Iterator*> iterators;
+  TERARKDB_NAMESPACE::Status s = db->NewIterators(read_options, cf_handles, &iterators);
   if (s.ok()) {
     jlongArray jLongArray =
         env->NewLongArray(static_cast<jsize>(iterators.size()));
@@ -1624,7 +1624,7 @@ jlongArray Java_org_rocksdb_RocksDB_iterators(JNIEnv* env, jobject /*jdb*/,
       return nullptr;
     }
 
-    for (std::vector<rocksdb::Iterator*>::size_type i = 0; i < iterators.size();
+    for (std::vector<TERARKDB_NAMESPACE::Iterator*>::size_type i = 0; i < iterators.size();
          i++) {
       env->SetLongArrayRegion(
           jLongArray, static_cast<jsize>(i), 1,
@@ -1638,7 +1638,7 @@ jlongArray Java_org_rocksdb_RocksDB_iterators(JNIEnv* env, jobject /*jdb*/,
 
     return jLongArray;
   } else {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
     return nullptr;
   }
 }
@@ -1651,7 +1651,7 @@ jlongArray Java_org_rocksdb_RocksDB_iterators(JNIEnv* env, jobject /*jdb*/,
 jlong Java_org_rocksdb_RocksDB_getDefaultColumnFamily(JNIEnv* /*env*/,
                                                       jobject /*jobj*/,
                                                       jlong jdb_handle) {
-  auto* db_handle = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db_handle = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   auto* cf_handle = db_handle->DefaultColumnFamily();
   return reinterpret_cast<jlong>(cf_handle);
 }
@@ -1665,9 +1665,9 @@ jlong Java_org_rocksdb_RocksDB_createColumnFamily(JNIEnv* env, jobject /*jdb*/,
                                                   jlong jdb_handle,
                                                   jbyteArray jcolumn_name,
                                                   jlong jcolumn_options) {
-  rocksdb::ColumnFamilyHandle* handle;
+  TERARKDB_NAMESPACE::ColumnFamilyHandle* handle;
   jboolean has_exception = JNI_FALSE;
-  std::string column_name = rocksdb::JniUtil::byteString<std::string>(
+  std::string column_name = TERARKDB_NAMESPACE::JniUtil::byteString<std::string>(
       env, jcolumn_name,
       [](const char* str, const size_t len) { return std::string(str, len); },
       &has_exception);
@@ -1676,18 +1676,18 @@ jlong Java_org_rocksdb_RocksDB_createColumnFamily(JNIEnv* env, jobject /*jdb*/,
     return 0;
   }
 
-  auto* db_handle = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db_handle = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   auto* cfOptions =
-      reinterpret_cast<rocksdb::ColumnFamilyOptions*>(jcolumn_options);
+      reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyOptions*>(jcolumn_options);
 
-  rocksdb::Status s =
+  TERARKDB_NAMESPACE::Status s =
       db_handle->CreateColumnFamily(*cfOptions, column_name, &handle);
 
   if (s.ok()) {
     return reinterpret_cast<jlong>(handle);
   }
 
-  rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   return 0;
 }
 
@@ -1699,11 +1699,11 @@ jlong Java_org_rocksdb_RocksDB_createColumnFamily(JNIEnv* env, jobject /*jdb*/,
 void Java_org_rocksdb_RocksDB_dropColumnFamily(JNIEnv* env, jobject /*jdb*/,
                                                jlong jdb_handle,
                                                jlong jcf_handle) {
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
-  auto* db_handle = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  rocksdb::Status s = db_handle->DropColumnFamily(cf_handle);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
+  auto* db_handle = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  TERARKDB_NAMESPACE::Status s = db_handle->DropColumnFamily(cf_handle);
   if (!s.ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   }
 }
 
@@ -1713,8 +1713,8 @@ void Java_org_rocksdb_RocksDB_dropColumnFamily(JNIEnv* env, jobject /*jdb*/,
  */
 jlong Java_org_rocksdb_RocksDB_getSnapshot(JNIEnv* /*env*/, jobject /*jdb*/,
                                            jlong db_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(db_handle);
-  const rocksdb::Snapshot* snapshot = db->GetSnapshot();
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(db_handle);
+  const TERARKDB_NAMESPACE::Snapshot* snapshot = db->GetSnapshot();
   return reinterpret_cast<jlong>(snapshot);
 }
 
@@ -1725,8 +1725,8 @@ jlong Java_org_rocksdb_RocksDB_getSnapshot(JNIEnv* /*env*/, jobject /*jdb*/,
 void Java_org_rocksdb_RocksDB_releaseSnapshot(JNIEnv* /*env*/, jobject /*jdb*/,
                                               jlong db_handle,
                                               jlong snapshot_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(db_handle);
-  auto* snapshot = reinterpret_cast<rocksdb::Snapshot*>(snapshot_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(db_handle);
+  auto* snapshot = reinterpret_cast<TERARKDB_NAMESPACE::Snapshot*>(snapshot_handle);
   db->ReleaseSnapshot(snapshot);
 }
 
@@ -1743,9 +1743,9 @@ jstring Java_org_rocksdb_RocksDB_getProperty0__JLjava_lang_String_2I(
     // exception thrown: OutOfMemoryError
     return nullptr;
   }
-  rocksdb::Slice property_slice(property, jproperty_len);
+  TERARKDB_NAMESPACE::Slice property_slice(property, jproperty_len);
 
-  auto* db = reinterpret_cast<rocksdb::DB*>(db_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(db_handle);
   std::string property_value;
   bool retCode = db->GetProperty(property_slice, &property_value);
   env->ReleaseStringUTFChars(jproperty, property);
@@ -1754,7 +1754,7 @@ jstring Java_org_rocksdb_RocksDB_getProperty0__JLjava_lang_String_2I(
     return env->NewStringUTF(property_value.c_str());
   }
 
-  rocksdb::RocksDBExceptionJni::ThrowNew(env, rocksdb::Status::NotFound());
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, TERARKDB_NAMESPACE::Status::NotFound());
   return nullptr;
 }
 
@@ -1771,10 +1771,10 @@ jstring Java_org_rocksdb_RocksDB_getProperty0__JJLjava_lang_String_2I(
     // exception thrown: OutOfMemoryError
     return nullptr;
   }
-  rocksdb::Slice property_slice(property, jproperty_len);
+  TERARKDB_NAMESPACE::Slice property_slice(property, jproperty_len);
 
-  auto* db = reinterpret_cast<rocksdb::DB*>(db_handle);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(db_handle);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   std::string property_value;
   bool retCode = db->GetProperty(cf_handle, property_slice, &property_value);
   env->ReleaseStringUTFChars(jproperty, property);
@@ -1783,7 +1783,7 @@ jstring Java_org_rocksdb_RocksDB_getProperty0__JJLjava_lang_String_2I(
     return env->NewStringUTF(property_value.c_str());
   }
 
-  rocksdb::RocksDBExceptionJni::ThrowNew(env, rocksdb::Status::NotFound());
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, TERARKDB_NAMESPACE::Status::NotFound());
   return nullptr;
 }
 
@@ -1800,9 +1800,9 @@ jlong Java_org_rocksdb_RocksDB_getLongProperty__JLjava_lang_String_2I(
     // exception thrown: OutOfMemoryError
     return 0;
   }
-  rocksdb::Slice property_slice(property, jproperty_len);
+  TERARKDB_NAMESPACE::Slice property_slice(property, jproperty_len);
 
-  auto* db = reinterpret_cast<rocksdb::DB*>(db_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(db_handle);
   uint64_t property_value = 0;
   bool retCode = db->GetIntProperty(property_slice, &property_value);
   env->ReleaseStringUTFChars(jproperty, property);
@@ -1811,7 +1811,7 @@ jlong Java_org_rocksdb_RocksDB_getLongProperty__JLjava_lang_String_2I(
     return property_value;
   }
 
-  rocksdb::RocksDBExceptionJni::ThrowNew(env, rocksdb::Status::NotFound());
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, TERARKDB_NAMESPACE::Status::NotFound());
   return 0;
 }
 
@@ -1828,10 +1828,10 @@ jlong Java_org_rocksdb_RocksDB_getLongProperty__JJLjava_lang_String_2I(
     // exception thrown: OutOfMemoryError
     return 0;
   }
-  rocksdb::Slice property_slice(property, jproperty_len);
+  TERARKDB_NAMESPACE::Slice property_slice(property, jproperty_len);
 
-  auto* db = reinterpret_cast<rocksdb::DB*>(db_handle);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(db_handle);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   uint64_t property_value;
   bool retCode = db->GetIntProperty(cf_handle, property_slice, &property_value);
   env->ReleaseStringUTFChars(jproperty, property);
@@ -1840,7 +1840,7 @@ jlong Java_org_rocksdb_RocksDB_getLongProperty__JJLjava_lang_String_2I(
     return property_value;
   }
 
-  rocksdb::RocksDBExceptionJni::ThrowNew(env, rocksdb::Status::NotFound());
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, TERARKDB_NAMESPACE::Status::NotFound());
   return 0;
 }
 
@@ -1855,8 +1855,8 @@ jlong Java_org_rocksdb_RocksDB_getAggregatedLongProperty(
   if (property == nullptr) {
     return 0;
   }
-  rocksdb::Slice property_slice(property, jproperty_len);
-  auto* db = reinterpret_cast<rocksdb::DB*>(db_handle);
+  TERARKDB_NAMESPACE::Slice property_slice(property, jproperty_len);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(db_handle);
   uint64_t property_value = 0;
   bool retCode = db->GetAggregatedIntProperty(property_slice, &property_value);
   env->ReleaseStringUTFChars(jproperty, property);
@@ -1865,25 +1865,25 @@ jlong Java_org_rocksdb_RocksDB_getAggregatedLongProperty(
     return property_value;
   }
 
-  rocksdb::RocksDBExceptionJni::ThrowNew(env, rocksdb::Status::NotFound());
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, TERARKDB_NAMESPACE::Status::NotFound());
   return 0;
 }
 
 
 //////////////////////////////////////////////////////////////////////////////
-// rocksdb::DB::Flush
+// TERARKDB_NAMESPACE::DB::Flush
 
-void rocksdb_flush_helper(JNIEnv* env, rocksdb::DB* db,
-                          const rocksdb::FlushOptions& flush_options,
-                          rocksdb::ColumnFamilyHandle* column_family_handle) {
-  rocksdb::Status s;
+void rocksdb_flush_helper(JNIEnv* env, TERARKDB_NAMESPACE::DB* db,
+                          const TERARKDB_NAMESPACE::FlushOptions& flush_options,
+                          TERARKDB_NAMESPACE::ColumnFamilyHandle* column_family_handle) {
+  TERARKDB_NAMESPACE::Status s;
   if (column_family_handle != nullptr) {
     s = db->Flush(flush_options, column_family_handle);
   } else {
     s = db->Flush(flush_options);
   }
   if (!s.ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   }
 }
 
@@ -1895,9 +1895,9 @@ void rocksdb_flush_helper(JNIEnv* env, rocksdb::DB* db,
 void Java_org_rocksdb_RocksDB_flush__JJ(JNIEnv* env, jobject /*jdb*/,
                                         jlong jdb_handle,
                                         jlong jflush_options) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   auto* flush_options =
-      reinterpret_cast<rocksdb::FlushOptions*>(jflush_options);
+      reinterpret_cast<TERARKDB_NAMESPACE::FlushOptions*>(jflush_options);
   rocksdb_flush_helper(env, db, *flush_options, nullptr);
 }
 
@@ -1909,22 +1909,22 @@ void Java_org_rocksdb_RocksDB_flush__JJ(JNIEnv* env, jobject /*jdb*/,
 void Java_org_rocksdb_RocksDB_flush__JJJ(JNIEnv* env, jobject /*jdb*/,
                                          jlong jdb_handle, jlong jflush_options,
                                          jlong jcf_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   auto* flush_options =
-      reinterpret_cast<rocksdb::FlushOptions*>(jflush_options);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+      reinterpret_cast<TERARKDB_NAMESPACE::FlushOptions*>(jflush_options);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   rocksdb_flush_helper(env, db, *flush_options, cf_handle);
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// rocksdb::DB::CompactRange - Full
+// TERARKDB_NAMESPACE::DB::CompactRange - Full
 
-void rocksdb_compactrange_helper(JNIEnv* env, rocksdb::DB* db,
-                                 rocksdb::ColumnFamilyHandle* cf_handle,
+void rocksdb_compactrange_helper(JNIEnv* env, TERARKDB_NAMESPACE::DB* db,
+                                 TERARKDB_NAMESPACE::ColumnFamilyHandle* cf_handle,
                                  jboolean jreduce_level, jint jtarget_level,
                                  jint jtarget_path_id) {
-  rocksdb::Status s;
-  rocksdb::CompactRangeOptions compact_options;
+  TERARKDB_NAMESPACE::Status s;
+  TERARKDB_NAMESPACE::CompactRangeOptions compact_options;
   compact_options.change_level = jreduce_level;
   compact_options.target_level = jtarget_level;
   compact_options.target_path_id = static_cast<uint32_t>(jtarget_path_id);
@@ -1938,7 +1938,7 @@ void rocksdb_compactrange_helper(JNIEnv* env, rocksdb::DB* db,
   if (s.ok()) {
     return;
   }
-  rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
 }
 
 /*
@@ -1951,7 +1951,7 @@ void Java_org_rocksdb_RocksDB_compactRange0__JZII(JNIEnv* env, jobject /*jdb*/,
                                                   jboolean jreduce_level,
                                                   jint jtarget_level,
                                                   jint jtarget_path_id) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   rocksdb_compactrange_helper(env, db, nullptr, jreduce_level, jtarget_level,
                               jtarget_path_id);
 }
@@ -1964,24 +1964,24 @@ void Java_org_rocksdb_RocksDB_compactRange0__JZII(JNIEnv* env, jobject /*jdb*/,
 void Java_org_rocksdb_RocksDB_compactRange__JZIIJ(
     JNIEnv* env, jobject /*jdb*/, jlong jdb_handle, jboolean jreduce_level,
     jint jtarget_level, jint jtarget_path_id, jlong jcf_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   rocksdb_compactrange_helper(env, db, cf_handle, jreduce_level, jtarget_level,
                               jtarget_path_id);
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// rocksdb::DB::CompactRange - Range
+// TERARKDB_NAMESPACE::DB::CompactRange - Range
 
 /**
  * @return true if the compact range succeeded, false if a Java Exception
  *     was thrown
  */
-bool rocksdb_compactrange_helper(JNIEnv* env, rocksdb::DB* db,
-                                 rocksdb::ColumnFamilyHandle* cf_handle,
+bool rocksdb_compactrange_helper(JNIEnv* env, TERARKDB_NAMESPACE::DB* db,
+                                 TERARKDB_NAMESPACE::ColumnFamilyHandle* cf_handle,
                                  jbyteArray jbegin, jint jbegin_len,
                                  jbyteArray jend, jint jend_len,
-                                 const rocksdb::CompactRangeOptions& compact_options) {
+                                 const TERARKDB_NAMESPACE::CompactRangeOptions& compact_options) {
   jbyte* begin = env->GetByteArrayElements(jbegin, nullptr);
   if (begin == nullptr) {
     // exception thrown: OutOfMemoryError
@@ -1995,10 +1995,10 @@ bool rocksdb_compactrange_helper(JNIEnv* env, rocksdb::DB* db,
     return false;
   }
 
-  const rocksdb::Slice begin_slice(reinterpret_cast<char*>(begin), jbegin_len);
-  const rocksdb::Slice end_slice(reinterpret_cast<char*>(end), jend_len);
+  const TERARKDB_NAMESPACE::Slice begin_slice(reinterpret_cast<char*>(begin), jbegin_len);
+  const TERARKDB_NAMESPACE::Slice end_slice(reinterpret_cast<char*>(end), jend_len);
 
-  rocksdb::Status s;
+  TERARKDB_NAMESPACE::Status s;
   if (cf_handle != nullptr) {
     s = db->CompactRange(compact_options, cf_handle, &begin_slice, &end_slice);
   } else {
@@ -2013,7 +2013,7 @@ bool rocksdb_compactrange_helper(JNIEnv* env, rocksdb::DB* db,
     return true;
   }
 
-  rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   return false;
 }
 
@@ -2021,13 +2021,13 @@ bool rocksdb_compactrange_helper(JNIEnv* env, rocksdb::DB* db,
  * @return true if the compact range succeeded, false if a Java Exception
  *     was thrown
  */
-bool rocksdb_compactrange_helper(JNIEnv* env, rocksdb::DB* db,
-                                 rocksdb::ColumnFamilyHandle* cf_handle,
+bool rocksdb_compactrange_helper(JNIEnv* env, TERARKDB_NAMESPACE::DB* db,
+                                 TERARKDB_NAMESPACE::ColumnFamilyHandle* cf_handle,
                                  jbyteArray jbegin, jint jbegin_len,
                                  jbyteArray jend, jint jend_len,
                                  jboolean jreduce_level, jint jtarget_level,
                                  jint jtarget_path_id) {
-    rocksdb::CompactRangeOptions compact_options;
+    TERARKDB_NAMESPACE::CompactRangeOptions compact_options;
     compact_options.change_level = jreduce_level;
     compact_options.target_level = jtarget_level;
     compact_options.target_path_id = static_cast<uint32_t>(jtarget_path_id);
@@ -2045,7 +2045,7 @@ void Java_org_rocksdb_RocksDB_compactRange0__J_3BI_3BIZII(
     JNIEnv* env, jobject /*jdb*/, jlong jdb_handle, jbyteArray jbegin,
     jint jbegin_len, jbyteArray jend, jint jend_len, jboolean jreduce_level,
     jint jtarget_level, jint jtarget_path_id) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   rocksdb_compactrange_helper(env, db, nullptr, jbegin, jbegin_len, jend,
                               jend_len, jreduce_level, jtarget_level,
                               jtarget_path_id);
@@ -2060,8 +2060,8 @@ void Java_org_rocksdb_RocksDB_compactRange__J_3BI_3BIZIIJ(
     JNIEnv* env, jobject /*jdb*/, jlong jdb_handle, jbyteArray jbegin,
     jint jbegin_len, jbyteArray jend, jint jend_len, jboolean jreduce_level,
     jint jtarget_level, jint jtarget_path_id, jlong jcf_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   rocksdb_compactrange_helper(env, db, cf_handle, jbegin, jbegin_len, jend,
                               jend_len, jreduce_level, jtarget_level,
                               jtarget_path_id);
@@ -2072,9 +2072,9 @@ void Java_org_rocksdb_RocksDB_compactRange__J_3BI_3BIJJ(
     JNIEnv* env, jobject /*jdb*/, jlong jdb_handle, jbyteArray jbegin,
     jint jbegin_len, jbyteArray jend, jint jend_len,
     jlong jcompact_options_handle, jlong jcf_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
-  auto* compact_options = reinterpret_cast<rocksdb::CompactRangeOptions*>(jcompact_options_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
+  auto* compact_options = reinterpret_cast<TERARKDB_NAMESPACE::CompactRangeOptions*>(jcompact_options_handle);
 
   rocksdb_compactrange_helper(env, db, cf_handle, jbegin, jbegin_len, jend,
                               jend_len, *compact_options);
@@ -2082,7 +2082,7 @@ void Java_org_rocksdb_RocksDB_compactRange__J_3BI_3BIJJ(
 
 
 //////////////////////////////////////////////////////////////////////////////
-// rocksdb::DB::PauseBackgroundWork
+// TERARKDB_NAMESPACE::DB::PauseBackgroundWork
 
 /*
  * Class:     org_rocksdb_RocksDB
@@ -2091,15 +2091,15 @@ void Java_org_rocksdb_RocksDB_compactRange__J_3BI_3BIJJ(
  */
 void Java_org_rocksdb_RocksDB_pauseBackgroundWork(JNIEnv* env, jobject /*jobj*/,
                                                   jlong jdb_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   auto s = db->PauseBackgroundWork();
   if (!s.ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   }
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// rocksdb::DB::ContinueBackgroundWork
+// TERARKDB_NAMESPACE::DB::ContinueBackgroundWork
 
 /*
  * Class:     org_rocksdb_RocksDB
@@ -2109,15 +2109,15 @@ void Java_org_rocksdb_RocksDB_pauseBackgroundWork(JNIEnv* env, jobject /*jobj*/,
 void Java_org_rocksdb_RocksDB_continueBackgroundWork(JNIEnv* env,
                                                      jobject /*jobj*/,
                                                      jlong jdb_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   auto s = db->ContinueBackgroundWork();
   if (!s.ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   }
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// rocksdb::DB::GetLatestSequenceNumber
+// TERARKDB_NAMESPACE::DB::GetLatestSequenceNumber
 
 /*
  * Class:     org_rocksdb_RocksDB
@@ -2127,12 +2127,12 @@ void Java_org_rocksdb_RocksDB_continueBackgroundWork(JNIEnv* env,
 jlong Java_org_rocksdb_RocksDB_getLatestSequenceNumber(JNIEnv* /*env*/,
                                                        jobject /*jdb*/,
                                                        jlong jdb_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   return db->GetLatestSequenceNumber();
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// rocksdb::DB enable/disable file deletions
+// TERARKDB_NAMESPACE::DB enable/disable file deletions
 
 /*
  * Class:     org_rocksdb_RocksDB
@@ -2141,10 +2141,10 @@ jlong Java_org_rocksdb_RocksDB_getLatestSequenceNumber(JNIEnv* /*env*/,
  */
 void Java_org_rocksdb_RocksDB_disableFileDeletions(JNIEnv* env, jobject /*jdb*/,
                                                    jlong jdb_handle) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  rocksdb::Status s = db->DisableFileDeletions();
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  TERARKDB_NAMESPACE::Status s = db->DisableFileDeletions();
   if (!s.ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   }
 }
 
@@ -2156,15 +2156,15 @@ void Java_org_rocksdb_RocksDB_disableFileDeletions(JNIEnv* env, jobject /*jdb*/,
 void Java_org_rocksdb_RocksDB_enableFileDeletions(JNIEnv* env, jobject /*jdb*/,
                                                   jlong jdb_handle,
                                                   jboolean jforce) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  rocksdb::Status s = db->EnableFileDeletions(jforce);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  TERARKDB_NAMESPACE::Status s = db->EnableFileDeletions(jforce);
   if (!s.ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   }
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// rocksdb::DB::GetUpdatesSince
+// TERARKDB_NAMESPACE::DB::GetUpdatesSince
 
 /*
  * Class:     org_rocksdb_RocksDB
@@ -2174,16 +2174,16 @@ void Java_org_rocksdb_RocksDB_enableFileDeletions(JNIEnv* env, jobject /*jdb*/,
 jlong Java_org_rocksdb_RocksDB_getUpdatesSince(JNIEnv* env, jobject /*jdb*/,
                                                jlong jdb_handle,
                                                jlong jsequence_number) {
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  rocksdb::SequenceNumber sequence_number =
-      static_cast<rocksdb::SequenceNumber>(jsequence_number);
-  std::unique_ptr<rocksdb::TransactionLogIterator> iter;
-  rocksdb::Status s = db->GetUpdatesSince(sequence_number, &iter);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  TERARKDB_NAMESPACE::SequenceNumber sequence_number =
+      static_cast<TERARKDB_NAMESPACE::SequenceNumber>(jsequence_number);
+  std::unique_ptr<TERARKDB_NAMESPACE::TransactionLogIterator> iter;
+  TERARKDB_NAMESPACE::Status s = db->GetUpdatesSince(sequence_number, &iter);
   if (s.ok()) {
     return reinterpret_cast<jlong>(iter.release());
   }
 
-  rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   return 0;
 }
 
@@ -2244,13 +2244,13 @@ void Java_org_rocksdb_RocksDB_setOptions(JNIEnv* env, jobject /*jdb*/,
     env->DeleteLocalRef(jobj_value);
   }
 
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-  auto* cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
+  auto* cf_handle = reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
   db->SetOptions(cf_handle, options_map);
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// rocksdb::DB::IngestExternalFile
+// TERARKDB_NAMESPACE::DB::IngestExternalFile
 
 /*
  * Class:     org_rocksdb_RocksDB
@@ -2262,22 +2262,22 @@ void Java_org_rocksdb_RocksDB_ingestExternalFile(
     jobjectArray jfile_path_list, jint jfile_path_list_len,
     jlong jingest_external_file_options_handle) {
   jboolean has_exception = JNI_FALSE;
-  std::vector<std::string> file_path_list = rocksdb::JniUtil::copyStrings(
+  std::vector<std::string> file_path_list = TERARKDB_NAMESPACE::JniUtil::copyStrings(
       env, jfile_path_list, jfile_path_list_len, &has_exception);
   if (has_exception == JNI_TRUE) {
     // exception occurred
     return;
   }
 
-  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto* db = reinterpret_cast<TERARKDB_NAMESPACE::DB*>(jdb_handle);
   auto* column_family =
-      reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
-  auto* ifo = reinterpret_cast<rocksdb::IngestExternalFileOptions*>(
+      reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyHandle*>(jcf_handle);
+  auto* ifo = reinterpret_cast<TERARKDB_NAMESPACE::IngestExternalFileOptions*>(
       jingest_external_file_options_handle);
-  rocksdb::Status s =
+  TERARKDB_NAMESPACE::Status s =
       db->IngestExternalFile(column_family, file_path_list, *ifo);
   if (!s.ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   }
 }
 
@@ -2295,16 +2295,16 @@ void Java_org_rocksdb_RocksDB_destroyDB(JNIEnv* env, jclass /*jcls*/,
     return;
   }
 
-  auto* options = reinterpret_cast<rocksdb::Options*>(joptions_handle);
+  auto* options = reinterpret_cast<TERARKDB_NAMESPACE::Options*>(joptions_handle);
   if (options == nullptr) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(
-        env, rocksdb::Status::InvalidArgument("Invalid Options."));
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(
+        env, TERARKDB_NAMESPACE::Status::InvalidArgument("Invalid Options."));
   }
 
-  rocksdb::Status s = rocksdb::DestroyDB(db_path, *options);
+  TERARKDB_NAMESPACE::Status s = TERARKDB_NAMESPACE::DestroyDB(db_path, *options);
   env->ReleaseStringUTFChars(jdb_path, db_path);
 
   if (!s.ok()) {
-    rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+    TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
   }
 }

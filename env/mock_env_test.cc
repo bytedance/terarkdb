@@ -8,21 +8,18 @@
 #include <string>
 
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/testharness.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class MockEnvTest : public testing::Test {
  public:
   MockEnv* env_;
   const EnvOptions soptions_;
 
-  MockEnvTest()
-      : env_(new MockEnv(Env::Default())) {
-  }
-  ~MockEnvTest() {
-    delete env_;
-  }
+  MockEnvTest() : env_(new MockEnv(Env::Default())) {}
+  ~MockEnvTest() { delete env_; }
 };
 
 TEST_F(MockEnvTest, Corrupt) {
@@ -53,14 +50,14 @@ TEST_F(MockEnvTest, Corrupt) {
   ASSERT_OK(writable_file->Append(kCorrupted));
   ASSERT_TRUE(writable_file->GetFileSize() == kGood.size() + kCorrupted.size());
   result.clear();
-  ASSERT_OK(rand_file->Read(kGood.size(), kCorrupted.size(),
-            &result, &(scratch[0])));
+  ASSERT_OK(
+      rand_file->Read(kGood.size(), kCorrupted.size(), &result, &(scratch[0])));
   ASSERT_EQ(result.compare(kCorrupted), 0);
   // Corrupted
   ASSERT_OK(dynamic_cast<MockEnv*>(env_)->CorruptBuffer(kFileName));
   result.clear();
-  ASSERT_OK(rand_file->Read(kGood.size(), kCorrupted.size(),
-            &result, &(scratch[0])));
+  ASSERT_OK(
+      rand_file->Read(kGood.size(), kCorrupted.size(), &result, &(scratch[0])));
   ASSERT_NE(result.compare(kCorrupted), 0);
 }
 
@@ -77,7 +74,7 @@ TEST_F(MockEnvTest, FakeSleeping) {
   ASSERT_TRUE(delta == 3 || delta == 4);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

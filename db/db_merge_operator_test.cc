@@ -9,10 +9,11 @@
 #include "db/forward_iterator.h"
 #include "port/stack_trace.h"
 #include "rocksdb/merge_operator.h"
+#include "rocksdb/terark_namespace.h"
 #include "utilities/merge_operators.h"
 #include "utilities/merge_operators/string_append/stringappend2.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class TestReadCallback : public ReadCallback {
  public:
@@ -74,8 +75,7 @@ TEST_F(DBMergeOperatorTest, LimitMergeOperands) {
   Options options;
   options.create_if_missing = true;
   // Use only the latest two merge operands.
-  options.merge_operator =
-      std::make_shared<LimitedStringAppendMergeOp>(2, ',');
+  options.merge_operator = std::make_shared<LimitedStringAppendMergeOp>(2, ',');
   options.env = env_;
   Reopen(options);
   // All K1 values are in memtable.
@@ -192,7 +192,6 @@ TEST_F(DBMergeOperatorTest, MergeErrorOnIteration) {
   delete iter;
   VerifyDBInternal({{"k1", "v1"}, {"k2", "corrupted"}, {"k2", "v2"}});
 }
-
 
 class MergeOperatorPinningTest : public DBMergeOperatorTest,
                                  public testing::WithParamInterface<bool> {
@@ -473,8 +472,8 @@ TEST_P(MergeOperatorPinningTest, TailingIterator) {
     delete iter;
   };
 
-  rocksdb::port::Thread writer_thread(writer_func);
-  rocksdb::port::Thread reader_thread(reader_func);
+  TERARKDB_NAMESPACE::port::Thread writer_thread(writer_func);
+  TERARKDB_NAMESPACE::port::Thread reader_thread(reader_func);
 
   writer_thread.join();
   reader_thread.join();
@@ -503,7 +502,7 @@ TEST_F(DBMergeOperatorTest, TailingIteratorMemtableUnrefedBySomeoneElse) {
   //    reproduces it.
 
   db_->Merge(WriteOptions(), "key", "sst");
-  db_->Flush(FlushOptions()); // Switch to SuperVersion A
+  db_->Flush(FlushOptions());  // Switch to SuperVersion A
   db_->Merge(WriteOptions(), "key", "memtable");
 
   // Pin SuperVersion A
@@ -511,19 +510,19 @@ TEST_F(DBMergeOperatorTest, TailingIteratorMemtableUnrefedBySomeoneElse) {
 
   bool pushed_first_operand = false;
   bool stepped_to_next_operand = false;
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "DBIter::MergeValuesNewToOld:PushedFirstOperand", [&](void*) {
         EXPECT_FALSE(pushed_first_operand);
         pushed_first_operand = true;
-        db_->Flush(FlushOptions()); // Switch to SuperVersion B
+        db_->Flush(FlushOptions());  // Switch to SuperVersion B
       });
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "DBIter::MergeValuesNewToOld:SteppedToNextOperand", [&](void*) {
         EXPECT_FALSE(stepped_to_next_operand);
         stepped_to_next_operand = true;
-        someone_else.reset(); // Unpin SuperVersion A
+        someone_else.reset();  // Unpin SuperVersion A
       });
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
 
   ReadOptions ro;
   ro.tailing = true;
@@ -626,10 +625,10 @@ TEST_F(DBMergeOperatorTest, SnapshotCheckerAndReadCallback) {
   db_->ReleaseSnapshot(snapshot2);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

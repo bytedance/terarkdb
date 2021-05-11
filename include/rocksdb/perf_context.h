@@ -5,13 +5,15 @@
 
 #pragma once
 
-#include <map>
 #include <stdint.h>
+
+#include <map>
 #include <string>
 
 #include "rocksdb/perf_level.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // A thread local context for gathering performance counter efficiently
 // and transparently.
@@ -35,14 +37,13 @@ struct PerfContextByLevel {
   // total nanos spent on reading data from SST files
   uint64_t get_from_table_nanos;
 
-  void Reset(); // reset all performance counters to zero
+  void Reset();  // reset all performance counters to zero
 };
 
 struct PerfContext {
-
   ~PerfContext();
 
-  void Reset(); // reset all performance counters to zero
+  void Reset();  // reset all performance counters to zero
 
   std::string ToString(bool exclude_zero_counters = false) const;
 
@@ -55,12 +56,12 @@ struct PerfContext {
   // free the space for PerfContextByLevel, also disable per level perf context
   void ClearPerLevelPerfContext();
 
-  uint64_t user_key_comparison_count; // total number of user key comparisons
-  uint64_t block_cache_hit_count;     // total number of block cache hits
-  uint64_t block_read_count;          // total number of block reads (with IO)
-  uint64_t block_read_byte;           // total number of bytes from block reads
-  uint64_t block_read_time;           // total nanos spent on block reads
-  uint64_t block_checksum_time;       // total nanos spent on block checksum
+  uint64_t user_key_comparison_count;  // total number of user key comparisons
+  uint64_t block_cache_hit_count;      // total number of block cache hits
+  uint64_t block_read_count;           // total number of block reads (with IO)
+  uint64_t block_read_byte;            // total number of bytes from block reads
+  uint64_t block_read_time;            // total nanos spent on block reads
+  uint64_t block_checksum_time;        // total nanos spent on block checksum
   uint64_t block_decompress_time;  // total nanos spent on block decompression
 
   uint64_t get_read_bytes;       // bytes for vals returned by Get
@@ -101,9 +102,9 @@ struct PerfContext {
   //
   uint64_t internal_merge_count;
 
-  uint64_t get_snapshot_time;       // total nanos spent on getting snapshot
-  uint64_t get_from_memtable_time;  // total nanos spent on querying memtables
-  uint64_t get_from_memtable_count;    // number of mem tables queried
+  uint64_t get_snapshot_time;        // total nanos spent on getting snapshot
+  uint64_t get_from_memtable_time;   // total nanos spent on querying memtables
+  uint64_t get_from_memtable_count;  // number of mem tables queried
   // total nanos spent after Get() finds a key
   uint64_t get_post_process_time;
   uint64_t get_from_output_files_time;  // total nanos reading from output files
@@ -209,4 +210,4 @@ struct PerfContext {
 // if defined(NPERF_CONTEXT), then the pointer is not thread-local
 PerfContext* get_perf_context();
 
-}
+}  // namespace TERARKDB_NAMESPACE

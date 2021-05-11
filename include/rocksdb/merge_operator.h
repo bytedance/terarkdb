@@ -12,9 +12,10 @@
 
 #include "rocksdb/lazy_buffer.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "utilities/util/factory.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Slice;
 class Logger;
@@ -261,4 +262,4 @@ class AssociativeMergeOperator : public MergeOperator {
                     Logger* logger) const override;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

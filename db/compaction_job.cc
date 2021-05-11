@@ -32,11 +32,8 @@
 #pragma GCC diagnostic pop
 #endif
 
-#include <deque>
 #include <functional>
-#include <list>
 #include <memory>
-#include <random>
 #include <set>
 #include <thread>
 #include <utility>
@@ -48,17 +45,13 @@
 #include "db/dbformat.h"
 #include "db/error_handler.h"
 #include "db/event_helpers.h"
-#include "db/log_reader.h"
-#include "db/log_writer.h"
 #include "db/map_builder.h"
 #include "db/memtable.h"
-#include "db/memtable_list.h"
 #include "db/merge_context.h"
 #include "db/merge_helper.h"
 #include "db/range_del_aggregator.h"
 #include "db/version_set.h"
 #include "monitoring/iostats_context_imp.h"
-#include "monitoring/perf_context_imp.h"
 #include "monitoring/thread_status_util.h"
 #include "port/port.h"
 #include "rocksdb/db.h"
@@ -67,7 +60,8 @@
 #include "rocksdb/statistics.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table.h"
-#include "table/block.h"
+#include "rocksdb/table_properties.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block_based_table_factory.h"
 #include "table/get_context.h"
 #include "table/merging_iterator.h"
@@ -80,7 +74,6 @@
 #include "util/filename.h"
 #include "util/log_buffer.h"
 #include "util/logging.h"
-#include "util/mutexlock.h"
 #include "util/random.h"
 #include "util/sst_file_manager_impl.h"
 #include "util/stop_watch.h"
@@ -88,7 +81,7 @@
 #include "util/sync_point.h"
 #include "utilities/util/valvec.hpp"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 const char* GetCompactionReasonString(CompactionReason compaction_reason) {
   switch (compaction_reason) {
@@ -116,8 +109,6 @@ const char* GetCompactionReasonString(CompactionReason compaction_reason) {
       return "FilesMarkedForCompaction";
     case CompactionReason::kBottommostFiles:
       return "BottommostFiles";
-    case CompactionReason::kTtl:
-      return "Ttl";
     case CompactionReason::kFlush:
       return "Flush";
     case CompactionReason::kExternalSstIngestion:
@@ -435,9 +426,7 @@ void CompactionJob::ReportStartedCompaction(Compaction* compaction) {
          compaction->is_manual_compaction() == true);
 
   ThreadStatusUtil::SetThreadOperationProperty(
-      ThreadStatus::COMPACTION_PROP_FLAGS,
-      compaction->is_manual_compaction() +
-          (compaction->deletion_compaction() << 1));
+      ThreadStatus::COMPACTION_PROP_FLAGS, compaction->is_manual_compaction());
 
   ThreadStatusUtil::SetThreadOperationProperty(
       ThreadStatus::COMPACTION_TOTAL_INPUT_BYTES,
@@ -480,7 +469,7 @@ int CompactionJob::Prepare(int sub_compaction_slots) {
                   uint32_t(input_range.size()), c->max_subcompactions()});
     boundaries_.resize(n * 2);
     auto uc = c->column_family_data()->user_comparator();
-    if (n > input_range.size()) {
+    if (n < input_range.size()) {
       std::nth_element(input_range.begin(), input_range.begin() + n,
                        input_range.end(), TERARK_CMP(weight, >));
       input_range.resize(n);
@@ -749,6 +738,7 @@ Status CompactionJob::Run() {
     context.compaction_filter_factory = factory->Name();
   }
   context.blob_config = c->mutable_cf_options()->get_blob_config();
+  context.separation_type = c->separation_type();
   context.table_factory = iopt->table_factory->Name();
   s = iopt->table_factory->GetOptionString(&context.table_factory_options,
                                            "\n");
@@ -791,7 +781,7 @@ Status CompactionJob::Run() {
   context.output_level = c->output_level();
   context.number_levels = iopt->num_levels;
   context.skip_filters =
-      cfd->ioptions()->optimize_filters_for_hits && bottommost_level_;
+      c->mutable_cf_options()->optimize_filters_for_hits && bottommost_level_;
   context.bottommost_level = c->bottommost_level();
   context.allow_ingest_behind = iopt->allow_ingest_behind;
   context.preserve_deletes = iopt->preserve_deletes;
@@ -800,7 +790,8 @@ Status CompactionJob::Run() {
       context.compaction_filter_context.column_family_id;
   collector_context.smallest_user_key = context.smallest_user_key;
   collector_context.largest_user_key = context.largest_user_key;
-  for (auto& collector : *cfd->int_tbl_prop_collector_factories()) {
+  for (auto& collector :
+       *cfd->int_tbl_prop_collector_factories(*c->mutable_cf_options())) {
     std::string param;
     if (collector->NeedSerialize()) {
       collector->Serialize(&param, collector_context);
@@ -852,15 +843,15 @@ Status CompactionJob::Run() {
           output.meta.largest = std::move(file_info.largest);
           output.meta.marked_for_compaction = file_info.marked_for_compaction;
           // output.stat_one = std::move(file_info.stat_one);
-          std::unique_ptr<rocksdb::RandomAccessFile> file;
+          std::unique_ptr<TERARKDB_NAMESPACE::RandomAccessFile> file;
           s = env_->NewRandomAccessFile(fname, &file, env_options_);
           if (!s.ok()) {
             break;
           }
-          std::unique_ptr<rocksdb::RandomAccessFileReader> file_reader(
-              new rocksdb::RandomAccessFileReader(std::move(file), fname,
-                                                  env_));
-          std::unique_ptr<rocksdb::TableReader> reader;
+          std::unique_ptr<TERARKDB_NAMESPACE::RandomAccessFileReader>
+              file_reader(new TERARKDB_NAMESPACE::RandomAccessFileReader(
+                  std::move(file), fname, env_));
+          std::unique_ptr<TERARKDB_NAMESPACE::TableReader> reader;
           TableReaderOptions table_reader_options(
               *c->immutable_cf_options(),
               c->mutable_cf_options()->prefix_extractor.get(), env_options_,
@@ -886,7 +877,20 @@ Status CompactionJob::Run() {
           output.meta.prop.max_read_amp = tp->max_read_amp;
           output.meta.prop.read_amp = tp->read_amp;
           output.meta.prop.dependence = tp->dependence;
-          output.meta.prop.inheritance_chain = tp->inheritance_chain;
+          output.meta.prop.inheritance =
+              InheritanceTreeToSet(tp->inheritance_tree);
+          if (iopt->ttl_extractor_factory != nullptr) {
+            GetCompactionTimePoint(
+                tp->user_collected_properties,
+                &output.meta.prop.earliest_time_begin_compact,
+                &output.meta.prop.latest_time_end_compact);
+            ROCKS_LOG_INFO(
+                db_options_.info_log,
+                "CompactionOutput earliest_time_begin_compact = %" PRIu64
+                ", latest_time_end_compact = %" PRIu64,
+                output.meta.prop.earliest_time_begin_compact,
+                output.meta.prop.latest_time_end_compact);
+          }
           output.finished = true;
           c->AddOutputTableFileNumber(file_number);
         }
@@ -948,7 +952,7 @@ Status CompactionJob::RunSelf() {
       vec_process_arg[i].task_id = int(i);
       vec_process_arg[i].future = vec_process_arg[i].finished.get_future();
       env_->Schedule(&CompactionJob::CallProcessCompaction, &vec_process_arg[i],
-                     rocksdb::Env::LOW, this, nullptr);
+                     TERARKDB_NAMESPACE::Env::LOW, this, nullptr);
     }
     ProcessCompaction(&compact_->sub_compact_states.back());
     for (auto& arg : vec_process_arg) {
@@ -1021,9 +1025,9 @@ Status CompactionJob::VerifyFiles() {
       // Verify that the table is usable
       // We set for_compaction to false and don't OptimizeForCompactionTableRead
       // here because this is a special case after we finish the table building
-      // No matter whether use_direct_io_for_flush_and_compaction is true,
-      // we will regard this verification as user reads since the goal is
-      // to cache it here for further user reads
+      // No matter whether use_direct_io_for_flush_and_compaction is true, we
+      // will regard this verification as user reads since the goal is to cache
+      // it here for further user reads
       auto output_level = compact_->compaction->output_level();
       InternalIterator* iter = cfd->table_cache()->NewIterator(
           ReadOptions(), env_options_, cfd->internal_comparator(),
@@ -1306,7 +1310,6 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   }
 
   auto trans_to_separate = [&](const Slice& key, LazyBuffer& value) {
-    assert(value.file_number() == uint64_t(-1));
     Status status;
     TableBuilder* blob_builder = sub_compact->blob_builder.get();
     FileMetaData* blob_meta = &sub_compact->current_blob_output()->meta;
@@ -1696,7 +1699,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   sub_compact->c_iter.reset();
   input.reset();
   sub_compact->status = status;
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
   assert(sub_compact != nullptr);
@@ -1848,26 +1851,14 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
   if (status.ok()) {
     status = input->status();
   }
-  std::vector<uint64_t> inheritance_chain;
-  size_t raw_chain_length = 0;
-  for (auto& level : *sub_compact->compaction->inputs()) {
-    for (auto f : level.files) {
-      raw_chain_length += f->prop.inheritance_chain.size() + 1;
-      inheritance_chain.push_back(f->fd.GetNumber());
-      for (size_t i = 0; i < f->prop.inheritance_chain.size(); ++i) {
-        if (dependence_map.count(f->prop.inheritance_chain[i]) > 0) {
-          inheritance_chain.insert(inheritance_chain.end(),
-                                   f->prop.inheritance_chain.begin() + i,
-                                   f->prop.inheritance_chain.end());
-          break;
-        }
-      }
-    }
+  std::vector<uint64_t> inheritance_tree;
+  size_t inheritance_tree_pruge_count = 0;
+  if (status.ok()) {
+    status = BuildInheritanceTree(
+        *sub_compact->compaction->inputs(), dependence_map, input_version,
+        &inheritance_tree, &inheritance_tree_pruge_count);
   }
-  std::sort(inheritance_chain.begin(), inheritance_chain.end());
-  assert(std::unique(inheritance_chain.begin(), inheritance_chain.end()) ==
-         inheritance_chain.end());
-  Status s = FinishCompactionOutputBlob(status, sub_compact, inheritance_chain);
+  Status s = FinishCompactionOutputBlob(status, sub_compact, inheritance_tree);
   if (status.ok()) {
     status = s;
   }
@@ -1882,13 +1873,14 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
         " inputs from %zd files. %" PRIu64
         " clear, %.2f%% estimation: [ %" PRIu64 " garbage type, %" PRIu64
         " get not found, %" PRIu64
-        " file number mismatch ], inheritance chain: %" PRIu64 " -> %" PRIu64,
+        " file number mismatch ], inheritance tree: %" PRIu64 " -> %" PRIu64,
         cfd->GetName().c_str(), job_id_, meta.fd.GetNumber(), counter.input,
         files.size(), counter.input - meta.prop.num_entries,
         sub_compact->compaction->num_antiquation() * 100. / counter.input,
         counter.garbage_type, counter.get_not_found,
-        counter.file_number_mismatch, raw_chain_length,
-        inheritance_chain.size());
+        counter.file_number_mismatch,
+        meta.prop.inheritance.size() + inheritance_tree_pruge_count,
+        meta.prop.inheritance.size());
     if ((std::find_if(files.begin(), files.end(),
                       [](FileMetaData* f) {
                         return f->marked_for_compaction;
@@ -2119,6 +2111,18 @@ Status CompactionJob::FinishCompactionOutputFile(
         tp.num_range_deletions > 0 ? 0 : TablePropertyCache::kNoRangeDeletions;
     meta->prop.flags |=
         tp.snapshots.empty() ? 0 : TablePropertyCache::kHasSnapshots;
+
+    if (compact_->compaction->immutable_cf_options()->ttl_extractor_factory !=
+        nullptr) {
+      GetCompactionTimePoint(tp.user_collected_properties,
+                             &meta->prop.earliest_time_begin_compact,
+                             &meta->prop.latest_time_end_compact);
+      ROCKS_LOG_INFO(db_options_.info_log,
+                     "CompactionOutput earliest_time_begin_compact = %" PRIu64
+                     ", latest_time_end_compact = %" PRIu64,
+                     meta->prop.earliest_time_begin_compact,
+                     meta->prop.latest_time_end_compact);
+    }
   }
 
   if (s.ok() && tp.num_entries == 0 && tp.num_range_deletions == 0) {
@@ -2192,7 +2196,7 @@ Status CompactionJob::FinishCompactionOutputFile(
 
 Status CompactionJob::FinishCompactionOutputBlob(
     const Status& input_status, SubcompactionState* sub_compact,
-    const std::vector<uint64_t>& inheritance_chain) {
+    const std::vector<uint64_t>& inheritance_tree) {
   AutoThreadOperationStageUpdater stage_updater(
       ThreadStatus::STAGE_COMPACTION_SYNC_FILE);
   assert(sub_compact != nullptr);
@@ -2213,9 +2217,11 @@ Status CompactionJob::FinishCompactionOutputBlob(
   if (s.ok()) {
     meta->marked_for_compaction = sub_compact->blob_builder->NeedCompact();
     meta->prop.num_entries = sub_compact->blob_builder->NumEntries();
-    assert(std::is_sorted(inheritance_chain.begin(), inheritance_chain.end()));
-    meta->prop.inheritance_chain = inheritance_chain;
-    s = sub_compact->blob_builder->Finish(&meta->prop, nullptr);
+    meta->prop.inheritance = InheritanceTreeToSet(inheritance_tree);
+    assert(std::is_sorted(meta->prop.inheritance.begin(),
+                          meta->prop.inheritance.end()));
+    s = sub_compact->blob_builder->Finish(&meta->prop, nullptr,
+                                          &inheritance_tree);
   } else {
     sub_compact->blob_builder->Abandon();
   }
@@ -2420,11 +2426,13 @@ Status CompactionJob::InstallCompactionResults(
       }
     }
     db_mutex_->Unlock();
-    auto s = map_builder.Build(*compaction->inputs(), deleted_range,
-                               added_files, compaction->output_level(),
-                               compaction->output_path_id(), cfd,
-                               compaction->input_version(),
-                               compact_->compaction->edit(), &file_meta, &prop);
+    bool optimize_range_deletion = mutable_cf_options.optimize_range_deletion &&
+                                   !compaction->bottommost_level();
+    auto s = map_builder.Build(
+        *compaction->inputs(), deleted_range, added_files,
+        compaction->output_level(), compaction->output_path_id(), cfd,
+        optimize_range_deletion, compaction->input_version(),
+        compact_->compaction->edit(), &file_meta, &prop);
     if (s.ok() && file_meta.fd.file_size > 0) {
       // test map sst
       DependenceMap empty_dependence_map;
@@ -2586,8 +2594,9 @@ Status CompactionJob::OpenCompactionOutputFile(
   // If the Column family flag is to only optimize filters for hits,
   // we can skip creating filters if this is the bottommost_level where
   // data is going to be found
-  bool skip_filters =
-      cfd->ioptions()->optimize_filters_for_hits && bottommost_level_;
+  bool skip_filters = sub_compact->compaction->mutable_cf_options()
+                          ->optimize_filters_for_hits &&
+                      bottommost_level_;
 
   uint64_t output_file_creation_time =
       sub_compact->compaction->MaxInputFileCreationTime();
@@ -2606,10 +2615,12 @@ Status CompactionJob::OpenCompactionOutputFile(
   }
 
   auto c = sub_compact->compaction;
+  auto& moptions = *c->mutable_cf_options();
   sub_compact->builder.reset(NewTableBuilder(
-      *cfd->ioptions(), *c->mutable_cf_options(), cfd->internal_comparator(),
-      cfd->int_tbl_prop_collector_factories(), cfd->GetID(), cfd->GetName(),
-      sub_compact->outfile.get(), sub_compact->compaction->output_compression(),
+      *cfd->ioptions(), moptions, cfd->internal_comparator(),
+      cfd->int_tbl_prop_collector_factories(moptions), cfd->GetID(),
+      cfd->GetName(), sub_compact->outfile.get(),
+      sub_compact->compaction->output_compression(),
       sub_compact->compaction->output_compression_opts(),
       sub_compact->compaction->output_level(), c->compaction_load(),
       &sub_compact->compression_dict, skip_filters, output_file_creation_time,
@@ -2693,11 +2704,12 @@ Status CompactionJob::OpenCompactionOutputBlob(
   }
 
   auto c = sub_compact->compaction;
+  auto& moptions = *c->mutable_cf_options();
   // skip_filters always false, Blob all hits
   sub_compact->blob_builder.reset(NewTableBuilder(
-      *cfd->ioptions(), *c->mutable_cf_options(), cfd->internal_comparator(),
-      cfd->int_tbl_prop_collector_factories(), cfd->GetID(), cfd->GetName(),
-      sub_compact->blob_outfile.get(),
+      *cfd->ioptions(), moptions, cfd->internal_comparator(),
+      cfd->int_tbl_prop_collector_factories_for_blob(moptions), cfd->GetID(),
+      cfd->GetName(), sub_compact->blob_outfile.get(),
       sub_compact->compaction->output_compression(),
       sub_compact->compaction->output_compression_opts(), -1 /* level */,
       c->compaction_load(), nullptr, true /* skip_filters */,
@@ -2926,4 +2938,4 @@ bool ReapMatureAction(const void* obj, std::string* result) {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -4,32 +4,35 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 // This file implements the callback "bridge" between Java and C++ for
-// rocksdb::CompactionFilterFactory.
+// TERARKDB_NAMESPACE::CompactionFilterFactory.
 
 #ifndef JAVA_ROCKSJNI_COMPACTION_FILTER_FACTORY_JNICALLBACK_H_
 #define JAVA_ROCKSJNI_COMPACTION_FILTER_FACTORY_JNICALLBACK_H_
 
 #include <jni.h>
+
 #include <memory>
 
 #include "rocksdb/compaction_filter.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksjni/jnicallback.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
-class CompactionFilterFactoryJniCallback : public JniCallback, public CompactionFilterFactory {
+class CompactionFilterFactoryJniCallback : public JniCallback,
+                                           public CompactionFilterFactory {
  public:
-    CompactionFilterFactoryJniCallback(
-        JNIEnv* env, jobject jcompaction_filter_factory);
-    virtual std::unique_ptr<CompactionFilter> CreateCompactionFilter(
+  CompactionFilterFactoryJniCallback(JNIEnv* env,
+                                     jobject jcompaction_filter_factory);
+  virtual std::unique_ptr<CompactionFilter> CreateCompactionFilter(
       const CompactionFilter::Context& context);
-    virtual const char* Name() const;
+  virtual const char* Name() const;
 
  private:
-    std::unique_ptr<const char[]> m_name;
-    jmethodID m_jcreate_compaction_filter_methodid;
+  std::unique_ptr<const char[]> m_name;
+  jmethodID m_jcreate_compaction_filter_methodid;
 };
 
-}  //namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // JAVA_ROCKSJNI_COMPACTION_FILTER_FACTORY_JNICALLBACK_H_

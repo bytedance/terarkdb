@@ -14,6 +14,7 @@
 #include "db/version_edit.h"
 #include "monitoring/perf_context_imp.h"
 #include "rocksdb/statistics.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/get_context.h"
 #include "table/internal_iterator.h"
 #include "table/iterator_wrapper.h"
@@ -27,7 +28,7 @@
 #include "util/stop_watch.h"
 #include "util/sync_point.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 
@@ -637,4 +638,4 @@ void TableCache::TEST_AddMockTableReader(TableReader* table_reader,
   s = cache_->Insert(key, table_reader, 1, &DeleteEntry<TableReader>);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

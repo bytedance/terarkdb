@@ -11,7 +11,9 @@
 #include <stdexcept>
 #include <vector>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+
+namespace TERARKDB_NAMESPACE {
 
 #ifdef ROCKSDB_LITE
 template <class T, size_t kSize = 8>
@@ -64,7 +66,7 @@ class autovector {
     typedef std::random_access_iterator_tag iterator_category;
 
     iterator_impl(TAutoVector* vect, size_t index)
-        : vect_(vect), index_(index) {};
+        : vect_(vect), index_(index){};
     iterator_impl(const iterator_impl&) = default;
     ~iterator_impl() {}
     iterator_impl& operator=(const iterator_impl&) = default;
@@ -139,7 +141,6 @@ class autovector {
       assert(vect_->size() >= index_);
       return &(*vect_)[index_];
     }
-
 
     // -- Logical Operators
     bool operator==(const self_type& other) const {
@@ -340,4 +341,4 @@ autovector<T, kSize>& autovector<T, kSize>::assign(const autovector& other) {
   return *this;
 }
 #endif  // ROCKSDB_LITE
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

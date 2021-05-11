@@ -6,9 +6,11 @@
 #pragma once
 #include "monitoring/perf_step_timer.h"
 #include "rocksdb/perf_context.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/stop_watch.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
+
 #if defined(NPERF_CONTEXT) || !defined(ROCKSDB_SUPPORT_THREAD_LOCAL)
 extern PerfContext perf_context;
 #else
@@ -60,21 +62,20 @@ extern thread_local PerfContext perf_context;
   }
 
 // Increase metric value
-#define PERF_COUNTER_BY_LEVEL_ADD(metric, value, level)                      \
-  if (perf_level >= PerfLevel::kEnableCount &&                               \
-      perf_context.per_level_perf_context_enabled &&                         \
-      perf_context.level_to_perf_context) {                                  \
-    if ((*(perf_context.level_to_perf_context)).find(level) !=               \
-        (*(perf_context.level_to_perf_context)).end()) {                     \
-      (*(perf_context.level_to_perf_context))[level].metric += value;        \
-    }                                                                        \
-    else {                                                                   \
-      PerfContextByLevel empty_context;                                      \
-      (*(perf_context.level_to_perf_context))[level] = empty_context;        \
-      (*(perf_context.level_to_perf_context))[level].metric += value;       \
-    }                                                                        \
-  }                                                                          \
+#define PERF_COUNTER_BY_LEVEL_ADD(metric, value, level)               \
+  if (perf_level >= PerfLevel::kEnableCount &&                        \
+      perf_context.per_level_perf_context_enabled &&                  \
+      perf_context.level_to_perf_context) {                           \
+    if ((*(perf_context.level_to_perf_context)).find(level) !=        \
+        (*(perf_context.level_to_perf_context)).end()) {              \
+      (*(perf_context.level_to_perf_context))[level].metric += value; \
+    } else {                                                          \
+      PerfContextByLevel empty_context;                               \
+      (*(perf_context.level_to_perf_context))[level] = empty_context; \
+      (*(perf_context.level_to_perf_context))[level].metric += value; \
+    }                                                                 \
+  }
 
 #endif
 
-}
+}  // namespace TERARKDB_NAMESPACE

@@ -9,7 +9,6 @@
 
 #include "db/db_iter.h"
 
-#include <iostream>
 #include <limits>
 #include <string>
 
@@ -23,16 +22,14 @@
 #include "rocksdb/iterator.h"
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 #include "util/arena.h"
-#include "util/filename.h"
 #include "util/logging.h"
-#include "util/mutexlock.h"
 #include "util/string_util.h"
-#include "util/trace_replay.h"
 #include "util/util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 #if 0
 static void DumpInternalIter(Iterator* iter) {
@@ -432,7 +429,7 @@ bool DBIter::FindNextUserEntryInternal(bool skipping, bool prefix_check) {
   //                         greater than that,
   //  - none of the above  : saved_key_ can contain anything, it doesn't matter.
   uint64_t num_skipped = 0;
-
+  bool reseek_done = false;
   do {
     if (!ParseKey(&ikey_)) {
       return false;
@@ -460,6 +457,7 @@ bool DBIter::FindNextUserEntryInternal(bool skipping, bool prefix_check) {
         PERF_COUNTER_ADD(internal_key_skipped_count, 1);
       } else {
         num_skipped = 0;
+        reseek_done = false;
         switch (ikey_.type) {
           case kTypeDeletion:
           case kTypeSingleDeletion:
@@ -503,6 +501,7 @@ bool DBIter::FindNextUserEntryInternal(bool skipping, bool prefix_check) {
                 // they are hidden by this deletion.
                 skipping = true;
                 num_skipped = 0;
+                reseek_done = false;
                 PERF_COUNTER_ADD(internal_delete_skipped_count, 1);
               } else {
                 value_ = GetValue(ikey_, kTypeValueIndex);
@@ -520,6 +519,7 @@ bool DBIter::FindNextUserEntryInternal(bool skipping, bool prefix_check) {
               // they are hidden by this deletion.
               skipping = true;
               num_skipped = 0;
+              reseek_done = false;
               PERF_COUNTER_ADD(internal_delete_skipped_count, 1);
             } else {
               // By now, we are sure the current ikey is going to yield a
@@ -548,13 +548,15 @@ bool DBIter::FindNextUserEntryInternal(bool skipping, bool prefix_check) {
         saved_key_.SetUserKey(ikey_.user_key);
         skipping = false;
         num_skipped = 0;
+        reseek_done = false;
       }
     }
 
     // If we have sequentially iterated via numerous equal keys, then it's
     // better to seek so that we can avoid too many key comparisons.
-    if (num_skipped > max_skip_ && CanReseekToSkip()) {
+    if (num_skipped > max_skip_ && !reseek_done) {
       num_skipped = 0;
+      reseek_done = true;
       std::string last_key;
       if (skipping) {
         // We're looking for the next user-key but all we see are the same
@@ -575,6 +577,8 @@ bool DBIter::FindNextUserEntryInternal(bool skipping, bool prefix_check) {
                                             kValueTypeForSeek));
       }
       iter_->Seek(last_key);
+      TEST_SYNC_POINT_CALLBACK("DBIter::FindNextUserEntryInternal::Reseek",
+                               &last_key);
       RecordTick(statistics_, NUMBER_OF_RESEEKS_IN_ITERATION);
     } else {
       iter_->Next();
@@ -1522,4 +1526,4 @@ ArenaWrappedDBIter* NewArenaWrappedDbIterator(
   return iter;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -38,6 +38,7 @@
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/types.h"
 #include "table/merging_iterator.h"
 #include "table/table_reader.h"
@@ -71,15 +72,15 @@ AJSON(AJsonStatus, code, subcode, sev, state);
 namespace ajson {
 #ifdef USE_AJSON
 template <>
-struct json_impl<rocksdb::Status, void> {
-  static inline void read(reader& rd, rocksdb::Status& v) {
+struct json_impl<TERARKDB_NAMESPACE::Status, void> {
+  static inline void read(reader& rd, TERARKDB_NAMESPACE::Status& v) {
     AJsonStatus s;
     json_impl<AJsonStatus>::read(rd, s);
-    v = rocksdb::Status(s.code, s.subcode, s.sev,
-                        s.state.empty() ? nullptr : s.state.c_str());
+    v = TERARKDB_NAMESPACE::Status(s.code, s.subcode, s.sev,
+                                   s.state.empty() ? nullptr : s.state.c_str());
   }
   template <typename write_ty>
-  static inline void write(write_ty& wt, rocksdb::Status const& v) {
+  static inline void write(write_ty& wt, TERARKDB_NAMESPACE::Status const& v) {
     AJsonStatus s = {v.code(), v.subcode(), v.severity(),
                      v.getState() == nullptr ? std::string() : v.getState()};
     json_impl<AJsonStatus>::template write<write_ty>(wt, s);
@@ -87,9 +88,11 @@ struct json_impl<rocksdb::Status, void> {
 };
 
 template <>
-struct json_impl<rocksdb::CompactionWorkerContext::EncodedString, void> {
-  static inline void read(reader& rd,
-                          rocksdb::CompactionWorkerContext::EncodedString& v) {
+struct json_impl<TERARKDB_NAMESPACE::CompactionWorkerContext::EncodedString,
+                 void> {
+  static inline void read(
+      reader& rd,
+      TERARKDB_NAMESPACE::CompactionWorkerContext::EncodedString& v) {
     std::string s;
     json_impl<std::string>::read(rd, s);
     v.data.resize(s.size() / 2);
@@ -100,22 +103,25 @@ struct json_impl<rocksdb::CompactionWorkerContext::EncodedString, void> {
   }
   template <typename write_ty>
   static inline void write(
-      write_ty& wt, rocksdb::CompactionWorkerContext::EncodedString const& v) {
+      write_ty& wt,
+      TERARKDB_NAMESPACE::CompactionWorkerContext::EncodedString const& v) {
     json_impl<std::string>::template write<write_ty>(
-        wt, rocksdb::Slice(v.data).ToString(true));
+        wt, TERARKDB_NAMESPACE::Slice(v.data).ToString(true));
   }
 };
 
 template <>
-struct json_impl<rocksdb::InternalKey, void> {
-  static inline void read(reader& rd, rocksdb::InternalKey& v) {
-    rocksdb::CompactionWorkerContext::EncodedString s;
-    json_impl<rocksdb::CompactionWorkerContext::EncodedString>::read(rd, s);
+struct json_impl<TERARKDB_NAMESPACE::InternalKey, void> {
+  static inline void read(reader& rd, TERARKDB_NAMESPACE::InternalKey& v) {
+    TERARKDB_NAMESPACE::CompactionWorkerContext::EncodedString s;
+    json_impl<TERARKDB_NAMESPACE::CompactionWorkerContext::EncodedString>::read(
+        rd, s);
     *v.rep() = std::move(s.data);
   }
   template <typename write_ty>
-  static inline void write(write_ty& wt, rocksdb::InternalKey const& v) {
-    rocksdb::Slice s(*v.rep());
+  static inline void write(write_ty& wt,
+                           TERARKDB_NAMESPACE::InternalKey const& v) {
+    TERARKDB_NAMESPACE::Slice s(*v.rep());
     json_impl<std::string>::template write<write_ty>(wt, s.ToString(true));
   }
 };
@@ -126,14 +132,14 @@ void load_from_buff(T& x, std::string& data) {
 }
 
 template <class T>
-void load_from_buff(T& x, const rocksdb::Slice& data) {
+void load_from_buff(T& x, const TERARKDB_NAMESPACE::Slice& data) {
   load_from_buff(x, &data.ToString()[0], data.size());
 }
 
 #else  // USE_AJSON
 
 template <class T>
-void load_from_buff(T& x, const rocksdb::Slice& data) {
+void load_from_buff(T& x, const TERARKDB_NAMESPACE::Slice& data) {
   using namespace terark;
   LittleEndianDataInput<MemIO> dio;
   dio.set((char*)data.data(), data.size());
@@ -154,20 +160,20 @@ void save_to(string_stream& ss, const T& x) {
 }  // namespace ajson
 
 #ifdef USE_AJSON
-using namespace rocksdb;
+using namespace TERARKDB_NAMESPACE;
 #else
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 template <class DataIO>
-void DataIO_loadObject(DataIO& dio, rocksdb::Status& x) {
+void DataIO_loadObject(DataIO& dio, TERARKDB_NAMESPACE::Status& x) {
   AJsonStatus s;
   dio >> s;
-  x = rocksdb::Status(s.code, s.subcode, s.sev,
-                      s.state.empty() ? nullptr : s.state.c_str());
+  x = TERARKDB_NAMESPACE::Status(s.code, s.subcode, s.sev,
+                                 s.state.empty() ? nullptr : s.state.c_str());
 }
 
 template <class DataIO>
-void DataIO_saveObject(DataIO& dio, const rocksdb::Status& v) {
+void DataIO_saveObject(DataIO& dio, const TERARKDB_NAMESPACE::Status& v) {
   AJsonStatus s = {v.code(), v.subcode(), v.severity(),
                    v.getState() == nullptr ? std::string() : v.getState()};
   dio << s;
@@ -213,7 +219,7 @@ AJSON(FileDescriptor, packed_number_and_path_id, file_size, smallest_seqno,
 
 AJSON(TablePropertyCache, num_entries, num_deletions, raw_key_size,
       raw_value_size, flags, purpose, max_read_amp, read_amp, dependence,
-      inheritance_chain);
+      inheritance);
 
 AJSON(FileMetaData, fd, smallest, largest, prop);
 
@@ -232,9 +238,9 @@ AJSON(CompactionWorkerContext, user_comparator, merge_operator,
       merge_operator_data, value_meta_extractor_factory,
       value_meta_extractor_factory_options, compaction_filter,
       compaction_filter_factory, compaction_filter_context,
-      compaction_filter_data, blob_config, table_factory, table_factory_options,
-      bloom_locality, cf_paths, prefix_extractor, prefix_extractor_options,
-      has_start, has_end, start, end, last_sequence,
+      compaction_filter_data, blob_config, separation_type, table_factory,
+      table_factory_options, bloom_locality, cf_paths, prefix_extractor,
+      prefix_extractor_options, has_start, has_end, start, end, last_sequence,
       earliest_write_conflict_snapshot, preserve_deletes_seqnum, file_metadata,
       inputs, cf_name, target_file_size, compression, compression_opts,
       existing_snapshots, smallest_user_key, largest_user_key, level,
@@ -243,10 +249,10 @@ AJSON(CompactionWorkerContext, user_comparator, merge_operator,
 
 #ifdef USE_AJSON
 #else
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 template <class T>
 using STMap = std::unordered_map<std::string, std::shared_ptr<T>>;
@@ -361,6 +367,7 @@ class RemoteCompactionProxy : public CompactionIterator::CompactionProxy {
  public:
   RemoteCompactionProxy(const CompactionWorkerContext* context)
       : CompactionProxy(),
+        separation_type_(static_cast<SeparationType>(context->separation_type)),
         largest_user_key_(context->largest_user_key.data),
         level_(context->level),
         number_levels_(context->number_levels),
@@ -368,6 +375,7 @@ class RemoteCompactionProxy : public CompactionIterator::CompactionProxy {
         allow_ingest_behind_(context->allow_ingest_behind),
         preserve_deletes_(context->preserve_deletes) {}
 
+  SeparationType separation_type() const override { return separation_type_; }
   int level(size_t /*compaction_input_level*/ = 0) const override {
     return level_;
   }
@@ -383,6 +391,7 @@ class RemoteCompactionProxy : public CompactionIterator::CompactionProxy {
   bool preserve_deletes() const override { return preserve_deletes_; }
 
  protected:
+  SeparationType separation_type_;
   Slice largest_user_key_;
   int level_, number_levels_;
   bool bottommost_level_, allow_ingest_behind_, preserve_deletes_;
@@ -471,7 +480,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
     }
   }
   ImmutableCFOptions immutable_cf_options(immutable_db_options, cf_options);
-  MutableCFOptions mutable_cf_options(cf_options);
+  MutableCFOptions mutable_cf_options(cf_options, rep_->env);
 
   struct CollectorFactoriesHolder {
     std::vector<std::unique_ptr<IntTblPropCollectorFactory>> data;
@@ -497,6 +506,14 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
     int_tbl_prop_collector_factories.data.emplace_back(
         new UserKeyTablePropertiesCollectorFactory(
             user_fac->shared_from_this()));
+  }
+  if (immutable_cf_options.ttl_extractor_factory != nullptr) {
+    // What this extractor will do is still unknown
+    int_tbl_prop_collector_factories.data.emplace_back(
+        NewTtlIntTblPropCollectorFactory(
+            immutable_cf_options.ttl_extractor_factory, rep_->env,
+            mutable_cf_options.ttl_gc_ratio,
+            mutable_cf_options.ttl_max_scan_gap));
   }
   const Slice* start = nullptr;
   const Slice* end = nullptr;
@@ -1166,4 +1183,4 @@ std::shared_ptr<CompactionDispatcher> NewCommandLineCompactionDispatcher(
   return std::make_shared<CommandLineCompactionDispatcher>(std::move(cmd));
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

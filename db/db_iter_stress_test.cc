@@ -8,6 +8,7 @@
 #include "rocksdb/comparator.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/random.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
@@ -29,7 +30,7 @@ bool FLAGS_verbose = false;
 
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class DBIteratorStressTest : public testing::Test {
  public:
@@ -473,12 +474,11 @@ TEST_F(DBIteratorStressTest, StressTest) {
                 std::cout << "entries:";
                 for (size_t i = 0; i < data.entries.size(); ++i) {
                   Entry& e = data.entries[i];
-                  std::cout
-                      << "\n  idx " << i << ": \"" << e.key << "\": \""
-                      << e.value << "\" seq: " << e.sequence << " type: "
-                      << (e.type == kTypeValue
-                              ? "val"
-                              : e.type == kTypeDeletion ? "del" : "merge");
+                  std::cout << "\n  idx " << i << ": \"" << e.key << "\": \""
+                            << e.value << "\" seq: " << e.sequence << " type: "
+                            << (e.type == kTypeValue      ? "val"
+                                : e.type == kTypeDeletion ? "del"
+                                                          : "merge");
                 }
                 std::cout << std::endl;
               }
@@ -640,7 +640,7 @@ TEST_F(DBIteratorStressTest, StressTest) {
             << "\n  mutated on the fly: " << num_recently_removed << std::endl;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

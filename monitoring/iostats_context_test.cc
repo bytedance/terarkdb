@@ -4,9 +4,11 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include "rocksdb/iostats_context.h"
+
+#include "rocksdb/terark_namespace.h"
 #include "util/testharness.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 TEST(IOStatsContextTest, ToString) {
   get_iostats_context()->Reset();
@@ -21,7 +23,7 @@ TEST(IOStatsContextTest, ToString) {
   ASSERT_NE(std::string::npos, zero_excluded.find("= 12345"));
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

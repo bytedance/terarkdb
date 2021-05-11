@@ -3,21 +3,24 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 //
+#include "utilities/persistent_cache/hash_table.h"
+
 #include <stdlib.h>
+
 #include <iostream>
 #include <set>
 #include <string>
 
 #include "db/db_test_util.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/arena.h"
 #include "util/random.h"
 #include "util/testharness.h"
-#include "utilities/persistent_cache/hash_table.h"
 #include "utilities/persistent_cache/hash_table_evictable.h"
 
 #ifndef ROCKSDB_LITE
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct HashTableTest : public testing::Test {
   ~HashTableTest() { map_.Clear(&HashTableTest::ClearNode); }
@@ -149,7 +152,7 @@ TEST_F(EvictableHashTableTest, TestEvict) {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif
 
 int main(int argc, char** argv) {

@@ -18,6 +18,7 @@
 
 #include "port/likely.h"
 #include "port/port.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/mutexlock.h"
 
 #define MY_USE_FIBER_LOCAL_STORAGE 0  // drop boost lib
@@ -26,7 +27,7 @@
 #include <boost/fiber/fss.hpp>
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct Entry {
   Entry() : ptr(nullptr) {}
@@ -414,4 +415,4 @@ void ThreadLocalPtr::Fold(FoldFunc func, void* res) {
   Instance()->Fold(id_, func, res);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

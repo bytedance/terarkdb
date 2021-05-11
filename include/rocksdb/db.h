@@ -17,14 +17,13 @@
 #include <unordered_map>
 #include <vector>
 
-//#include <terark/thread/fiber_future.hpp>
-//#include <boost/fiber/future.hpp>
 #include "rocksdb/iterator.h"
 #include "rocksdb/listener.h"
 #include "rocksdb/metadata.h"
 #include "rocksdb/options.h"
 #include "rocksdb/snapshot.h"
 #include "rocksdb/sst_file_writer.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/thread_status.h"
 #include "rocksdb/transaction_log.h"
 #include "rocksdb/types.h"
@@ -49,7 +48,7 @@ class future;  // forward declaration
 }  // namespace boost
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 using std::future;
 struct Options;
@@ -65,11 +64,13 @@ struct ExternalSstFileInfo;
 class WriteBatch;
 class Env;
 class EventListener;
+class StatsHistoryIterator;
 class TraceWriter;
 
 using std::unique_ptr;
 
 extern const std::string kDefaultColumnFamilyName;
+extern const std::string kPersistentStatsColumnFamilyName;
 struct ColumnFamilyDescriptor {
   std::string name;
   ColumnFamilyOptions options;
@@ -176,7 +177,7 @@ class DB {
   // read only, you can specify only a subset of column families in the
   // database that should be opened. However, you always need to specify default
   // column family. The default column family name is 'default' and it's stored
-  // in rocksdb::kDefaultColumnFamilyName
+  // in TERARKDB_NAMESPACE::kDefaultColumnFamilyName
   //
   // Not supported in ROCKSDB_LITE, in which case the function will
   // return Status::NotSupported.
@@ -194,7 +195,7 @@ class DB {
   // ListColumnFamilies(). Also, you can open only a subset of column families
   // for read-only access.
   // The default column family name is 'default' and it's stored
-  // in rocksdb::kDefaultColumnFamilyName.
+  // in TERARKDB_NAMESPACE::kDefaultColumnFamilyName.
   // If everything is OK, handles will on return be the same size
   // as column_families --- handles[i] will be a handle that you
   // will use to operate on column family column_family[i].
@@ -680,12 +681,6 @@ class DB {
     //  "rocksdb.is-write-stopped" - Return 1 if write has been stopped.
     static const std::string kIsWriteStopped;
 
-    //  "rocksdb.estimate-oldest-key-time" - returns an estimation of
-    //      oldest key timestamp in the DB. Currently only available for
-    //      FIFO compaction with
-    //      compaction_options_fifo.allow_compaction = false.
-    static const std::string kEstimateOldestKeyTime;
-
     //  "rocksdb.block-cache-capacity" - returns block cache capacity.
     static const std::string kBlockCacheCapacity;
 
@@ -752,7 +747,6 @@ class DB {
   //  "rocksdb.num-running-flushes"
   //  "rocksdb.actual-delayed-write-rate"
   //  "rocksdb.is-write-stopped"
-  //  "rocksdb.estimate-oldest-key-time"
   //  "rocksdb.block-cache-capacity"
   //  "rocksdb.block-cache-usage"
   //  "rocksdb.block-cache-pinned-usage"
@@ -1234,6 +1228,13 @@ class DB {
   // be set properly
   virtual Status GetDbIdentity(std::string& identity) const = 0;
 
+  // Return a unique identifier for each DB object that is opened
+  // This DB session ID should be unique among all open DB instances on all
+  // hosts, and should be unique among re-openings of the same or other DBs.
+  // (Two open DBs have the same identity from other function GetDbIdentity when
+  // one is physically copied from the other.)
+  virtual Status GetDbSessionId(std::string& session_id) const = 0;
+
   // Returns default column family handle
   virtual ColumnFamilyHandle* DefaultColumnFamily() const = 0;
 
@@ -1279,6 +1280,15 @@ class DB {
   // Needed for StackableDB
   virtual DB* GetRootDB() { return this; }
 
+  // Given a window [start_time, end_time), setup a StatsHistoryIterator to
+  // access stats history. Note the start_time and end_time are epoch time
+  // measured in seconds, and end_time is an exclusive bound.
+  virtual Status GetStatsHistory(
+      uint64_t /*start_time*/, uint64_t /*end_time*/,
+      std::unique_ptr<StatsHistoryIterator>* /*stats_iterator*/) {
+    return Status::NotSupported("GetStatsHistory() is not implemented.");
+  }
+
  private:
   // No copying allowed
   DB(const DB&);
@@ -1316,4 +1326,4 @@ Status RepairDB(const std::string& dbname, const Options& options);
 
 #endif
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

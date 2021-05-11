@@ -35,9 +35,9 @@ template <class ProductPtr, class... CreatorArgs>
 class Factoryable {
  public:
   virtual ~Factoryable();
-  static ProductPtr create(rocksdb::Slice name, CreatorArgs...);
+  static ProductPtr create(TERARKDB_NAMESPACE::Slice name, CreatorArgs...);
 
-  rocksdb::Slice reg_name() const;
+  TERARKDB_NAMESPACE::Slice reg_name() const;
 
 #ifdef BOOSTLIB
   struct AutoReg : boost::noncopyable {
@@ -45,7 +45,7 @@ class Factoryable {
   struct AutoReg : boost::noncopyable {
 #endif
     typedef function<ProductPtr(CreatorArgs...)> CreatorFunc;
-    AutoReg(rocksdb::Slice name, CreatorFunc creator, const std::type_info&);
+    AutoReg(TERARKDB_NAMESPACE::Slice name, CreatorFunc creator, const std::type_info&);
     ~AutoReg();
     std::string m_name;
     std::type_index m_type_idx;
@@ -114,7 +114,7 @@ struct Factoryable<ProductPtr, CreatorArgs...>::AutoReg::Impl {
 
 template <class ProductPtr, class... CreatorArgs>
 Factoryable<ProductPtr, CreatorArgs...>::AutoReg::AutoReg(
-    rocksdb::Slice name, CreatorFunc creator, const std::type_info& ti)
+    TERARKDB_NAMESPACE::Slice name, CreatorFunc creator, const std::type_info& ti)
     : m_name(name.ToString()), m_type_idx(ti) {
   auto& imp = Impl::s_singleton();
   auto& func_map = imp.func_map;
@@ -126,7 +126,7 @@ Factoryable<ProductPtr, CreatorArgs...>::AutoReg::AutoReg(
   }
   if (!imp.type_map.emplace(ti, name.ToString()).second) {
 #if defined(TERARK_FACTORY_WARN_ON_DUP_NAME)
-    rocksdb::Slice oldname = imp.type_map.val(ib.first);
+    TERARKDB_NAMESPACE::Slice oldname = imp.type_map.val(ib.first);
     fprintf(stderr,
             "WARN: %s: dup name: {old=\"%.*s\", new=\"%.*s\"} "
             "for type: %s, new name ignored\n",
@@ -159,7 +159,7 @@ Factoryable<ProductPtr, CreatorArgs...>::AutoReg::~AutoReg() {
 
 template <class ProductPtr, class... CreatorArgs>
 ProductPtr Factoryable<ProductPtr, CreatorArgs...>::create(
-    rocksdb::Slice name, CreatorArgs... args) {
+    TERARKDB_NAMESPACE::Slice name, CreatorArgs... args) {
   auto& imp = AutoReg::Impl::s_singleton();
   auto& func_map = imp.func_map;
   imp.mtx.lock();
@@ -175,9 +175,9 @@ ProductPtr Factoryable<ProductPtr, CreatorArgs...>::create(
 }
 
 template <class ProductPtr, class... CreatorArgs>
-rocksdb::Slice Factoryable<ProductPtr, CreatorArgs...>::reg_name() const {
+TERARKDB_NAMESPACE::Slice Factoryable<ProductPtr, CreatorArgs...>::reg_name() const {
   auto& imp = AutoReg::Impl::s_singleton();
-  rocksdb::Slice name;
+  TERARKDB_NAMESPACE::Slice name;
   imp.mtx.lock();
   auto i = imp.type_map.find(std::type_index(typeid(*this)));
   if (imp.type_map.end() != i) {

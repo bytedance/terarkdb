@@ -4,7 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 // This file implements the "bridge" between Java and C++ and enables
-// calling c++ rocksdb::Env methods from Java side.
+// calling c++ TERARKDB_NAMESPACE::Env methods from Java side.
 
 #include "rocksdb/env.h"
 #include "include/org_rocksdb_Env.h"
@@ -18,7 +18,7 @@
  */
 jlong Java_org_rocksdb_Env_getDefaultEnvInternal(JNIEnv* /*env*/,
                                                  jclass /*jclazz*/) {
-  return reinterpret_cast<jlong>(rocksdb::Env::Default());
+  return reinterpret_cast<jlong>(TERARKDB_NAMESPACE::Env::Default());
 }
 
 /*
@@ -29,13 +29,13 @@ jlong Java_org_rocksdb_Env_getDefaultEnvInternal(JNIEnv* /*env*/,
 void Java_org_rocksdb_Env_setBackgroundThreads(JNIEnv* /*env*/,
                                                jobject /*jobj*/, jlong jhandle,
                                                jint num, jint priority) {
-  auto* rocks_env = reinterpret_cast<rocksdb::Env*>(jhandle);
+  auto* rocks_env = reinterpret_cast<TERARKDB_NAMESPACE::Env*>(jhandle);
   switch (priority) {
     case org_rocksdb_Env_FLUSH_POOL:
-      rocks_env->SetBackgroundThreads(num, rocksdb::Env::Priority::LOW);
+      rocks_env->SetBackgroundThreads(num, TERARKDB_NAMESPACE::Env::Priority::LOW);
       break;
     case org_rocksdb_Env_COMPACTION_POOL:
-      rocks_env->SetBackgroundThreads(num, rocksdb::Env::Priority::HIGH);
+      rocks_env->SetBackgroundThreads(num, TERARKDB_NAMESPACE::Env::Priority::HIGH);
       break;
   }
 }
@@ -48,12 +48,12 @@ void Java_org_rocksdb_Env_setBackgroundThreads(JNIEnv* /*env*/,
 jint Java_org_rocksdb_Env_getThreadPoolQueueLen(JNIEnv* /*env*/,
                                                 jobject /*jobj*/, jlong jhandle,
                                                 jint pool_id) {
-  auto* rocks_env = reinterpret_cast<rocksdb::Env*>(jhandle);
+  auto* rocks_env = reinterpret_cast<TERARKDB_NAMESPACE::Env*>(jhandle);
   switch (pool_id) {
     case org_rocksdb_RocksEnv_FLUSH_POOL:
-      return rocks_env->GetThreadPoolQueueLen(rocksdb::Env::Priority::LOW);
+      return rocks_env->GetThreadPoolQueueLen(TERARKDB_NAMESPACE::Env::Priority::LOW);
     case org_rocksdb_RocksEnv_COMPACTION_POOL:
-      return rocks_env->GetThreadPoolQueueLen(rocksdb::Env::Priority::HIGH);
+      return rocks_env->GetThreadPoolQueueLen(TERARKDB_NAMESPACE::Env::Priority::HIGH);
   }
   return 0;
 }
@@ -65,7 +65,7 @@ jint Java_org_rocksdb_Env_getThreadPoolQueueLen(JNIEnv* /*env*/,
  */
 jlong Java_org_rocksdb_RocksMemEnv_createMemEnv(JNIEnv* /*env*/,
                                                 jclass /*jclazz*/) {
-  return reinterpret_cast<jlong>(rocksdb::NewMemEnv(rocksdb::Env::Default()));
+  return reinterpret_cast<jlong>(TERARKDB_NAMESPACE::NewMemEnv(TERARKDB_NAMESPACE::Env::Default()));
 }
 
 /*
@@ -76,7 +76,7 @@ jlong Java_org_rocksdb_RocksMemEnv_createMemEnv(JNIEnv* /*env*/,
 void Java_org_rocksdb_RocksMemEnv_disposeInternal(JNIEnv* /*env*/,
                                                   jobject /*jobj*/,
                                                   jlong jhandle) {
-  auto* e = reinterpret_cast<rocksdb::Env*>(jhandle);
+  auto* e = reinterpret_cast<TERARKDB_NAMESPACE::Env*>(jhandle);
   assert(e != nullptr);
   delete e;
 }

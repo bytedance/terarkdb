@@ -4,11 +4,13 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 #include "db/error_handler.h"
+
 #include "db/db_impl.h"
 #include "db/event_helpers.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/sst_file_manager_impl.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Maps to help decide the severity of an error based on the
 // BackgroundErrorReason, Code, SubCode and whether db_options.paranoid_checks
@@ -53,7 +55,8 @@ std::map<std::tuple<BackgroundErrorReason, Status::Code, Status::SubCode, bool>,
          Status::Severity::kHardError},
 };
 
-std::map<std::tuple<BackgroundErrorReason, Status::Code, bool>, Status::Severity>
+std::map<std::tuple<BackgroundErrorReason, Status::Code, bool>,
+         Status::Severity>
     DefaultErrorSeverityMap = {
         // Errors during BG compaction
         {std::make_tuple(BackgroundErrorReason::kCompaction,
@@ -75,11 +78,11 @@ std::map<std::tuple<BackgroundErrorReason, Status::Code, bool>, Status::Severity
         {std::make_tuple(BackgroundErrorReason::kFlush,
                          Status::Code::kCorruption, false),
          Status::Severity::kNoError},
-        {std::make_tuple(BackgroundErrorReason::kFlush,
-                         Status::Code::kIOError, true),
+        {std::make_tuple(BackgroundErrorReason::kFlush, Status::Code::kIOError,
+                         true),
          Status::Severity::kFatalError},
-        {std::make_tuple(BackgroundErrorReason::kFlush,
-                         Status::Code::kIOError, false),
+        {std::make_tuple(BackgroundErrorReason::kFlush, Status::Code::kIOError,
+                         false),
          Status::Severity::kNoError},
         // Errors during Write
         {std::make_tuple(BackgroundErrorReason::kWriteCallback,
@@ -100,24 +103,24 @@ std::map<std::tuple<BackgroundErrorReason, bool>, Status::Severity>
     DefaultReasonMap = {
         // Errors during BG compaction
         {std::make_tuple(BackgroundErrorReason::kCompaction, true),
-          Status::Severity::kFatalError},
+         Status::Severity::kFatalError},
         {std::make_tuple(BackgroundErrorReason::kCompaction, false),
-          Status::Severity::kNoError},
+         Status::Severity::kNoError},
         // Errors during BG flush
         {std::make_tuple(BackgroundErrorReason::kFlush, true),
-          Status::Severity::kFatalError},
+         Status::Severity::kFatalError},
         {std::make_tuple(BackgroundErrorReason::kFlush, false),
-          Status::Severity::kNoError},
+         Status::Severity::kNoError},
         // Errors during Write
         {std::make_tuple(BackgroundErrorReason::kWriteCallback, true),
-          Status::Severity::kFatalError},
+         Status::Severity::kFatalError},
         {std::make_tuple(BackgroundErrorReason::kWriteCallback, false),
-          Status::Severity::kFatalError},
+         Status::Severity::kFatalError},
         // Errors during Memtable update
         {std::make_tuple(BackgroundErrorReason::kMemTable, true),
-          Status::Severity::kFatalError},
+         Status::Severity::kFatalError},
         {std::make_tuple(BackgroundErrorReason::kMemTable, false),
-          Status::Severity::kFatalError},
+         Status::Severity::kFatalError},
 };
 
 void ErrorHandler::CancelErrorRecovery() {
@@ -127,8 +130,8 @@ void ErrorHandler::CancelErrorRecovery() {
   // We'll release the lock before calling sfm, so make sure no new
   // recovery gets scheduled at that point
   auto_recovery_ = false;
-  SstFileManagerImpl* sfm = reinterpret_cast<SstFileManagerImpl*>(
-      db_options_.sst_file_manager.get());
+  SstFileManagerImpl* sfm =
+      reinterpret_cast<SstFileManagerImpl*>(db_options_.sst_file_manager.get());
   if (sfm) {
     // This may or may not cancel a pending recovery
     db_mutex_->Unlock();
@@ -159,7 +162,8 @@ void ErrorHandler::CancelErrorRecovery() {
 // This can also get called as part of a recovery operation. In that case, we
 // also track the error separately in recovery_error_ so we can tell in the
 // end whether recovery succeeded or not
-Status ErrorHandler::SetBGError(const Status& bg_err, BackgroundErrorReason reason) {
+Status ErrorHandler::SetBGError(const Status& bg_err,
+                                BackgroundErrorReason reason) {
   db_mutex_->AssertHeld();
 
   if (bg_err.ok()) {
@@ -178,8 +182,8 @@ Status ErrorHandler::SetBGError(const Status& bg_err, BackgroundErrorReason reas
   bool found = false;
 
   {
-    auto entry = ErrorSeverityMap.find(std::make_tuple(reason, bg_err.code(),
-          bg_err.subcode(), paranoid));
+    auto entry = ErrorSeverityMap.find(
+        std::make_tuple(reason, bg_err.code(), bg_err.subcode(), paranoid));
     if (entry != ErrorSeverityMap.end()) {
       sev = entry->second;
       found = true;
@@ -187,8 +191,8 @@ Status ErrorHandler::SetBGError(const Status& bg_err, BackgroundErrorReason reas
   }
 
   if (!found) {
-    auto entry = DefaultErrorSeverityMap.find(std::make_tuple(reason,
-          bg_err.code(), paranoid));
+    auto entry = DefaultErrorSeverityMap.find(
+        std::make_tuple(reason, bg_err.code(), paranoid));
     if (entry != DefaultErrorSeverityMap.end()) {
       sev = entry->second;
       found = true;
@@ -342,4 +346,4 @@ Status ErrorHandler::RecoverFromBGError(bool is_manual) {
   return bg_error_;
 #endif
 }
-}
+}  // namespace TERARKDB_NAMESPACE

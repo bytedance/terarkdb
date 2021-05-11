@@ -11,17 +11,20 @@
 
 #include <inttypes.h>
 #include <stdio.h>
-#include <string>
+
 #include <algorithm>
+#include <string>
 #include <vector>
 
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/filename.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 void DumpDBFileSummary(const ImmutableDBOptions& options,
-                       const std::string& dbname) {
+                       const std::string& dbname,
+                       const std::string& session_id) {
   if (options.info_log == nullptr) {
     return;
   }
@@ -36,10 +39,11 @@ void DumpDBFileSummary(const ImmutableDBOptions& options,
   std::string file_info, wal_info;
 
   Header(options.info_log, "DB SUMMARY\n");
+  Header(options.info_log, "DB Session ID:  %s\n", session_id.c_str());
+
   // Get files in dbname dir
   if (!env->GetChildren(dbname, &files).ok()) {
-    Error(options.info_log,
-          "Error when reading %s dir\n", dbname.c_str());
+    Error(options.info_log, "Error when reading %s dir\n", dbname.c_str());
   }
   std::sort(files.begin(), files.end());
   for (const std::string& file : files) {
@@ -62,8 +66,7 @@ void DumpDBFileSummary(const ImmutableDBOptions& options,
         env->GetFileSize(dbname + "/" + file, &file_size);
         char str[16];
         snprintf(str, sizeof(str), "%" PRIu64, file_size);
-        wal_info.append(file).append(" size: ").
-            append(str).append(" ; ");
+        wal_info.append(file).append(" size: ").append(str).append(" ; ");
         break;
       case kTableFile:
         if (++file_num < 10) {
@@ -79,9 +82,8 @@ void DumpDBFileSummary(const ImmutableDBOptions& options,
   for (auto& db_path : options.db_paths) {
     if (dbname.compare(db_path.path) != 0) {
       if (!env->GetChildren(db_path.path, &files).ok()) {
-        Error(options.info_log,
-            "Error when reading %s dir\n",
-            db_path.path.c_str());
+        Error(options.info_log, "Error when reading %s dir\n",
+              db_path.path.c_str());
         continue;
       }
       std::sort(files.begin(), files.end());
@@ -103,9 +105,8 @@ void DumpDBFileSummary(const ImmutableDBOptions& options,
   // Get wal file in wal_dir
   if (dbname.compare(options.wal_dir) != 0) {
     if (!env->GetChildren(options.wal_dir, &files).ok()) {
-      Error(options.info_log,
-          "Error when reading %s dir\n",
-          options.wal_dir.c_str());
+      Error(options.info_log, "Error when reading %s dir\n",
+            options.wal_dir.c_str());
       return;
     }
     wal_info.clear();
@@ -115,8 +116,7 @@ void DumpDBFileSummary(const ImmutableDBOptions& options,
           env->GetFileSize(options.wal_dir + "/" + file, &file_size);
           char str[16];
           snprintf(str, sizeof(str), "%" PRIu64, file_size);
-          wal_info.append(file).append(" size: ").
-              append(str).append(" ; ");
+          wal_info.append(file).append(" size: ").append(str).append(" ; ");
         }
       }
     }
@@ -124,4 +124,4 @@ void DumpDBFileSummary(const ImmutableDBOptions& options,
   Header(options.info_log, "Write Ahead Log file in %s: %s\n",
          options.wal_dir.c_str(), wal_info.c_str());
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

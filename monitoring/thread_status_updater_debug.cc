@@ -7,8 +7,9 @@
 
 #include "db/column_family.h"
 #include "monitoring/thread_status_updater.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 #ifndef NDEBUG
 #ifdef ROCKSDB_USING_THREAD_STATUS
@@ -39,4 +40,4 @@ void ThreadStatusUpdater::TEST_VerifyColumnFamilyInfoMap(
 #endif  // ROCKSDB_USING_THREAD_STATUS
 #endif  // !NDEBUG
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

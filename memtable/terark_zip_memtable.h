@@ -16,6 +16,7 @@
 #include "port/port.h"
 #include "rocksdb/convenience.h"
 #include "rocksdb/memtablerep.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/terark_zip_internal.h"
 #include "terark/fsa/cspptrie.inl"
 #include "terark/heap_ext.hpp"
@@ -23,7 +24,7 @@
 #include "terark/thread/instance_tls_owner.hpp"
 #include "util/arena.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Write token pairing with MainPatricia
 class MemWriterToken : public terark::Patricia::WriterToken {
@@ -55,14 +56,13 @@ enum class InsertResult { Success, Duplicated, Fail };
 #pragma pack(push)
 #pragma pack(4)
 struct tag_vector_t {
-  std::atomic<uint32_t> size;
-  std::atomic<uint32_t> loc;
+  std::atomic<uint64_t> size_loc;
   struct data_t {
     uint64_t tag;
     uint32_t loc;
     operator uint64_t() const { return tag; }
   };
-  static bool full(uint32_t size) { return ((size - 1) & size) == 0; }
+  static bool full(uint32_t size) { return !((size - 1) & size); }
 };
 #pragma pack(pop)
 
@@ -130,8 +130,7 @@ class PatriciaTrieRep : public MemTableRep {
 // Heap iterator for traversing multi tries simultaneously.
 // Create a heap to merge iterators from all tries.
 template <bool heap_mode>
-class PatriciaRepIterator : public MemTableRep::Iterator,
-                            boost::noncopyable {
+class PatriciaRepIterator : public MemTableRep::Iterator, boost::noncopyable {
   typedef terark::Patricia::ReaderToken token_t;
 
   // Inner iterator abstructiong for polymorphism
@@ -312,4 +311,4 @@ class PatriciaTrieRepFactory : public MemTableRepFactory {
   virtual bool CanHandleDuplicatedKey() const override { return true; }
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

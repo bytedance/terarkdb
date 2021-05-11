@@ -7,10 +7,11 @@
 #include <string>
 
 #include "monitoring/statistics.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/format.h"
 #include "table/persistent_cache_options.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct BlockContents;
 
@@ -41,4 +42,4 @@ class PersistentCacheHelper {
       BlockContents* contents);
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -4,10 +4,13 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include "utilities/flink/flink_compaction_filter.h"
+
 #include <random>
+
+#include "rocksdb/terark_namespace.h"
 #include "util/testharness.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace flink {
 
 #define DISABLED FlinkCompactionFilter::StateType::Disabled
@@ -61,7 +64,7 @@ Slice key = Slice("key");  // NOLINT
 char data[24];
 LazyBuffer new_list;
 // std::string new_list = "";  // NOLINT
-std::string stub = "";      // NOLINT
+std::string stub = "";  // NOLINT
 
 FlinkCompactionFilter::StateType state_type;
 CompactionFilter::ValueType value_type;
@@ -76,9 +79,10 @@ void SetTimestamp(int64_t timestamp, size_t offset = 0, char* value = data) {
 }
 
 CompactionFilter::Decision decide(size_t data_size = sizeof(data)) {
-  return filter->FilterV2(0, key, value_type, nullptr/* existing value meta, not used */, 
-                          LazyBuffer(Slice(data, data_size)) /* old value*/, &new_list /* new value*/,
-                          &stub);
+  return filter->FilterV2(0, key, value_type,
+                          nullptr /* existing value meta, not used */,
+                          LazyBuffer(Slice(data, data_size)) /* old value*/,
+                          &new_list /* new value*/, &stub);
 }
 
 void Init(
@@ -217,7 +221,7 @@ TEST(FlinkListStateTtlTest, HalfExpired) {  // NOLINT
 // }
 
 }  // namespace flink
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

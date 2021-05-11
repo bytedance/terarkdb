@@ -10,10 +10,11 @@
 #pragma once
 #include "rocksdb/env.h"
 #include "rocksdb/iterator.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/iterator_wrapper.h"
 #include "util/iterator_cache.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct ReadOptions;
 class InternalKeyComparator;
@@ -26,7 +27,6 @@ struct TwoLevelIteratorState {
   virtual InternalIteratorBase<BlockHandle>* NewSecondaryIterator(
       const BlockHandle& handle) = 0;
 };
-
 
 // Return a new two level iterator.  A two-level iterator contains an
 // index iterator whose values point to a sequence of blocks where
@@ -50,4 +50,4 @@ extern InternalIterator* NewMapSstIterator(
     void* callback_arg, const IteratorCache::CreateIterCallback& create_iter,
     Arena* arena = nullptr);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

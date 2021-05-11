@@ -11,8 +11,9 @@
 
 #include "rocksdb/env.h"
 #include "rocksdb/statistics.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class RateLimiter {
  public:
@@ -136,4 +137,4 @@ extern RateLimiter* NewGenericRateLimiter(
     RateLimiter::Mode mode = RateLimiter::Mode::kWritesOnly,
     bool auto_tuned = false);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

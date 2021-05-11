@@ -20,12 +20,13 @@
 #include "rocksdb/env.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/slice_transform.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/merging_iterator.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
 #include "utilities/util/valvec.hpp"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Usage:
 //     ForwardLevelIterator iter;
@@ -855,6 +856,6 @@ void ForwardIterator::DeleteIterator(InternalIterator* iter, bool is_arena) {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

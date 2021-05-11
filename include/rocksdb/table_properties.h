@@ -11,10 +11,11 @@
 #include <vector>
 
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/types.h"
 #include "utilities/util/factory.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // -- Table Properties
 // Other than basic table properties, each table may also have the user
@@ -67,6 +68,9 @@ struct TablePropertiesNames {
   static const std::string kDependence;
   static const std::string kDependenceEntryCount;
   static const std::string kInheritanceChain;
+  static const std::string kInheritanceTree;
+  static const std::string kEarliestTimeBeginCompact;
+  static const std::string kLatestTimeEndCompact;
 };
 
 extern const std::string kPropertiesBlock;
@@ -190,8 +194,8 @@ struct TablePropertiesBase {
   uint64_t fixed_key_len = 0;
   // ID of column family for this SST file, corresponding to the CF identified
   // by column_family_name.
-  uint64_t column_family_id =
-      rocksdb::TablePropertiesCollectorFactory::Context::kUnknownColumnFamily;
+  uint64_t column_family_id = TERARKDB_NAMESPACE::
+      TablePropertiesCollectorFactory::Context::kUnknownColumnFamily;
   // The time when the SST file was created.
   // Since SST files are immutable, this is equivalent to last modified time.
   uint64_t creation_time = 0;
@@ -217,6 +221,11 @@ struct TablePropertiesBase {
   // If no value meta extractor is used, `value_meta_extractor_name` will be
   // "nullptr".
   std::string value_meta_extractor_name;
+
+  // The name of the ttl extractor used in this table.
+  // If no ttl extractor is used, `ttl_extractor_name` will be
+  // "nullptr".
+  std::string ttl_extractor_name;
 
   // The name of the prefix extractor used in this table
   // If no prefix extractor is used, `prefix_extractor_name` will be "nullptr".
@@ -245,8 +254,8 @@ struct TablePropertiesBase {
   // Make these sst hidden
   std::vector<Dependence> dependence;
 
-  // Inheritance chain
-  std::vector<uint64_t> inheritance_chain;
+  // Inheritance tree
+  std::vector<uint64_t> inheritance_tree;
 
   // convert this object to a human readable form
   //   @prop_delim: delimiter for each property.
@@ -275,5 +284,8 @@ struct TableProperties : public TablePropertiesBase {
 extern uint64_t GetDeletedKeys(const UserCollectedProperties& props);
 extern uint64_t GetMergeOperands(const UserCollectedProperties& props,
                                  bool* property_present);
+extern void GetCompactionTimePoint(const UserCollectedProperties& props,
+                                   uint64_t* earliest_time_begin_compact,
+                                   uint64_t* latest_time_end_compact);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

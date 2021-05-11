@@ -4,12 +4,13 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 #ifndef ROCKSDB_LITE
+#include <cctype>
+
+#include "rocksdb/terark_namespace.h"
+#include "util/testharness.h"
 #include "utilities/geodb/geodb_impl.h"
 
-#include <cctype>
-#include "util/testharness.h"
-
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class GeoDBTest : public testing::Test {
  public:
@@ -23,16 +24,12 @@ class GeoDBTest : public testing::Test {
     EXPECT_OK(DestroyDB(kDefaultDbName, options));
     options.create_if_missing = true;
     Status status = DB::Open(options, kDefaultDbName, &db);
-    geodb =  new GeoDBImpl(db, geodb_options);
+    geodb = new GeoDBImpl(db, geodb_options);
   }
 
-  ~GeoDBTest() {
-    delete geodb;
-  }
+  ~GeoDBTest() { delete geodb; }
 
-  GeoDB* getdb() {
-    return geodb;
-  }
+  GeoDB* getdb() { return geodb; }
 };
 
 const std::string GeoDBTest::kDefaultDbName =
@@ -154,12 +151,14 @@ TEST_F(GeoDBTest, DifferentPosInSameQuadkey) {
   // get obj1's quadkey
   ReadOptions opt;
   LazyBuffer quadkey1;
-  status = getdb()->Get(opt, getdb()->DefaultColumnFamily(), "k:" + id1, &quadkey1);
+  status =
+      getdb()->Get(opt, getdb()->DefaultColumnFamily(), "k:" + id1, &quadkey1);
   ASSERT_TRUE(status.ok());
 
   // get obj2's quadkey
   LazyBuffer quadkey2;
-  status = getdb()->Get(opt, getdb()->DefaultColumnFamily(), "k:" + id2, &quadkey2);
+  status =
+      getdb()->Get(opt, getdb()->DefaultColumnFamily(), "k:" + id2, &quadkey2);
   ASSERT_TRUE(status.ok());
 
   // obj1 and obj2 have the same quadkey
@@ -183,7 +182,7 @@ TEST_F(GeoDBTest, DifferentPosInSameQuadkey) {
   ASSERT_EQ(obj.value, value2);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char* argv[]) {
   ::testing::InitGoogleTest(&argc, argv);

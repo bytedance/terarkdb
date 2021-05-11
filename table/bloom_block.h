@@ -4,11 +4,13 @@
 //  (found in the LICENSE.Apache file in the root directory).
 #pragma once
 
-#include <vector>
 #include <string>
+#include <vector>
+
+#include "rocksdb/terark_namespace.h"
 #include "util/dynamic_bloom.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 class Logger;
 
 class BloomBlockBuilder {
@@ -35,4 +37,4 @@ class BloomBlockBuilder {
   DynamicBloom bloom_;
 };
 
-};  // namespace rocksdb
+};  // namespace TERARKDB_NAMESPACE

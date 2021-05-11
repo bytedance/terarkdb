@@ -13,14 +13,13 @@ IF(CMAKE_BUILD_TYPE STREQUAL "" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebug")
   SET(CMAKE_BUILD_TYPE "RelWithDebInfo")
 ENDIF()
 
-# Change `RelWithDebInfo` g2 -O2 -DDEBUG`
-string(REGEX REPLACE "-DNDEBUG " "" CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -DDEBUG" )
-string(REGEX REPLACE "-DNDEBUG " "" CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO} -DDEBUG" )
-
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/modules/")
-SET(CMAKE_INSTALL_LIBDIR ${CMAKE_BINARY_DIR}/lib)
-SET(CMAKE_INSTALL_BINDIR ${CMAKE_BINARY_DIR}/bin)
-SET(CMAKE_INSTALL_INCLUDEDIR ${CMAKE_BINARY_DIR}/include)
+IF(CMAKE_INSTALL_PREFIX STREQUAL "")
+  SET(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})
+ENDIF()
+SET(CMAKE_INSTALL_LIBDIR ${CMAKE_INSTALL_PREFIX}/lib)
+SET(CMAKE_INSTALL_BINDIR ${CMAKE_INSTALL_PREFIX}/bin)
+SET(CMAKE_INSTALL_INCLUDEDIR ${CMAKE_INSTALL_PREFIX}/include)
 
 option(WITH_COVERAGE "build with gcov support" OFF)
 option(WITH_JEMALLOC "build with JeMalloc" ON)
@@ -31,13 +30,21 @@ option(WITH_ZSTD "build with zstd" ON)
 option(WITH_BZ2 "build with bzip2" ON)
 option(WITH_WINDOWS_UTF8_FILENAMES "use UTF8 as characterset for opening files, regardles of the system code page" OFF)
 option(WITH_BYTEDANCE_METRICS "build with bytedance internal metrics" ON)
-option(WITH_ASAN "build with ASAN" ON)
+option(WITH_ASAN "build with ASAN" OFF)
 option(WITH_GFLAGS "build with GFlags" ON)
-option(WITH_TESTS "build with tests" OFF)
+include(CMakeDependentOption)
+# Tests are excluded from Release builds
+CMAKE_DEPENDENT_OPTION(WITH_TESTS "build with tests" ON "CMAKE_BUILD_TYPE STREQUAL Debug" OFF)
 option(WITH_TOOLS "build with tools" OFF)
 option(WITH_TERARK_ZIP "build with TerarkZipTable support" ON)
 option(WITH_BOOSTLIB "build with boost, if WITH_TERARK_ZIP is ON, this will also set to ON" OFF)
-option(FORCE_TERARKDB_RELEASE_BUILD "ignore outside cmake_build_type" OFF)
+option(WITH_TERARKDB_NAMESPACE "namespace" "terarkdb")
+
+if(NOT WITH_TERARKDB_NAMESPACE)
+  SET(WITH_TERARKDB_NAMESPACE "terarkdb")
+endif()
+MESSAGE(STATUS "terarkdb namespace: " ${WITH_TERARKDB_NAMESPACE})
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/rocksdb/terark_namespace.h.in ${CMAKE_CURRENT_SOURCE_DIR}/include/rocksdb/terark_namespace.h)
 
 option(BUILD_SUFFIX "library sufix" "d")
 option(FORCE_TERARKDB_RELEASE_BUILD "ignore outside cmake_build_type" OFF)
@@ -48,12 +55,6 @@ Find_Package(Threads REQUIRED)
 #----------------------- Global Options
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin" OR CMAKE_BUILD_TYPE STREQUAL "Release" OR WITH_JEMALLOC)
   set(WITH_ASAN OFF)
-endif()
-
-
-# RocksDB's UT has to be run under Debug or RelWithDebInfo mode
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-  SET(WITH_TESTS OFF CACHE BOOL OFF)
 endif()
 
 if (WITH_WINDOWS_UTF8_FILENAMES)
@@ -82,13 +83,13 @@ IF(WITH_COVERAGE)
 ENDIF()
 
 #-------------------------- Print Global Options
-message("[terarkdb] FORCE_RELEASE_BUILD = ${FORCE_TERARKDB_RELEASE_BUILD}, cmake_build_type = ${CMAKE_BUILD_TYPE}")
-message("[terarkdb] WITH_TOOLS = ${WITH_TOOLS}, WITH_ASAN = ${WITH_ASAN}, WITH_TESTS = ${WITH_TESTS}")
-message("[terarkdb] WITH_JEMALLOC = ${WITH_JEMALLOC}, WITH_COVERAGE=${WITH_COVERAGE}")
+MESSAGE("[terarkdb] FORCE_RELEASE_BUILD = ${FORCE_TERARKDB_RELEASE_BUILD}, cmake_build_type = ${CMAKE_BUILD_TYPE}")
+MESSAGE("[terarkdb] TERARKDB_NAMESPACE=${WITH_TERARKDB_NAMESPACE}")
+MESSAGE("[terarkdb] WITH_TOOLS = ${WITH_TOOLS}, WITH_ASAN = ${WITH_ASAN}, WITH_TESTS = ${WITH_TESTS}")
+MESSAGE("[terarkdb] WITH_JEMALLOC = ${WITH_JEMALLOC}, WITH_COVERAGE=${WITH_COVERAGE}")
 MESSAGE("[terarkdb] CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}, BUILD_SUFFIX=${BUILD_SUFFIX}")
 MESSAGE("[terarkdb] CMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}")
 MESSAGE("[terarkdb] CMAKE_THREAD_LIBS_INIT=${CMAKE_THREAD_LIBS_INIT}")
-
 
 #-------------------------- Third-party Libraries
 ADD_SUBDIRECTORY(third-party)
@@ -230,6 +231,7 @@ else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-format")
   endif()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -DBUILD_BY_CMAKE -fPIC")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
   if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer")
     include(CheckCXXCompilerFlag)
@@ -255,6 +257,7 @@ endif(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
 option(PORTABLE "build a portable binary" OFF)
 option(FORCE_SSE42 "force building with SSE4.2, even when PORTABLE=ON" OFF)
 if(PORTABLE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=haswell")
   # MSVC does not need a separate compiler flag to enable SSE4.2; if nmmintrin.h
   # is available, it is available by default.
   if(FORCE_SSE42 AND NOT MSVC)
@@ -265,7 +268,7 @@ else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /arch:AVX2")
   else()
     if(NOT HAVE_POWER8)
-      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=haswell")
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
     endif()
   endif()
 endif()
@@ -515,7 +518,8 @@ include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/include)
 find_package(Threads REQUIRED)
 
-SET(TERARK_ZIP_LIB terark-zip-${BUILD_SUFFIX})
+
+
 if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   LIST(APPEND TERARK_SHARED_DEPENDS pthread gomp aio rt dl)
   if ((${CMAKE_BUILD_TYPE} STREQUAL "Debug") AND (${WITH_ASAN}))
@@ -539,7 +543,6 @@ set(SOURCES
         db/compaction_iterator.cc
         db/compaction_job.cc
         db/compaction_picker.cc
-        db/compaction_picker_fifo.cc
         db/compaction_picker_universal.cc
         db/convenience.cc
         db/db_filesnapshot.cc
@@ -573,6 +576,7 @@ set(SOURCES
         db/memtable_list.cc
         db/merge_helper.cc
         db/merge_operator.cc
+        db/periodic_work_scheduler.cc
         db/range_del_aggregator.cc
         db/range_tombstone_fragmenter.cc
         db/repair.cc
@@ -595,6 +599,7 @@ set(SOURCES
         env/env_io_prof.cc
         env/mock_env.cc
         memtable/alloc_tracker.cc
+        memtable/concurrent_hashduallist_rep.cc
         memtable/hash_cuckoo_rep.cc
         memtable/hash_linklist_rep.cc
         memtable/hash_skiplist_rep.cc
@@ -603,10 +608,12 @@ set(SOURCES
         memtable/write_buffer_manager.cc
         monitoring/histogram.cc
         monitoring/histogram_windowing.cc
+        monitoring/in_memory_stats_history.cc
         monitoring/instrumented_mutex.cc
         monitoring/iostats_context.cc
         monitoring/perf_context.cc
         monitoring/perf_level.cc
+        monitoring/persistent_stats_history.cc
         monitoring/statistics.cc
         monitoring/thread_status_impl.cc
         monitoring/thread_status_updater.cc
@@ -654,7 +661,6 @@ set(SOURCES
         table/table_properties.cc
         table/table_reader.cc
         table/two_level_iterator.cc
-        tools/db_bench_tool.cc
         tools/dump/db_dump_tool.cc
         tools/ldb_cmd.cc
         tools/ldb_tool.cc
@@ -690,7 +696,6 @@ set(SOURCES
         util/string_util.cc
         util/sync_point.cc
         util/sync_point_impl.cc
-        util/testutil.cc
         util/thread_local.cc
         util/threadpool_imp.cc
         util/trace_replay.cc
@@ -769,7 +774,8 @@ ENDIF()
 IF(WITH_TESTS OR WITH_TOOLS)
   LIST(APPEND SOURCES utilities/cassandra/cassandra_compaction_filter.cc
                       utilities/cassandra/format.cc
-                      utilities/cassandra/merge_operator.cc)
+                      utilities/cassandra/merge_operator.cc
+                      util/testutil.cc)
 ENDIF()
 
 # Scan more sources
@@ -907,7 +913,7 @@ if(NOT WIN32 OR ROCKSDB_INSTALL_ON_WINDOWS)
   #  EXPORT RocksDBTargets
   #  COMPONENT devel
   #  DESTINATION ${package_config_destination}
-  #  NAMESPACE RocksDB::
+  #  NAMESPACE TERARKDB_NAMESPACE::
   #)
 
   install(
@@ -919,11 +925,9 @@ if(NOT WIN32 OR ROCKSDB_INSTALL_ON_WINDOWS)
   )
 endif()
 
-
 IF(WITH_TESTS OR WITH_TOOLS)
   add_library(testharness OBJECT util/testharness.cc)
 ENDIF()
-
 
 if(WITH_TESTS)
   set(TESTS
@@ -945,6 +949,7 @@ if(WITH_TESTS)
         db/db_compaction_test.cc
         db/db_dynamic_level_test.cc
         db/db_flush_test.cc
+        db/db_impl_gc_ttl_test.cc
         db/db_inplace_update_test.cc
         db/db_io_failure_test.cc
         db/db_iter_test.cc
@@ -984,6 +989,7 @@ if(WITH_TESTS)
         db/merge_test.cc
         db/options_file_test.cc
         db/perf_context_test.cc
+        db/periodic_work_scheduler_test.cc
         db/plain_table_db_test.cc
         db/prefix_test.cc
         db/range_del_aggregator_test.cc
@@ -1009,6 +1015,7 @@ if(WITH_TESTS)
         options/options_settable_test.cc
         options/options_test.cc
         table/block_based_filter_block_test.cc
+        table/block_based_table_row_ttl_test.cc
         table/block_test.cc
         table/cleanable_test.cc
         table/cuckoo_table_builder_test.cc
@@ -1040,6 +1047,7 @@ if(WITH_TESTS)
         util/repeatable_thread_test.cc
         util/slice_transform_test.cc
         util/timer_queue_test.cc
+        util/timer_test.cc
         util/thread_list_test.cc
         util/thread_local_test.cc
         utilities/backupable/backupable_db_test.cc
@@ -1073,7 +1081,12 @@ if(WITH_TESTS)
         utilities/ttl/ttl_test.cc
         utilities/write_batch_with_index/write_batch_with_index_test.cc
   )
-
+  if(WITH_TERARK_ZIP)
+    list(APPEND TESTS
+        memtable/terark_zip_memtable_test.cc
+        table/terark_zip_table_row_ttl_test.cc
+    )
+  endif()
   if(WITH_LIBRADOS)
     list(APPEND TESTS utilities/env_librados_test.cc)
   endif()
@@ -1084,6 +1097,7 @@ if(WITH_TESTS)
       db/db_test_util.cc
       monitoring/thread_status_updater_debug.cc
       table/mock_table.cc
+      util/mock_time_env.cc
       util/fault_injection_test_env.cc
       utilities/cassandra/test_utils.cc
   )
@@ -1146,7 +1160,6 @@ if(WITH_TOOLS)
     cache/cache_bench.cc
     memtable/memtablerep_bench.cc
     db/range_del_aggregator_bench.cc
-    tools/db_bench.cc
     table/table_reader_bench.cc
     utilities/column_aware_encoding_exp.cc
     utilities/persistent_cache/hash_table_bench.cc)
@@ -1157,7 +1170,14 @@ if(WITH_TOOLS)
     target_link_libraries(${exename}${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
   endforeach(sourcefile ${BENCHMARKS})
 
+  add_executable(db_bench${ARTIFACT_SUFFIX} tools/db_bench.cc
+      tools/db_bench_tool.cc
+      $<TARGET_OBJECTS:testharness>)
+  target_link_libraries(db_bench${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
+
+  if(WITH_TERARK_ZIP)
+    add_subdirectory(terark-tools/terark-test)
+  endif()
   add_subdirectory(tools)
-  #add_subdirectory(terark-tools/terark-test)
   add_subdirectory(terark-tools/batch-write-bench)
 endif()

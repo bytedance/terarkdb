@@ -31,6 +31,7 @@
 #include "rocksdb/perf_context.h"
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/statistics.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/write_buffer_manager.h"
 #include "table/block.h"
 #include "table/block_based_table_builder.h"
@@ -53,7 +54,7 @@
 #include "util/testutil.h"
 #include "utilities/merge_operators.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 extern const uint64_t kLegacyBlockBasedTableMagicNumber;
 extern const uint64_t kLegacyPlainTableMagicNumber;
@@ -156,7 +157,7 @@ class Constructor {
  public:
   explicit Constructor(const Comparator* cmp)
       : data_(stl_wrappers::LessOfComparator(cmp)) {}
-  virtual ~Constructor() { }
+  virtual ~Constructor() {}
 
   void Add(const std::string& key, const Slice& value) {
     data_[key] = value.ToString();
@@ -208,15 +209,11 @@ class Constructor {
   stl_wrappers::KVMap data_;
 };
 
-class BlockConstructor: public Constructor {
+class BlockConstructor : public Constructor {
  public:
   explicit BlockConstructor(const Comparator* cmp)
-      : Constructor(cmp),
-        comparator_(cmp),
-        block_(nullptr) { }
-  ~BlockConstructor() {
-    delete block_;
-  }
+      : Constructor(cmp), comparator_(cmp), block_(nullptr) {}
+  ~BlockConstructor() { delete block_; }
   virtual Status FinishImpl(
       const Options& /*options*/, const ImmutableCFOptions& /*ioptions*/,
       const MutableCFOptions& /*moptions*/,
@@ -251,7 +248,7 @@ class BlockConstructor: public Constructor {
   BlockConstructor();
 };
 
-class TableConstructor: public Constructor {
+class TableConstructor : public Constructor {
  public:
   explicit TableConstructor(const Comparator* cmp,
                             bool convert_to_internal_key = false,
@@ -276,12 +273,12 @@ class TableConstructor: public Constructor {
         int_tbl_prop_collector_factories;
     std::string column_family_name;
     builder.reset(ioptions.table_factory->NewTableBuilder(
-        TableBuilderOptions(
-            ioptions, moptions, internal_comparator,
-            &int_tbl_prop_collector_factories, options.compression,
-            CompressionOptions(), nullptr /* compression_dict */,
-            false /* skip_filters */,
-            column_family_name, level_, 0 /* compaction_load */),
+        TableBuilderOptions(ioptions, moptions, internal_comparator,
+                            &int_tbl_prop_collector_factories,
+                            options.compression, CompressionOptions(),
+                            nullptr /* compression_dict */,
+                            false /* skip_filters */, column_family_name,
+                            level_, 0 /* compaction_load */),
         TablePropertiesCollectorFactory::Context::kUnknownColumnFamily,
         file_writer_.get()));
 
@@ -382,7 +379,7 @@ class TableConstructor: public Constructor {
 };
 uint64_t TableConstructor::cur_uniq_id_ = 1;
 
-class MemTableConstructor: public Constructor {
+class MemTableConstructor : public Constructor {
  public:
   explicit MemTableConstructor(const Comparator* cmp, WriteBufferManager* wb)
       : Constructor(cmp),
@@ -397,9 +394,7 @@ class MemTableConstructor: public Constructor {
                      0 /* column_family_id */);
     memtable_->Ref();
   }
-  ~MemTableConstructor() {
-    delete memtable_->Unref();
-  }
+  ~MemTableConstructor() { delete memtable_->Unref(); }
   virtual Status FinishImpl(
       const Options&, const ImmutableCFOptions& ioptions,
       const MutableCFOptions& /*moptions*/,
@@ -408,11 +403,10 @@ class MemTableConstructor: public Constructor {
       const stl_wrappers::KVMap& kv_map) override {
     delete memtable_->Unref();
     ImmutableCFOptions mem_ioptions(ioptions);
-    memtable_ = new MemTable(internal_comparator_, mem_ioptions,
-                             MutableCFOptions(options_),
-                             /* needs_dup_key_check */ false,
-                             write_buffer_manager_,
-                             kMaxSequenceNumber, 0 /* column_family_id */);
+    memtable_ = new MemTable(
+        internal_comparator_, mem_ioptions, MutableCFOptions(options_),
+        /* needs_dup_key_check */ false, write_buffer_manager_,
+        kMaxSequenceNumber, 0 /* column_family_id */);
     memtable_->Ref();
     int seq = 1;
     for (const auto kv : kv_map) {
@@ -440,17 +434,14 @@ class MemTableConstructor: public Constructor {
   std::shared_ptr<SkipListFactory> table_factory_;
 };
 
-class DBConstructor: public Constructor {
+class DBConstructor : public Constructor {
  public:
   explicit DBConstructor(const Comparator* cmp)
-      : Constructor(cmp),
-        comparator_(cmp) {
+      : Constructor(cmp), comparator_(cmp) {
     db_ = nullptr;
     NewDB();
   }
-  ~DBConstructor() {
-    delete db_;
-  }
+  ~DBConstructor() { delete db_; }
   virtual Status FinishImpl(
       const Options& /*options*/, const ImmutableCFOptions& /*ioptions*/,
       const MutableCFOptions& /*moptions*/,
@@ -519,15 +510,15 @@ struct TestArgs {
 
 static std::vector<TestArgs> GenerateArgList() {
   std::vector<TestArgs> test_args;
-  std::vector<TestType> test_types = {
-      BLOCK_BASED_TABLE_TEST,
+  std::vector<TestType> test_types = {BLOCK_BASED_TABLE_TEST,
 #ifndef ROCKSDB_LITE
-      PLAIN_TABLE_SEMI_FIXED_PREFIX,
-      PLAIN_TABLE_FULL_STR_PREFIX,
-      PLAIN_TABLE_TOTAL_ORDER,
+                                      PLAIN_TABLE_SEMI_FIXED_PREFIX,
+                                      PLAIN_TABLE_FULL_STR_PREFIX,
+                                      PLAIN_TABLE_TOTAL_ORDER,
 #endif  // !ROCKSDB_LITE
-      BLOCK_TEST,
-      MEMTABLE_TEST, DB_TEST};
+                                      BLOCK_TEST,
+                                      MEMTABLE_TEST,
+                                      DB_TEST};
   std::vector<bool> reverse_compare_types = {false, true};
   std::vector<int> restart_intervals = {16, 1, 1024};
 
@@ -606,9 +597,8 @@ class FixedOrLessPrefixTransform : public SliceTransform {
   const size_t prefix_len_;
 
  public:
-  explicit FixedOrLessPrefixTransform(size_t prefix_len) :
-      prefix_len_(prefix_len) {
-  }
+  explicit FixedOrLessPrefixTransform(size_t prefix_len)
+      : prefix_len_(prefix_len) {}
 
   virtual const char* Name() const override { return "rocksdb.FixedPrefix"; }
 
@@ -722,8 +712,8 @@ class HarnessTest : public testing::Test {
         table_options_.block_size = 256;
         options_.table_factory.reset(
             new BlockBasedTableFactory(table_options_));
-        constructor_ = new MemTableConstructor(options_.comparator,
-                                               &write_buffer_);
+        constructor_ =
+            new MemTableConstructor(options_.comparator, &write_buffer_);
         break;
       case DB_TEST:
         table_options_.block_size = 256;
@@ -822,8 +812,8 @@ class HarnessTest : public testing::Test {
         case 2: {
           std::string key = PickRandomKey(rnd, keys);
           model_iter = data.lower_bound(key);
-          if (kVerbose) fprintf(stderr, "Seek '%s'\n",
-                                EscapeString(key).c_str());
+          if (kVerbose)
+            fprintf(stderr, "Seek '%s'\n", EscapeString(key).c_str());
           iter->Seek(Slice(key));
           ASSERT_EQ(ToString(data, model_iter), ToString(iter));
           break;
@@ -834,7 +824,7 @@ class HarnessTest : public testing::Test {
             if (kVerbose) fprintf(stderr, "Prev\n");
             iter->Prev();
             if (model_iter == data.begin()) {
-              model_iter = data.end();   // Wrap around to invalid value
+              model_iter = data.end();  // Wrap around to invalid value
             } else {
               --model_iter;
             }
@@ -908,14 +898,14 @@ class HarnessTest : public testing::Test {
           break;
         case 1: {
           // Attempt to return something smaller than an existing key
-          if (result.size() > 0 && result[result.size() - 1] > '\0'
-              && (!only_support_prefix_seek_
-                  || options_.prefix_extractor->Transform(result).size()
-                  < result.size())) {
+          if (result.size() > 0 && result[result.size() - 1] > '\0' &&
+              (!only_support_prefix_seek_ ||
+               options_.prefix_extractor->Transform(result).size() <
+                   result.size())) {
             result[result.size() - 1]--;
           }
           break;
-      }
+        }
         case 2: {
           // Return something larger than an existing key
           Increment(options_.comparator, &result);
@@ -967,8 +957,7 @@ static bool Between(uint64_t val, uint64_t low, uint64_t high) {
   bool result = (val >= low) && (val <= high);
   if (!result) {
     fprintf(stderr, "Value %llu is not in range [%llu, %llu]\n",
-            (unsigned long long)(val),
-            (unsigned long long)(low),
+            (unsigned long long)(val), (unsigned long long)(low),
             (unsigned long long)(high));
   }
   return result;
@@ -1022,22 +1011,18 @@ INSTANTIATE_TEST_CASE_P(FormatLatest, BlockBasedTableTest,
 // This test serves as the living tutorial for the prefix scan of user collected
 // properties.
 TEST_F(TablePropertyTest, PrefixScanTest) {
-  UserCollectedProperties props{{"num.111.1", "1"},
-                                {"num.111.2", "2"},
-                                {"num.111.3", "3"},
-                                {"num.333.1", "1"},
-                                {"num.333.2", "2"},
-                                {"num.333.3", "3"},
-                                {"num.555.1", "1"},
-                                {"num.555.2", "2"},
-                                {"num.555.3", "3"}, };
+  UserCollectedProperties props{
+      {"num.111.1", "1"}, {"num.111.2", "2"}, {"num.111.3", "3"},
+      {"num.333.1", "1"}, {"num.333.2", "2"}, {"num.333.3", "3"},
+      {"num.555.1", "1"}, {"num.555.2", "2"}, {"num.555.3", "3"},
+  };
 
   // prefixes that exist
   for (const std::string& prefix : {"num.111", "num.333", "num.555"}) {
     int num = 0;
     for (auto pos = props.lower_bound(prefix);
          pos != props.end() &&
-             pos->first.compare(0, prefix.size(), prefix) == 0;
+         pos->first.compare(0, prefix.size(), prefix) == 0;
          ++pos) {
       ++num;
       auto key = prefix + "." + ToString(num);
@@ -1269,7 +1254,7 @@ TEST_P(BlockBasedTableTest, RangeDelBlock) {
     ASSERT_TRUE(!iter->Valid());
   }
 }
-#endif // OLD_RANGE_DELETION
+#endif  // OLD_RANGE_DELETION
 
 TEST_P(BlockBasedTableTest, FilterPolicyNameProperties) {
   TableConstructor c(BytewiseComparator(), true /* convert_to_internal_key_ */);
@@ -1397,7 +1382,6 @@ TEST_P(BlockBasedTableTest, PrefetchTest) {
   // [ k05         ]    k05
   // [ k06 k07     ]    k07
 
-
   // Simple
   PrefetchRange(&c, &opt, &table_options,
                 /*key_range=*/"k01", "k05",
@@ -1435,37 +1419,37 @@ TEST_P(BlockBasedTableTest, TotalOrderSeekOnHashIndex) {
     // Make each key/value an individual block
     table_options.block_size = 64;
     switch (i) {
-    case 0:
-      // Binary search index
-      table_options.index_type = BlockBasedTableOptions::kBinarySearch;
-      options.table_factory.reset(new BlockBasedTableFactory(table_options));
-      break;
-    case 1:
-      // Hash search index
-      table_options.index_type = BlockBasedTableOptions::kHashSearch;
-      options.table_factory.reset(new BlockBasedTableFactory(table_options));
-      options.prefix_extractor.reset(NewFixedPrefixTransform(4));
-      break;
-    case 2:
-      // Hash search index with hash_index_allow_collision
-      table_options.index_type = BlockBasedTableOptions::kHashSearch;
-      table_options.hash_index_allow_collision = true;
-      options.table_factory.reset(new BlockBasedTableFactory(table_options));
-      options.prefix_extractor.reset(NewFixedPrefixTransform(4));
-      break;
-    case 3:
-      // Hash search index with filter policy
-      table_options.index_type = BlockBasedTableOptions::kHashSearch;
-      table_options.filter_policy.reset(NewBloomFilterPolicy(10));
-      options.table_factory.reset(new BlockBasedTableFactory(table_options));
-      options.prefix_extractor.reset(NewFixedPrefixTransform(4));
-      break;
-    case 4:
-    default:
-      // Binary search index
-      table_options.index_type = BlockBasedTableOptions::kTwoLevelIndexSearch;
-      options.table_factory.reset(new BlockBasedTableFactory(table_options));
-      break;
+      case 0:
+        // Binary search index
+        table_options.index_type = BlockBasedTableOptions::kBinarySearch;
+        options.table_factory.reset(new BlockBasedTableFactory(table_options));
+        break;
+      case 1:
+        // Hash search index
+        table_options.index_type = BlockBasedTableOptions::kHashSearch;
+        options.table_factory.reset(new BlockBasedTableFactory(table_options));
+        options.prefix_extractor.reset(NewFixedPrefixTransform(4));
+        break;
+      case 2:
+        // Hash search index with hash_index_allow_collision
+        table_options.index_type = BlockBasedTableOptions::kHashSearch;
+        table_options.hash_index_allow_collision = true;
+        options.table_factory.reset(new BlockBasedTableFactory(table_options));
+        options.prefix_extractor.reset(NewFixedPrefixTransform(4));
+        break;
+      case 3:
+        // Hash search index with filter policy
+        table_options.index_type = BlockBasedTableOptions::kHashSearch;
+        table_options.filter_policy.reset(NewBloomFilterPolicy(10));
+        options.table_factory.reset(new BlockBasedTableFactory(table_options));
+        options.prefix_extractor.reset(NewFixedPrefixTransform(4));
+        break;
+      case 4:
+      default:
+        // Binary search index
+        table_options.index_type = BlockBasedTableOptions::kTwoLevelIndexSearch;
+        options.table_factory.reset(new BlockBasedTableFactory(table_options));
+        break;
     }
 
     TableConstructor c(BytewiseComparator(),
@@ -1659,8 +1643,9 @@ void TableTest::IndexTest(BlockBasedTableOptions table_options) {
 
   // -- Find keys do not exist, but have common prefix.
   std::vector<std::string> prefixes = {"001", "003", "005", "007", "009"};
-  std::vector<std::string> lower_bound = {keys[0], keys[1], keys[2],
-                                          keys[7], keys[9], };
+  std::vector<std::string> lower_bound = {
+      keys[0], keys[1], keys[2], keys[7], keys[9],
+  };
 
   // find the lower bound of the prefix
   for (size_t i = 0; i < prefixes.size(); ++i) {
@@ -1674,7 +1659,12 @@ void TableTest::IndexTest(BlockBasedTableOptions table_options) {
   }
 
   // find the upper bound of prefixes
-  std::vector<std::string> upper_bound = {keys[1], keys[2], keys[7], keys[9], };
+  std::vector<std::string> upper_bound = {
+      keys[1],
+      keys[2],
+      keys[7],
+      keys[9],
+  };
 
   // find existing keys
   for (const auto& item : kvmap) {
@@ -2274,96 +2264,99 @@ std::map<std::string, size_t> MockCache::marked_data_in_cache_;
 // table is closed. This test makes sure that the only items remains in the
 // cache after the table is closed are raw data blocks.
 TEST_P(BlockBasedTableTest, NoObjectInCacheAfterTableClose) {
-  for (int level: {-1, 0, 1, 10}) {
-  for (auto index_type :
-       {BlockBasedTableOptions::IndexType::kBinarySearch,
-        BlockBasedTableOptions::IndexType::kTwoLevelIndexSearch}) {
-    for (bool block_based_filter : {true, false}) {
-      for (bool partition_filter : {true, false}) {
-        if (partition_filter &&
-            (block_based_filter ||
-             index_type !=
-                 BlockBasedTableOptions::IndexType::kTwoLevelIndexSearch)) {
-          continue;
-        }
-        for (bool index_and_filter_in_cache : {true, false}) {
-          for (bool pin_l0 : {true, false}) {
-            for (bool pin_top_level : {true, false}) {
-              if (pin_l0 && !index_and_filter_in_cache) {
-                continue;
-              }
-              // Create a table
-              Options opt;
-              std::unique_ptr<InternalKeyComparator> ikc;
-              ikc.reset(new test::PlainInternalKeyComparator(opt.comparator));
-              opt.compression = kNoCompression;
-              BlockBasedTableOptions table_options =
-                  GetBlockBasedTableOptions();
-              table_options.block_size = 1024;
-              table_options.index_type =
-                  BlockBasedTableOptions::IndexType::kTwoLevelIndexSearch;
-              table_options.pin_l0_filter_and_index_blocks_in_cache = pin_l0;
-              table_options.pin_top_level_index_and_filter = pin_top_level;
-              table_options.partition_filters = partition_filter;
-              table_options.cache_index_and_filter_blocks =
-                  index_and_filter_in_cache;
-              // big enough so we don't ever lose cached values.
-              table_options.block_cache = std::shared_ptr<rocksdb::Cache>(
-                  new MockCache(16 * 1024 * 1024, 4, false, 0.0));
-              table_options.filter_policy.reset(
-                  rocksdb::NewBloomFilterPolicy(10, block_based_filter));
-              opt.table_factory.reset(NewBlockBasedTableFactory(table_options));
-
-              bool convert_to_internal_key = false;
-              TableConstructor c(BytewiseComparator(), convert_to_internal_key,
-                                 level);
-              std::string user_key = "k01";
-              std::string key =
-                  InternalKey(user_key, 0, kTypeValue).Encode().ToString();
-              c.Add(key, "hello");
-              std::vector<std::string> keys;
-              stl_wrappers::KVMap kvmap;
-              const ImmutableCFOptions ioptions(opt);
-              const MutableCFOptions moptions(opt);
-              c.Finish(opt, ioptions, moptions, table_options, *ikc, &keys,
-                       &kvmap);
-
-              // Doing a read to make index/filter loaded into the cache
-              auto table_reader =
-                  dynamic_cast<BlockBasedTable*>(c.GetTableReader());
-              LazyBuffer value;
-              GetContext get_context(opt.comparator, nullptr, nullptr, nullptr,
-                                     GetContext::kNotFound, user_key, &value,
-                                     nullptr, nullptr, nullptr, nullptr,
-                                     nullptr, nullptr);
-              InternalKey ikey(user_key, 0, kTypeValue);
-              auto s = table_reader->Get(ReadOptions(), key, &get_context,
-                                         moptions.prefix_extractor.get());
-              ASSERT_OK(value.fetch());
-              ASSERT_EQ(get_context.State(), GetContext::kFound);
-              ASSERT_STREQ(value.ToString().c_str(), "hello");
-
-              // Close the table
-              c.ResetTableReader();
-
-              auto usage = table_options.block_cache->GetUsage();
-              auto pinned_usage = table_options.block_cache->GetPinnedUsage();
-              // The only usage must be for marked data blocks
-              ASSERT_EQ(usage, MockCache::marked_size_);
-              // There must be some pinned data since LazyBuffer has not
-              // released them yet
-              // ASSERT_GT(pinned_usage, 0);
-              // Release pinnable slice reousrces
-              value.clear();
-              pinned_usage = table_options.block_cache->GetPinnedUsage();
-              ASSERT_EQ(pinned_usage, 0);
+  for (int level : {-1, 0, 1, 10}) {
+    for (auto index_type :
+         {BlockBasedTableOptions::IndexType::kBinarySearch,
+          BlockBasedTableOptions::IndexType::kTwoLevelIndexSearch}) {
+      for (bool block_based_filter : {true, false}) {
+        for (bool partition_filter : {true, false}) {
+          if (partition_filter &&
+              (block_based_filter ||
+               index_type !=
+                   BlockBasedTableOptions::IndexType::kTwoLevelIndexSearch)) {
+            continue;
           }
+          for (bool index_and_filter_in_cache : {true, false}) {
+            for (bool pin_l0 : {true, false}) {
+              for (bool pin_top_level : {true, false}) {
+                if (pin_l0 && !index_and_filter_in_cache) {
+                  continue;
+                }
+                // Create a table
+                Options opt;
+                std::unique_ptr<InternalKeyComparator> ikc;
+                ikc.reset(new test::PlainInternalKeyComparator(opt.comparator));
+                opt.compression = kNoCompression;
+                BlockBasedTableOptions table_options =
+                    GetBlockBasedTableOptions();
+                table_options.block_size = 1024;
+                table_options.index_type =
+                    BlockBasedTableOptions::IndexType::kTwoLevelIndexSearch;
+                table_options.pin_l0_filter_and_index_blocks_in_cache = pin_l0;
+                table_options.pin_top_level_index_and_filter = pin_top_level;
+                table_options.partition_filters = partition_filter;
+                table_options.cache_index_and_filter_blocks =
+                    index_and_filter_in_cache;
+                // big enough so we don't ever lose cached values.
+                table_options.block_cache =
+                    std::shared_ptr<TERARKDB_NAMESPACE::Cache>(
+                        new MockCache(16 * 1024 * 1024, 4, false, 0.0));
+                table_options.filter_policy.reset(
+                    TERARKDB_NAMESPACE::NewBloomFilterPolicy(
+                        10, block_based_filter));
+                opt.table_factory.reset(
+                    NewBlockBasedTableFactory(table_options));
+
+                bool convert_to_internal_key = false;
+                TableConstructor c(BytewiseComparator(),
+                                   convert_to_internal_key, level);
+                std::string user_key = "k01";
+                std::string key =
+                    InternalKey(user_key, 0, kTypeValue).Encode().ToString();
+                c.Add(key, "hello");
+                std::vector<std::string> keys;
+                stl_wrappers::KVMap kvmap;
+                const ImmutableCFOptions ioptions(opt);
+                const MutableCFOptions moptions(opt);
+                c.Finish(opt, ioptions, moptions, table_options, *ikc, &keys,
+                         &kvmap);
+
+                // Doing a read to make index/filter loaded into the cache
+                auto table_reader =
+                    dynamic_cast<BlockBasedTable*>(c.GetTableReader());
+                LazyBuffer value;
+                GetContext get_context(opt.comparator, nullptr, nullptr,
+                                       nullptr, GetContext::kNotFound, user_key,
+                                       &value, nullptr, nullptr, nullptr,
+                                       nullptr, nullptr, nullptr);
+                InternalKey ikey(user_key, 0, kTypeValue);
+                auto s = table_reader->Get(ReadOptions(), key, &get_context,
+                                           moptions.prefix_extractor.get());
+                ASSERT_OK(value.fetch());
+                ASSERT_EQ(get_context.State(), GetContext::kFound);
+                ASSERT_STREQ(value.ToString().c_str(), "hello");
+
+                // Close the table
+                c.ResetTableReader();
+
+                auto usage = table_options.block_cache->GetUsage();
+                auto pinned_usage = table_options.block_cache->GetPinnedUsage();
+                // The only usage must be for marked data blocks
+                ASSERT_EQ(usage, MockCache::marked_size_);
+                // There must be some pinned data since LazyBuffer has not
+                // released them yet
+                // ASSERT_GT(pinned_usage, 0);
+                // Release pinnable slice reousrces
+                value.clear();
+                pinned_usage = table_options.block_cache->GetPinnedUsage();
+                ASSERT_EQ(pinned_usage, 0);
+              }
+            }
           }
         }
       }
     }
-  }
-  } // level
+  }  // level
 }
 
 TEST_P(BlockBasedTableTest, BlockCacheLeak) {
@@ -2521,7 +2514,7 @@ TEST_P(BlockBasedTableTest, NewIndexIteratorLeak) {
   c.Finish(options, ioptions, moptions, table_options,
            GetPlainInternalComparator(options.comparator), &keys, &kvmap);
 
-  rocksdb::SyncPoint::GetInstance()->LoadDependencyAndMarkers(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->LoadDependencyAndMarkers(
       {
           {"BlockBasedTable::NewIndexIterator::thread1:1",
            "BlockBasedTable::NewIndexIterator::thread2:2"},
@@ -2539,7 +2532,7 @@ TEST_P(BlockBasedTableTest, NewIndexIteratorLeak) {
            "BlockBasedTable::NewIndexIterator::thread2:3"},
       });
 
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
   ReadOptions ro;
   auto* reader = c.GetTableReader();
 
@@ -2561,7 +2554,7 @@ TEST_P(BlockBasedTableTest, NewIndexIteratorLeak) {
   auto thread2 = port::Thread(func2);
   thread1.join();
   thread2.join();
-  rocksdb::SyncPoint::GetInstance()->DisableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
   c.ResetTableReader();
 }
 
@@ -2604,15 +2597,15 @@ TEST_F(PlainTableTest, BasicPlainTableProperties) {
   file_writer->Flush();
 
   test::StringSink* ss =
-    static_cast<test::StringSink*>(file_writer->writable_file());
+      static_cast<test::StringSink*>(file_writer->writable_file());
   std::unique_ptr<RandomAccessFileReader> file_reader(
       test::GetRandomAccessFileReader(
           new test::StringSource(ss->contents(), 72242, true)));
 
   TableProperties* props = nullptr;
   auto s = ReadTableProperties(file_reader.get(), ss->contents().size(),
-                               kPlainTableMagicNumber, ioptions,
-                               &props, true /* compression_type_missing */);
+                               kPlainTableMagicNumber, ioptions, &props,
+                               true /* compression_type_missing */);
   std::unique_ptr<TableProperties> props_guard(props);
   ASSERT_OK(s);
 
@@ -2646,19 +2639,19 @@ TEST_F(GeneralTableTest, ApproximateOffsetOfPlain) {
   c.Finish(options, ioptions, moptions, table_options, internal_comparator,
            &keys, &kvmap);
 
-  ASSERT_TRUE(Between(c.ApproximateOffsetOf("abc"),       0,      0));
-  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k01"),       0,      0));
-  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k01a"),      0,      0));
-  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k02"),       0,      0));
-  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k03"),       0,      0));
-  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k04"),   10000,  11000));
+  ASSERT_TRUE(Between(c.ApproximateOffsetOf("abc"), 0, 0));
+  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k01"), 0, 0));
+  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k01a"), 0, 0));
+  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k02"), 0, 0));
+  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k03"), 0, 0));
+  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k04"), 10000, 11000));
   // k04 and k05 will be in two consecutive blocks, the index is
   // an arbitrary slice between k04 and k05, either before or after k04a
   ASSERT_TRUE(Between(c.ApproximateOffsetOf("k04a"), 10000, 211000));
-  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k05"),  210000, 211000));
-  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k06"),  510000, 511000));
-  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k07"),  510000, 511000));
-  ASSERT_TRUE(Between(c.ApproximateOffsetOf("xyz"),  610000, 612000));
+  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k05"), 210000, 211000));
+  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k06"), 510000, 511000));
+  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k07"), 510000, 511000));
+  ASSERT_TRUE(Between(c.ApproximateOffsetOf("xyz"), 610000, 612000));
   c.ResetTableReader();
 }
 
@@ -2681,12 +2674,12 @@ static void DoCompressionTest(CompressionType comp) {
   const MutableCFOptions moptions(options);
   c.Finish(options, ioptions, moptions, table_options, ikc, &keys, &kvmap);
 
-  ASSERT_TRUE(Between(c.ApproximateOffsetOf("abc"),       0,      0));
-  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k01"),       0,      0));
-  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k02"),       0,      0));
-  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k03"),    2000,   3500));
-  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k04"),    2000,   3500));
-  ASSERT_TRUE(Between(c.ApproximateOffsetOf("xyz"),    4000,   6500));
+  ASSERT_TRUE(Between(c.ApproximateOffsetOf("abc"), 0, 0));
+  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k01"), 0, 0));
+  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k02"), 0, 0));
+  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k03"), 2000, 3500));
+  ASSERT_TRUE(Between(c.ApproximateOffsetOf("k04"), 2000, 3500));
+  ASSERT_TRUE(Between(c.ApproximateOffsetOf("xyz"), 4000, 6500));
   c.ResetTableReader();
 }
 
@@ -2722,8 +2715,7 @@ TEST_F(GeneralTableTest, ApproximateOffsetOfCompressed) {
 
   if (!XPRESS_Supported()) {
     fprintf(stderr, "skipping xpress and xpress compression tests\n");
-  }
-  else {
+  } else {
     compression_state.push_back(kXpressCompression);
   }
 
@@ -2858,9 +2850,8 @@ TEST_F(MemTableTest, Simple) {
     } else {
       typedef ConvertingIterator<false, FragmentedRangeTombstoneIterator>
           IterWrapperType;
-      auto range_tombstone_iterator =
-          memtable->NewRangeTombstoneIterator(
-              ReadOptions(), kMaxSequenceNumber /* read_seq */);
+      auto range_tombstone_iterator = memtable->NewRangeTombstoneIterator(
+          ReadOptions(), kMaxSequenceNumber /* read_seq */);
       if (range_tombstone_iterator == nullptr) {
         continue;
       }
@@ -2873,10 +2864,10 @@ TEST_F(MemTableTest, Simple) {
       auto s = v.fetch();
       if (s.ok()) {
         fprintf(stderr, "key: '%s' -> '%s'\n", iter->key().ToString().c_str(),
-            v.ToString().c_str());
+                v.ToString().c_str());
       } else {
         fprintf(stderr, "key: '%s' -> '%s'\n", iter->key().ToString().c_str(),
-            s.ToString().c_str());
+                s.ToString().c_str());
       }
       iter->Next();
     }
@@ -3136,24 +3127,27 @@ class PrefixTest : public testing::Test {
 
 namespace {
 // A simple PrefixExtractor that only works for test PrefixAndWholeKeyTest
-class TestPrefixExtractor : public rocksdb::SliceTransform {
+class TestPrefixExtractor : public TERARKDB_NAMESPACE::SliceTransform {
  public:
   ~TestPrefixExtractor() override{};
   const char* Name() const override { return "TestPrefixExtractor"; }
 
-  rocksdb::Slice Transform(const rocksdb::Slice& src) const override {
+  TERARKDB_NAMESPACE::Slice Transform(
+      const TERARKDB_NAMESPACE::Slice& src) const override {
     assert(IsValid(src));
-    return rocksdb::Slice(src.data(), 3);
+    return TERARKDB_NAMESPACE::Slice(src.data(), 3);
   }
 
-  bool InDomain(const rocksdb::Slice& src) const override {
+  bool InDomain(const TERARKDB_NAMESPACE::Slice& src) const override {
     assert(IsValid(src));
     return true;
   }
 
-  bool InRange(const rocksdb::Slice& /*dst*/) const override { return true; }
+  bool InRange(const TERARKDB_NAMESPACE::Slice& /*dst*/) const override {
+    return true;
+  }
 
-  bool IsValid(const rocksdb::Slice& src) const {
+  bool IsValid(const TERARKDB_NAMESPACE::Slice& src) const {
     if (src.size() != 4) {
       return false;
     }
@@ -3175,30 +3169,30 @@ class TestPrefixExtractor : public rocksdb::SliceTransform {
 }  // namespace
 
 TEST_F(PrefixTest, PrefixAndWholeKeyTest) {
-  rocksdb::Options options;
-  options.compaction_style = rocksdb::kCompactionStyleUniversal;
+  TERARKDB_NAMESPACE::Options options;
+  options.compaction_style = TERARKDB_NAMESPACE::kCompactionStyleUniversal;
   options.num_levels = 20;
   options.create_if_missing = true;
   options.optimize_filters_for_hits = false;
   options.target_file_size_base = 268435456;
   options.prefix_extractor = std::make_shared<TestPrefixExtractor>();
-  rocksdb::BlockBasedTableOptions bbto;
-  bbto.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10));
+  TERARKDB_NAMESPACE::BlockBasedTableOptions bbto;
+  bbto.filter_policy.reset(TERARKDB_NAMESPACE::NewBloomFilterPolicy(10));
   bbto.block_size = 262144;
   bbto.whole_key_filtering = true;
 
   const std::string kDBPath = test::PerThreadDBPath("table_prefix_test");
   options.table_factory.reset(NewBlockBasedTableFactory(bbto));
   DestroyDB(kDBPath, options);
-  rocksdb::DB* db;
-  ASSERT_OK(rocksdb::DB::Open(options, kDBPath, &db));
+  TERARKDB_NAMESPACE::DB* db;
+  ASSERT_OK(TERARKDB_NAMESPACE::DB::Open(options, kDBPath, &db));
 
   // Create a bunch of keys with 10 filters.
   for (int i = 0; i < 10; i++) {
     std::string prefix = "[" + std::to_string(i) + "]";
     for (int j = 0; j < 10; j++) {
       std::string key = prefix + std::to_string(j);
-      db->Put(rocksdb::WriteOptions(), key, "1");
+      db->Put(TERARKDB_NAMESPACE::WriteOptions(), key, "1");
     }
   }
 
@@ -3254,8 +3248,8 @@ TEST_P(BlockBasedTableTest, BlockAlignTest) {
   std::function<void()> VerifyBlockAlignment = [&]() {
     TableProperties* props = nullptr;
     ASSERT_OK(ReadTableProperties(file_reader.get(), ss_rw.contents().size(),
-                                  kBlockBasedTableMagicNumber, ioptions,
-                                  &props, true /* compression_type_missing */));
+                                  kBlockBasedTableMagicNumber, ioptions, &props,
+                                  true /* compression_type_missing */));
 
     uint64_t data_block_size = props->data_size / props->num_data_blocks;
     ASSERT_EQ(data_block_size, 4096);
@@ -3478,7 +3472,7 @@ TEST_P(BlockBasedTableTest, PropertiesMetaBlockLast) {
 }
 
 TEST_P(BlockBasedTableTest, BadOptions) {
-  rocksdb::Options options;
+  TERARKDB_NAMESPACE::Options options;
   options.compression = kNoCompression;
   BlockBasedTableOptions bbto = GetBlockBasedTableOptions();
   bbto.block_size = 4000;
@@ -3488,13 +3482,13 @@ TEST_P(BlockBasedTableTest, BadOptions) {
       test::PerThreadDBPath("block_based_table_bad_options_test");
   options.table_factory.reset(NewBlockBasedTableFactory(bbto));
   DestroyDB(kDBPath, options);
-  rocksdb::DB* db;
-  ASSERT_NOK(rocksdb::DB::Open(options, kDBPath, &db));
+  TERARKDB_NAMESPACE::DB* db;
+  ASSERT_NOK(TERARKDB_NAMESPACE::DB::Open(options, kDBPath, &db));
 
   bbto.block_size = 4096;
   options.compression = kSnappyCompression;
   options.table_factory.reset(NewBlockBasedTableFactory(bbto));
-  ASSERT_NOK(rocksdb::DB::Open(options, kDBPath, &db));
+  ASSERT_NOK(TERARKDB_NAMESPACE::DB::Open(options, kDBPath, &db));
 }
 
 TEST_F(BBTTailPrefetchTest, TestTailPrefetchStats) {
@@ -3639,7 +3633,7 @@ TEST_P(BlockBasedTableTest, DataBlockHashIndex) {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

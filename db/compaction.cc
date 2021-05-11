@@ -20,11 +20,12 @@
 #include "db/column_family.h"
 #include "db/version_set.h"
 #include "rocksdb/compaction_filter.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
 #include "utilities/util/factory.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 const uint64_t kRangeTombstoneSentinel =
     PackSequenceAndType(kMaxSequenceNumber, kTypeRangeDeletion);
@@ -82,6 +83,101 @@ const char* CompactionTypeName(CompactionType type) {
     default:
       return "Unknow Compaction";
   }
+}
+
+Status BuildInheritanceTree(const std::vector<CompactionInputFiles>& inputs,
+                            const DependenceMap& dependence_map,
+                            const Version* version,
+                            std::vector<uint64_t>* inheritance_tree,
+                            size_t* pruge_count_ptr) {
+  // Purging the leaf nodes recursively with inheritance tree encoded by DFS
+  // sequence.
+  //
+  //  GC job:
+  //    input sst = [10,9,11]
+  //      sst 10 = [3,1,1,2,2,3,7,4,4,5,5,6,6,7]
+  //      sst 9  = [8,8]
+  //      sst 11 = []
+  //    output sst = 12
+  //    dependence_map = {5,6,8,9,10,11}
+  //
+  //        1  2   4 5 6
+  //        \ /     \ /
+  //         3      7          8
+  //          \    /           |
+  //          sst 10    +    sst 9   +   sst 11
+  //
+  //  After purge & merge, we got output inheritance tree
+  //
+  //                5   6
+  //                 \ /
+  //                  7   8
+  //                  |   |
+  //                 10   9  11
+  //                  \  |  /
+  //                  sst 12
+  //
+  //  sst 12 = [10,7,5,5,6,6,7,10,9,8,8,9,11,11]
+
+  Status s;
+  size_t pruge_count = 0;
+
+  inheritance_tree->clear();
+
+  for (auto& level : inputs) {
+    for (auto f : level.files) {
+      std::shared_ptr<const TableProperties> tp;
+      s = version->GetTableProperties(&tp, f);
+      if (!s.ok()) {
+        return s;
+      }
+      inheritance_tree->emplace_back(f->fd.GetNumber());
+      // verify input inheritance tree
+      size_t size = inheritance_tree->size();
+      for (auto fn : tp->inheritance_tree) {
+        if (inheritance_tree->back() == fn) {
+          inheritance_tree->pop_back();
+          if (inheritance_tree->size() < size) {
+            break;
+          }
+        } else {
+          inheritance_tree->emplace_back(fn);
+        }
+      }
+      if (inheritance_tree->size() != size) {
+        // input inheritance tree invalid !
+        return Status::Corruption(
+            "BuildInheritanceTree: bad inheritance_tree, file_number ",
+            ToString(f->fd.GetNumber()));
+      }
+      // purge unnecessary node & merge input inheritance tree
+      for (auto fn : tp->inheritance_tree) {
+        if (inheritance_tree->back() == fn && dependence_map.count(fn) == 0) {
+          ++pruge_count;
+          inheritance_tree->pop_back();
+        } else {
+          inheritance_tree->emplace_back(fn);
+        }
+      }
+      inheritance_tree->emplace_back(f->fd.GetNumber());
+    }
+  }
+  if (pruge_count_ptr != nullptr) {
+    *pruge_count_ptr = pruge_count;
+  }
+
+  inheritance_tree->shrink_to_fit();
+  return s;
+}
+
+std::vector<uint64_t> InheritanceTreeToSet(const std::vector<uint64_t>& tree) {
+  std::vector<uint64_t> set = tree;
+  std::sort(set.begin(), set.end());
+  auto it = std::unique(set.begin(), set.end());
+  assert(set.end() - it == it - set.begin());
+  set.resize(it - set.begin());
+  set.shrink_to_fit();
+  return set;
 }
 
 void Compaction::SetInputVersion(Version* _input_version) {
@@ -196,9 +292,9 @@ Compaction::Compaction(CompactionParams&& params)
       output_path_id_(params.output_path_id),
       output_compression_(params.compression),
       output_compression_opts_(params.compression_opts),
-      deletion_compaction_(params.deletion_compaction),
       partial_compaction_(params.partial_compaction),
       compaction_type_(params.compaction_type),
+      separation_type_(params.separation_type),
       input_range_(std::move(params.input_range)),
       inputs_(std::move(params.inputs)),
       grandparents_(std::move(params.grandparents)),
@@ -541,9 +637,9 @@ int Compaction::GetInputBaseLevel() const {
   return input_vstorage_->base_level();
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
-using namespace rocksdb;
+using namespace TERARKDB_NAMESPACE;
 TERARK_FACTORY_INSTANTIATE_GNS(CompactionFilter*, Slice,
                                CompactionFilterContext);
 TERARK_FACTORY_INSTANTIATE_GNS(CompactionFilterFactory*, Slice);

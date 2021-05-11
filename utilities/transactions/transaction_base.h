@@ -15,19 +15,20 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/snapshot.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/types.h"
 #include "rocksdb/utilities/transaction.h"
 #include "rocksdb/utilities/transaction_db.h"
 #include "rocksdb/utilities/write_batch_with_index.h"
 #include "utilities/transactions/transaction_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class TransactionBaseImpl : public Transaction {
  public:
-  TransactionBaseImpl(
-      DB* db, const WriteOptions& write_options,
-      const rocksdb::WriteBatchEntryIndexFactory* index_factory = nullptr);
+  TransactionBaseImpl(DB* db, const WriteOptions& write_options,
+                      const TERARKDB_NAMESPACE::WriteBatchEntryIndexFactory*
+                          index_factory = nullptr);
 
   virtual ~TransactionBaseImpl();
 
@@ -47,7 +48,7 @@ class TransactionBaseImpl : public Transaction {
   void SetSavePoint() override;
 
   Status RollbackToSavePoint() override;
-  
+
   Status PopSavePoint() override;
 
   using Transaction::Get;
@@ -83,8 +84,9 @@ class TransactionBaseImpl : public Transaction {
   std::vector<Status> MultiGet(const ReadOptions& options,
                                const std::vector<Slice>& keys,
                                std::vector<std::string>* values) override {
-    return MultiGet(options, std::vector<ColumnFamilyHandle*>(
-                                 keys.size(), db_->DefaultColumnFamily()),
+    return MultiGet(options,
+                    std::vector<ColumnFamilyHandle*>(
+                        keys.size(), db_->DefaultColumnFamily()),
                     keys, values);
   }
 
@@ -340,6 +342,6 @@ class TransactionBaseImpl : public Transaction {
   void SetSnapshotInternal(const Snapshot* snapshot);
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

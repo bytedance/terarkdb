@@ -17,6 +17,7 @@ int main() {
 #include "rocksdb/db.h"
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block_based_table_factory.h"
 #include "table/get_context.h"
 #include "table/internal_iterator.h"
@@ -30,7 +31,7 @@ int main() {
 using GFLAGS_NAMESPACE::ParseCommandLineFlags;
 using GFLAGS_NAMESPACE::SetUsageMessage;
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 // Make a key that i determines the first 4 characters and j determines the
@@ -73,7 +74,7 @@ void TableReaderBenchmark(Options& opts, EnvOptions& env_options,
                           int num_keys2, int num_iter, int /*prefix_len*/,
                           bool if_query_empty_keys, bool for_iterator,
                           bool through_db, bool measured_by_nanosecond) {
-  rocksdb::InternalKeyComparator ikc(opts.comparator);
+  TERARKDB_NAMESPACE::InternalKeyComparator ikc(opts.comparator);
 
   std::string file_name =
       test::PerThreadDBPath("rocksdb_table_reader_benchmark");
@@ -85,7 +86,7 @@ void TableReaderBenchmark(Options& opts, EnvOptions& env_options,
   Status s;
   const ImmutableCFOptions ioptions(opts);
   const ColumnFamilyOptions cfo(opts);
-  const MutableCFOptions moptions(cfo);
+  const MutableCFOptions moptions(cfo, env);
   std::unique_ptr<WritableFileWriter> file_writer;
   if (!through_db) {
     std::unique_ptr<WritableFile> file;
@@ -219,9 +220,10 @@ void TableReaderBenchmark(Options& opts, EnvOptions& env_options,
             }
           }
           if (count != r2_len) {
-            fprintf(
-                stderr, "Iterator cannot iterate expected number of entries. "
-                "Expected %d but got %d\n", r2_len, count);
+            fprintf(stderr,
+                    "Iterator cannot iterate expected number of entries. "
+                    "Expected %d but got %d\n",
+                    r2_len, count);
             assert(false);
           }
           delete iter;
@@ -254,16 +256,18 @@ void TableReaderBenchmark(Options& opts, EnvOptions& env_options,
   }
 }
 }  // namespace
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
-DEFINE_bool(query_empty, false, "query non-existing keys instead of existing "
+DEFINE_bool(query_empty, false,
+            "query non-existing keys instead of existing "
             "ones.");
 DEFINE_int32(num_keys1, 4096, "number of distinguish prefix of keys");
 DEFINE_int32(num_keys2, 512, "number of distinguish keys for each prefix");
 DEFINE_int32(iter, 3, "query non-existing keys instead of existing ones");
 DEFINE_int32(prefix_len, 16, "Prefix length used for iterators and indexes");
 DEFINE_bool(iterator, false, "For test iterator");
-DEFINE_bool(through_db, false, "If enable, a DB instance will be created and "
+DEFINE_bool(through_db, false,
+            "If enable, a DB instance will be created and "
             "the query will be against DB. Otherwise, will be directly against "
             "a table reader.");
 DEFINE_bool(mmap_read, true, "Whether use mmap read");
@@ -279,24 +283,24 @@ int main(int argc, char** argv) {
                   " [OPTIONS]...");
   ParseCommandLineFlags(&argc, &argv, true);
 
-  std::shared_ptr<rocksdb::TableFactory> tf;
-  rocksdb::Options options;
+  std::shared_ptr<TERARKDB_NAMESPACE::TableFactory> tf;
+  TERARKDB_NAMESPACE::Options options;
   if (FLAGS_prefix_len < 16) {
-    options.prefix_extractor.reset(rocksdb::NewFixedPrefixTransform(
-        FLAGS_prefix_len));
+    options.prefix_extractor.reset(
+        TERARKDB_NAMESPACE::NewFixedPrefixTransform(FLAGS_prefix_len));
   }
-  rocksdb::ReadOptions ro;
-  rocksdb::EnvOptions env_options;
+  TERARKDB_NAMESPACE::ReadOptions ro;
+  TERARKDB_NAMESPACE::EnvOptions env_options;
   options.create_if_missing = true;
-  options.compression = rocksdb::CompressionType::kNoCompression;
+  options.compression = TERARKDB_NAMESPACE::CompressionType::kNoCompression;
 
   if (FLAGS_table_factory == "cuckoo_hash") {
 #ifndef ROCKSDB_LITE
     options.allow_mmap_reads = FLAGS_mmap_read;
     env_options.use_mmap_reads = FLAGS_mmap_read;
-    rocksdb::CuckooTableOptions table_options;
+    TERARKDB_NAMESPACE::CuckooTableOptions table_options;
     table_options.hash_table_ratio = 0.75;
-    tf.reset(rocksdb::NewCuckooTableFactory(table_options));
+    tf.reset(TERARKDB_NAMESPACE::NewCuckooTableFactory(table_options));
 #else
     fprintf(stderr, "Plain table is not supported in lite mode\n");
     exit(1);
@@ -306,20 +310,20 @@ int main(int argc, char** argv) {
     options.allow_mmap_reads = FLAGS_mmap_read;
     env_options.use_mmap_reads = FLAGS_mmap_read;
 
-    rocksdb::PlainTableOptions plain_table_options;
+    TERARKDB_NAMESPACE::PlainTableOptions plain_table_options;
     plain_table_options.user_key_len = 16;
     plain_table_options.bloom_bits_per_key = (FLAGS_prefix_len == 16) ? 0 : 8;
     plain_table_options.hash_table_ratio = 0.75;
 
-    tf.reset(new rocksdb::PlainTableFactory(plain_table_options));
-    options.prefix_extractor.reset(rocksdb::NewFixedPrefixTransform(
-        FLAGS_prefix_len));
+    tf.reset(new TERARKDB_NAMESPACE::PlainTableFactory(plain_table_options));
+    options.prefix_extractor.reset(
+        TERARKDB_NAMESPACE::NewFixedPrefixTransform(FLAGS_prefix_len));
 #else
     fprintf(stderr, "Cuckoo table is not supported in lite mode\n");
     exit(1);
 #endif  // ROCKSDB_LITE
   } else if (FLAGS_table_factory == "block_based") {
-    tf.reset(new rocksdb::BlockBasedTableFactory());
+    tf.reset(new TERARKDB_NAMESPACE::BlockBasedTableFactory());
   } else {
     fprintf(stderr, "Invalid table type %s\n", FLAGS_table_factory.c_str());
   }
@@ -329,10 +333,10 @@ int main(int argc, char** argv) {
     bool measured_by_nanosecond = FLAGS_time_unit == "nanosecond";
 
     options.table_factory = tf;
-    rocksdb::TableReaderBenchmark(options, env_options, ro, FLAGS_num_keys1,
-                                  FLAGS_num_keys2, FLAGS_iter, FLAGS_prefix_len,
-                                  FLAGS_query_empty, FLAGS_iterator,
-                                  FLAGS_through_db, measured_by_nanosecond);
+    TERARKDB_NAMESPACE::TableReaderBenchmark(
+        options, env_options, ro, FLAGS_num_keys1, FLAGS_num_keys2, FLAGS_iter,
+        FLAGS_prefix_len, FLAGS_query_empty, FLAGS_iterator, FLAGS_through_db,
+        measured_by_nanosecond);
   } else {
     return 1;
   }

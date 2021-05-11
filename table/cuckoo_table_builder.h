@@ -6,30 +6,31 @@
 #pragma once
 #ifndef ROCKSDB_LITE
 #include <stdint.h>
+
 #include <limits>
 #include <string>
 #include <utility>
 #include <vector>
+
 #include "port/port.h"
 #include "rocksdb/status.h"
-#include "table/table_builder.h"
 #include "rocksdb/table.h"
 #include "rocksdb/table_properties.h"
+#include "rocksdb/terark_namespace.h"
+#include "table/table_builder.h"
 #include "util/autovector.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
-class CuckooTableBuilder: public TableBuilder {
+class CuckooTableBuilder : public TableBuilder {
  public:
-  CuckooTableBuilder(WritableFileWriter* file, double max_hash_table_ratio,
-                     uint32_t max_num_hash_func, uint32_t max_search_depth,
-                     const Comparator* user_comparator,
-                     uint32_t cuckoo_block_size, bool use_module_hash,
-                     bool identity_as_first_hash,
-                     uint64_t (*get_slice_hash)(const Slice&, uint32_t,
-                                                uint64_t),
-                     uint32_t column_family_id,
-                     const std::string& column_family_name);
+  CuckooTableBuilder(
+      WritableFileWriter* file, double max_hash_table_ratio,
+      uint32_t max_num_hash_func, uint32_t max_search_depth,
+      const Comparator* user_comparator, uint32_t cuckoo_block_size,
+      bool use_module_hash, bool identity_as_first_hash,
+      uint64_t (*get_slice_hash)(const Slice&, uint32_t, uint64_t),
+      uint32_t column_family_id, const std::string& column_family_name);
 
   // REQUIRES: Either Finish() or Abandon() has been called.
   ~CuckooTableBuilder() {}
@@ -43,7 +44,8 @@ class CuckooTableBuilder: public TableBuilder {
   // constructor after this function returns.
   // REQUIRES: Finish(), Abandon() have not been called
   Status Finish(const TablePropertyCache* prop,
-                const std::vector<SequenceNumber>* snapshots) override;
+                const std::vector<SequenceNumber>* snapshots,
+                const std::vector<uint64_t>* inheritance_tree) override;
 
   // Indicate that the contents of this builder should be abandoned.  Stops
   // using the file passed to the constructor after this function returns.
@@ -63,8 +65,7 @@ class CuckooTableBuilder: public TableBuilder {
 
  private:
   struct CuckooBucket {
-    CuckooBucket()
-      : vector_idx(kMaxVectorIdx), make_space_for_key_call_id(0) {}
+    CuckooBucket() : vector_idx(kMaxVectorIdx), make_space_for_key_call_id(0) {}
     uint32_t vector_idx;
     // This number will not exceed kvs_.size() + max_num_hash_func_.
     // We assume number of items is <= 2^32.
@@ -108,7 +109,7 @@ class CuckooTableBuilder: public TableBuilder {
   bool use_module_hash_;
   bool identity_as_first_hash_;
   uint64_t (*get_slice_hash_)(const Slice& s, uint32_t index,
-    uint64_t max_num_buckets);
+                              uint64_t max_num_buckets);
   std::string largest_user_key_ = "";
   std::string smallest_user_key_ = "";
 
@@ -119,6 +120,6 @@ class CuckooTableBuilder: public TableBuilder {
   void operator=(const CuckooTableBuilder&) = delete;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

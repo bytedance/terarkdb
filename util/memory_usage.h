@@ -7,7 +7,9 @@
 
 #include <unordered_map>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+
+namespace TERARKDB_NAMESPACE {
 
 // Helper methods to estimate memroy usage by std containers.
 
@@ -22,4 +24,4 @@ size_t ApproximateMemoryUsage(
          umap.bucket_count() * sizeof(void*);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

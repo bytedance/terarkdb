@@ -3,7 +3,10 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 //
+#include "table/block.h"
+
 #include <stdio.h>
+
 #include <algorithm>
 #include <set>
 #include <string>
@@ -12,23 +15,23 @@
 #include <vector>
 
 #include "db/dbformat.h"
-#include "db/write_batch_internal.h"
 #include "db/memtable.h"
+#include "db/write_batch_internal.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/iterator.h"
-#include "rocksdb/table.h"
 #include "rocksdb/slice_transform.h"
-#include "table/block.h"
+#include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block_builder.h"
 #include "table/format.h"
 #include "util/random.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
-static std::string RandomString(Random* rnd, int len) {
+static std::string RandomString(Random *rnd, int len) {
   std::string r;
   test::RandomString(rnd, len, &r);
   return r;
@@ -123,8 +126,7 @@ TEST_F(BlockTest, SimpleTest) {
   int count = 0;
   InternalIteratorBase<Slice> *iter =
       reader.NewIterator<DataBlockIter>(options.comparator, options.comparator);
-  for (iter->SeekToFirst();iter->Valid(); count++, iter->Next()) {
-
+  for (iter->SeekToFirst(); iter->Valid(); count++, iter->Next()) {
     // read kv from block
     Slice k = iter->key();
     Slice v = iter->value();
@@ -139,7 +141,6 @@ TEST_F(BlockTest, SimpleTest) {
   iter =
       reader.NewIterator<DataBlockIter>(options.comparator, options.comparator);
   for (int i = 0; i < num_records; i++) {
-
     // find a random key in the lookaside array
     int index = rnd.Uniform(num_records);
     Slice k(keys[index]);
@@ -375,9 +376,9 @@ class BlockReadAmpBitmapSlowAndAccurate {
 TEST_F(BlockTest, BlockReadAmpBitmap) {
   uint32_t pin_offset = 0;
   SyncPoint::GetInstance()->SetCallBack(
-    "BlockReadAmpBitmap:rnd", [&pin_offset](void* arg) {
-      pin_offset = *(static_cast<uint32_t*>(arg));
-    });
+      "BlockReadAmpBitmap:rnd", [&pin_offset](void *arg) {
+        pin_offset = *(static_cast<uint32_t *>(arg));
+      });
   SyncPoint::GetInstance()->EnableProcessing();
   std::vector<size_t> block_sizes = {
       1,                // 1 byte
@@ -397,7 +398,8 @@ TEST_F(BlockTest, BlockReadAmpBitmap) {
 
   Random rnd(301);
   for (size_t block_size : block_sizes) {
-    std::shared_ptr<Statistics> stats = rocksdb::CreateDBStatistics();
+    std::shared_ptr<Statistics> stats =
+        TERARKDB_NAMESPACE::CreateDBStatistics();
     BlockReadAmpBitmap read_amp_bitmap(block_size, kBytesPerBit, stats.get());
     BlockReadAmpBitmapSlowAndAccurate read_amp_slow_and_accurate;
 
@@ -443,11 +445,11 @@ TEST_F(BlockTest, BlockReadAmpBitmap) {
       size_t total_bits = 0;
       for (size_t bit_idx = 0; bit_idx < needed_bits; bit_idx++) {
         total_bits += read_amp_slow_and_accurate.IsPinMarked(
-          bit_idx * kBytesPerBit + pin_offset);
+            bit_idx * kBytesPerBit + pin_offset);
       }
       size_t expected_estimate_useful = total_bits * kBytesPerBit;
       size_t got_estimate_useful =
-        stats->getTickerCount(READ_AMP_ESTIMATE_USEFUL_BYTES);
+          stats->getTickerCount(READ_AMP_ESTIMATE_USEFUL_BYTES);
       ASSERT_EQ(expected_estimate_useful, got_estimate_useful);
     }
   }
@@ -477,7 +479,8 @@ TEST_F(BlockTest, BlockWithReadAmpBitmap) {
 
   // Read the block sequentially using Next()
   {
-    std::shared_ptr<Statistics> stats = rocksdb::CreateDBStatistics();
+    std::shared_ptr<Statistics> stats =
+        TERARKDB_NAMESPACE::CreateDBStatistics();
 
     // create block reader
     BlockContents contents;
@@ -511,7 +514,8 @@ TEST_F(BlockTest, BlockWithReadAmpBitmap) {
 
   // Read the block sequentially using Seek()
   {
-    std::shared_ptr<Statistics> stats = rocksdb::CreateDBStatistics();
+    std::shared_ptr<Statistics> stats =
+        TERARKDB_NAMESPACE::CreateDBStatistics();
 
     // create block reader
     BlockContents contents;
@@ -547,7 +551,8 @@ TEST_F(BlockTest, BlockWithReadAmpBitmap) {
 
   // Read the block randomly
   {
-    std::shared_ptr<Statistics> stats = rocksdb::CreateDBStatistics();
+    std::shared_ptr<Statistics> stats =
+        TERARKDB_NAMESPACE::CreateDBStatistics();
 
     // create block reader
     BlockContents contents;
@@ -587,7 +592,7 @@ TEST_F(BlockTest, BlockWithReadAmpBitmap) {
 }
 
 TEST_F(BlockTest, ReadAmpBitmapPow2) {
-  std::shared_ptr<Statistics> stats = rocksdb::CreateDBStatistics();
+  std::shared_ptr<Statistics> stats = TERARKDB_NAMESPACE::CreateDBStatistics();
   ASSERT_EQ(BlockReadAmpBitmap(100, 1, stats.get()).GetBytesPerBit(), 1);
   ASSERT_EQ(BlockReadAmpBitmap(100, 2, stats.get()).GetBytesPerBit(), 2);
   ASSERT_EQ(BlockReadAmpBitmap(100, 4, stats.get()).GetBytesPerBit(), 4);
@@ -603,7 +608,7 @@ TEST_F(BlockTest, ReadAmpBitmapPow2) {
   ASSERT_EQ(BlockReadAmpBitmap(100, 35, stats.get()).GetBytesPerBit(), 32);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);

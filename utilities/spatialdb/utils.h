@@ -4,12 +4,13 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #pragma once
-#include <string>
 #include <algorithm>
+#include <string>
 
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/spatial_db.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace spatial {
 
 // indexing idea from http://msdn.microsoft.com/en-us/library/bb259689.aspx
@@ -92,4 +93,4 @@ inline bool GetDouble(Slice* input, double* d) {
 }
 
 }  // namespace spatial
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

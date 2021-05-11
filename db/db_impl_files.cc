@@ -18,11 +18,12 @@
 
 #include "db/event_helpers.h"
 #include "db/memtable_list.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/file_util.h"
 #include "util/sst_file_manager_impl.h"
 #include "utilities/util/valvec.hpp"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 uint64_t DBImpl::MinLogNumberToKeep() {
   if (allow_2pc()) {
@@ -396,8 +397,7 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
   // dedup state.candidate_files so we don't try to delete the same
   // file twice
   terark::sort_a(candidate_files, CompareCandidateFile);
-  candidate_files.resize(
-      terark::unique_a(candidate_files, EqualCandidateFile));
+  candidate_files.resize(terark::unique_a(candidate_files, EqualCandidateFile));
   terark::sort_a(state.skip_candidate_files);
 
   if (state.prev_total_log_size > 0) {
@@ -427,8 +427,8 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
     // 1. remove if we cannot parse
     // 2. remove if file number in skip_candidate_files
     if (!ParseFileName(fname, &number, info_log_prefix.prefix, &type) ||
-        (type != kInfoLogFile && terark::binary_search_a(
-                                     state.skip_candidate_files, number))) {
+        (type != kInfoLogFile &&
+         terark::binary_search_a(state.skip_candidate_files, number))) {
       // erase this candidate_files
       candidate_files[i] = std::move(candidate_files.back());
       candidate_files.pop_back();
@@ -711,4 +711,4 @@ uint64_t PrecomputeMinLogNumberToKeep(
   return min_log_number_to_keep;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

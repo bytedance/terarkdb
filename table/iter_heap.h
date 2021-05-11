@@ -7,9 +7,10 @@
 #pragma once
 
 #include "db/dbformat.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/iterator_wrapper.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // When used with std::priority_queue, this comparison functor puts the
 // iterator with the max/largest key on top.
@@ -21,6 +22,7 @@ class MaxIteratorComparator {
   bool operator()(IteratorWrapper* a, IteratorWrapper* b) const {
     return comparator_->Compare(a->key(), b->key()) < 0;
   }
+
  private:
   const InternalKeyComparator* comparator_;
 };
@@ -35,8 +37,9 @@ class MinIteratorComparator {
   bool operator()(IteratorWrapper* a, IteratorWrapper* b) const {
     return comparator_->Compare(a->key(), b->key()) > 0;
   }
+
  private:
   const InternalKeyComparator* comparator_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

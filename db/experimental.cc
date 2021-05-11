@@ -6,8 +6,9 @@
 #include "rocksdb/experimental.h"
 
 #include "db/db_impl.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace experimental {
 
 #ifndef ROCKSDB_LITE
@@ -47,4 +48,4 @@ Status SuggestCompactRange(DB* db, const Slice* begin, const Slice* end) {
 }
 
 }  // namespace experimental
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

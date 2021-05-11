@@ -17,25 +17,25 @@
 
 #ifndef ROCKSDB_LITE
 
-#include <iostream>
-#include <cctype>
-
 #include "redis_lists.h"
-#include "util/testharness.h"
+
+#include <cctype>
+#include <iostream>
+
+#include "rocksdb/terark_namespace.h"
 #include "util/random.h"
+#include "util/testharness.h"
 
-using namespace rocksdb;
+using namespace TERARKDB_NAMESPACE;
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class RedisListsTest : public testing::Test {
  public:
   static const std::string kDefaultDbName;
   static Options options;
 
-  RedisListsTest() {
-    options.create_if_missing = true;
-  }
+  RedisListsTest() { options.create_if_missing = true; }
 };
 
 const std::string RedisListsTest::kDefaultDbName =
@@ -57,7 +57,7 @@ void AssertListEq(const std::vector<std::string>& result,
 
 // PushRight, Length, Index, Range
 TEST_F(RedisListsTest, SimpleTest) {
-  RedisLists redis(kDefaultDbName, options, true);   // Destructive
+  RedisLists redis(kDefaultDbName, options, true);  // Destructive
 
   std::string tempv;  // Used below for all Index(), PopRight(), PopLeft()
 
@@ -67,16 +67,16 @@ TEST_F(RedisListsTest, SimpleTest) {
   ASSERT_EQ(redis.PushRight("k1", "v3"), 3);
 
   // Check Length and Index() functions
-  ASSERT_EQ(redis.Length("k1"), 3);        // Check length
+  ASSERT_EQ(redis.Length("k1"), 3);  // Check length
   ASSERT_TRUE(redis.Index("k1", 0, &tempv));
-  ASSERT_EQ(tempv, "v1");   // Check valid indices
+  ASSERT_EQ(tempv, "v1");  // Check valid indices
   ASSERT_TRUE(redis.Index("k1", 1, &tempv));
   ASSERT_EQ(tempv, "v2");
   ASSERT_TRUE(redis.Index("k1", 2, &tempv));
   ASSERT_EQ(tempv, "v3");
 
   // Check range function and vectors
-  std::vector<std::string> result = redis.Range("k1", 0, 2);   // Get the list
+  std::vector<std::string> result = redis.Range("k1", 0, 2);  // Get the list
   std::vector<std::string> expected_result(3);
   expected_result[0] = "v1";
   expected_result[1] = "v2";
@@ -86,7 +86,7 @@ TEST_F(RedisListsTest, SimpleTest) {
 
 // PushLeft, Length, Index, Range
 TEST_F(RedisListsTest, SimpleTest2) {
-  RedisLists redis(kDefaultDbName, options, true);   // Destructive
+  RedisLists redis(kDefaultDbName, options, true);  // Destructive
 
   std::string tempv;  // Used below for all Index(), PopRight(), PopLeft()
 
@@ -96,16 +96,16 @@ TEST_F(RedisListsTest, SimpleTest2) {
   ASSERT_EQ(redis.PushLeft("k1", "v1"), 3);
 
   // Check Length and Index() functions
-  ASSERT_EQ(redis.Length("k1"), 3);        // Check length
+  ASSERT_EQ(redis.Length("k1"), 3);  // Check length
   ASSERT_TRUE(redis.Index("k1", 0, &tempv));
-  ASSERT_EQ(tempv, "v1");   // Check valid indices
+  ASSERT_EQ(tempv, "v1");  // Check valid indices
   ASSERT_TRUE(redis.Index("k1", 1, &tempv));
   ASSERT_EQ(tempv, "v2");
   ASSERT_TRUE(redis.Index("k1", 2, &tempv));
   ASSERT_EQ(tempv, "v3");
 
   // Check range function and vectors
-  std::vector<std::string> result = redis.Range("k1", 0, 2);   // Get the list
+  std::vector<std::string> result = redis.Range("k1", 0, 2);  // Get the list
   std::vector<std::string> expected_result(3);
   expected_result[0] = "v1";
   expected_result[1] = "v2";
@@ -115,7 +115,7 @@ TEST_F(RedisListsTest, SimpleTest2) {
 
 // Exhaustive test of the Index() function
 TEST_F(RedisListsTest, IndexTest) {
-  RedisLists redis(kDefaultDbName, options, true);   // Destructive
+  RedisLists redis(kDefaultDbName, options, true);  // Destructive
 
   std::string tempv;  // Used below for all Index(), PopRight(), PopLeft()
 
@@ -171,10 +171,9 @@ TEST_F(RedisListsTest, IndexTest) {
   ASSERT_TRUE(!redis.Index("k1", -129, &tempv));
 }
 
-
 // Exhaustive test of the Range() function
 TEST_F(RedisListsTest, RangeTest) {
-  RedisLists redis(kDefaultDbName, options, true);   // Destructive
+  RedisLists redis(kDefaultDbName, options, true);  // Destructive
 
   std::string tempv;  // Used below for all Index(), PopRight(), PopLeft()
 
@@ -288,7 +287,7 @@ TEST_F(RedisListsTest, InsertTest) {
   ASSERT_EQ(tempv, "hello");
 
   // Test InsertAfter
-  newLength =  redis.InsertAfter("k1", "c", "bye");
+  newLength = redis.InsertAfter("k1", "c", "bye");
   ASSERT_EQ(newLength, 9);
   ASSERT_EQ(redis.Length("k1"), newLength);
   ASSERT_TRUE(redis.Index("k1", 6, &tempv));
@@ -370,7 +369,7 @@ TEST_F(RedisListsTest, SetTest) {
   ASSERT_TRUE(redis.Set("k1", 1, "1"));
   ASSERT_TRUE(redis.Set("k1", 4, "4"));
 
-  ASSERT_EQ(redis.Length("k1"), 7); // Size should not change
+  ASSERT_EQ(redis.Length("k1"), 7);  // Size should not change
   ASSERT_TRUE(redis.Index("k1", 0, &tempv));
   ASSERT_EQ(tempv, "0");
   ASSERT_TRUE(redis.Index("k1", 1, &tempv));
@@ -395,7 +394,7 @@ TEST_F(RedisListsTest, SetTest) {
   ASSERT_TRUE(redis.Set("k1", -6, "b"));
   ASSERT_TRUE(redis.Set("k1", -3, "e"));
 
-  ASSERT_EQ(redis.Length("k1"), 7); // Size should not change
+  ASSERT_EQ(redis.Length("k1"), 7);  // Size should not change
   ASSERT_TRUE(redis.Index("k1", 0, &tempv));
   ASSERT_EQ(tempv, "a");
   ASSERT_TRUE(redis.Index("k1", 1, &tempv));
@@ -418,7 +417,7 @@ TEST_F(RedisListsTest, SetTest) {
   ASSERT_EQ(redis.Set("k1", -21391, "large negative index should fail"), false);
 
   // One last check (to make sure nothing weird happened)
-  ASSERT_EQ(redis.Length("k1"), 7); // Size should not change
+  ASSERT_EQ(redis.Length("k1"), 7);  // Size should not change
   ASSERT_TRUE(redis.Index("k1", 0, &tempv));
   ASSERT_EQ(tempv, "a");
   ASSERT_TRUE(redis.Index("k1", 1, &tempv));
@@ -437,7 +436,7 @@ TEST_F(RedisListsTest, SetTest) {
 
 // Testing Insert, Push, and Set, in a mixed environment
 TEST_F(RedisListsTest, InsertPushSetTest) {
-  RedisLists redis(kDefaultDbName, options, true);   // Destructive
+  RedisLists redis(kDefaultDbName, options, true);  // Destructive
 
   std::string tempv;  // Used below for all Index(), PopRight(), PopLeft()
 
@@ -450,36 +449,36 @@ TEST_F(RedisListsTest, InsertPushSetTest) {
   redis.PushLeft("k1", "z");
   redis.PushRight("k1", "x");
   lengthCheck = redis.InsertAfter("k1", "a", "aftera");
-  ASSERT_EQ(lengthCheck , 4);
+  ASSERT_EQ(lengthCheck, 4);
   redis.InsertBefore("k1", "z", "newbegin");  // InsertBefore beginning of list
   redis.InsertAfter("k1", "x", "newend");     // InsertAfter end of list
 
   // Check
-  std::vector<std::string> res = redis.Range("k1", 0, -1); // Get the list
+  std::vector<std::string> res = redis.Range("k1", 0, -1);  // Get the list
   ASSERT_EQ((int)res.size(), 6);
   ASSERT_EQ(res[0], "newbegin");
   ASSERT_EQ(res[5], "newend");
   ASSERT_EQ(res[3], "aftera");
 
   // Testing duplicate values/pivots (multiple occurrences of 'a')
-  ASSERT_TRUE(redis.Set("k1", 0, "a"));     // [a, z, a, aftera, x, newend]
-  redis.InsertAfter("k1", "a", "happy");    // [a, happy, z, a, aftera, ...]
+  ASSERT_TRUE(redis.Set("k1", 0, "a"));   // [a, z, a, aftera, x, newend]
+  redis.InsertAfter("k1", "a", "happy");  // [a, happy, z, a, aftera, ...]
   ASSERT_TRUE(redis.Index("k1", 1, &tempv));
   ASSERT_EQ(tempv, "happy");
-  redis.InsertBefore("k1", "a", "sad");     // [sad, a, happy, z, a, aftera, ...]
+  redis.InsertBefore("k1", "a", "sad");  // [sad, a, happy, z, a, aftera, ...]
   ASSERT_TRUE(redis.Index("k1", 0, &tempv));
   ASSERT_EQ(tempv, "sad");
   ASSERT_TRUE(redis.Index("k1", 2, &tempv));
   ASSERT_EQ(tempv, "happy");
   ASSERT_TRUE(redis.Index("k1", 5, &tempv));
   ASSERT_EQ(tempv, "aftera");
-  redis.InsertAfter("k1", "a", "zz");         // [sad, a, zz, happy, z, a, aftera, ...]
+  redis.InsertAfter("k1", "a", "zz");  // [sad, a, zz, happy, z, a, aftera, ...]
   ASSERT_TRUE(redis.Index("k1", 2, &tempv));
   ASSERT_EQ(tempv, "zz");
   ASSERT_TRUE(redis.Index("k1", 6, &tempv));
   ASSERT_EQ(tempv, "aftera");
-  ASSERT_TRUE(redis.Set("k1", 1, "nota"));    // [sad, nota, zz, happy, z, a, ...]
-  redis.InsertBefore("k1", "a", "ba");        // [sad, nota, zz, happy, z, ba, a, ...]
+  ASSERT_TRUE(redis.Set("k1", 1, "nota"));  // [sad, nota, zz, happy, z, a, ...]
+  redis.InsertBefore("k1", "a", "ba");  // [sad, nota, zz, happy, z, ba, a, ...]
   ASSERT_TRUE(redis.Index("k1", 4, &tempv));
   ASSERT_EQ(tempv, "z");
   ASSERT_TRUE(redis.Index("k1", 5, &tempv));
@@ -491,12 +490,12 @@ TEST_F(RedisListsTest, InsertPushSetTest) {
   // redis.Print("k1");   // manually check
 
   // Test Inserting before/after non-existent values
-  lengthCheck = redis.Length("k1"); // Ensure that the length doesn't change
+  lengthCheck = redis.Length("k1");  // Ensure that the length doesn't change
   ASSERT_EQ(lengthCheck, 10);
   ASSERT_EQ(redis.InsertBefore("k1", "non-exist", "randval"), lengthCheck);
   ASSERT_EQ(redis.InsertAfter("k1", "nothing", "a"), lengthCheck);
-  ASSERT_EQ(redis.InsertAfter("randKey", "randVal", "ranValue"), 0); // Empty
-  ASSERT_EQ(redis.Length("k1"), lengthCheck); // The length should not change
+  ASSERT_EQ(redis.InsertAfter("randKey", "randVal", "ranValue"), 0);  // Empty
+  ASSERT_EQ(redis.Length("k1"), lengthCheck);  // The length should not change
 
   // Simply Test the Set() function
   redis.Set("k1", 5, "ba2");
@@ -516,7 +515,7 @@ TEST_F(RedisListsTest, InsertPushSetTest) {
   redis.Set("k1", -1, "endprank");
   ASSERT_TRUE(!redis.Index("k1", 11, &tempv));
   ASSERT_TRUE(redis.Index("k1", 10, &tempv));
-  ASSERT_EQ(tempv, "endprank"); // Ensure Set worked correctly
+  ASSERT_EQ(tempv, "endprank");  // Ensure Set worked correctly
   redis.Set("k1", -11, "t");
   ASSERT_TRUE(redis.Index("k1", 0, &tempv));
   ASSERT_EQ(tempv, "t");
@@ -529,7 +528,7 @@ TEST_F(RedisListsTest, InsertPushSetTest) {
 
 // Testing Trim, Pop
 TEST_F(RedisListsTest, TrimPopTest) {
-  RedisLists redis(kDefaultDbName, options, true);   // Destructive
+  RedisLists redis(kDefaultDbName, options, true);  // Destructive
 
   std::string tempv;  // Used below for all Index(), PopRight(), PopLeft()
 
@@ -538,8 +537,8 @@ TEST_F(RedisListsTest, TrimPopTest) {
   redis.PushLeft("k1", "a");
   redis.PushLeft("k1", "z");
   redis.PushRight("k1", "x");
-  redis.InsertBefore("k1", "z", "newbegin");    // InsertBefore start of list
-  redis.InsertAfter("k1", "x", "newend");       // InsertAfter end of list
+  redis.InsertBefore("k1", "z", "newbegin");  // InsertBefore start of list
+  redis.InsertAfter("k1", "x", "newend");     // InsertAfter end of list
   redis.InsertAfter("k1", "a", "aftera");
 
   // Simple PopLeft/Right test
@@ -557,13 +556,13 @@ TEST_F(RedisListsTest, TrimPopTest) {
   // Now have: [z, a, aftera, x]
 
   // Test Trim
-  ASSERT_TRUE(redis.Trim("k1", 0, -1));       // [z, a, aftera, x] (do nothing)
+  ASSERT_TRUE(redis.Trim("k1", 0, -1));  // [z, a, aftera, x] (do nothing)
   ASSERT_EQ(redis.Length("k1"), 4);
-  ASSERT_TRUE(redis.Trim("k1", 0, 2));                     // [z, a, aftera]
+  ASSERT_TRUE(redis.Trim("k1", 0, 2));  // [z, a, aftera]
   ASSERT_EQ(redis.Length("k1"), 3);
   ASSERT_TRUE(redis.Index("k1", -1, &tempv));
   ASSERT_EQ(tempv, "aftera");
-  ASSERT_TRUE(redis.Trim("k1", 1, 1));                     // [a]
+  ASSERT_TRUE(redis.Trim("k1", 1, 1));  // [a]
   ASSERT_EQ(redis.Length("k1"), 1);
   ASSERT_TRUE(redis.Index("k1", 0, &tempv));
   ASSERT_EQ(tempv, "a");
@@ -582,10 +581,10 @@ TEST_F(RedisListsTest, TrimPopTest) {
   redis.PushLeft("k1", "a");
   redis.PushLeft("k1", "z");
   redis.PushRight("k1", "x");
-  redis.InsertBefore("k1", "z", "newbegin");    // InsertBefore start of list
-  redis.InsertAfter("k1", "x", "newend");       // InsertAfter end of list
+  redis.InsertBefore("k1", "z", "newbegin");  // InsertBefore start of list
+  redis.InsertAfter("k1", "x", "newend");     // InsertAfter end of list
   redis.InsertAfter("k1", "a", "aftera");
-  ASSERT_TRUE(redis.Trim("k1", -6, -1));                     // Should do nothing
+  ASSERT_TRUE(redis.Trim("k1", -6, -1));  // Should do nothing
   ASSERT_EQ(redis.Length("k1"), 6);
   ASSERT_TRUE(redis.Trim("k1", 1, -2));
   ASSERT_TRUE(redis.Index("k1", 0, &tempv));
@@ -599,7 +598,7 @@ TEST_F(RedisListsTest, TrimPopTest) {
 
 // Testing Remove, RemoveFirst, RemoveLast
 TEST_F(RedisListsTest, RemoveTest) {
-  RedisLists redis(kDefaultDbName, options, true);   // Destructive
+  RedisLists redis(kDefaultDbName, options, true);  // Destructive
 
   std::string tempv;  // Used below for all Index(), PopRight(), PopLeft()
 
@@ -608,8 +607,8 @@ TEST_F(RedisListsTest, RemoveTest) {
   redis.PushLeft("k1", "a");
   redis.PushLeft("k1", "z");
   redis.PushRight("k1", "x");
-  redis.InsertBefore("k1", "z", "newbegin");    // InsertBefore start of list
-  redis.InsertAfter("k1", "x", "newend");       // InsertAfter end of list
+  redis.InsertBefore("k1", "z", "newbegin");  // InsertBefore start of list
+  redis.InsertAfter("k1", "x", "newend");     // InsertAfter end of list
   redis.InsertAfter("k1", "a", "aftera");
   redis.PushRight("k1", "a");
   redis.PushRight("k1", "a");
@@ -670,7 +669,7 @@ TEST_F(RedisListsTest, RemoveTest) {
 
   // Test over-shooting (removing more than there exists)
   numRemoved = redis.Remove("k1", -9000, "x");
-  ASSERT_EQ(numRemoved , 4);    // Only really removed 4
+  ASSERT_EQ(numRemoved, 4);  // Only really removed 4
   ASSERT_EQ(redis.Length("k1"), 5);
   ASSERT_TRUE(redis.Index("k1", 0, &tempv));
   ASSERT_EQ(tempv, "newbegin");
@@ -678,7 +677,7 @@ TEST_F(RedisListsTest, RemoveTest) {
   ASSERT_EQ(numRemoved, 0);
 
   // Try removing ALL!
-  numRemoved = redis.Remove("k1", 0, "newbegin");   // REMOVE 0 will remove all!
+  numRemoved = redis.Remove("k1", 0, "newbegin");  // REMOVE 0 will remove all!
   ASSERT_EQ(numRemoved, 1);
 
   // Removal from an empty-list
@@ -687,22 +686,21 @@ TEST_F(RedisListsTest, RemoveTest) {
   ASSERT_EQ(numRemoved, 0);
 }
 
-
 // Test Multiple keys and Persistence
 TEST_F(RedisListsTest, PersistenceMultiKeyTest) {
   std::string tempv;  // Used below for all Index(), PopRight(), PopLeft()
 
   // Block one: populate a single key in the database
   {
-    RedisLists redis(kDefaultDbName, options, true);   // Destructive
+    RedisLists redis(kDefaultDbName, options, true);  // Destructive
 
     // A series of pushes and insertions
     // Will result in [newbegin, z, a, aftera, x, newend, a, a]
     redis.PushLeft("k1", "a");
     redis.PushLeft("k1", "z");
     redis.PushRight("k1", "x");
-    redis.InsertBefore("k1", "z", "newbegin");    // InsertBefore start of list
-    redis.InsertAfter("k1", "x", "newend");       // InsertAfter end of list
+    redis.InsertBefore("k1", "z", "newbegin");  // InsertBefore start of list
+    redis.InsertAfter("k1", "x", "newend");     // InsertAfter end of list
     redis.InsertAfter("k1", "a", "aftera");
     redis.PushRight("k1", "a");
     redis.PushRight("k1", "a");
@@ -713,7 +711,8 @@ TEST_F(RedisListsTest, PersistenceMultiKeyTest) {
 
   // Block two: make sure changes were saved and add some other key
   {
-    RedisLists redis(kDefaultDbName, options, false); // Persistent, non-destructive
+    RedisLists redis(kDefaultDbName, options,
+                     false);  // Persistent, non-destructive
 
     // Check
     ASSERT_EQ(redis.Length("k1"), 8);
@@ -728,7 +727,8 @@ TEST_F(RedisListsTest, PersistenceMultiKeyTest) {
 
   // Block three: Verify the changes from block 2
   {
-    RedisLists redis(kDefaultDbName, options, false); // Persistent, non-destructive
+    RedisLists redis(kDefaultDbName, options,
+                     false);  // Persistent, non-destructive
 
     // Check
     ASSERT_EQ(redis.Length("k1"), 7);
@@ -747,7 +747,8 @@ namespace {
 void MakeUpper(std::string* const s) {
   int len = static_cast<int>(s->length());
   for (int i = 0; i < len; ++i) {
-    (*s)[i] = static_cast<char>(toupper((*s)[i]));  // C-version defined in <ctype.h>
+    (*s)[i] =
+        static_cast<char>(toupper((*s)[i]));  // C-version defined in <ctype.h>
   }
 }
 
@@ -756,9 +757,8 @@ void MakeUpper(std::string* const s) {
 ///  Use destructive=true to clean the database before use.
 ///  Use destructive=false to remember the previous state (i.e.: persistent)
 /// Should be called from main function.
-int manual_redis_test(bool destructive){
-  RedisLists redis(RedisListsTest::kDefaultDbName,
-                   RedisListsTest::options,
+int manual_redis_test(bool destructive) {
+  RedisLists redis(RedisListsTest::kDefaultDbName, RedisListsTest::options,
                    destructive);
 
   // TODO: Right now, please use spaces to separate each word.
@@ -766,7 +766,7 @@ int manual_redis_test(bool destructive){
   //  Example: RPUSH mylist "this is a compound value"
 
   std::string command;
-  while(true) {
+  while (true) {
     std::cin >> command;
     MakeUpper(&command);
 
@@ -774,9 +774,9 @@ int manual_redis_test(bool destructive){
       std::string k, t, p, v;
       std::cin >> k >> t >> p >> v;
       MakeUpper(&t);
-      if (t=="BEFORE") {
+      if (t == "BEFORE") {
         std::cout << redis.InsertBefore(k, p, v) << std::endl;
-      } else if (t=="AFTER") {
+      } else if (t == "AFTER") {
         std::cout << redis.InsertAfter(k, p, v) << std::endl;
       }
     } else if (command == "LPUSH") {
@@ -837,7 +837,7 @@ int manual_redis_test(bool destructive){
       std::string res;
       redis.Index(k, idx, &res);
       std::cout << res << std::endl;
-    } else if (command == "PRINT") {      // Added by Deon
+    } else if (command == "PRINT") {  // Added by Deon
       std::string k;
       std::cin >> k;
       redis.Print(k);
@@ -850,18 +850,16 @@ int manual_redis_test(bool destructive){
 }
 }  // namespace
 
-} // namespace rocksdb
-
+}  // namespace TERARKDB_NAMESPACE
 
 // USAGE: "./redis_test" for default (unit tests)
 //        "./redis_test -m" for manual testing (redis command api)
 //        "./redis_test -m -d" for destructive manual test (erase db before use)
 
-
 namespace {
 // Check for "want" argument in the argument list
-bool found_arg(int argc, char* argv[], const char* want){
-  for(int i=1; i<argc; ++i){
+bool found_arg(int argc, char* argv[], const char* want) {
+  for (int i = 1; i < argc; ++i) {
     if (strcmp(argv[i], want) == 0) {
       return true;
     }
@@ -877,7 +875,7 @@ int main(int argc, char* argv[]) {
   ::testing::InitGoogleTest(&argc, argv);
   if (found_arg(argc, argv, "-m")) {
     bool destructive = found_arg(argc, argv, "-d");
-    return rocksdb::manual_redis_test(destructive);
+    return TERARKDB_NAMESPACE::manual_redis_test(destructive);
   } else {
     return RUN_ALL_TESTS();
   }

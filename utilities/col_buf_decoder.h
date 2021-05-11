@@ -10,10 +10,12 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 #include "utilities/col_buf_encoder.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct ColDeclaration;
 
@@ -116,4 +118,4 @@ struct KVPairColBufDecoders {
         ColBufDecoder::NewColBufDecoder(*kvp_cd.value_checksum_declaration));
   }
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

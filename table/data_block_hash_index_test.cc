@@ -3,22 +3,24 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
+#include "table/data_block_hash_index.h"
+
 #include <cstdlib>
 #include <string>
 #include <unordered_map>
 
 #include "db/table_properties_collector.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block.h"
 #include "table/block_based_table_reader.h"
 #include "table/block_builder.h"
-#include "table/data_block_hash_index.h"
 #include "table/get_context.h"
 #include "table/table_builder.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 bool SearchForOffset(DataBlockHashIndex& index, const char* data,
                      uint16_t map_offset, const Slice& key,
@@ -134,7 +136,7 @@ TEST(DataBlockHashIndex, DataBlockHashTest) {
 
   ASSERT_EQ(buffer.size(), estimated_size);
 
-  buffer2 = buffer; // test for the correctness of relative offset
+  buffer2 = buffer;  // test for the correctness of relative offset
 
   Slice s(buffer2);
   DataBlockHashIndex index;
@@ -171,7 +173,7 @@ TEST(DataBlockHashIndex, DataBlockHashTestCollision) {
 
   ASSERT_EQ(buffer.size(), estimated_size);
 
-  buffer2 = buffer; // test for the correctness of relative offset
+  buffer2 = buffer;  // test for the correctness of relative offset
 
   Slice s(buffer2);
   DataBlockHashIndex index;
@@ -212,7 +214,7 @@ TEST(DataBlockHashIndex, DataBlockHashTestLarge) {
 
   ASSERT_EQ(buffer.size(), estimated_size);
 
-  buffer2 = buffer; // test for the correctness of relative offset
+  buffer2 = buffer;  // test for the correctness of relative offset
 
   Slice s(buffer2);
   DataBlockHashIndex index;
@@ -719,7 +721,7 @@ TEST(DataBlockHashIndex, BlockBoundary) {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

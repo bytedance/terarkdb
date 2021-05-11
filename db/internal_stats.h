@@ -14,11 +14,11 @@
 #include <vector>
 
 #include "db/version_set.h"
+#include "rocksdb/terark_namespace.h"
+
+namespace TERARKDB_NAMESPACE {
 
 class ColumnFamilyData;
-
-namespace rocksdb {
-
 class DBImpl;
 class MemTableList;
 
@@ -222,8 +222,7 @@ class InternalStats {
           bytes_moved(c.bytes_moved),
           num_input_files_in_non_output_levels(
               c.num_input_files_in_non_output_levels),
-          num_input_files_in_output_level(
-              c.num_input_files_in_output_level),
+          num_input_files_in_output_level(c.num_input_files_in_output_level),
           num_output_files(c.num_output_files),
           num_input_records(c.num_input_records),
           num_dropped_records(c.num_dropped_records),
@@ -267,7 +266,7 @@ class InternalStats {
       this->num_dropped_records += c.num_dropped_records;
       this->count += c.count;
       int num_of_reasons = static_cast<int>(CompactionReason::kNumOfReasons);
-      for (int i = 0; i< num_of_reasons; i++) {
+      for (int i = 0; i < num_of_reasons; i++) {
         counts[i] += c.counts[i];
       }
     }
@@ -396,8 +395,8 @@ class InternalStats {
   struct CFStatsSnapshot {
     // ColumnFamily-level stats
     CompactionStats comp_stats;
-    uint64_t ingest_bytes_flush;      // Bytes written to L0 (Flush)
-    uint64_t stall_count;             // Stall count
+    uint64_t ingest_bytes_flush;  // Bytes written to L0 (Flush)
+    uint64_t stall_count;         // Stall count
     // Stats from compaction jobs - bytes written, bytes read, duration.
     uint64_t compact_bytes_write;
     uint64_t compact_bytes_read;
@@ -439,10 +438,10 @@ class InternalStats {
 
   struct DBStatsSnapshot {
     // DB-level stats
-    uint64_t ingest_bytes;            // Bytes written by user
-    uint64_t wal_bytes;               // Bytes written to WAL
-    uint64_t wal_synced;              // Number of times WAL is synced
-    uint64_t write_with_wal;          // Number of writes that request WAL
+    uint64_t ingest_bytes;    // Bytes written by user
+    uint64_t wal_bytes;       // Bytes written to WAL
+    uint64_t wal_synced;      // Number of times WAL is synced
+    uint64_t write_with_wal;  // Number of writes that request WAL
     // These count the number of writes processed by the calling thread or
     // another thread.
     uint64_t write_other;
@@ -645,16 +644,17 @@ class InternalStats {
     return false;
   }
 
-  bool GetIntProperty(const DBPropertyInfo& /*property_info*/, uint64_t* /*value*/,
-                      DBImpl* /*db*/) const {
+  bool GetIntProperty(const DBPropertyInfo& /*property_info*/,
+                      uint64_t* /*value*/, DBImpl* /*db*/) const {
     return false;
   }
 
   bool GetIntPropertyOutOfMutex(const DBPropertyInfo& /*property_info*/,
-                                Version* /*version*/, uint64_t* /*value*/) const {
+                                Version* /*version*/,
+                                uint64_t* /*value*/) const {
     return false;
   }
 };
 #endif  // !ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

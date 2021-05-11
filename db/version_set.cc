@@ -19,13 +19,11 @@
 #include <algorithm>
 #include <list>
 #include <map>
-#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "db/compaction.h"
-#include "db/internal_stats.h"
 #include "db/log_reader.h"
 #include "db/log_writer.h"
 #include "db/memtable.h"
@@ -35,8 +33,10 @@
 #include "db/version_builder.h"
 #include "monitoring/file_read_sample.h"
 #include "monitoring/perf_context_imp.h"
+#include "monitoring/persistent_stats_history.h"
 #include "rocksdb/env.h"
 #include "rocksdb/merge_operator.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/write_buffer_manager.h"
 #include "table/format.h"
 #include "table/get_context.h"
@@ -56,7 +56,7 @@
 #include "util/sync_point.h"
 #include "utilities/util/valvec.hpp"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 
@@ -1415,9 +1415,15 @@ void Version::GetKey(const Slice& user_key, const Slice& ikey, Status* status,
       storage_info_.files_, user_key, ikey, &storage_info_.level_files_brief_,
       storage_info_.num_non_empty_levels_, &storage_info_.file_indexer_,
       user_comparator(), internal_comparator());
+  SequenceNumber ikey_seq = GetInternalKeySeqno(ikey);
   FdWithKeyRange* f = fp.GetNextFile();
 
   while (f != nullptr) {
+    if (f->fd.smallest_seqno > ikey_seq || f->fd.largest_seqno < ikey_seq) {
+      // fast path
+      f = fp.GetNextFile();
+      continue;
+    }
     *status =
         table_cache_->Get(options, *internal_comparator(), *f->file_metadata,
                           storage_info_.dependence_map(), ikey, &get_context,
@@ -1450,7 +1456,7 @@ void Version::GetKey(const Slice& user_key, const Slice& ikey, Status* status,
 bool Version::IsFilterSkipped(int level, bool is_file_last_in_level) {
   // Reaching the bottom level implies misses at all upper levels, so we'll
   // skip checking the filters when we predict a hit.
-  return cfd_->ioptions()->optimize_filters_for_hits &&
+  return cfd_->OptimizeFiltersForHits() &&
          (level > 0 || is_file_last_in_level) &&
          level == storage_info_.num_non_empty_levels() - 1;
 }
@@ -1643,33 +1649,6 @@ void VersionStorageInfo::EstimateCompactionBytesNeeded(
   }
 }
 
-namespace {
-uint32_t GetExpiredTtlFilesCount(const ImmutableCFOptions& ioptions,
-                                 const MutableCFOptions& mutable_cf_options,
-                                 const std::vector<FileMetaData*>& files) {
-  uint32_t ttl_expired_files_count = 0;
-
-  int64_t _current_time;
-  auto status = ioptions.env->GetCurrentTime(&_current_time);
-  if (status.ok()) {
-    const uint64_t current_time = static_cast<uint64_t>(_current_time);
-    for (auto f : files) {
-      if (!f->being_compacted && f->fd.table_reader != nullptr &&
-          f->fd.table_reader->GetTableProperties() != nullptr) {
-        auto creation_time =
-            f->fd.table_reader->GetTableProperties()->creation_time;
-        if (creation_time > 0 &&
-            creation_time < (current_time -
-                             mutable_cf_options.compaction_options_fifo.ttl)) {
-          ttl_expired_files_count++;
-        }
-      }
-    }
-  }
-  return ttl_expired_files_count;
-}
-}  // anonymous namespace
-
 void VersionStorageInfo::ComputeCompactionScore(
     const ImmutableCFOptions& immutable_cf_options,
     const MutableCFOptions& mutable_cf_options) {
@@ -1706,33 +1685,15 @@ void VersionStorageInfo::ComputeCompactionScore(
         }
       }
 
-      if (compaction_style_ == kCompactionStyleFIFO) {
-        score = static_cast<double>(total_size) /
-                mutable_cf_options.compaction_options_fifo.max_table_files_size;
-        if (mutable_cf_options.compaction_options_fifo.allow_compaction) {
-          score = std::max(
-              static_cast<double>(num_sorted_runs) /
-                  mutable_cf_options.level0_file_num_compaction_trigger,
-              score);
-        }
-        if (mutable_cf_options.compaction_options_fifo.ttl > 0) {
-          score = std::max(
-              static_cast<double>(GetExpiredTtlFilesCount(
-                  immutable_cf_options, mutable_cf_options, files_[level])),
-              score);
-        }
-
-      } else {
-        score = static_cast<double>(num_sorted_runs) /
-                mutable_cf_options.level0_file_num_compaction_trigger;
-        if (compaction_style_ == kCompactionStyleLevel && num_levels() > 1) {
-          // Level-based involves L0->L0 compactions that can lead to oversized
-          // L0 files. Take into account size as well to avoid later giant
-          // compactions to the base level.
-          score =
-              std::max(score, static_cast<double>(total_size) /
-                                  mutable_cf_options.max_bytes_for_level_base);
-        }
+      score = static_cast<double>(num_sorted_runs) /
+              mutable_cf_options.level0_file_num_compaction_trigger;
+      if (compaction_style_ == kCompactionStyleLevel && num_levels() > 1) {
+        // Level-based involves L0->L0 compactions that can lead to oversized
+        // L0 files. Take into account size as well to avoid later giant
+        // compactions to the base level.
+        score =
+            std::max(score, static_cast<double>(total_size) /
+                                mutable_cf_options.max_bytes_for_level_base);
       }
     } else {
       // Compute the ratio of current size to size limit.
@@ -1769,10 +1730,10 @@ void VersionStorageInfo::ComputeCompactionScore(
   uint64_t num_entries = 0;
   bool marked = false;
   for (auto& f : LevelFiles(-1)) {
-    if (f->is_gc_forbidden()) {
+    if (!f->is_gc_permitted()) {
       continue;
     }
-    // if a file being_compacted, gc_status must be kGarbageCollectionForbidden
+    // if a file being_compacted, gc_status must be kGarbageCollectionCandidate
     marked |= f->marked_for_compaction;
     num_antiquation += f->num_antiquation;
     num_entries += f->prop.num_entries;
@@ -1783,9 +1744,6 @@ void VersionStorageInfo::ComputeCompactionScore(
   is_pick_compaction_fail = false;
   ComputeFilesMarkedForCompaction();
   ComputeBottommostFilesMarkedForCompaction();
-  if (mutable_cf_options.ttl > 0) {
-    ComputeExpiredTtlFiles(immutable_cf_options, mutable_cf_options.ttl);
-  }
   EstimateCompactionBytesNeeded(mutable_cf_options);
 }
 
@@ -1810,33 +1768,8 @@ void VersionStorageInfo::ComputeFilesMarkedForCompaction() {
       }
     }
   }
-}
-
-void VersionStorageInfo::ComputeExpiredTtlFiles(
-    const ImmutableCFOptions& ioptions, const uint64_t ttl) {
-  assert(ttl > 0);
-
-  expired_ttl_files_.clear();
-
-  int64_t _current_time;
-  auto status = ioptions.env->GetCurrentTime(&_current_time);
-  if (!status.ok()) {
-    return;
-  }
-  const uint64_t current_time = static_cast<uint64_t>(_current_time);
-
-  for (int level = 0; level < num_levels() - 1; level++) {
-    for (auto f : files_[level]) {
-      if (!f->being_compacted && f->fd.table_reader != nullptr &&
-          f->fd.table_reader->GetTableProperties() != nullptr) {
-        auto creation_time =
-            f->fd.table_reader->GetTableProperties()->creation_time;
-        if (creation_time > 0 && creation_time < (current_time - ttl)) {
-          expired_ttl_files_.emplace_back(level, f);
-        }
-      }
-    }
-  }
+  std::sort(files_marked_for_compaction_.begin(),
+            files_marked_for_compaction_.end());
 }
 
 namespace {
@@ -1883,12 +1816,12 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f,
     // When this function is not set, dependence_map_ will update with subject
     // file's property.
     if (exists == nullptr) {
-      for (auto file_number : f->prop.inheritance_chain) {
+      for (auto file_number : f->prop.inheritance) {
         assert(dependence_map_.count(file_number) == 0);
         dependence_map_.emplace(file_number, f);
       }
     } else {
-      for (auto file_number : f->prop.inheritance_chain) {
+      for (auto file_number : f->prop.inheritance) {
         assert(dependence_map_.count(file_number) == 0);
         if (exists(exists_args, file_number)) {
           dependence_map_.emplace(file_number, f);
@@ -1898,6 +1831,9 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f,
   } else {
     if (f->prop.is_map_sst()) {
       space_amplification_[level] |= kHasMapSst;
+    }
+    if (f->marked_for_compaction) {
+      space_amplification_[level] |= kMarkedForCompaction;
     }
   }
   if (f->prop.has_range_deletions()) {
@@ -2053,7 +1989,6 @@ void SortFileByOverlappingRatio(
 void VersionStorageInfo::UpdateFilesByCompactionPri(
     CompactionPri compaction_pri) {
   if (compaction_style_ == kCompactionStyleNone ||
-      compaction_style_ == kCompactionStyleFIFO ||
       compaction_style_ == kCompactionStyleUniversal) {
     // don't need this
     return;
@@ -2167,7 +2102,12 @@ void VersionStorageInfo::ComputeBottommostFilesMarkedForCompaction() {
   bottommost_files_mark_threshold_ = kMaxSequenceNumber;
   for (auto& level_and_file : bottommost_files_) {
     auto meta = level_and_file.second;
-    if (!meta->being_compacted && meta->prop.has_snapshots()) {
+    if (meta->being_compacted) {
+      continue;
+    }
+    if (meta->marked_for_compaction) {
+      bottommost_files_marked_for_compaction_.push_back(level_and_file);
+    } else if (meta->prop.has_snapshots()) {
       // largest_seqno might be nonzero due to containing the final key in an
       // earlier compaction, whose seqnum we didn't zero out. Multiple deletions
       // ensures the file really contains deleted or overwritten keys.
@@ -2179,6 +2119,8 @@ void VersionStorageInfo::ComputeBottommostFilesMarkedForCompaction() {
       }
     }
   }
+  std::sort(bottommost_files_marked_for_compaction_.begin(),
+            bottommost_files_marked_for_compaction_.end());
 }
 
 void Version::Ref() { ++refs_; }
@@ -2680,7 +2622,7 @@ void VersionStorageInfo::CalculateBaseBytes(const ImmutableCFOptions& ioptions,
 
     // Prefill every level's max bytes to disallow compaction from there.
     for (int i = 0; i < num_levels_; i++) {
-      level_max_bytes_[i] = std::numeric_limits<uint64_t>::max();
+      level_max_bytes_[i] = port::kMaxUint64;
     }
 
     if (max_level_size == 0) {
@@ -2979,7 +2921,7 @@ Status VersionSet::ProcessManifestWrites(
     batch_edits.push_back(first_writer.edit_list.front());
   } else {
     auto it = manifest_writers_.cbegin();
-    size_t group_start = std::numeric_limits<size_t>::max();
+    size_t group_start = port::kMaxUint64;
     while (it != manifest_writers_.cend()) {
       if ((*it)->edit_list.front()->IsColumnFamilyManipulation()) {
         // no group commits for column family add or drop
@@ -3052,8 +2994,8 @@ Status VersionSet::ProcessManifestWrites(
                batch_edits.back()->remaining_entries_ == 0)) {
             group_start = batch_edits.size();
           }
-        } else if (group_start != std::numeric_limits<size_t>::max()) {
-          group_start = std::numeric_limits<size_t>::max();
+        } else if (group_start != port::kMaxUint64) {
+          group_start = port::kMaxUint64;
         }
         builder->PushEdit(e, this, mu);
         batch_edits.push_back(e);
@@ -3125,6 +3067,7 @@ Status VersionSet::ProcessManifestWrites(
     mu->Unlock();
 
     if (!first_writer.edit_list.front()->IsColumnFamilyManipulation()) {
+      StopWatch sw(env_, db_options_->statistics.get(), BUILD_VERSION_TIME);
       for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
         assert(!builder_guards.empty() &&
                builder_guards.size() == versions.size());
@@ -3145,7 +3088,8 @@ Status VersionSet::ProcessManifestWrites(
                builder_guards.size() == versions.size());
         ColumnFamilyData* cfd = versions[i]->cfd_;
         builder_guards[i]->version_builder()->LoadTableHandlers(
-            cfd->internal_stats(), cfd->ioptions()->optimize_filters_for_hits,
+            cfd->internal_stats(),
+            mutable_cf_options_ptrs[i]->optimize_filters_for_hits,
             mutable_cf_options_ptrs[i]->prefix_extractor.get(),
             load_essence_sst);
       }
@@ -3510,11 +3454,23 @@ Status VersionSet::ApplyOneVersionEdit(
           edit.column_family_name_);
     }
     auto cf_options = name_to_options.find(edit.column_family_name_);
-    if (cf_options == name_to_options.end()) {
+    // implicitly add persistent_stats column family without requiring user
+    // to specify
+    bool is_persistent_stats_column_family =
+        edit.column_family_name_.compare(kPersistentStatsColumnFamilyName) == 0;
+    if (cf_options == name_to_options.end() &&
+        !is_persistent_stats_column_family) {
       column_families_not_found.insert(
           {edit.column_family_, edit.column_family_name_});
     } else {
-      cfd = CreateColumnFamily(cf_options->second, &edit);
+      // recover persistent_stats CF from a DB that already contains it
+      if (is_persistent_stats_column_family) {
+        ColumnFamilyOptions cfo;
+        OptimizeForPersistentStats(&cfo);
+        cfd = CreateColumnFamily(cfo, &edit);
+      } else {
+        cfd = CreateColumnFamily(cf_options->second, &edit);
+      }
       cfd->set_initialized();
       builders.insert(
           {edit.column_family_, new BaseReferencedVersionBuilder(cfd)});
@@ -4588,11 +4544,10 @@ bool VersionSet::VerifyCompactionFileConsistency(Compaction* c) {
   Version* version = c->column_family_data()->current();
   const VersionStorageInfo* vstorage = version->storage_info();
   if (c->input_version() != version) {
-    ROCKS_LOG_INFO(
-        db_options_->info_log,
-        "[%s] compaction output being applied to a different base version from"
-        " input version",
-        c->column_family_data()->GetName().c_str());
+    ROCKS_LOG_INFO(db_options_->info_log,
+                   "[%s] compaction output being applied to a different base "
+                   "version from input version",
+                   c->column_family_data()->GetName().c_str());
 
     if (vstorage->compaction_style_ == kCompactionStyleLevel &&
         c->start_level() == 0 && c->num_input_levels() > 2U) {
@@ -4760,4 +4715,4 @@ uint64_t VersionSet::GetTotalSstFilesSize(Version* dummy_versions) {
   return total_files_size;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

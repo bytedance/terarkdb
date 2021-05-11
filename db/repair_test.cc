@@ -13,11 +13,12 @@
 #include "db/db_test_util.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/db.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/transaction_log.h"
 #include "util/file_util.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE
 class RepairTest : public DBTestBase {
@@ -204,7 +205,7 @@ TEST_F(RepairTest, SeparateWalDir) {
     GetAllSSTFiles(&total_ssts_size);
     ASSERT_EQ(total_ssts_size, 0);
     std::string manifest_path =
-      DescriptorFileName(dbname_, dbfull()->TEST_Current_Manifest_FileNo());
+        DescriptorFileName(dbname_, dbfull()->TEST_Current_Manifest_FileNo());
 
     Close();
     ASSERT_OK(env_->FileExists(manifest_path));
@@ -222,7 +223,7 @@ TEST_F(RepairTest, SeparateWalDir) {
     ASSERT_EQ(Get("key"), "val");
     ASSERT_EQ(Get("foo"), "bar");
 
- } while(ChangeWalOptions());
+  } while (ChangeWalOptions());
 }
 
 TEST_F(RepairTest, RepairMultipleColumnFamilies) {
@@ -307,11 +308,10 @@ TEST_F(RepairTest, RepairColumnFamilyOptions) {
   db_->GetPropertiesOfAllTables(handles_[1], &fname_to_props);
   ASSERT_EQ(fname_to_props.size(), 2U);
   for (const auto& fname_and_props : fname_to_props) {
-    std::string comparator_name (
-      InternalKeyComparator(rev_opts.comparator).Name());
+    std::string comparator_name(
+        InternalKeyComparator(rev_opts.comparator).Name());
     comparator_name = comparator_name.substr(comparator_name.find(':') + 1);
-    ASSERT_EQ(comparator_name,
-              fname_and_props.second->comparator_name);
+    ASSERT_EQ(comparator_name, fname_and_props.second->comparator_name);
   }
   Close();
 
@@ -347,7 +347,7 @@ TEST_F(RepairTest, DbNameContainsTrailingSlash) {
   ASSERT_EQ(Get("key"), "val");
 }
 #endif  // ROCKSDB_LITE
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

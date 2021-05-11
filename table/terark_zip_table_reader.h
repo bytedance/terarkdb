@@ -10,18 +10,7 @@
 #ifndef TERARK_ZIP_TABLE_READER_H_
 #define TERARK_ZIP_TABLE_READER_H_
 
-// project headers
-#include "terark_zip_internal.h"
-#include "terark_zip_table.h"
-// boost headers
 #include <boost/noncopyable.hpp>
-// rocksdb headers
-#include <rocksdb/options.h>
-#include <table/block.h>
-#include <table/table_builder.h>
-#include <table/table_reader.h>
-#include <util/arena.h>
-// terark headers
 #include <terark/bitfield_array.hpp>
 #include <terark/entropy/entropy_base.hpp>
 #include <terark/idx/terark_zip_index.hpp>
@@ -29,7 +18,16 @@
 #include <terark/util/throw.hpp>
 #include <terark/zbs/abstract_blob_store.hpp>
 
-namespace rocksdb {
+#include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
+#include "table/block.h"
+#include "table/table_builder.h"
+#include "table/table_reader.h"
+#include "table/terark_zip_internal.h"
+#include "table/terark_zip_table.h"
+#include "util/arena.h"
+
+namespace TERARKDB_NAMESPACE {
 
 using terark::ContextBuffer;
 using terark::TerarkContext;
@@ -293,6 +291,6 @@ class TerarkZipTableMultiReader : public TerarkZipTableReaderBase {
   bool isReverseBytewiseOrder_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif /* TERARK_ZIP_TABLE_READER_H_ */

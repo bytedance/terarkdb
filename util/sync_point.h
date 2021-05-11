@@ -5,11 +5,14 @@
 #pragma once
 
 #include <assert.h>
+
 #include <functional>
 #include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
+
+#include "rocksdb/terark_namespace.h"
 
 // This is only set from db_stress.cc and for testing only.
 // If non-zero, kill at various points in source code with probability 1/this
@@ -22,7 +25,7 @@ extern std::vector<std::string> rocksdb_kill_prefix_blacklist;
 #define TEST_KILL_RANDOM(kill_point, rocksdb_kill_odds)
 #else
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 // Kill the process with probability 1/odds for testing.
 extern void TestKillRandom(std::string kill_point, int odds,
                            const std::string& srcfile, int srcline);
@@ -38,7 +41,7 @@ extern void TestKillRandom(std::string kill_point, int odds,
       TestKillRandom(kill_point, rocksdb_kill_odds, __FILE__, __LINE__); \
     }                                                                    \
   }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif
 
 #ifdef NDEBUG
@@ -48,7 +51,7 @@ extern void TestKillRandom(std::string kill_point, int odds,
 #define INIT_SYNC_POINT_SINGLETONS()
 #else
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // This class provides facility to reproduce race conditions deterministically
 // in unit tests.
@@ -117,12 +120,12 @@ class SyncPoint {
   struct Data;
 
  private:
-   // Singleton
+  // Singleton
   SyncPoint();
-  Data*  impl_;
+  Data* impl_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 // Use TEST_SYNC_POINT to specify sync points inside code base.
 // Sync points can have happens-after depedency on other sync points,
@@ -130,11 +133,13 @@ class SyncPoint {
 // utilized to re-produce race conditions between threads.
 // See TransactionLogIteratorRace in db_test.cc for an example use case.
 // TEST_SYNC_POINT is no op in release build.
-#define TEST_SYNC_POINT(x) rocksdb::SyncPoint::GetInstance()->Process(x)
-#define TEST_IDX_SYNC_POINT(x, index) \
-  rocksdb::SyncPoint::GetInstance()->Process(x + std::to_string(index))
+#define TEST_SYNC_POINT(x) \
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->Process(x)
+#define TEST_IDX_SYNC_POINT(x, index)                       \
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->Process(x + \
+                                                        std::to_string(index))
 #define TEST_SYNC_POINT_CALLBACK(x, y) \
-  rocksdb::SyncPoint::GetInstance()->Process(x, y)
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->Process(x, y)
 #define INIT_SYNC_POINT_SINGLETONS() \
-  (void)rocksdb::SyncPoint::GetInstance();
+  (void)TERARKDB_NAMESPACE::SyncPoint::GetInstance();
 #endif  // NDEBUG

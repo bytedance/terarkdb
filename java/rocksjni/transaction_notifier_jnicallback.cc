@@ -4,15 +4,18 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 // This file implements the callback "bridge" between Java and C++ for
-// rocksdb::TransactionNotifier.
+// TERARKDB_NAMESPACE::TransactionNotifier.
 
 #include "rocksjni/transaction_notifier_jnicallback.h"
+
+#include "rocksdb/terark_namespace.h"
 #include "rocksjni/portal.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
-TransactionNotifierJniCallback::TransactionNotifierJniCallback(JNIEnv* env,
-    jobject jtransaction_notifier) : JniCallback(env, jtransaction_notifier) {
+TransactionNotifierJniCallback::TransactionNotifierJniCallback(
+    JNIEnv* env, jobject jtransaction_notifier)
+    : JniCallback(env, jtransaction_notifier) {
   // we cache the method id for the JNI callback
   m_jsnapshot_created_methodID =
       AbstractTransactionNotifierJni::getSnapshotCreatedMethodId(env);
@@ -24,10 +27,10 @@ void TransactionNotifierJniCallback::SnapshotCreated(
   JNIEnv* env = getJniEnv(&attached_thread);
   assert(env != nullptr);
 
-  env->CallVoidMethod(m_jcallback_obj,
-      m_jsnapshot_created_methodID, reinterpret_cast<jlong>(newSnapshot));
+  env->CallVoidMethod(m_jcallback_obj, m_jsnapshot_created_methodID,
+                      reinterpret_cast<jlong>(newSnapshot));
 
-  if(env->ExceptionCheck()) {
+  if (env->ExceptionCheck()) {
     // exception thrown from CallVoidMethod
     env->ExceptionDescribe();  // print out exception to stderr
     releaseJniEnv(attached_thread);
@@ -36,4 +39,4 @@ void TransactionNotifierJniCallback::SnapshotCreated(
 
   releaseJniEnv(attached_thread);
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -23,13 +23,13 @@
 #include "db/version_edit.h"
 #include "monitoring/iostats_context_imp.h"
 #include "monitoring/thread_status_util.h"
-#include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/iterator.h"
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
-#include "table/block_based_table_builder.h"
+#include "rocksdb/table_properties.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/format.h"
 #include "table/internal_iterator.h"
 #include "util/c_style_callback.h"
@@ -38,7 +38,7 @@
 #include "util/stop_watch.h"
 #include "util/sync_point.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class TableFactory;
 
@@ -78,6 +78,8 @@ Status BuildTable(
     const InternalKeyComparator& internal_comparator,
     const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
         int_tbl_prop_collector_factories,
+    const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
+        int_tbl_prop_collector_factories_for_blob,
     uint32_t column_family_id, const std::string& column_family_name,
     std::vector<SequenceNumber> snapshots,
     SequenceNumber earliest_write_conflict_snapshot,
@@ -276,7 +278,7 @@ Status BuildTable(
                                    ioptions.statistics, ioptions.listeners));
         separate_helper.builder.reset(NewTableBuilder(
             ioptions, mutable_cf_options, internal_comparator,
-            int_tbl_prop_collector_factories, column_family_id,
+            int_tbl_prop_collector_factories_for_blob, column_family_id,
             column_family_name, separate_helper.file_writer.get(), compression,
             compression_opts, -1 /* level */, 0 /* compaction_load */, nullptr,
             true));
@@ -413,6 +415,12 @@ Status BuildTable(
                                     : TablePropertyCache::kNoRangeDeletions;
       sst_meta()->prop.flags |=
           tp.snapshots.empty() ? 0 : TablePropertyCache::kHasSnapshots;
+      if (ioptions.ttl_extractor_factory != nullptr) {
+        GetCompactionTimePoint(
+            builder->GetTableProperties().user_collected_properties,
+            &sst_meta()->prop.earliest_time_begin_compact,
+            &sst_meta()->prop.latest_time_end_compact);
+      }
     }
 
     if (s.ok() && !empty) {
@@ -483,4 +491,4 @@ Status BuildTable(
   return s;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

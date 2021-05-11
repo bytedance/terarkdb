@@ -29,7 +29,7 @@ size_t f_delete = 100;
 int n_graphcnt = 0;
 std::string outfname;
 
-using namespace rocksdb;
+using namespace TERARKDB_NAMESPACE;
 
 /*-----------------------------------{ Main }---------------------------------*/
 int main(int argc, char** argv) {
@@ -37,24 +37,24 @@ int main(int argc, char** argv) {
 /*--------------------------------{ White Hole }------------------------------*/
     std::mt19937_64 gen(42);
 
-    rocksdb::Status s;
-    rocksdb::DB* db;
+    TERARKDB_NAMESPACE::Status s;
+    TERARKDB_NAMESPACE::DB* db;
 /*-------------------------------{ Metrics Name }-----------------------------*/
-    //rocksdb::OperationTimerReporter::InitNamespace("terarkdb.iterdebug");
+    //TERARKDB_NAMESPACE::OperationTimerReporter::InitNamespace("terarkdb.iterdebug");
 
 /*----------------------------{ Thread Container }----------------------------*/
     std::vector<std::thread> v_write;
     std::vector<std::thread> v_verify;
 
-    std::vector<rocksdb::ColumnFamilyDescriptor> v_cfd;
-    std::vector<rocksdb::ColumnFamilyHandle*> v_cfh;
+    std::vector<TERARKDB_NAMESPACE::ColumnFamilyDescriptor> v_cfd;
+    std::vector<TERARKDB_NAMESPACE::ColumnFamilyHandle*> v_cfh;
 
 /*------------------------{ Generic Options Details }-------------------------*/
-    rocksdb::Options options;
+    TERARKDB_NAMESPACE::Options options;
 
-    options.compaction_style = rocksdb::kCompactionStyleLevel;
-    options.compaction_pri = rocksdb::kMinOverlappingRatio;
-    options.comparator = rocksdb::BytewiseComparator();
+    options.compaction_style = TERARKDB_NAMESPACE::kCompactionStyleLevel;
+    options.compaction_pri = TERARKDB_NAMESPACE::kMinOverlappingRatio;
+    options.comparator = TERARKDB_NAMESPACE::BytewiseComparator();
     options.allow_concurrent_memtable_write = false;
     options.max_open_files = -1;
     options.allow_mmap_reads = true;
@@ -72,12 +72,12 @@ int main(int argc, char** argv) {
     options.max_manifest_edit_count = 4096;
     options.force_consistency_checks = true;
     options.max_file_opening_threads = 64;
-    options.memtable_factory.reset(new rocksdb::SkipListFactory());
+    options.memtable_factory.reset(new TERARKDB_NAMESPACE::SkipListFactory());
     options.enable_lazy_compaction = false;
     std::shared_ptr<Cache> cache = NewLIRSCache(1ull << 30, 4, false, 0.9);
     BlockBasedTableOptions table_options;
     table_options.block_cache = cache;
-    options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
+    options.table_factory.reset(TERARKDB_NAMESPACE::NewBlockBasedTableFactory(table_options));
     options.create_if_missing = true;
     options.blob_size = size_t(-1);
     options.create_missing_column_families = true;
@@ -89,12 +89,12 @@ int main(int argc, char** argv) {
     options.max_total_wal_size = 1UL << 30;
 
 /*---------------------{ Terark Zip Table Options Details }-------------------*/
-    rocksdb::TerarkZipTableOptions tzto;
+    TERARKDB_NAMESPACE::TerarkZipTableOptions tzto;
 
     tzto.localTempDir = "./temp";
     tzto.indexNestLevel = 3;
     tzto.checksumLevel = 3;
-    tzto.entropyAlgo = rocksdb::TerarkZipTableOptions::EntropyAlgo::kNoEntropy;
+    tzto.entropyAlgo = TERARKDB_NAMESPACE::TerarkZipTableOptions::EntropyAlgo::kNoEntropy;
     tzto.terarkZipMinLevel = 0;
     tzto.debugLevel = 0;
     tzto.indexNestScale = 8;
@@ -123,21 +123,21 @@ int main(int argc, char** argv) {
     // tzto.compressLevel = -1;
 /*---------------------------{ Options file test }----------------------------*/
 
-    // rocksdb::DBOptions db_options, last_db_options;
-    // std::vector<rocksdb::ColumnFamilyDescriptor> cf_descriptors, last_cf_descriptors;
-    // s = rocksdb::LoadOptionsFromFile("./option_file.ini", rocksdb::Env::Default(),
+    // TERARKDB_NAMESPACE::DBOptions db_options, last_db_options;
+    // std::vector<TERARKDB_NAMESPACE::ColumnFamilyDescriptor> cf_descriptors, last_cf_descriptors;
+    // s = TERARKDB_NAMESPACE::LoadOptionsFromFile("./option_file.ini", TERARKDB_NAMESPACE::Env::Default(),
     //                                 &db_options, &cf_descriptors);
     // assert(s.ok());
-    // s = rocksdb::DB::Open(db_options, "./db", cf_descriptors, &v_cfh, &db);
+    // s = TERARKDB_NAMESPACE::DB::Open(db_options, "./db", cf_descriptors, &v_cfh, &db);
     // assert(s.ok());
     // for(auto& cfh : v_cfh) db->DestroyColumnFamilyHandle(cfh);
     // s = db->Close();
     // v_cfh.clear();
     // delete db;
     // assert(s.ok());
-    // s = rocksdb::LoadLatestOptions("./db", rocksdb::Env::Default(), &last_db_options, &last_cf_descriptors);
+    // s = TERARKDB_NAMESPACE::LoadLatestOptions("./db", TERARKDB_NAMESPACE::Env::Default(), &last_db_options, &last_cf_descriptors);
     // assert(s.ok());
-    // s = rocksdb::DB::Open(last_db_options, "./db2", last_cf_descriptors, &v_cfh, &db);
+    // s = TERARKDB_NAMESPACE::DB::Open(last_db_options, "./db2", last_cf_descriptors, &v_cfh, &db);
     // assert(s.ok());
     // for(auto& cfh : v_cfh) db->DestroyColumnFamilyHandle(cfh);
     // s = db->Close();
@@ -146,18 +146,18 @@ int main(int argc, char** argv) {
     // assert(s.ok());
     // return 0;
 /*---------------------{ Default Rocksdb Column Family }----------------------*/
-    options.compaction_style = rocksdb::kCompactionStyleLevel;
+    options.compaction_style = TERARKDB_NAMESPACE::kCompactionStyleLevel;
     options.write_buffer_size = size_t(file_size_base * 1.0);
     options.target_file_size_base = file_size_base * 1.0;
-    v_cfd.emplace_back(rocksdb::kDefaultColumnFamilyName, options); 
+    v_cfd.emplace_back(TERARKDB_NAMESPACE::kDefaultColumnFamilyName, options);
 
 /*--------------------{ Enable Terark Zip Table Factory }---------------------*/
     options.table_factory.reset(
-        rocksdb::NewTerarkZipTableFactory(tzto, options.table_factory));
+        TERARKDB_NAMESPACE::NewTerarkZipTableFactory(tzto, options.table_factory));
     options.enable_lazy_compaction = true;
 
 /*----------------------{ Lazy Leveled Column Family }------------------------*/
-    options.compaction_style = rocksdb::kCompactionStyleLevel;
+    options.compaction_style = TERARKDB_NAMESPACE::kCompactionStyleLevel;
     options.write_buffer_size = size_t(file_size_base * 1.1);
     options.target_file_size_base = file_size_base * 1.1;
     options.max_bytes_for_level_base = options.target_file_size_base * 4;
@@ -165,7 +165,7 @@ int main(int argc, char** argv) {
     v_cfd.emplace_back("LazyLeveled", options);
     
 /*---------------------{ Lazy Universal Column Family }-----------------------*/
-    options.compaction_style = rocksdb::kCompactionStyleUniversal;
+    options.compaction_style = TERARKDB_NAMESPACE::kCompactionStyleUniversal;
     options.write_buffer_size = size_t(file_size_base * 1.2);
     options.target_file_size_base = file_size_base * 1.2;
     options.max_bytes_for_level_base = options.target_file_size_base * 4;
@@ -173,14 +173,14 @@ int main(int argc, char** argv) {
     v_cfd.emplace_back("LazyUniversal", options); // Lazy universal
     
 /*--------------------{ Enable Huffman and KV Separate }----------------------*/
-    tzto.entropyAlgo = rocksdb::TerarkZipTableOptions::EntropyAlgo::kHuffman;
+    tzto.entropyAlgo = TERARKDB_NAMESPACE::TerarkZipTableOptions::EntropyAlgo::kHuffman;
     options.blob_size = 5; 
     options.table_factory.reset(
-        rocksdb::NewTerarkZipTableFactory(tzto, options.table_factory));
-    options.memtable_factory.reset(rocksdb::NewPatriciaTrieRepFactory({}, &s));
+        TERARKDB_NAMESPACE::NewTerarkZipTableFactory(tzto, options.table_factory));
+    options.memtable_factory.reset(TERARKDB_NAMESPACE::NewPatriciaTrieRepFactory({}, &s));
 
 /*-----------------{ Lazy Leveled Huffman Column Family }---------------------*/
-    options.compaction_style = rocksdb::kCompactionStyleLevel;
+    options.compaction_style = TERARKDB_NAMESPACE::kCompactionStyleLevel;
     options.write_buffer_size = size_t(file_size_base * 1.3);
     options.target_file_size_base = file_size_base * 1.3;
     options.max_bytes_for_level_base = options.target_file_size_base * 4;
@@ -188,7 +188,7 @@ int main(int argc, char** argv) {
     v_cfd.emplace_back("LazyLeveledHuffman", options);
 
 /*----------------{ Lazy Universal Huffman Column Family }--------------------*/
-    options.compaction_style = rocksdb::kCompactionStyleUniversal;
+    options.compaction_style = TERARKDB_NAMESPACE::kCompactionStyleUniversal;
     options.write_buffer_size = size_t(file_size_base * 1.4);
     options.target_file_size_base = file_size_base * 1.4;
     options.max_bytes_for_level_base = options.target_file_size_base * 4;
@@ -196,13 +196,13 @@ int main(int argc, char** argv) {
     v_cfd.emplace_back("LazyUniversalHuffman", options); 
 
 /*-------------------------{ Compact Range Options }--------------------------*/
-    rocksdb::CompactRangeOptions cro;
+    TERARKDB_NAMESPACE::CompactRangeOptions cro;
     cro.exclusive_manual_compaction = false;
 
 /*--------------------------------{ Open DB }---------------------------------*/
     
-    rocksdb::DBOptions dbo = options;
-    s = rocksdb::DB::Open(dbo, "./db", v_cfd, &v_cfh, &db);
+    TERARKDB_NAMESPACE::DBOptions dbo = options;
+    s = TERARKDB_NAMESPACE::DB::Open(dbo, "./db", v_cfd, &v_cfh, &db);
 
     if (!s.ok()) {
         fprintf(stderr, "%s\n", s.getState());
@@ -213,9 +213,9 @@ int main(int argc, char** argv) {
     auto fn_write = [&](size_t seed, std::string name){
         std::mt19937_64 gen(seed);
         size_t cnt = 0;
-        rocksdb::Status s;
-        rocksdb::WriteBatch b;
-        rocksdb::WriteOptions wo;
+        TERARKDB_NAMESPACE::Status s;
+        TERARKDB_NAMESPACE::WriteBatch b;
+        TERARKDB_NAMESPACE::WriteOptions wo;
         t_str key, val;
         fprintf(stdout, "Thread %s for writing data...\n", name.c_str());
         while (start_write) {
@@ -260,8 +260,8 @@ int main(int argc, char** argv) {
 		    e = get_key(gen());
                 std::sort(vec.begin(), vec.end());
                 int select = gen() % (f_compact - 1);
-                rocksdb::Slice lhs(vec[select]);
-                rocksdb::Slice rhs(vec[select+1]);
+                TERARKDB_NAMESPACE::Slice lhs(vec[select]);
+                TERARKDB_NAMESPACE::Slice rhs(vec[select+1]);
                 for (auto& cfh : v_cfh) 
 		    db->CompactRange(cro, cfh, &lhs, &rhs);
 		fprintf(stdout, "CR : < Bgn = %s, End = %s >\n",
@@ -275,7 +275,7 @@ int main(int argc, char** argv) {
 
 /*------------------------{ Thread Verify Function }--------------------------*/
     auto fn_verify = [&](){
-        rocksdb::ReadOptions ro;
+        TERARKDB_NAMESPACE::ReadOptions ro;
         ro.snapshot = db->GetSnapshot();
         uint64_t sp = ((const uint64_t *)ro.snapshot)[1];
         fprintf(stdout, "Create snapshot %d...\n", sp);
@@ -284,7 +284,7 @@ int main(int argc, char** argv) {
         }
         fprintf(stdout, "Verify data with snapshot %d...\n", sp);
         size_t n = 0, e = 0;
-        std::vector<rocksdb::Iterator*> v_iter;
+        std::vector<TERARKDB_NAMESPACE::Iterator*> v_iter;
         db->NewIterators(ro, v_cfh, &v_iter);
         for (auto& iter : v_iter) iter->SeekToFirst();
         
@@ -392,12 +392,12 @@ int main(int argc, char** argv) {
         // }
         gettimeofday(&st, NULL);
         std::vector<double> costs(2);
-        rocksdb::ReadOptions ro;
+        TERARKDB_NAMESPACE::ReadOptions ro;
         ro.snapshot = db->GetSnapshot();
         int n_iter = 1000;
         
         auto new_iter = [&]{
-            std::vector<rocksdb::Iterator*> v_iter;
+            std::vector<TERARKDB_NAMESPACE::Iterator*> v_iter;
             for (int i = 0; i < n_iter; ++i) {
                 if (v_iter.size() > 10) {
                     for (auto& iter : v_iter) iter->~Iterator();
@@ -441,10 +441,10 @@ int main(int argc, char** argv) {
     }
 /*----------------------------{ Minimal Reproduce }------------------------------*/
     while (MIN_REP) {
-	rocksdb::Status s;
-	rocksdb::WriteBatch b;
-        rocksdb::WriteOptions wo;
-	rocksdb::ReadOptions ro;
+	TERARKDB_NAMESPACE::Status s;
+	TERARKDB_NAMESPACE::WriteBatch b;
+        TERARKDB_NAMESPACE::WriteOptions wo;
+	TERARKDB_NAMESPACE::ReadOptions ro;
     	for (int i = 1000; i < 10000; ++i) {
 	    b.Put(v_cfh[1], std::to_string(i), "MarkValue");
 	}

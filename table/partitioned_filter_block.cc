@@ -17,11 +17,12 @@
 #include "monitoring/perf_context_imp.h"
 #include "port/port.h"
 #include "rocksdb/filter_policy.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block.h"
 #include "table/block_based_table_reader.h"
 #include "util/coding.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 PartitionedFilterBlockBuilder::PartitionedFilterBlockBuilder(
     const SliceTransform* prefix_extractor, bool whole_key_filtering,
@@ -326,7 +327,7 @@ void PartitionedFilterBlockReader::CacheDependencies(
   prefetch_buffer.reset(new FilePrefetchBuffer());
   Status s;
   s = prefetch_buffer->Prefetch(file.get(), prefetch_off,
-    static_cast<size_t>(prefetch_len));
+                                static_cast<size_t>(prefetch_len));
 
   // After prefetch, read the partitions one by one
   biter.SeekToFirst();
@@ -352,4 +353,4 @@ void PartitionedFilterBlockReader::CacheDependencies(
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

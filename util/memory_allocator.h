@@ -7,8 +7,9 @@
 #pragma once
 
 #include "rocksdb/memory_allocator.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct CustomDeleter {
   CustomDeleter(MemoryAllocator* a = nullptr) : allocator(a) {}
@@ -35,4 +36,4 @@ inline CacheAllocationPtr AllocateBlock(size_t size,
   return CacheAllocationPtr(new char[size]);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

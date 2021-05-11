@@ -141,7 +141,8 @@ FORCE_INLINE void  XXH_free  (void* p)  { free(p); }
 FORCE_INLINE void* XXH_memcpy(void* dest, const void* src, size_t size) { return memcpy(dest,src,size); }
 #include <assert.h> /* assert */
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 //**************************************
 // Basic Types
 //**************************************
@@ -1071,4 +1072,4 @@ void XXH64_canonicalFromHash(XXH64_canonical_t* dst, XXH64_hash_t hash) {
 XXH64_hash_t XXH64_hashFromCanonical(const XXH64_canonical_t* src) {
   return XXH_readBE64(src);
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

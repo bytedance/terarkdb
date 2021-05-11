@@ -9,12 +9,13 @@
 
 #include "util/compression_context_cache.h"
 
+#include <atomic>
+
+#include "rocksdb/terark_namespace.h"
 #include "util/compression.h"
 #include "util/core_local.h"
 
-#include <atomic>
-
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace compression_cache {
 
 void* const SentinelValue = nullptr;
@@ -105,4 +106,4 @@ void CompressionContextCache::ReturnCachedZSTDUncompressData(int64_t idx) {
 
 CompressionContextCache::~CompressionContextCache() { delete rep_; }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

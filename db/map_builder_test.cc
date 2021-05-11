@@ -16,13 +16,14 @@
 #include "db/version_set.h"
 #include "db/wal_manager.h"
 #include "env/mock_env.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/mock_table.h"
 #include "util/file_reader_writer.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class MapBuilderTest : public testing::Test {
  public:
@@ -54,7 +55,7 @@ class MapBuilderTest : public testing::Test {
       : env_(Env::Default()),
         dbname_(test::PerThreadDBPath("map_builder_test")),
         db_options_(),
-        mutable_cf_options_(cf_options_),
+        mutable_cf_options_(cf_options_, env_),
         ioptions_(db_options_, cf_options_),
         table_cache_(NewLRUCache(50000, 16)),
         write_buffer_manager_(db_options_.db_write_buffer_size),
@@ -394,7 +395,7 @@ TEST_F(MapBuilderTest, NoNeedBuildMapSst) {
   ASSERT_LE(output_file->fd.GetNumber(), 0);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

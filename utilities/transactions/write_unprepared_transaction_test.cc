@@ -9,18 +9,19 @@
 #define __STDC_FORMAT_MACROS
 #endif
 
+#include "rocksdb/terark_namespace.h"
 #include "utilities/transactions/transaction_test.h"
 #include "utilities/transactions/write_unprepared_txn.h"
 #include "utilities/transactions/write_unprepared_txn_db.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class WriteUnpreparedTransactionTestBase : public TransactionTestBase {
  public:
   WriteUnpreparedTransactionTestBase(bool use_stackable_db,
                                      bool two_write_queue,
                                      TxnDBWritePolicy write_policy)
-      : TransactionTestBase(use_stackable_db, two_write_queue, write_policy){}
+      : TransactionTestBase(use_stackable_db, two_write_queue, write_policy) {}
 };
 
 class WriteUnpreparedTransactionTest
@@ -31,7 +32,7 @@ class WriteUnpreparedTransactionTest
   WriteUnpreparedTransactionTest()
       : WriteUnpreparedTransactionTestBase(std::get<0>(GetParam()),
                                            std::get<1>(GetParam()),
-                                           std::get<2>(GetParam())){}
+                                           std::get<2>(GetParam())) {}
 };
 
 INSTANTIATE_TEST_CASE_P(
@@ -425,7 +426,7 @@ TEST_P(WriteUnpreparedTransactionTest, MarkLogWithPrepSection) {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

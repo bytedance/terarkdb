@@ -11,7 +11,9 @@
 
 #include <utility>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+
+namespace TERARKDB_NAMESPACE {
 
 template <class Lambda>
 struct c_style_callback_fetcher {
@@ -34,4 +36,4 @@ c_style_callback_fetcher<Lambda> c_style_callback(Lambda&) {
   return c_style_callback_fetcher<Lambda>();
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

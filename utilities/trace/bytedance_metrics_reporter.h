@@ -1,13 +1,13 @@
-#include "rocksdb/metrics_reporter.h"
-
 #include <atomic>
 #include <chrono>
 #include <list>
 
 #include "rocksdb/env.h"
+#include "rocksdb/metrics_reporter.h"
+#include "rocksdb/terark_namespace.h"
 #include "stats.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 class ByteDanceHistReporterHandle : public HistReporterHandle {
  public:
 #ifdef TERARKDB_ENABLE_METRICS
@@ -36,7 +36,7 @@ class ByteDanceHistReporterHandle : public HistReporterHandle {
  private:
 #ifdef TERARKDB_ENABLE_METRICS
   enum {
-    kMaxThreadNum = 8192,
+      kMaxThreadNum = 8192,
   };
 
   const std::string& name_;
@@ -118,4 +118,4 @@ class ByteDanceMetricsReporterFactory : public MetricsReporterFactory {
 
   void InitNamespace(const std::string& ns);
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

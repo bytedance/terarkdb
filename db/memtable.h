@@ -25,12 +25,13 @@
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/memtablerep.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/allocator.h"
 #include "util/concurrent_arena.h"
 #include "util/dynamic_bloom.h"
 #include "util/hash.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Mutex;
 template <class TValue>
@@ -397,8 +398,10 @@ class MemTable {
  private:
   enum FlushStateEnum { FLUSH_NOT_REQUESTED, FLUSH_REQUESTED, FLUSH_SCHEDULED };
 
-  template <class TValue>
-  friend class MemTableIteratorBase;
+  friend InternalIteratorBase<Slice>* NewMemTableTombstoneIterator(
+      MemTable&, const ReadOptions&, Arena*);
+  friend InternalIterator* NewMemTableIterator(MemTable&, const ReadOptions&,
+                                               Arena*);
   friend class MemTableBackwardIterator;
   friend class MemTableList;
 
@@ -494,4 +497,4 @@ class MemTable {
 
 extern const char* EncodeKey(std::string* scratch, const Slice& target);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -14,7 +14,9 @@
 
 #include <algorithm>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 template <class T, class S>
@@ -746,4 +748,4 @@ LazyBuffer LazyBufferRemoveSuffix(const LazyBuffer* buffer, size_t fixed_len) {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

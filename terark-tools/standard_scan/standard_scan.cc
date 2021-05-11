@@ -8,7 +8,7 @@
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
 
-using namespace rocksdb;
+using namespace TERARKDB_NAMESPACE;
 
 class Stats {
  public:
@@ -65,21 +65,21 @@ class Stats {
   bool empty_ = false;
 };
 
-class ComparatorRename : public rocksdb::Comparator {
+class ComparatorRename : public TERARKDB_NAMESPACE::Comparator {
  public:
   virtual const char *Name() const override { return n; }
 
-  virtual int Compare(const rocksdb::Slice &a,
-                      const rocksdb::Slice &b) const override {
+  virtual int Compare(const TERARKDB_NAMESPACE::Slice &a,
+                      const TERARKDB_NAMESPACE::Slice &b) const override {
     return c->Compare(a, b);
   }
 
-  virtual bool Equal(const rocksdb::Slice &a,
-                     const rocksdb::Slice &b) const override {
+  virtual bool Equal(const TERARKDB_NAMESPACE::Slice &a,
+                     const TERARKDB_NAMESPACE::Slice &b) const override {
     return c->Equal(a, b);
   }
   virtual void FindShortestSeparator(
-      std::string *start, const rocksdb::Slice &limit) const override {
+      std::string *start, const TERARKDB_NAMESPACE::Slice &limit) const override {
     c->FindShortestSeparator(start, limit);
   }
 
@@ -88,9 +88,9 @@ class ComparatorRename : public rocksdb::Comparator {
   }
 
   const char *n;
-  const rocksdb::Comparator *c;
+  const TERARKDB_NAMESPACE::Comparator *c;
 
-  ComparatorRename(const char *_n, const rocksdb::Comparator *_c)
+  ComparatorRename(const char *_n, const TERARKDB_NAMESPACE::Comparator *_c)
       : n(_n), c(_c) {}
 };
 
@@ -105,7 +105,7 @@ int main(int argc, const char **argv) {
   std::string db_dir = argv[1];
   printf("open database: %s\n", db_dir.c_str());
 
-  ComparatorRename cmp{"RocksDB_SE_v3.10", rocksdb::BytewiseComparator()};
+  ComparatorRename cmp{"RocksDB_SE_v3.10", TERARKDB_NAMESPACE::BytewiseComparator()};
   DB *db;
   Options options;
   options.comparator = &cmp;
@@ -117,7 +117,7 @@ int main(int argc, const char **argv) {
     return 0;
   }
 
-  rocksdb::ReadOptions readOptions;
+  TERARKDB_NAMESPACE::ReadOptions readOptions;
   readOptions.fill_cache = false;
   readOptions.verify_checksums = false;
   auto it = db->NewIterator(readOptions);

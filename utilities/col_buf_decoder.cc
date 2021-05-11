@@ -4,11 +4,14 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include "utilities/col_buf_decoder.h"
+
 #include <cstring>
 #include <string>
-#include "port/port.h"
 
-namespace rocksdb {
+#include "port/port.h"
+#include "rocksdb/terark_namespace.h"
+
+namespace TERARKDB_NAMESPACE {
 
 ColBufDecoder::~ColBufDecoder() {}
 
@@ -237,4 +240,4 @@ size_t VariableChunkColBufDecoder::Decode(const char* src, char** dest) {
   return src - orig_src;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

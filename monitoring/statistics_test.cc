@@ -4,13 +4,14 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 
+#include "rocksdb/statistics.h"
+
 #include "port/stack_trace.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-#include "rocksdb/statistics.h"
-
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class StatisticsTest : public testing::Test {};
 
@@ -38,10 +39,10 @@ TEST_F(StatisticsTest, SanityHistograms) {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

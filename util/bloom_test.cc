@@ -18,6 +18,7 @@ int main() {
 #include <vector>
 
 #include "rocksdb/filter_policy.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/full_filter_bits_builder.h"
 #include "util/arena.h"
 #include "util/gflags_compat.h"
@@ -29,7 +30,7 @@ using GFLAGS_NAMESPACE::ParseCommandLineFlags;
 
 DEFINE_int32(bits_per_key, 10, "");
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 static const int kVerbose = 1;
 
@@ -60,21 +61,16 @@ class BloomTest : public testing::Test {
   std::vector<std::string> keys_;
 
  public:
-  BloomTest() : policy_(
-      NewBloomFilterPolicy(FLAGS_bits_per_key)) {}
+  BloomTest() : policy_(NewBloomFilterPolicy(FLAGS_bits_per_key)) {}
 
-  ~BloomTest() {
-    delete policy_;
-  }
+  ~BloomTest() { delete policy_; }
 
   void Reset() {
     keys_.clear();
     filter_.clear();
   }
 
-  void Add(const Slice& s) {
-    keys_.push_back(s.ToString());
-  }
+  void Add(const Slice& s) { keys_.push_back(s.ToString()); }
 
   void Build() {
     std::vector<Slice> key_slices;
@@ -88,16 +84,14 @@ class BloomTest : public testing::Test {
     if (kVerbose >= 2) DumpFilter();
   }
 
-  size_t FilterSize() const {
-    return filter_.size();
-  }
+  size_t FilterSize() const { return filter_.size(); }
 
   void DumpFilter() {
     fprintf(stderr, "F(");
-    for (size_t i = 0; i+1 < filter_.size(); i++) {
+    for (size_t i = 0; i + 1 < filter_.size(); i++) {
       const unsigned int c = static_cast<unsigned int>(filter_[i]);
       for (int j = 0; j < 8; j++) {
-        fprintf(stderr, "%c", (c & (1 <<j)) ? '1' : '.');
+        fprintf(stderr, "%c", (c & (1 << j)) ? '1' : '.');
       }
     }
     fprintf(stderr, ")\n");
@@ -123,8 +117,8 @@ class BloomTest : public testing::Test {
 };
 
 TEST_F(BloomTest, EmptyFilter) {
-  ASSERT_TRUE(! Matches("hello"));
-  ASSERT_TRUE(! Matches("world"));
+  ASSERT_TRUE(!Matches("hello"));
+  ASSERT_TRUE(!Matches("world"));
 }
 
 TEST_F(BloomTest, Small) {
@@ -132,8 +126,8 @@ TEST_F(BloomTest, Small) {
   Add("world");
   ASSERT_TRUE(Matches("hello"));
   ASSERT_TRUE(Matches("world"));
-  ASSERT_TRUE(! Matches("x"));
-  ASSERT_TRUE(! Matches("foo"));
+  ASSERT_TRUE(!Matches("x"));
+  ASSERT_TRUE(!Matches("foo"));
 }
 
 TEST_F(BloomTest, VaryingLengths) {
@@ -162,17 +156,19 @@ TEST_F(BloomTest, VaryingLengths) {
     double rate = FalsePositiveRate();
     if (kVerbose >= 1) {
       fprintf(stderr, "False positives: %5.2f%% @ length = %6d ; bytes = %6d\n",
-              rate*100.0, length, static_cast<int>(FilterSize()));
+              rate * 100.0, length, static_cast<int>(FilterSize()));
     }
-    ASSERT_LE(rate, 0.02);   // Must not be over 2%
-    if (rate > 0.0125) mediocre_filters++;  // Allowed, but not too often
-    else good_filters++;
+    ASSERT_LE(rate, 0.02);  // Must not be over 2%
+    if (rate > 0.0125)
+      mediocre_filters++;  // Allowed, but not too often
+    else
+      good_filters++;
   }
   if (kVerbose >= 1) {
-    fprintf(stderr, "Filters: %d good, %d mediocre\n",
-            good_filters, mediocre_filters);
+    fprintf(stderr, "Filters: %d good, %d mediocre\n", good_filters,
+            mediocre_filters);
   }
-  ASSERT_LE(mediocre_filters, good_filters/5);
+  ASSERT_LE(mediocre_filters, good_filters / 5);
 }
 
 // Different bits-per-byte
@@ -186,15 +182,13 @@ class FullBloomTest : public testing::Test {
   size_t filter_size_;
 
  public:
-  FullBloomTest() :
-      policy_(NewBloomFilterPolicy(FLAGS_bits_per_key, false)),
-      filter_size_(0) {
+  FullBloomTest()
+      : policy_(NewBloomFilterPolicy(FLAGS_bits_per_key, false)),
+        filter_size_(0) {
     Reset();
   }
 
-  ~FullBloomTest() {
-    delete policy_;
-  }
+  ~FullBloomTest() { delete policy_; }
 
   FullFilterBitsBuilder* GetFullFilterBitsBuilder() {
     return dynamic_cast<FullFilterBitsBuilder*>(bits_builder_.get());
@@ -207,9 +201,7 @@ class FullBloomTest : public testing::Test {
     filter_size_ = 0;
   }
 
-  void Add(const Slice& s) {
-    bits_builder_->AddKey(s);
-  }
+  void Add(const Slice& s) { bits_builder_->AddKey(s); }
 
   void Build() {
     Slice filter = bits_builder_->Finish(&buf_);
@@ -217,9 +209,7 @@ class FullBloomTest : public testing::Test {
     filter_size_ = filter.size();
   }
 
-  size_t FilterSize() const {
-    return filter_size_;
-  }
+  size_t FilterSize() const { return filter_size_; }
 
   bool Matches(const Slice& s) {
     if (bits_reader_ == nullptr) {
@@ -294,22 +284,22 @@ TEST_F(FullBloomTest, FullVaryingLengths) {
     double rate = FalsePositiveRate();
     if (kVerbose >= 1) {
       fprintf(stderr, "False positives: %5.2f%% @ length = %6d ; bytes = %6d\n",
-              rate*100.0, length, static_cast<int>(FilterSize()));
+              rate * 100.0, length, static_cast<int>(FilterSize()));
     }
-    ASSERT_LE(rate, 0.02);   // Must not be over 2%
+    ASSERT_LE(rate, 0.02);  // Must not be over 2%
     if (rate > 0.0125)
       mediocre_filters++;  // Allowed, but not too often
     else
       good_filters++;
   }
   if (kVerbose >= 1) {
-    fprintf(stderr, "Filters: %d good, %d mediocre\n",
-            good_filters, mediocre_filters);
+    fprintf(stderr, "Filters: %d good, %d mediocre\n", good_filters,
+            mediocre_filters);
   }
-  ASSERT_LE(mediocre_filters, good_filters/5);
+  ASSERT_LE(mediocre_filters, good_filters / 5);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

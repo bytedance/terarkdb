@@ -6,25 +6,28 @@
 #pragma once
 #ifndef ROCKSDB_LITE
 #include <stdint.h>
+
 #include <string>
 #include <vector>
+
 #include "rocksdb/options.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table.h"
 #include "rocksdb/table_properties.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/bloom_block.h"
 #include "table/plain_table_index.h"
 #include "table/plain_table_key_coding.h"
 #include "table/table_builder.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class BlockBuilder;
 class BlockHandle;
 class WritableFile;
 class TableBuilder;
 
-class PlainTableBuilder: public TableBuilder {
+class PlainTableBuilder : public TableBuilder {
  public:
   // Create a builder that will store the contents of the table it is
   // building in *file.  Does not close the file.  It is up to the
@@ -50,7 +53,8 @@ class PlainTableBuilder: public TableBuilder {
   // constructor after this function returns.
   // REQUIRES: Finish(), Abandon() have not been called
   Status Finish(const TablePropertyCache* prop,
-                const std::vector<SequenceNumber>* snapshots) override;
+                const std::vector<SequenceNumber>* snapshots,
+                const std::vector<uint64_t>* inheritance_tree) override;
 
   // Indicate that the contents of this builder should be abandoned.  Stops
   // using the file passed to the constructor after this function returns.
@@ -126,6 +130,6 @@ class PlainTableBuilder: public TableBuilder {
   void operator=(const PlainTableBuilder&) = delete;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

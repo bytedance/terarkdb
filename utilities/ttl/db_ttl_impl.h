@@ -9,21 +9,21 @@
 #include <string>
 #include <vector>
 
+#include "db/db_impl.h"
+#include "rocksdb/compaction_filter.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
-#include "rocksdb/compaction_filter.h"
 #include "rocksdb/merge_operator.h"
-#include "rocksdb/utilities/utility_db.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/db_ttl.h"
-#include "db/db_impl.h"
+#include "rocksdb/utilities/utility_db.h"
 
 #ifdef _WIN32
 // Windows API macro interference
 #undef GetCurrentTime
 #endif
 
-
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class DBWithTTLImpl : public DBWithTTL {
  public:
@@ -97,11 +97,10 @@ class DBWithTTLImpl : public DBWithTTL {
 
   void SetTtl(int32_t ttl) override { SetTtl(DefaultColumnFamily(), ttl); }
 
-  void SetTtl(ColumnFamilyHandle *h, int32_t ttl) override;
+  void SetTtl(ColumnFamilyHandle* h, int32_t ttl) override;
 };
 
 class TtlIterator : public Iterator {
-
  public:
   explicit TtlIterator(Iterator* iter) : iter_(iter) { assert(iter_); }
 
@@ -144,10 +143,10 @@ class TtlIterator : public Iterator {
 
 class TtlCompactionFilter : public CompactionFilter {
  public:
-  TtlCompactionFilter(
-      int32_t ttl, Env* env, const CompactionFilter* user_comp_filter,
-      std::unique_ptr<const CompactionFilter> user_comp_filter_from_factory =
-          nullptr)
+  TtlCompactionFilter(int32_t ttl, Env* env,
+                      const CompactionFilter* user_comp_filter,
+                      std::unique_ptr<const CompactionFilter>
+                          user_comp_filter_from_factory = nullptr)
       : ttl_(ttl),
         env_(env),
         user_comp_filter_(user_comp_filter),
@@ -161,8 +160,8 @@ class TtlCompactionFilter : public CompactionFilter {
   }
 
   virtual bool Filter(int level, const Slice& key, const Slice& old_val,
-                      std::string* new_val, bool* value_changed) const
-      override {
+                      std::string* new_val,
+                      bool* value_changed) const override {
     if (DBWithTTLImpl::IsStale(old_val, ttl_, env_)) {
       return true;
     }
@@ -213,9 +212,7 @@ class TtlCompactionFilterFactory : public CompactionFilterFactory {
         ttl_, env_, nullptr, std::move(user_comp_filter_from_factory)));
   }
 
-  void SetTtl(int32_t ttl) {
-    ttl_ = ttl;
-  }
+  void SetTtl(int32_t ttl) { ttl_ = ttl; }
 
   virtual const char* Name() const override {
     return "TtlCompactionFilterFactory";
@@ -228,7 +225,6 @@ class TtlCompactionFilterFactory : public CompactionFilterFactory {
 };
 
 class TtlMergeOperator : public MergeOperator {
-
  public:
   explicit TtlMergeOperator(const std::shared_ptr<MergeOperator>& merge_op,
                             Env* env)
@@ -298,8 +294,8 @@ class TtlMergeOperator : public MergeOperator {
 
   virtual bool PartialMergeMulti(const Slice& key,
                                  const std::vector<LazyBuffer>& operand_list,
-                                 LazyBuffer* new_value, Logger* logger) const
-      override {
+                                 LazyBuffer* new_value,
+                                 Logger* logger) const override {
     const uint32_t ts_len = DBWithTTLImpl::kTSLength;
     std::vector<LazyBuffer> operands_without_ts;
 
@@ -336,5 +332,5 @@ class TtlMergeOperator : public MergeOperator {
   std::shared_ptr<MergeOperator> user_merge_op_;
   Env* env_;
 };
-}
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

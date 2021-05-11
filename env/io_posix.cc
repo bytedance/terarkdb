@@ -38,6 +38,7 @@
 #include "monitoring/iostats_context_imp.h"
 #include "port/port.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
@@ -47,7 +48,7 @@
 #define F_SET_RW_HINT (F_LINUX_SPECIFIC_BASE + 12)
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // A wrapper for fadvise, if the platform doesn't support fadvise,
 // it will simply return 0.
@@ -370,7 +371,7 @@ static Status PosixFsRead(uint64_t offset, size_t n, Slice* result,
   }
   *result = Slice(scratch, (r < 0) ? 0 : n - left);
   return s;
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 Status PosixRandomAccessFile::Read(uint64_t offset, size_t n, Slice* result,
                                    char* scratch) const {
@@ -1113,5 +1114,5 @@ Status PosixDirectory::Fsync() {
 #endif
   return Status::OK();
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif

@@ -25,6 +25,7 @@
 #include "rocksdb/cache.h"
 #include "rocksdb/convenience.h"
 #include "rocksdb/memtablerep.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/leveldb_options.h"
 #include "util/random.h"
 #include "util/stderr_logger.h"
@@ -40,7 +41,7 @@ using GFLAGS_NAMESPACE::ParseCommandLineFlags;
 DEFINE_bool(enable_print, false, "Print options generated to console.");
 #endif  // GFLAGS
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class OptionsTest : public testing::Test {};
 
@@ -84,7 +85,6 @@ TEST_F(OptionsTest, GetOptionsFromMapTest) {
       {"compaction_style", "kCompactionStyleLevel"},
       {"compaction_pri", "kOldestSmallestSeqFirst"},
       {"verify_checksums_in_compaction", "false"},
-      {"compaction_options_fifo", "23"},
       {"max_sequential_skip_in_iterations", "24"},
       {"enable_lazy_compaction", "true"},
       {"pin_table_properties_in_reader", "false"},
@@ -133,6 +133,9 @@ TEST_F(OptionsTest, GetOptionsFromMapTest) {
       {"is_fd_close_on_exec", "true"},
       {"skip_log_error_on_recovery", "false"},
       {"stats_dump_period_sec", "46"},
+      {"stats_persist_period_sec", "57"},
+      {"persist_stats_to_disk", "false"},
+      {"stats_history_buffer_size", "69"},
       {"advise_random_on_open", "true"},
       {"allow_mmap_populate", "true"},
       {"use_adaptive_mutex", "false"},
@@ -195,8 +198,6 @@ TEST_F(OptionsTest, GetOptionsFromMapTest) {
   ASSERT_EQ(new_cf_opt.disable_auto_compactions, true);
   ASSERT_EQ(new_cf_opt.compaction_style, kCompactionStyleLevel);
   ASSERT_EQ(new_cf_opt.compaction_pri, kOldestSmallestSeqFirst);
-  ASSERT_EQ(new_cf_opt.compaction_options_fifo.max_table_files_size,
-            static_cast<uint64_t>(23));
   ASSERT_EQ(new_cf_opt.max_sequential_skip_in_iterations,
             static_cast<uint64_t>(24));
   ASSERT_EQ(new_cf_opt.enable_lazy_compaction, true);
@@ -271,6 +272,9 @@ TEST_F(OptionsTest, GetOptionsFromMapTest) {
   ASSERT_EQ(new_db_opt.is_fd_close_on_exec, true);
   ASSERT_EQ(new_db_opt.skip_log_error_on_recovery, false);
   ASSERT_EQ(new_db_opt.stats_dump_period_sec, 46U);
+  ASSERT_EQ(new_db_opt.stats_persist_period_sec, 57U);
+  ASSERT_EQ(new_db_opt.persist_stats_to_disk, false);
+  ASSERT_EQ(new_db_opt.stats_history_buffer_size, 69U);
   ASSERT_EQ(new_db_opt.advise_random_on_open, true);
   ASSERT_EQ(new_db_opt.allow_mmap_populate, true);
   ASSERT_EQ(new_db_opt.use_adaptive_mutex, false);
@@ -1895,7 +1899,7 @@ TEST_F(OptionsParserTest, EscapeOptionString) {
             "Escape \\# and");
 }
 #endif  // !ROCKSDB_LITE
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

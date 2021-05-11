@@ -14,10 +14,11 @@
 #include <string>
 
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/file_reader_writer.h"
 #include "util/sst_file_manager_impl.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Utility function to copy a file up to a specified length
 Status CopyFile(Env* env, const std::string& source,
@@ -141,4 +142,4 @@ int SetThreadSched(SchedClass sched_class, int nice) {
 #endif
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

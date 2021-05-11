@@ -7,25 +7,23 @@
 #pragma once
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class StringAppendOperator : public AssociativeMergeOperator {
  public:
   // Constructor: specify delimiter
   explicit StringAppendOperator(char delim_char);
 
-  virtual bool Merge(const Slice& key,
-                     const Slice* existing_value,
-                     const Slice& value,
-                     std::string* new_value,
+  virtual bool Merge(const Slice& key, const Slice* existing_value,
+                     const Slice& value, std::string* new_value,
                      Logger* logger) const override;
 
   virtual const char* Name() const override;
 
  private:
-  char delim_;         // The delimiter is inserted between elements
-
+  char delim_;  // The delimiter is inserted between elements
 };
 
-} // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -15,8 +15,9 @@
 #include "monitoring/instrumented_mutex.h"
 #include "port/port.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Env;
 class Logger;
@@ -135,6 +136,6 @@ class DeleteScheduler {
   static const uint64_t kMicrosInSecond = 1000 * 1000LL;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

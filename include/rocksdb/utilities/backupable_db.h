@@ -15,17 +15,18 @@
 #endif
 
 #include <inttypes.h>
-#include <string>
-#include <map>
-#include <vector>
-#include <functional>
 
-#include "rocksdb/utilities/stackable_db.h"
+#include <functional>
+#include <map>
+#include <string>
+#include <vector>
 
 #include "rocksdb/env.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
+#include "rocksdb/utilities/stackable_db.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct BackupableDBOptions {
   // Where to keep the backup files. Has to be different than dbname_
@@ -257,8 +258,7 @@ class BackupEngine {
 
   // BackupableDBOptions have to be the same as the ones used in previous
   // BackupEngines for the same backup directory.
-  static Status Open(Env* db_env,
-                     const BackupableDBOptions& options,
+  static Status Open(Env* db_env, const BackupableDBOptions& options,
                      BackupEngine** backup_engine_ptr);
 
   // same as CreateNewBackup, but stores extra application metadata
@@ -270,9 +270,9 @@ class BackupEngine {
   // Captures the state of the database in the latest backup
   // NOT a thread safe call
   // Flush will always trigger if 2PC is enabled.
-  virtual Status CreateNewBackup(DB* db, bool flush_before_backup = false,
-                                 std::function<void()> progress_callback =
-                                     []() {}) {
+  virtual Status CreateNewBackup(
+      DB* db, bool flush_before_backup = false,
+      std::function<void()> progress_callback = []() {}) {
     return CreateNewBackupWithMetadata(db, "", flush_before_backup,
                                        progress_callback);
   }
@@ -330,5 +330,5 @@ class BackupEngine {
   virtual Status GarbageCollect() = 0;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

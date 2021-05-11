@@ -1,11 +1,13 @@
 #include "manifest.hpp"
 
-using namespace rocksdb;
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+using namespace TERARKDB_NAMESPACE;
+
+namespace TERARKDB_NAMESPACE {
 extern const uint64_t kPlainTableMagicNumber;
 extern const uint64_t kLegacyPlainTableMagicNumber;
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 namespace terark {
 

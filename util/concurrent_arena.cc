@@ -8,11 +8,12 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "util/concurrent_arena.h"
-#include <thread>
-#include "port/port.h"
-#include "util/random.h"
 
-namespace rocksdb {
+#include <thread>
+
+#include "rocksdb/terark_namespace.h"
+
+namespace TERARKDB_NAMESPACE {
 
 #ifdef ROCKSDB_SUPPORT_THREAD_LOCAL
 __thread size_t ConcurrentArena::tls_cpuid = 0;
@@ -44,4 +45,4 @@ ConcurrentArena::Shard* ConcurrentArena::Repick() {
   return shard_and_index.first;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

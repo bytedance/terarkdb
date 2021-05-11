@@ -4,12 +4,15 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include "monitoring/thread_status_updater.h"
+
 #include <memory>
+
 #include "port/likely.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/mutexlock.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 #ifdef ROCKSDB_USING_THREAD_STATUS
 
@@ -311,4 +314,4 @@ void ThreadStatusUpdater::IncreaseThreadOperationProperty(int /*i*/,
                                                           uint64_t /*delta*/) {}
 
 #endif  // ROCKSDB_USING_THREAD_STATUS
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

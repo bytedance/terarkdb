@@ -15,13 +15,14 @@ int main() {
 #else
 
 #include <inttypes.h>
-#include <sys/types.h>
 #include <stdio.h>
+#include <sys/types.h>
 
 #include "port/port.h"
 #include "rocksdb/cache.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/gflags_compat.h"
 #include "util/mutexlock.h"
 #include "util/random.h"
@@ -48,12 +49,12 @@ DEFINE_int32(erase_percent, 10,
 
 DEFINE_bool(use_clock_cache, false, "");
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class CacheBench;
 namespace {
 void deleter(const Slice& /*key*/, void* value) {
-    delete reinterpret_cast<char *>(value);
+  delete reinterpret_cast<char*>(value);
 }
 
 // State shared by all concurrent executions of the same benchmark.
@@ -65,46 +66,27 @@ class SharedState {
         num_initialized_(0),
         start_(false),
         num_done_(0),
-        cache_bench_(cache_bench) {
-  }
+        cache_bench_(cache_bench) {}
 
   ~SharedState() {}
 
-  port::Mutex* GetMutex() {
-    return &mu_;
-  }
+  port::Mutex* GetMutex() { return &mu_; }
 
-  port::CondVar* GetCondVar() {
-    return &cv_;
-  }
+  port::CondVar* GetCondVar() { return &cv_; }
 
-  CacheBench* GetCacheBench() const {
-    return cache_bench_;
-  }
+  CacheBench* GetCacheBench() const { return cache_bench_; }
 
-  void IncInitialized() {
-    num_initialized_++;
-  }
+  void IncInitialized() { num_initialized_++; }
 
-  void IncDone() {
-    num_done_++;
-  }
+  void IncDone() { num_done_++; }
 
-  bool AllInitialized() const {
-    return num_initialized_ >= num_threads_;
-  }
+  bool AllInitialized() const { return num_initialized_ >= num_threads_; }
 
-  bool AllDone() const {
-    return num_done_ >= num_threads_;
-  }
+  bool AllDone() const { return num_done_ >= num_threads_; }
 
-  void SetStart() {
-    start_ = true;
-  }
+  void SetStart() { start_ = true; }
 
-  bool Started() const {
-    return start_;
-  }
+  bool Started() const { return start_; }
 
  private:
   port::Mutex mu_;
@@ -157,7 +139,7 @@ class CacheBench {
   }
 
   bool Run() {
-    rocksdb::Env* env = rocksdb::Env::Default();
+    TERARKDB_NAMESPACE::Env* env = TERARKDB_NAMESPACE::Env::Default();
 
     PrintEnv();
     SharedState shared(this);
@@ -231,15 +213,15 @@ class CacheBench {
       if (prob_op >= 0 && prob_op < FLAGS_insert_percent) {
         // do insert
         cache_->Insert(key, new char[10], 1, &deleter);
-      } else if (prob_op -= FLAGS_insert_percent &&
-                 prob_op < FLAGS_lookup_percent) {
+      } else if (prob_op -=
+                 FLAGS_insert_percent && prob_op < FLAGS_lookup_percent) {
         // do lookup
         auto handle = cache_->Lookup(key);
         if (handle) {
           cache_->Release(handle);
         }
-      } else if (prob_op -= FLAGS_lookup_percent &&
-                 prob_op < FLAGS_erase_percent) {
+      } else if (prob_op -=
+                 FLAGS_lookup_percent && prob_op < FLAGS_erase_percent) {
         // do erase
         cache_->Erase(key);
       }
@@ -260,7 +242,7 @@ class CacheBench {
     printf("----------------------------\n");
   }
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ParseCommandLineFlags(&argc, &argv, true);
@@ -270,7 +252,7 @@ int main(int argc, char** argv) {
     exit(1);
   }
 
-  rocksdb::CacheBench bench;
+  TERARKDB_NAMESPACE::CacheBench bench;
   if (FLAGS_populate_cache) {
     bench.PopulateCache();
   }

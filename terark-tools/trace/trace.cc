@@ -7,7 +7,7 @@
 #include "trace.hpp"
 #include "utilities/trace/file_trace_reader_writer.h"
 
-using namespace rocksdb;
+using namespace TERARKDB_NAMESPACE;
 
 namespace terark {
 
@@ -25,7 +25,7 @@ void TraceTest::traceSeek() {
   options.create_if_missing = true;
   options.create_missing_column_families = true;
 
-  Env* env = rocksdb::Env::Default();
+  Env* env = TERARKDB_NAMESPACE::Env::Default();
   EnvOptions env_options(options);
 
   std::string trace_path = "./rocksdb_trace_test";
@@ -46,7 +46,7 @@ void TraceTest::traceSeek() {
     Slice key(std::to_string(r) + "_" + std::to_string(i));
     auto text = generate_text(3 * 1024);
     Slice value(text);
-    db->Put(rocksdb::WriteOptions(), key, value);
+    db->Put(TERARKDB_NAMESPACE::WriteOptions(), key, value);
 
     // print progress
     if (i % 10000 == 0) {
@@ -67,7 +67,7 @@ void TraceTest::traceSeek() {
   std::cout << "flush memtables" << std::endl;
 
   // flush
-  auto flsuh_opt = rocksdb::FlushOptions();
+  auto flsuh_opt = TERARKDB_NAMESPACE::FlushOptions();
   int us = 0;
   auto t1 = std::chrono::high_resolution_clock::now();
   flsuh_opt.wait = true;
@@ -90,7 +90,7 @@ void TraceTest::traceSeek() {
 
   std::cout << "create iterator..." << std::endl;
   t1 = std::chrono::high_resolution_clock::now();
-  auto it = db->NewIterator(rocksdb::ReadOptions());
+  auto it = db->NewIterator(TERARKDB_NAMESPACE::ReadOptions());
   t2 = std::chrono::high_resolution_clock::now();
   us = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
 

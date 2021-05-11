@@ -8,10 +8,13 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "rocksdb/write_buffer_manager.h"
+
 #include <mutex>
+
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 #ifndef ROCKSDB_LITE
 namespace {
 const size_t kSizeDummyEntry = 1024 * 1024;
@@ -127,4 +130,4 @@ void WriteBufferManager::FreeMemWithCache(size_t mem) {
   (void)mem;
 #endif  // ROCKSDB_LITE
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

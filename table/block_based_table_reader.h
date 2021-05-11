@@ -10,6 +10,7 @@
 #pragma once
 
 #include <stdint.h>
+
 #include <memory>
 #include <set>
 #include <string>
@@ -23,6 +24,7 @@
 #include "rocksdb/statistics.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block.h"
 #include "table/block_based_table_factory.h"
 #include "table/filter_block.h"
@@ -34,7 +36,7 @@
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class BlockHandle;
 class Cache;
@@ -372,10 +374,10 @@ class BlockBasedTable : public TableReader {
   static void SetupCacheKeyPrefix(Rep* rep, uint64_t file_size);
 
   // Generate a cache key prefix from the file
-  static void GenerateCachePrefix(Cache* cc,
-    RandomAccessFile* file, char* buffer, size_t* size);
-  static void GenerateCachePrefix(Cache* cc,
-    WritableFile* file, char* buffer, size_t* size);
+  static void GenerateCachePrefix(Cache* cc, RandomAccessFile* file,
+                                  char* buffer, size_t* size);
+  static void GenerateCachePrefix(Cache* cc, WritableFile* file, char* buffer,
+                                  size_t* size);
 
   // Helper functions for DumpTable()
   Status DumpIndexBlock(WritableFile* out_file);
@@ -701,4 +703,4 @@ class BlockBasedTableIterator<DataBlockIter, LazyBuffer>
   }
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

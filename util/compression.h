@@ -15,6 +15,7 @@
 
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/compression_context_cache.h"
 #include "util/memory_allocator.h"
@@ -41,7 +42,8 @@
 #if ZSTD_VERSION_NUMBER >= 10103  // v1.1.3+
 #include <zdict.h>
 #endif  // ZSTD_VERSION_NUMBER >= 10103
-namespace rocksdb {
+
+namespace TERARKDB_NAMESPACE {
 // Need this for the context allocation override
 // On windows we need to do this explicitly
 #if (ZSTD_VERSION_NUMBER >= 500)
@@ -82,7 +84,7 @@ class ZSTDUncompressCachedData {
 #ifdef ROCKSDB_ZSTD_CUSTOM_MEM
       zstd_ctx_ =
           ZSTD_createDCtx_advanced(port::GetJeZstdAllocationOverrides());
-#else   // ROCKSDB_ZSTD_CUSTOM_MEM
+#else  // ROCKSDB_ZSTD_CUSTOM_MEM
       zstd_ctx_ = ZSTD_createDCtx();
 #endif  // ROCKSDB_ZSTD_CUSTOM_MEM
       cache_idx_ = -1;
@@ -103,11 +105,11 @@ class ZSTDUncompressCachedData {
   int64_t cache_idx_ = -1;  // -1 means this instance owns the context
 };
 #endif  // (ZSTD_VERSION_NUMBER >= 500)
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ZSTD
 
 #if !(defined ZSTD) || !(ZSTD_VERSION_NUMBER >= 500)
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 class ZSTDUncompressCachedData {
   void* padding;  // unused
  public:
@@ -123,17 +125,18 @@ class ZSTDUncompressCachedData {
   int64_t GetCacheIndex() const { return -1; }
   void CreateIfNeeded() {}
   void InitFromCache(const ZSTDUncompressCachedData&, int64_t) {}
+
  private:
   void ignore_padding__() { padding = nullptr; }
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif
 
 #if defined(XPRESS)
 #include "port/xpress.h"
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Instantiate this class and pass it to the uncompression API below
 class CompressionContext {
@@ -148,7 +151,7 @@ class CompressionContext {
 #ifdef ROCKSDB_ZSTD_CUSTOM_MEM
       zstd_ctx_ =
           ZSTD_createCCtx_advanced(port::GetJeZstdAllocationOverrides());
-#else   // ROCKSDB_ZSTD_CUSTOM_MEM
+#else  // ROCKSDB_ZSTD_CUSTOM_MEM
       zstd_ctx_ = ZSTD_createCCtx();
 #endif  // ROCKSDB_ZSTD_CUSTOM_MEM
     }
@@ -165,7 +168,7 @@ class CompressionContext {
     assert(type_ == kZSTD || type_ == kZSTDNotFinalCompression);
     return zstd_ctx_;
   }
-#else   // ZSTD && (ZSTD_VERSION_NUMBER >= 500)
+#else  // ZSTD && (ZSTD_VERSION_NUMBER >= 500)
  private:
   void CreateNativeContext() {}
   void DestroyNativeContext() {}
@@ -787,7 +790,7 @@ inline bool LZ4_Compress(const CompressionContext& ctx,
       compress_bound);
 #endif
   LZ4_freeStream(stream);
-#else   // up to r123
+#else  // up to r123
   outlen = LZ4_compress_limitedOutput(input, &(*output)[output_header_len],
                                       static_cast<int>(length), compress_bound);
   (void)ctx;
@@ -850,7 +853,7 @@ inline CacheAllocationPtr LZ4_Uncompress(const UncompressionContext& ctx,
       stream, input_data, output.get(), static_cast<int>(input_length),
       static_cast<int>(output_len));
   LZ4_freeStreamDecode(stream);
-#else   // up to r123
+#else  // up to r123
   *decompress_size = LZ4_decompress_safe(input_data, output.get(),
                                          static_cast<int>(input_length),
                                          static_cast<int>(output_len));
@@ -924,7 +927,7 @@ inline bool LZ4HC_Compress(const CompressionContext& ctx,
   outlen =
       LZ4_compress_HC_continue(stream, input, &(*output)[output_header_len],
                                static_cast<int>(length), compress_bound);
-#else   // r124-r128
+#else  // r124-r128
   outlen = LZ4_compressHC_limitedOutput_continue(
       stream, input, &(*output)[output_header_len], static_cast<int>(length),
       compress_bound);
@@ -935,11 +938,11 @@ inline bool LZ4HC_Compress(const CompressionContext& ctx,
   outlen = LZ4_compressHC2_limitedOutput(input, &(*output)[output_header_len],
                                          static_cast<int>(length),
                                          compress_bound, level);
-#else                    // up to r112
+#else  // up to r112
   outlen =
       LZ4_compressHC_limitedOutput(input, &(*output)[output_header_len],
                                    static_cast<int>(length), compress_bound);
-#endif                   // LZ4_VERSION_NUMBER >= 10400
+#endif  // LZ4_VERSION_NUMBER >= 10400
 
   if (outlen == 0) {
     return false;
@@ -1011,7 +1014,7 @@ inline bool ZSTD_Compress(const CompressionContext& ctx, const char* input,
   outlen = ZSTD_compress_usingDict(context, &(*output)[output_header_len],
                                    compressBound, input, length,
                                    ctx.dict().data(), ctx.dict().size(), level);
-#else   // up to v0.4.x
+#else  // up to v0.4.x
   outlen = ZSTD_compress(&(*output)[output_header_len], compressBound, input,
                          length, level);
 #endif  // ZSTD_VERSION_NUMBER >= 500
@@ -1050,7 +1053,7 @@ inline CacheAllocationPtr ZSTD_Uncompress(
   actual_output_length = ZSTD_decompress_usingDict(
       context, output.get(), output_len, input_data, input_length,
       ctx.dict().data(), ctx.dict().size());
-#else   // up to v0.4.x
+#else  // up to v0.4.x
   actual_output_length =
       ZSTD_decompress(output.get(), output_len, input_data, input_length);
 #endif  // ZSTD_VERSION_NUMBER >= 500
@@ -1084,7 +1087,7 @@ inline std::string ZSTD_TrainDictionary(const std::string& samples,
   assert(dict_len <= max_dict_bytes);
   dict_data.resize(dict_len);
   return dict_data;
-#else   // up to v1.1.2
+#else  // up to v1.1.2
   assert(false);
   (void)samples;
   (void)sample_lens;
@@ -1103,7 +1106,7 @@ inline std::string ZSTD_TrainDictionary(const std::string& samples,
   size_t num_samples = samples.size() >> sample_len_shift;
   std::vector<size_t> sample_lens(num_samples, size_t(1) << sample_len_shift);
   return ZSTD_TrainDictionary(samples, sample_lens, max_dict_bytes);
-#else   // up to v1.1.2
+#else  // up to v1.1.2
   assert(false);
   (void)samples;
   (void)sample_len_shift;
@@ -1112,4 +1115,4 @@ inline std::string ZSTD_TrainDictionary(const std::string& samples,
 #endif  // ZSTD_VERSION_NUMBER >= 10103
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

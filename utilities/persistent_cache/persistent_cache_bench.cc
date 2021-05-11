@@ -15,18 +15,17 @@ int main() { fprintf(stderr, "Please install gflags to run tools\n"); }
 #include <sstream>
 #include <unordered_map>
 
-#include "rocksdb/env.h"
-
-#include "utilities/persistent_cache/block_cache_tier.h"
-#include "utilities/persistent_cache/persistent_cache_tier.h"
-#include "utilities/persistent_cache/volatile_tier_impl.h"
-
 #include "monitoring/histogram.h"
 #include "port/port.h"
+#include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block_builder.h"
 #include "util/gflags_compat.h"
 #include "util/mutexlock.h"
 #include "util/stop_watch.h"
+#include "utilities/persistent_cache/block_cache_tier.h"
+#include "utilities/persistent_cache/persistent_cache_tier.h"
+#include "utilities/persistent_cache/volatile_tier_impl.h"
 
 DEFINE_int32(nsec, 10, "nsec");
 DEFINE_int32(nthread_write, 1, "Insert threads");
@@ -43,7 +42,7 @@ DEFINE_string(cache_type, "block_cache",
 DEFINE_bool(benchmark, false, "Benchmark mode");
 DEFINE_int32(volatile_cache_pct, 10, "Percentage of cache in memory tier.");
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 std::unique_ptr<PersistentCacheTier> NewVolatileCache() {
   assert(FLAGS_cache_size != std::numeric_limits<uint64_t>::max());
@@ -235,7 +234,7 @@ class CacheTierBenchmark {
       fprintf(stderr, "%s\n", status.ToString().c_str());
     }
     assert(status.ok());
-    assert(size == (size_t) FLAGS_iosize);
+    assert(size == (size_t)FLAGS_iosize);
 
     // adjust stats
     const size_t elapsed_micro = timer.ElapsedNanos() / 1000;
@@ -301,7 +300,7 @@ class CacheTierBenchmark {
   mutable Stats stats_;                         // Stats
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 //
 // main
@@ -329,16 +328,16 @@ int main(int argc, char** argv) {
 
   fprintf(stderr, "%s\n", msg.str().c_str());
 
-  std::shared_ptr<rocksdb::PersistentCacheTier> cache;
+  std::shared_ptr<TERARKDB_NAMESPACE::PersistentCacheTier> cache;
   if (FLAGS_cache_type == "block_cache") {
     fprintf(stderr, "Using block cache implementation\n");
-    cache = rocksdb::NewBlockCache();
+    cache = TERARKDB_NAMESPACE::NewBlockCache();
   } else if (FLAGS_cache_type == "volatile") {
     fprintf(stderr, "Using volatile cache implementation\n");
-    cache = rocksdb::NewVolatileCache();
+    cache = TERARKDB_NAMESPACE::NewVolatileCache();
   } else if (FLAGS_cache_type == "tiered") {
     fprintf(stderr, "Using tiered cache implementation\n");
-    cache = rocksdb::NewTieredCache();
+    cache = TERARKDB_NAMESPACE::NewTieredCache();
   } else {
     fprintf(stderr, "Unknown option for cache\n");
   }
@@ -349,8 +348,8 @@ int main(int argc, char** argv) {
     abort();
   }
 
-  std::unique_ptr<rocksdb::CacheTierBenchmark> benchmark(
-      new rocksdb::CacheTierBenchmark(std::move(cache)));
+  std::unique_ptr<TERARKDB_NAMESPACE::CacheTierBenchmark> benchmark(
+      new TERARKDB_NAMESPACE::CacheTierBenchmark(std::move(cache)));
 
   return 0;
 }

@@ -20,13 +20,14 @@
 #include "db/version_edit.h"
 #include "include/rocksdb/comparator.h"
 #include "include/rocksdb/types.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 #include "table/scoped_arena_iterator.h"
 #include "table/table_builder.h"
 #include "util/heap.h"
 #include "util/kv_map.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class TruncatedRangeDelIterator {
  public:
@@ -431,4 +432,4 @@ extern InternalIteratorBase<Slice>* NewTruncatedRangeDelMergingIter(
     const InternalKeyComparator* icmp,
     const std::vector<std::unique_ptr<TruncatedRangeDelIterator>>& children);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -23,6 +23,8 @@
 #include "rocksdb/env.h"
 #include "rocksdb/listener.h"
 #include "rocksdb/metrics_reporter.h"
+#include "rocksdb/terark_namespace.h"
+#include "rocksdb/ttl_extractor.h"
 #include "rocksdb/universal_compaction.h"
 #include "rocksdb/value_extractor.h"
 #include "rocksdb/version.h"
@@ -32,7 +34,7 @@
 #undef max
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Cache;
 class CompactionFilter;
@@ -155,6 +157,9 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // Default: nullptr
   std::shared_ptr<const ValueExtractorFactory> value_meta_extractor_factory =
       nullptr;
+
+  // Default: nullptr
+  std::shared_ptr<const TtlExtractorFactory> ttl_extractor_factory = nullptr;
 
   // A single CompactionFilter instance to call into during compaction.
   // Allows an application to modify/delete a key-value during background
@@ -311,6 +316,22 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // valid [0 , 0.5]
   double blob_gc_ratio = 0.05;
 
+  // Blob file size
+  // Default : same as bottommost level sst file size
+  uint64_t target_blob_file_size = 0;
+
+  // Blob file defragment threshold
+  // Default : target_blob_file_size / 8
+  uint64_t blob_file_defragment_size = 0;
+
+  // Num total blob file count limits
+  // 0 to unlimited
+  size_t max_blob_files = 0;
+
+  // Max dependence blob overlap
+  // 0 to unlimited
+  size_t max_dependence_blob_overlap = 1024;
+
   // This is a factory that provides TableFactory objects.
   // Default: a block-based table factory that provides a default
   // implementation of TableBuilder and TableReader with default
@@ -330,6 +351,18 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // If left empty, db_paths will be used.
   // Default: empty
   std::vector<DbPath> cf_paths;
+
+  // The ratio of ttl to mark a SST to be compacted.
+  // The value should be set no greater than 1.000.
+  // If value less than 0.0, it acts the same as 0.0.
+  // If the value greater than 1.000, we do not enable ttl_gc.
+  // Default: 1.000
+  double ttl_gc_ratio = 1.000;
+
+  // The scan gap of ttl to mark a SST to be compacted.
+  // If the value not set, it use 0 default and we do not enable scan_gap.
+  // Default: 0
+  size_t ttl_max_scan_gap = 0;
 
   // Create ColumnFamilyOptions with default values for all fields
   ColumnFamilyOptions();
@@ -713,6 +746,27 @@ struct DBOptions {
   //
   // Dynamically changeable through SetDBOptions() API.
   unsigned int stats_dump_period_sec = 600;
+
+  // if not zero, dump rocksdb.stats to RocksDB every stats_persist_period_sec
+  // Default: 600
+  unsigned int stats_persist_period_sec = 600;
+
+  // If true, automatically persist stats to a hidden column family (column
+  // family name: ___rocksdb_stats_history___) every
+  // stats_persist_period_sec seconds; otherwise, write to an in-memory
+  // struct. User can query through `GetStatsHistory` API.
+  // If user attempts to create a column family with the same name on a DB
+  // which have previously set persist_stats_to_disk to true, the column family
+  // creation will fail, but the hidden column family will survive, as well as
+  // the previously persisted statistics.
+  // When peristing stats to disk, the stat name will be limited at 100 bytes.
+  // Default: false
+  bool persist_stats_to_disk = false;
+
+  // if not zero, periodically take stats snapshots and store in memory, the
+  // memory size for stats snapshots is capped at stats_history_buffer_size
+  // Default: 1MB
+  size_t stats_history_buffer_size = 1024 * 1024;
 
   // If set true, will hint the underlying file system that the file
   // access pattern is random, when a sst file is opened.
@@ -1290,6 +1344,19 @@ extern Status CreateLoggerFromOptions(const std::string& dbname,
                                       const DBOptions& options,
                                       std::shared_ptr<Logger>* logger);
 
+enum SeparationType {
+  // Keep key value stay separation state
+  kCompactionIngoreSeparate = 0,
+  // Separate key value using blob_size & blob_large_key_ratio
+  kCompactionTransToSeparate = 1,
+  // Separate key value & force rebuild blob files
+  // WARNING: may be cost long time and issue double size
+  kCompactionRebuildBlob = 2,
+  // Disable key value separation, combine separated value
+  // WARNING: may be cost long time and issue double size
+  kCompactionCombineValue = 3,
+};
+
 // CompactionOptions are used in CompactFiles() call.
 struct CompactionOptions {
   // Compaction output compression type
@@ -1298,6 +1365,9 @@ struct CompactionOptions {
   // according to the `ColumnFamilyOptions`, taking into account the output
   // level if `compression_per_level` is specified.
   CompressionType compression;
+  // Key value separation control
+  // Default: kCompactionTransToSeparate
+  SeparationType separation_type;
   // Compaction will create files of size `output_file_size_limit`.
   // Default: MAX, which means that compaction will create a single file
   uint64_t output_file_size_limit;
@@ -1306,6 +1376,7 @@ struct CompactionOptions {
 
   CompactionOptions()
       : compression(kSnappyCompression),
+        separation_type(kCompactionTransToSeparate),
         output_file_size_limit(std::numeric_limits<uint64_t>::max()),
         max_subcompactions(0) {}
 };
@@ -1340,6 +1411,8 @@ struct CompactRangeOptions {
   // if there is a compaction filter
   BottommostLevelCompaction bottommost_level_compaction =
       BottommostLevelCompaction::kIfHaveCompactionFilter;
+  // Key value separation control
+  SeparationType separation_type = kCompactionTransToSeparate;
   // If true, will execute immediately even if doing so would cause the DB to
   // enter write stall mode. Otherwise, it'll sleep until load is low enough.
   bool allow_write_stall = false;
@@ -1391,4 +1464,4 @@ struct TraceOptions {
   uint64_t max_trace_file_size = uint64_t{64} * 1024 * 1024 * 1024;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

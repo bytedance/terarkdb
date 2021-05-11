@@ -15,6 +15,8 @@
 #include <map>
 #include <string>
 #include <vector>
+
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/filename.h"
 #include "util/string_util.h"
@@ -33,7 +35,7 @@
 //   key  : 'k' + : + $id
 //   value:  $quadkey
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 const double GeoDBImpl::PI = 3.141592653589793;
 const double GeoDBImpl::EarthRadius = 6378137;
@@ -42,12 +44,10 @@ const double GeoDBImpl::MaxLatitude = 85.05112878;
 const double GeoDBImpl::MinLongitude = -180;
 const double GeoDBImpl::MaxLongitude = 180;
 
-GeoDBImpl::GeoDBImpl(DB* db, const GeoDBOptions& options) :
-  GeoDB(db, options), db_(db), options_(options) {
-}
+GeoDBImpl::GeoDBImpl(DB* db, const GeoDBOptions& options)
+    : GeoDB(db, options), db_(db), options_(options) {}
 
-GeoDBImpl::~GeoDBImpl() {
-}
+GeoDBImpl::~GeoDBImpl() {}
 
 Status GeoDBImpl::Insert(const GeoObject& obj) {
   WriteBatch batch;
@@ -81,8 +81,7 @@ Status GeoDBImpl::Insert(const GeoObject& obj) {
   return db_->Write(woptions_, &batch);
 }
 
-Status GeoDBImpl::GetByPosition(const GeoPosition& pos,
-                                const Slice& id,
+Status GeoDBImpl::GetByPosition(const GeoPosition& pos, const Slice& id,
                                 std::string* value) {
   std::string quadkey = PositionToQuad(pos, Detail);
   std::string key1 = MakeKey1(pos, id, quadkey);
@@ -140,7 +139,6 @@ Status GeoDBImpl::GetById(const Slice& id, GeoObject* object) {
   return Status::OK();
 }
 
-
 Status GeoDBImpl::Remove(const Slice& id) {
   // Read the object from the database
   GeoObject obj;
@@ -163,9 +161,10 @@ class GeoIteratorImpl : public GeoIterator {
  private:
   std::vector<GeoObject> values_;
   std::vector<GeoObject>::iterator iter_;
+
  public:
   explicit GeoIteratorImpl(std::vector<GeoObject> values)
-    : values_(std::move(values)) {
+      : values_(std::move(values)) {
     iter_ = values_.begin();
   }
   virtual void Next() override;
@@ -177,9 +176,10 @@ class GeoIteratorImpl : public GeoIterator {
 class GeoErrorIterator : public GeoIterator {
  private:
   Status status_;
+
  public:
   explicit GeoErrorIterator(Status s) : status_(s) {}
-  virtual void Next() override {};
+  virtual void Next() override{};
   virtual bool Valid() const override { return false; }
   virtual const GeoObject& geo_object() override {
     GeoObject* g = new GeoObject();
@@ -193,22 +193,17 @@ void GeoIteratorImpl::Next() {
   iter_++;
 }
 
-bool GeoIteratorImpl::Valid() const {
-  return iter_ != values_.end();
-}
+bool GeoIteratorImpl::Valid() const { return iter_ != values_.end(); }
 
 const GeoObject& GeoIteratorImpl::geo_object() {
   assert(Valid());
   return *iter_;
 }
 
-Status GeoIteratorImpl::status() const {
-  return Status::OK();
-}
+Status GeoIteratorImpl::status() const { return Status::OK(); }
 
-GeoIterator* GeoDBImpl::SearchRadial(const GeoPosition& pos,
-  double radius,
-  int number_of_values) {
+GeoIterator* GeoDBImpl::SearchRadial(const GeoPosition& pos, double radius,
+                                     int number_of_values) {
   std::vector<GeoObject> values;
 
   // Gather all bounding quadkeys
@@ -261,8 +256,8 @@ GeoIterator* GeoDBImpl::SearchRadial(const GeoPosition& pos,
 
 std::string GeoDBImpl::MakeKey1(const GeoPosition& pos, Slice id,
                                 std::string quadkey) {
-  std::string lat = rocksdb::ToString(pos.latitude);
-  std::string lon = rocksdb::ToString(pos.longitude);
+  std::string lat = TERARKDB_NAMESPACE::ToString(pos.latitude);
+  std::string lon = TERARKDB_NAMESPACE::ToString(pos.longitude);
   std::string key = "p:";
   key.reserve(5 + quadkey.size() + id.size() + lat.size() + lon.size());
   key.append(quadkey);
@@ -281,8 +276,7 @@ std::string GeoDBImpl::MakeKey2(Slice id) {
   return key;
 }
 
-std::string GeoDBImpl::MakeKey1Prefix(std::string quadkey,
-                                      Slice id) {
+std::string GeoDBImpl::MakeKey1Prefix(std::string quadkey, Slice id) {
   std::string key = "p:";
   key.reserve(4 + quadkey.size() + id.size());
   key.append(quadkey);
@@ -299,14 +293,10 @@ std::string GeoDBImpl::MakeQuadKeyPrefix(std::string quadkey) {
 }
 
 // convert degrees to radians
-double GeoDBImpl::radians(double x) {
-  return (x * PI) / 180;
-}
+double GeoDBImpl::radians(double x) { return (x * PI) / 180; }
 
 // convert radians to degrees
-double GeoDBImpl::degrees(double x) {
-  return (x * 180) / PI;
-}
+double GeoDBImpl::degrees(double x) { return (x * 180) / PI; }
 
 // convert a gps location to quad coordinate
 std::string GeoDBImpl::PositionToQuad(const GeoPosition& pos,
@@ -316,25 +306,23 @@ std::string GeoDBImpl::PositionToQuad(const GeoPosition& pos,
   return TileToQuadKey(tile, levelOfDetail);
 }
 
-GeoPosition GeoDBImpl::displaceLatLon(double lat, double lon,
-                                      double deltay, double deltax) {
+GeoPosition GeoDBImpl::displaceLatLon(double lat, double lon, double deltay,
+                                      double deltax) {
   double dLat = deltay / EarthRadius;
   double dLon = deltax / (EarthRadius * cos(radians(lat)));
-  return GeoPosition(lat + degrees(dLat),
-                     lon + degrees(dLon));
+  return GeoPosition(lat + degrees(dLat), lon + degrees(dLon));
 }
 
 //
 // Return the distance between two positions on the earth
 //
-double GeoDBImpl::distance(double lat1, double lon1,
-                           double lat2, double lon2) {
+double GeoDBImpl::distance(double lat1, double lon1, double lat2, double lon2) {
   double lon = radians(lon2 - lon1);
   double lat = radians(lat2 - lat1);
 
-  double a = (sin(lat / 2) * sin(lat / 2)) +
-              cos(radians(lat1)) * cos(radians(lat2)) *
-              (sin(lon / 2) * sin(lon / 2));
+  double a = (sin(lat / 2) * sin(lat / 2)) + cos(radians(lat1)) *
+                                                 cos(radians(lat2)) *
+                                                 (sin(lon / 2) * sin(lon / 2));
   double angle = 2 * atan2(sqrt(a), sqrt(1 - a));
   return angle * EarthRadius;
 }
@@ -342,34 +330,31 @@ double GeoDBImpl::distance(double lat1, double lon1,
 //
 // Returns all the quadkeys inside the search range
 //
-Status GeoDBImpl::searchQuadIds(const GeoPosition& position,
-                                double radius,
+Status GeoDBImpl::searchQuadIds(const GeoPosition& position, double radius,
                                 std::vector<std::string>* quadKeys) {
   // get the outline of the search square
   GeoPosition topLeftPos = boundingTopLeft(position, radius);
   GeoPosition bottomRightPos = boundingBottomRight(position, radius);
 
-  Pixel topLeft =  PositionToPixel(topLeftPos, Detail);
-  Pixel bottomRight =  PositionToPixel(bottomRightPos, Detail);
+  Pixel topLeft = PositionToPixel(topLeftPos, Detail);
+  Pixel bottomRight = PositionToPixel(bottomRightPos, Detail);
 
   // how many level of details to look for
-  int numberOfTilesAtMaxDepth = static_cast<int>(std::floor((bottomRight.x - topLeft.x) / 256));
-  int zoomLevelsToRise = static_cast<int>(std::floor(std::log(numberOfTilesAtMaxDepth) / std::log(2)));
+  int numberOfTilesAtMaxDepth =
+      static_cast<int>(std::floor((bottomRight.x - topLeft.x) / 256));
+  int zoomLevelsToRise = static_cast<int>(
+      std::floor(std::log(numberOfTilesAtMaxDepth) / std::log(2)));
   zoomLevelsToRise++;
   int levels = std::max(0, Detail - zoomLevelsToRise);
 
-  quadKeys->push_back(PositionToQuad(GeoPosition(topLeftPos.latitude,
-                                                 topLeftPos.longitude),
-                                     levels));
-  quadKeys->push_back(PositionToQuad(GeoPosition(topLeftPos.latitude,
-                                                 bottomRightPos.longitude),
-                                     levels));
-  quadKeys->push_back(PositionToQuad(GeoPosition(bottomRightPos.latitude,
-                                                 topLeftPos.longitude),
-                                     levels));
-  quadKeys->push_back(PositionToQuad(GeoPosition(bottomRightPos.latitude,
-                                                 bottomRightPos.longitude),
-                                     levels));
+  quadKeys->push_back(PositionToQuad(
+      GeoPosition(topLeftPos.latitude, topLeftPos.longitude), levels));
+  quadKeys->push_back(PositionToQuad(
+      GeoPosition(topLeftPos.latitude, bottomRightPos.longitude), levels));
+  quadKeys->push_back(PositionToQuad(
+      GeoPosition(bottomRightPos.latitude, topLeftPos.longitude), levels));
+  quadKeys->push_back(PositionToQuad(
+      GeoPosition(bottomRightPos.latitude, bottomRightPos.longitude), levels));
   return Status::OK();
 }
 
@@ -473,6 +458,6 @@ void GeoDBImpl::QuadKeyToTile(std::string quadkey, Tile* tile,
     }
   }
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

@@ -18,7 +18,7 @@
  */
 void Java_org_rocksdb_RocksDBExceptionTest_raiseException(JNIEnv* env,
                                                           jobject /*jobj*/) {
-  rocksdb::RocksDBExceptionJni::ThrowNew(env, std::string("test message"));
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, std::string("test message"));
 }
 
 /*
@@ -28,8 +28,8 @@ void Java_org_rocksdb_RocksDBExceptionTest_raiseException(JNIEnv* env,
  */
 void Java_org_rocksdb_RocksDBExceptionTest_raiseExceptionWithStatusCode(
     JNIEnv* env, jobject /*jobj*/) {
-  rocksdb::RocksDBExceptionJni::ThrowNew(env, "test message",
-                                         rocksdb::Status::NotSupported());
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, "test message",
+                                         TERARKDB_NAMESPACE::Status::NotSupported());
 }
 
 /*
@@ -39,7 +39,7 @@ void Java_org_rocksdb_RocksDBExceptionTest_raiseExceptionWithStatusCode(
  */
 void Java_org_rocksdb_RocksDBExceptionTest_raiseExceptionNoMsgWithStatusCode(
     JNIEnv* env, jobject /*jobj*/) {
-  rocksdb::RocksDBExceptionJni::ThrowNew(env, rocksdb::Status::NotSupported());
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, TERARKDB_NAMESPACE::Status::NotSupported());
 }
 
 /*
@@ -49,9 +49,9 @@ void Java_org_rocksdb_RocksDBExceptionTest_raiseExceptionNoMsgWithStatusCode(
  */
 void Java_org_rocksdb_RocksDBExceptionTest_raiseExceptionWithStatusCodeSubCode(
     JNIEnv* env, jobject /*jobj*/) {
-  rocksdb::RocksDBExceptionJni::ThrowNew(
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(
       env, "test message",
-      rocksdb::Status::TimedOut(rocksdb::Status::SubCode::kLockTimeout));
+      TERARKDB_NAMESPACE::Status::TimedOut(TERARKDB_NAMESPACE::Status::SubCode::kLockTimeout));
 }
 
 /*
@@ -61,8 +61,8 @@ void Java_org_rocksdb_RocksDBExceptionTest_raiseExceptionWithStatusCodeSubCode(
  */
 void Java_org_rocksdb_RocksDBExceptionTest_raiseExceptionNoMsgWithStatusCodeSubCode(
     JNIEnv* env, jobject /*jobj*/) {
-  rocksdb::RocksDBExceptionJni::ThrowNew(
-      env, rocksdb::Status::TimedOut(rocksdb::Status::SubCode::kLockTimeout));
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(
+      env, TERARKDB_NAMESPACE::Status::TimedOut(TERARKDB_NAMESPACE::Status::SubCode::kLockTimeout));
 }
 
 /*
@@ -72,7 +72,7 @@ void Java_org_rocksdb_RocksDBExceptionTest_raiseExceptionNoMsgWithStatusCodeSubC
  */
 void Java_org_rocksdb_RocksDBExceptionTest_raiseExceptionWithStatusCodeState(
     JNIEnv* env, jobject /*jobj*/) {
-  rocksdb::Slice state("test state");
-  rocksdb::RocksDBExceptionJni::ThrowNew(env, "test message",
-                                         rocksdb::Status::NotSupported(state));
+  TERARKDB_NAMESPACE::Slice state("test state");
+  TERARKDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, "test message",
+                                         TERARKDB_NAMESPACE::Status::NotSupported(state));
 }

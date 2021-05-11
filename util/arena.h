@@ -15,15 +15,18 @@
 #ifndef OS_WIN
 #include <sys/mman.h>
 #endif
-#include <cstddef>
-#include <cerrno>
-#include <vector>
 #include <assert.h>
 #include <stdint.h>
+
+#include <cerrno>
+#include <cstddef>
+#include <vector>
+
+#include "rocksdb/terark_namespace.h"
 #include "util/allocator.h"
 #include "util/mutexlock.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Arena : public Allocator {
  public:
@@ -77,12 +80,11 @@ class Arena : public Allocator {
 
   size_t BlockSize() const override { return kBlockSize; }
 
-  bool IsInInlineBlock() const {
-    return blocks_.empty();
-  }
+  bool IsInInlineBlock() const { return blocks_.empty(); }
 
  private:
-  char inline_block_[kInlineSize] __attribute__((__aligned__(alignof(max_align_t))));
+  char inline_block_[kInlineSize]
+      __attribute__((__aligned__(alignof(max_align_t))));
   // Number of bytes allocated in one block
   const size_t kBlockSize;
   // Array of new[] allocated memory blocks
@@ -138,4 +140,4 @@ inline char* Arena::Allocate(size_t bytes) {
 //  2. the multiple of align unit.
 extern size_t OptimizeBlockSize(size_t block_size);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

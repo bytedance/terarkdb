@@ -21,8 +21,10 @@
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
+#include "util/chash_set.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Compaction;
 struct CompactionInputFiles;
@@ -107,10 +109,11 @@ class CompactionPicker {
                                     VersionStorageInfo* vstorage,
                                     LogBuffer* log_buffer);
 
-  virtual void InitFilesBeingCompact(
-      const MutableCFOptions& mutable_cf_options, VersionStorageInfo* vstorage,
-      const InternalKey* begin, const InternalKey* end,
-      std::unordered_set<uint64_t>* files_being_compact);
+  virtual void InitFilesBeingCompact(const MutableCFOptions& mutable_cf_options,
+                                     VersionStorageInfo* vstorage,
+                                     const InternalKey* begin,
+                                     const InternalKey* end,
+                                     chash_set<uint64_t>* files_being_compact);
 
   // Return a compaction object for compacting the range [begin,end] in
   // the specified level.  Returns nullptr if there is nothing in that
@@ -125,20 +128,21 @@ class CompactionPicker {
   // *compaction_end should point to valid InternalKey!
   virtual Compaction* CompactRange(
       const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
-      VersionStorageInfo* vstorage, int input_level, int output_level,
-      uint32_t output_path_id, uint32_t max_subcompactions,
-      const InternalKey* begin, const InternalKey* end,
-      InternalKey** compaction_end, bool* manual_conflict,
-      const std::unordered_set<uint64_t>* files_being_compact);
+      SeparationType separation_type, VersionStorageInfo* vstorage,
+      int input_level, int output_level, uint32_t output_path_id,
+      uint32_t max_subcompactions, const InternalKey* begin,
+      const InternalKey* end, InternalKey** compaction_end,
+      bool* manual_conflict, const chash_set<uint64_t>* files_being_compact);
 
   // Pick compaction which pointed range files
   // range use internal keys
   Compaction* PickRangeCompaction(
       const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
-      VersionStorageInfo* vstorage, int level, const InternalKey* begin,
-      const InternalKey* end, uint32_t max_subcompactions,
-      const std::unordered_set<uint64_t>* files_being_compact,
-      bool* manual_conflict, LogBuffer* log_buffer);
+      SeparationType separation_type, VersionStorageInfo* vstorage, int level,
+      const InternalKey* begin, const InternalKey* end,
+      uint32_t max_subcompactions,
+      const chash_set<uint64_t>* files_being_compact, bool* manual_conflict,
+      LogBuffer* log_buffer);
 
   // The maximum allowed output level.  Default value is NumberLevels() - 1.
   virtual int MaxOutputLevel() const { return NumberLevels() - 1; }
@@ -261,12 +265,6 @@ class CompactionPicker {
       const std::vector<SequenceNumber>& snapshots,
       const std::vector<SortedRun>& sorted_runs, LogBuffer* log_buffer);
 
-  // Pick bottommost level for clean up snapshots
-  Compaction* PickBottommostLevelCompaction(
-      const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
-      VersionStorageInfo* vstorage,
-      const std::vector<SequenceNumber>& snapshots, LogBuffer* log_buffer);
-
   void PickFilesMarkedForCompaction(const std::string& cf_name,
                                     VersionStorageInfo* vstorage,
                                     int* start_level, int* output_level,
@@ -351,12 +349,12 @@ class NullCompactionPicker : public CompactionPicker {
   Compaction* CompactRange(
       const std::string& /*cf_name*/,
       const MutableCFOptions& /*mutable_cf_options*/,
-      VersionStorageInfo* /*vstorage*/, int /*input_level*/,
-      int /*output_level*/, uint32_t /*output_path_id*/,
+      SeparationType /*separation_type*/, VersionStorageInfo* /*vstorage*/,
+      int /*input_level*/, int /*output_level*/, uint32_t /*output_path_id*/,
       uint32_t /*max_subcompactions*/, const InternalKey* /*begin*/,
       const InternalKey* /*end*/, InternalKey** /*compaction_end*/,
       bool* /*manual_conflict*/,
-      const std::unordered_set<uint64_t>* /*files_being_compact*/) override {
+      const chash_set<uint64_t>* /*files_being_compact*/) override {
     return nullptr;
   }
 
@@ -384,4 +382,4 @@ CompressionOptions GetCompressionOptions(const ImmutableCFOptions& ioptions,
                                          int level,
                                          const bool enable_compression = true);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

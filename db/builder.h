@@ -20,11 +20,12 @@
 #include "rocksdb/options.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table_properties.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/types.h"
 #include "table/scoped_arena_iterator.h"
 #include "util/event_logger.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct Options;
 struct FileMetaData;
@@ -77,6 +78,8 @@ extern Status BuildTable(
     const InternalKeyComparator& internal_comparator,
     const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
         int_tbl_prop_collector_factories,
+    const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
+        int_tbl_prop_collector_factories_for_blob,
     uint32_t column_family_id, const std::string& column_family_name,
     std::vector<SequenceNumber> snapshots,
     SequenceNumber earliest_write_conflict_snapshot,
@@ -90,4 +93,4 @@ extern Status BuildTable(
     const uint64_t oldest_key_time = 0,
     Env::WriteLifeTimeHint write_hint = Env::WLTH_NOT_SET);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

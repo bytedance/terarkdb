@@ -15,11 +15,12 @@
 #include "rocksdb/memory_allocator.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block_builder.h"
 #include "table/format.h"
 #include "util/kv_map.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class BlockBuilder;
 class BlockHandle;
@@ -70,8 +71,8 @@ class PropertyBlockBuilder {
 
 // Were we encounter any error occurs during user-defined statistics collection,
 // we'll write the warning message to info log.
-void LogPropertiesCollectionError(
-    Logger* info_log, const std::string& method, const std::string& name);
+void LogPropertiesCollectionError(Logger* info_log, const std::string& method,
+                                  const std::string& name);
 
 // Utility functions help table builder to trigger batch events for user
 // defined property collectors.
@@ -142,4 +143,4 @@ Status ReadMetaBlock(RandomAccessFileReader* file,
                      bool compression_type_missing = false,
                      MemoryAllocator* memory_allocator = nullptr);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -5,7 +5,9 @@
 
 #pragma once
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+
+namespace TERARKDB_NAMESPACE {
 // A comparator to be used in std::set
 struct SetComparator {
   explicit SetComparator() : user_comparator_(BytewiseComparator()) {}
@@ -19,4 +21,4 @@ struct SetComparator {
  private:
   const Comparator* user_comparator_;
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

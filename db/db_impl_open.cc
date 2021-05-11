@@ -16,19 +16,23 @@
 #include "db/builder.h"
 #include "db/error_handler.h"
 #include "db/map_builder.h"
+#include "monitoring/persistent_stats_history.h"
 #include "options/options_helper.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/wal_filter.h"
 #include "table/block_based_table_factory.h"
 #include "util/c_style_callback.h"
 #include "util/rate_limiter.h"
 #include "util/sst_file_manager_impl.h"
+#include "util/string_util.h"
 #include "util/sync_point.h"
 #if !defined(_MSC_VER) && !defined(__APPLE__)
 #include <sys/unistd.h>
 #include <table/terark_zip_table.h>
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
+
 Options SanitizeOptions(const std::string& dbname, const Options& src) {
   auto db_options = SanitizeOptions(dbname, DBOptions(src));
   ImmutableDBOptions immutable_db_options(db_options);
@@ -118,7 +122,7 @@ DBOptions SanitizeOptions(const std::string& dbname, const DBOptions& src) {
   }
 
   if (result.db_paths.size() == 0) {
-    result.db_paths.emplace_back(dbname, std::numeric_limits<uint64_t>::max());
+    result.db_paths.emplace_back(dbname, port::kMaxUint64);
   }
 
   if (result.use_direct_reads && result.compaction_readahead_size == 0) {
@@ -195,19 +199,6 @@ static Status ValidateOptions(
     }
     if (!s.ok()) {
       return s;
-    }
-
-    if (cfd.options.ttl > 0 || cfd.options.compaction_options_fifo.ttl > 0) {
-      if (db_options.max_open_files != -1) {
-        return Status::NotSupported(
-            "TTL is only supported when files are always "
-            "kept open (set max_open_files = -1). ");
-      }
-      if (cfd.options.table_factory->Name() !=
-          BlockBasedTableFactory().Name()) {
-        return Status::NotSupported(
-            "TTL is only supported in Block-Based Table format. ");
-      }
     }
   }
 
@@ -404,6 +395,7 @@ Status DBImpl::Recover(
   }
 
   Status s = versions_->Recover(column_families, read_only);
+
   if (immutable_db_options_.paranoid_checks && s.ok()) {
     s = CheckConsistency(read_only);
   }
@@ -414,6 +406,10 @@ Status DBImpl::Recover(
         return s;
       }
     }
+  }
+  // DB mutex is already held
+  if (s.ok() && immutable_db_options_.persist_stats_to_disk) {
+    s = InitPersistStatsColumnFamily();
   }
 
   // Initial max_total_in_memory_state_ before recovery logs. Log recovery
@@ -430,6 +426,8 @@ Status DBImpl::Recover(
     default_cf_handle_ = new ColumnFamilyHandleImpl(
         versions_->GetColumnFamilySet()->GetDefault(), this, &mutex_);
     default_cf_internal_stats_ = default_cf_handle_->cfd()->internal_stats();
+    // TODO(Zhongyi): handle single_column_family_mode_ when
+    // persistent_stats is enabled
     single_column_family_mode_ =
         versions_->GetColumnFamilySet()->NumberOfColumnFamilies() == 1;
 
@@ -534,6 +532,98 @@ Status DBImpl::Recover(
     }
   }
 
+  return s;
+}
+
+Status DBImpl::PersistentStatsProcessFormatVersion() {
+  mutex_.AssertHeld();
+  Status s;
+  // persist version when stats CF doesn't exist
+  bool should_persist_format_version = !persistent_stats_cfd_exists_;
+  mutex_.Unlock();
+  if (persistent_stats_cfd_exists_) {
+    // Check persistent stats format version compatibility. Drop and recreate
+    // persistent stats CF if format version is incompatible
+    uint64_t format_version_recovered = 0;
+    Status s_format = DecodePersistentStatsVersionNumber(
+        this, StatsVersionKeyType::kFormatVersion, &format_version_recovered);
+    uint64_t compatible_version_recovered = 0;
+    Status s_compatible = DecodePersistentStatsVersionNumber(
+        this, StatsVersionKeyType::kCompatibleVersion,
+        &compatible_version_recovered);
+    // abort reading from existing stats CF if any of following is true:
+    // 1. failed to read format version or compatible version from disk
+    // 2. sst's format version is greater than current format version, meaning
+    // this sst is encoded with a newer RocksDB release, and current compatible
+    // version is below the sst's compatible version
+    if (!s_format.ok() || !s_compatible.ok() ||
+        (kStatsCFCurrentFormatVersion < format_version_recovered &&
+         kStatsCFCompatibleFormatVersion < compatible_version_recovered)) {
+      if (!s_format.ok() || !s_compatible.ok()) {
+        ROCKS_LOG_INFO(
+            immutable_db_options_.info_log,
+            "Reading persistent stats version key failed. Format key: %s, "
+            "compatible key: %s",
+            s_format.ToString().c_str(), s_compatible.ToString().c_str());
+      } else {
+        ROCKS_LOG_INFO(
+            immutable_db_options_.info_log,
+            "Disable persistent stats due to corrupted or incompatible format "
+            "version\n");
+      }
+      DropColumnFamily(persist_stats_cf_handle_);
+      DestroyColumnFamilyHandle(persist_stats_cf_handle_);
+      ColumnFamilyHandle* handle = nullptr;
+      ColumnFamilyOptions cfo;
+      OptimizeForPersistentStats(&cfo);
+      s = CreateColumnFamily(cfo, kPersistentStatsColumnFamilyName, &handle);
+      persist_stats_cf_handle_ = static_cast<ColumnFamilyHandleImpl*>(handle);
+      // should also persist version here because old stats CF is discarded
+      should_persist_format_version = true;
+    }
+  }
+  if (s.ok() && should_persist_format_version) {
+    // Persistent stats CF being created for the first time, need to write
+    // format version key
+    WriteBatch batch;
+    batch.Put(persist_stats_cf_handle_, kFormatVersionKeyString,
+              ToString(kStatsCFCurrentFormatVersion));
+    batch.Put(persist_stats_cf_handle_, kCompatibleVersionKeyString,
+              ToString(kStatsCFCompatibleFormatVersion));
+    WriteOptions wo;
+    wo.low_pri = true;
+    wo.no_slowdown = true;
+    wo.sync = false;
+    s = Write(wo, &batch);
+  }
+  mutex_.Lock();
+  return s;
+}
+
+Status DBImpl::InitPersistStatsColumnFamily() {
+  mutex_.AssertHeld();
+  assert(!persist_stats_cf_handle_);
+  ColumnFamilyData* persistent_stats_cfd =
+      versions_->GetColumnFamilySet()->GetColumnFamily(
+          kPersistentStatsColumnFamilyName);
+  persistent_stats_cfd_exists_ = persistent_stats_cfd != nullptr;
+
+  Status s;
+  if (persistent_stats_cfd != nullptr) {
+    // We are recovering from a DB which already contains persistent stats CF,
+    // the CF is already created in VersionSet::ApplyOneVersionEdit, but
+    // column family handle was not. Need to explicitly create handle here.
+    persist_stats_cf_handle_ =
+        new ColumnFamilyHandleImpl(persistent_stats_cfd, this, &mutex_);
+  } else {
+    mutex_.Unlock();
+    ColumnFamilyHandle* handle = nullptr;
+    ColumnFamilyOptions cfo;
+    OptimizeForPersistentStats(&cfo);
+    s = CreateColumnFamily(cfo, kPersistentStatsColumnFamilyName, &handle);
+    persist_stats_cf_handle_ = static_cast<ColumnFamilyHandleImpl*>(handle);
+    mutex_.Lock();
+  }
   return s;
 }
 
@@ -1068,8 +1158,10 @@ Status DBImpl::WriteLevel0TableForRecovery(int job_id, ColumnFamilyData* cfd,
           c_style_callback(get_arena_input_iter), &get_arena_input_iter,
           c_style_callback(get_range_del_iters), &get_range_del_iters,
           &meta_vec, cfd->internal_comparator(),
-          cfd->int_tbl_prop_collector_factories(), cfd->GetID(), cfd->GetName(),
-          snapshot_seqs, earliest_write_conflict_snapshot, snapshot_checker,
+          cfd->int_tbl_prop_collector_factories(mutable_cf_options),
+          cfd->int_tbl_prop_collector_factories_for_blob(mutable_cf_options),
+          cfd->GetID(), cfd->GetName(), snapshot_seqs,
+          earliest_write_conflict_snapshot, snapshot_checker,
           GetCompressionFlush(*cfd->ioptions(), mutable_cf_options),
           cfd->ioptions()->compression_opts, paranoid_file_checks,
           cfd->internal_stats(), TableFileCreationReason::kRecovery,
@@ -1118,12 +1210,23 @@ Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
   std::vector<ColumnFamilyDescriptor> column_families;
   column_families.push_back(
       ColumnFamilyDescriptor(kDefaultColumnFamilyName, cf_options));
+  if (db_options.persist_stats_to_disk) {
+    column_families.push_back(
+        ColumnFamilyDescriptor(kPersistentStatsColumnFamilyName, cf_options));
+  }
   std::vector<ColumnFamilyHandle*> handles;
   Status s = DB::Open(db_options, dbname, column_families, &handles, dbptr);
   if (s.ok()) {
-    assert(handles.size() == 1);
+    if (db_options.persist_stats_to_disk) {
+      assert(handles.size() == 2);
+    } else {
+      assert(handles.size() == 1);
+    }
     // i can delete the handle since DBImpl is always holding a reference to
     // default column family
+    if (db_options.persist_stats_to_disk && handles[1] != nullptr) {
+      delete handles[1];
+    }
     delete handles[0];
   }
   return s;
@@ -1297,21 +1400,13 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
       s = impl->directories_.GetDbDir()->Fsync();
     }
   }
+  if (s.ok() && impl->immutable_db_options_.persist_stats_to_disk) {
+    // try to read format version but no need to fail Open() even if it fails
+    s = impl->PersistentStatsProcessFormatVersion();
+  }
 
   if (s.ok()) {
     for (auto cfd : *impl->versions_->GetColumnFamilySet()) {
-      if (cfd->ioptions()->compaction_style == kCompactionStyleFIFO) {
-        auto* vstorage = cfd->current()->storage_info();
-        for (int i = 1; i < vstorage->num_levels(); ++i) {
-          int num_files = vstorage->NumLevelFiles(i);
-          if (num_files > 0) {
-            s = Status::InvalidArgument(
-                "Not all files are at level 0. Cannot "
-                "open with FIFO compaction style.");
-            break;
-          }
-        }
-      }
       if (!cfd->mem()->IsSnapshotSupported()) {
         impl->is_snapshot_supported_ = false;
       }
@@ -1380,6 +1475,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
     sfm->ReserveDiskBuffer(max_write_buffer_size,
                            impl->immutable_db_options_.db_paths[0].path);
   }
+
 #endif  // !ROCKSDB_LITE
 
   if (s.ok()) {
@@ -1395,9 +1491,8 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
     }
   }
   if (s.ok()) {
-    impl->StartTimedTasks();
-  }
-  if (!s.ok()) {
+    impl->StartPeriodicWorkScheduler();
+  } else {
     for (auto* h : *handles) {
       delete h;
     }
@@ -1407,4 +1502,4 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
   }
   return s;
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

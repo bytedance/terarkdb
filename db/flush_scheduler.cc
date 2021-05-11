@@ -8,8 +8,9 @@
 #include <cassert>
 
 #include "db/column_family.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 void FlushScheduler::ScheduleFlush(ColumnFamilyData* cfd) {
 #ifndef NDEBUG
@@ -85,4 +86,4 @@ void FlushScheduler::Clear() {
   assert(head_.load(std::memory_order_relaxed) == nullptr);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -10,6 +10,7 @@
 #include "db/table_properties_collector.h"
 #include "rocksdb/table.h"
 #include "rocksdb/table_properties.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block.h"
 #include "table/block_fetcher.h"
 #include "table/format.h"
@@ -19,7 +20,7 @@
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 MetaIndexBuilder::MetaIndexBuilder()
     : meta_index_block_(new BlockBuilder(1 /* restart interval */)) {}
@@ -123,8 +124,8 @@ void PropertyBlockBuilder::AddTableProperty(const TableProperties& props) {
     }
     Add(TablePropertiesNames::kDependenceEntryCount, val);
   }
-  if (!props.inheritance_chain.empty()) {
-    Add(TablePropertiesNames::kInheritanceChain, props.inheritance_chain);
+  if (!props.inheritance_tree.empty()) {
+    Add(TablePropertiesNames::kInheritanceTree, props.inheritance_tree);
   }
 
   if (!props.filter_policy_name.empty()) {
@@ -337,7 +338,9 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
 
     if (pos != predefined_uint64_properties.end()) {
       if (key == TablePropertiesNames::kDeletedKeys ||
-          key == TablePropertiesNames::kMergeOperands) {
+          key == TablePropertiesNames::kMergeOperands ||
+          key == TablePropertiesNames::kLatestTimeEndCompact ||
+          key == TablePropertiesNames::kEarliestTimeBeginCompact) {
         // Insert in user-collected properties for API backwards compatibility
         new_table_properties->user_collected_properties.insert(
             {key, raw_val.ToString()});
@@ -412,7 +415,14 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
         new_table_properties->dependence[i].entry_count = val[i];
       }
     } else if (key == TablePropertiesNames::kInheritanceChain) {
-      GetUint64Vector(key, &raw_val, new_table_properties->inheritance_chain);
+      std::vector<uint64_t> val;
+      GetUint64Vector(key, &raw_val, val);
+      auto& tree = new_table_properties->inheritance_tree;
+      tree.reserve(val.size() * 2);
+      tree.insert(tree.end(), val.rbegin(), val.rend());
+      tree.insert(tree.end(), val.begin(), val.end());
+    } else if (key == TablePropertiesNames::kInheritanceTree) {
+      GetUint64Vector(key, &raw_val, new_table_properties->inheritance_tree);
     } else {
       // handle user-collected properties
       new_table_properties->user_collected_properties.insert(
@@ -596,4 +606,4 @@ Status ReadMetaBlock(RandomAccessFileReader* file,
   return block_fetcher2.ReadBlockContents();
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

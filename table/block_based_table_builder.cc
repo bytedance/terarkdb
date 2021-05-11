@@ -13,10 +13,8 @@
 #include <stdio.h>
 
 #include <list>
-#include <map>
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <utility>
 
 #include "db/dbformat.h"
@@ -28,6 +26,7 @@
 #include "rocksdb/flush_block_policy.h"
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block.h"
 #include "table/block_based_filter_block.h"
 #include "table/block_based_table_factory.h"
@@ -44,10 +43,9 @@
 #include "util/crc32c.h"
 #include "util/memory_allocator.h"
 #include "util/stop_watch.h"
-#include "util/string_util.h"
 #include "util/xxhash.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 extern const std::string kHashIndexPrefixesBlock;
 extern const std::string kHashIndexPrefixesMetadataBlock;
@@ -77,9 +75,11 @@ FilterBlockBuilder* CreateFilterBlockBuilder(
       // until index builder actully cuts the partition, we take the lower bound
       // as partition size.
       assert(table_opt.block_size_deviation <= 100);
-      auto partition_size = static_cast<uint32_t>(
-          ((table_opt.metadata_block_size *
-          (100 - table_opt.block_size_deviation)) + 99) / 100);
+      auto partition_size =
+          static_cast<uint32_t>(((table_opt.metadata_block_size *
+                                  (100 - table_opt.block_size_deviation)) +
+                                 99) /
+                                100);
       partition_size = std::max(partition_size, static_cast<uint32_t>(1));
       return new PartitionedFilterBlockBuilder(
           mopt.prefix_extractor.get(), table_opt.whole_key_filtering,
@@ -154,10 +154,9 @@ Slice CompressBlock(const Slice& raw, const CompressionContext& compression_ctx,
           GoodCompressionRatio(compressed_output->size(), raw.size())) {
         return *compressed_output;
       }
-      break;     // fall back to no compression.
+      break;  // fall back to no compression.
     case kXpressCompression:
-      if (XPRESS_Compress(raw.data(), raw.size(),
-          compressed_output) &&
+      if (XPRESS_Compress(raw.data(), raw.size(), compressed_output) &&
           GoodCompressionRatio(compressed_output->size(), raw.size())) {
         return *compressed_output;
       }
@@ -169,8 +168,9 @@ Slice CompressBlock(const Slice& raw, const CompressionContext& compression_ctx,
           GoodCompressionRatio(compressed_output->size(), raw.size())) {
         return *compressed_output;
       }
-      break;     // fall back to no compression.
-    default: {}  // Do not recognize this compression type
+      break;  // fall back to no compression.
+    default: {
+    }  // Do not recognize this compression type
   }
 
   // Compression method is not supported, or not good compression ratio, so just
@@ -414,8 +414,8 @@ Status BlockBasedTableBuilder::Add(const Slice& key,
     // key for the next data block.  This allows us to use shorter keys in the
     // index block.  For example, consider a block boundary between the keys
     // "the quick brown fox" and "the who".  We can use "the r" as the key for
-    // the index block entry since it is >= all entries in the first block and <
-    // all entries in subsequent blocks.
+    // the index block entry since it is >= all entries in the first block and
+    // < all entries in subsequent blocks.
     if (ok()) {
       r->index_builder->AddIndexEntry(&r->last_key, &key, r->pending_handle);
     }
@@ -444,7 +444,7 @@ Status BlockBasedTableBuilder::Add(const Slice& key,
                                     r->table_properties_collectors,
                                     r->ioptions.info_log);
   return r->status;
-}
+}  // namespace TERARKDB_NAMESPACE
 
 Status BlockBasedTableBuilder::AddTombstone(const Slice& key,
                                             const LazyBuffer& lazy_value) {
@@ -501,8 +501,9 @@ void BlockBasedTableBuilder::WriteBlock(const Slice& raw_block_contents,
   Slice block_contents;
   bool abort_compression = false;
 
-  StopWatchNano timer(r->ioptions.env,
-    ShouldReportDetailedTime(r->ioptions.env, r->ioptions.statistics));
+  StopWatchNano timer(
+      r->ioptions.env,
+      ShouldReportDetailedTime(r->ioptions.env, r->ioptions.statistics));
 
   if (raw_block_contents.size() < kCompressionSizeLimit) {
     Slice compression_dict;
@@ -612,11 +613,12 @@ void BlockBasedTableBuilder::WriteRawBlock(const Slice& block_contents,
         XXH64_state_t* const state = XXH64_createState();
         XXH64_reset(state, 0);
         XXH64_update(state, block_contents.data(),
-                static_cast<uint32_t>(block_contents.size()));
+                     static_cast<uint32_t>(block_contents.size()));
         XXH64_update(state, trailer, 1);  // Extend  to cover block type
-        EncodeFixed32(trailer_without_type,
-          static_cast<uint32_t>(XXH64_digest(state) & // lower 32 bits
-                                   uint64_t{0xffffffff}));
+        EncodeFixed32(
+            trailer_without_type,
+            static_cast<uint32_t>(XXH64_digest(state) &  // lower 32 bits
+                                  uint64_t{0xffffffff}));
         XXH64_freeState(state);
         break;
       }
@@ -643,9 +645,7 @@ void BlockBasedTableBuilder::WriteRawBlock(const Slice& block_contents,
   }
 }
 
-Status BlockBasedTableBuilder::status() const {
-  return rep_->status;
-}
+Status BlockBasedTableBuilder::status() const { return rep_->status; }
 
 static void DeleteCachedBlockContents(const Slice& /*key*/, void* value) {
   BlockContents* bc = reinterpret_cast<BlockContents*>(value);
@@ -677,11 +677,10 @@ Status BlockBasedTableBuilder::InsertBlockInCache(const Slice& block_contents,
 
     // make cache key by appending the file offset to the cache prefix id
     char* end = EncodeVarint64(
-                  r->compressed_cache_key_prefix +
-                  r->compressed_cache_key_prefix_size,
-                  handle->offset());
-    Slice key(r->compressed_cache_key_prefix, static_cast<size_t>
-              (end - r->compressed_cache_key_prefix));
+        r->compressed_cache_key_prefix + r->compressed_cache_key_prefix_size,
+        handle->offset());
+    Slice key(r->compressed_cache_key_prefix,
+              static_cast<size_t>(end - r->compressed_cache_key_prefix));
 
     // Insert into compressed block cache.
     block_cache_compressed->Insert(
@@ -798,6 +797,10 @@ void BlockBasedTableBuilder::WritePropertiesBlock(
         rep_->ioptions.value_meta_extractor_factory != nullptr
             ? rep_->ioptions.value_meta_extractor_factory->Name()
             : "nullptr";
+    rep_->props.ttl_extractor_name =
+        rep_->ioptions.ttl_extractor_factory != nullptr
+            ? rep_->ioptions.ttl_extractor_factory->Name()
+            : "nullptr";
     rep_->props.compression_name =
         CompressionTypeToString(rep_->compression_ctx.type());
     rep_->props.prefix_extractor_name =
@@ -873,7 +876,8 @@ void BlockBasedTableBuilder::WriteRangeDelBlock(
 
 Status BlockBasedTableBuilder::Finish(
     const TablePropertyCache* prop,
-    const std::vector<SequenceNumber>* snapshots) {
+    const std::vector<SequenceNumber>* snapshots,
+    const std::vector<uint64_t>* inheritance_tree) {
   Rep* r = rep_;
   assert(r->status.ok());
   bool empty_data_block = r->data_block.empty();
@@ -886,10 +890,12 @@ Status BlockBasedTableBuilder::Finish(
     r->props.max_read_amp = prop->max_read_amp;
     r->props.read_amp = prop->read_amp;
     r->props.dependence = prop->dependence;
-    r->props.inheritance_chain = prop->inheritance_chain;
   }
   if (snapshots != nullptr) {
     r->props.snapshots = *snapshots;
+  }
+  if (inheritance_tree != nullptr) {
+    r->props.inheritance_tree = *inheritance_tree;
   }
 
   // To make sure properties block is able to keep the accurate size of index
@@ -960,9 +966,7 @@ uint64_t BlockBasedTableBuilder::NumEntries() const {
   return rep_->props.num_entries;
 }
 
-uint64_t BlockBasedTableBuilder::FileSize() const {
-  return rep_->offset;
-}
+uint64_t BlockBasedTableBuilder::FileSize() const { return rep_->offset; }
 
 bool BlockBasedTableBuilder::NeedCompact() const {
   for (const auto& collector : rep_->table_properties_collectors) {
@@ -988,4 +992,4 @@ const std::string BlockBasedTable::kFilterBlockPrefix = "filter.";
 const std::string BlockBasedTable::kFullFilterBlockPrefix = "fullfilter.";
 const std::string BlockBasedTable::kPartitionedFilterBlockPrefix =
     "partitionedfilter.";
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

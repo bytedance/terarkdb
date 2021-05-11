@@ -5,9 +5,11 @@
 //
 
 #include <assert.h>
-#include "monitoring/perf_level_imp.h"
 
-namespace rocksdb {
+#include "monitoring/perf_level_imp.h"
+#include "rocksdb/terark_namespace.h"
+
+namespace TERARKDB_NAMESPACE {
 
 #ifdef ROCKSDB_SUPPORT_THREAD_LOCAL
 __thread PerfLevel perf_level = kEnableCount;
@@ -21,8 +23,6 @@ void SetPerfLevel(PerfLevel level) {
   perf_level = level;
 }
 
-PerfLevel GetPerfLevel() {
-  return perf_level;
-}
+PerfLevel GetPerfLevel() { return perf_level; }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

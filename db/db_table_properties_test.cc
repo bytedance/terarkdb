@@ -13,13 +13,14 @@
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
 #include "rocksdb/db.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/table_properties_collectors.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
 #ifndef ROCKSDB_LITE
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // A helper function that ensures the table properties returned in
 // `GetPropertiesOfAllTablesTest` is correct.
@@ -30,8 +31,8 @@ class TerarkPropertiesCollector : public TablePropertiesCollector {
  public:
   const char* Name() const override { return "terark"; }
 
-  Status AddUserKey(const Slice& key, const Slice& value,
-                    EntryType type, SequenceNumber /*sequence*/,
+  Status AddUserKey(const Slice& key, const Slice& value, EntryType type,
+                    SequenceNumber /*sequence*/,
                     uint64_t /*file_size*/) override {
     if (type == kEntryPut) {
       size_ += key.size() + value.size();
@@ -53,7 +54,8 @@ class TerarkPropertiesCollector : public TablePropertiesCollector {
   int size_{0};
 };
 
-class TerarkPropertiesCollectorFactory : public TablePropertiesCollectorFactory {
+class TerarkPropertiesCollectorFactory
+    : public TablePropertiesCollectorFactory {
  public:
   const char* Name() const override { return "terark"; }
 
@@ -166,7 +168,6 @@ TablePropertiesCollection
 DBTablePropertiesTest::TestGetPropertiesOfTablesInRange(
     std::vector<Range> ranges, std::size_t* num_properties,
     std::size_t* num_files) {
-
   // Since we deref zero element in the vector it can not be empty
   // otherwise we pass an address to some random memory
   EXPECT_GT(ranges.size(), 0U);
@@ -331,7 +332,7 @@ TEST_F(DBTablePropertiesTest, DeletionTriggeredCompactionMarking) {
   int kWindowSize = 100;
   int kNumDelsTrigger = 90;
   std::shared_ptr<TablePropertiesCollectorFactory> compact_on_del =
-    NewCompactOnDeletionCollectorFactory(kWindowSize, kNumDelsTrigger);
+      NewCompactOnDeletionCollectorFactory(kWindowSize, kNumDelsTrigger);
 
   Options opts = CurrentOptions();
   opts.table_properties_collector_factories.emplace_back(compact_on_del);
@@ -361,10 +362,10 @@ TEST_F(DBTablePropertiesTest, DeletionTriggeredCompactionMarking) {
   // effect
   kWindowSize = 50;
   kNumDelsTrigger = 40;
-  static_cast<CompactOnDeletionCollectorFactory*>
-    (compact_on_del.get())->SetWindowSize(kWindowSize);
-  static_cast<CompactOnDeletionCollectorFactory*>
-    (compact_on_del.get())->SetDeletionTrigger(kNumDelsTrigger);
+  static_cast<CompactOnDeletionCollectorFactory*>(compact_on_del.get())
+      ->SetWindowSize(kWindowSize);
+  static_cast<CompactOnDeletionCollectorFactory*>(compact_on_del.get())
+      ->SetDeletionTrigger(kNumDelsTrigger);
   for (int i = 0; i < kNumKeys; ++i) {
     if (i >= kNumKeys - kWindowSize &&
         i < kNumKeys - kWindowSize + kNumDelsTrigger) {
@@ -381,10 +382,10 @@ TEST_F(DBTablePropertiesTest, DeletionTriggeredCompactionMarking) {
 
   // Change the window size to disable delete triggered compaction
   kWindowSize = 0;
-  static_cast<CompactOnDeletionCollectorFactory*>
-    (compact_on_del.get())->SetWindowSize(kWindowSize);
-  static_cast<CompactOnDeletionCollectorFactory*>
-    (compact_on_del.get())->SetDeletionTrigger(kNumDelsTrigger);
+  static_cast<CompactOnDeletionCollectorFactory*>(compact_on_del.get())
+      ->SetWindowSize(kWindowSize);
+  static_cast<CompactOnDeletionCollectorFactory*>(compact_on_del.get())
+      ->SetDeletionTrigger(kNumDelsTrigger);
   for (int i = 0; i < kNumKeys; ++i) {
     if (i >= kNumKeys - kWindowSize &&
         i < kNumKeys - kWindowSize + kNumDelsTrigger) {
@@ -397,15 +398,14 @@ TEST_F(DBTablePropertiesTest, DeletionTriggeredCompactionMarking) {
 
   dbfull()->TEST_WaitForCompact();
   ASSERT_EQ(1, NumTableFilesAtLevel(0));
-
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

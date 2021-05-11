@@ -8,68 +8,68 @@
 #include "options/db_options.h"
 #include "rocksdb/listener.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class DBImpl;
 
 class ErrorHandler {
-  public:
-   ErrorHandler(DBImpl* db, const ImmutableDBOptions& db_options,
-                InstrumentedMutex* db_mutex)
-       : db_(db),
-         db_options_(db_options),
-         bg_error_(Status::OK()),
-         recovery_error_(Status::OK()),
-         db_mutex_(db_mutex),
-         auto_recovery_(false),
-         recovery_in_prog_(false) {}
-   ~ErrorHandler() {}
+ public:
+  ErrorHandler(DBImpl* db, const ImmutableDBOptions& db_options,
+               InstrumentedMutex* db_mutex)
+      : db_(db),
+        db_options_(db_options),
+        bg_error_(Status::OK()),
+        recovery_error_(Status::OK()),
+        db_mutex_(db_mutex),
+        auto_recovery_(false),
+        recovery_in_prog_(false) {}
+  ~ErrorHandler() {}
 
-   void EnableAutoRecovery() { auto_recovery_ = true; }
+  void EnableAutoRecovery() { auto_recovery_ = true; }
 
-   Status::Severity GetErrorSeverity(BackgroundErrorReason reason,
-                                     Status::Code code,
-                                     Status::SubCode subcode);
+  Status::Severity GetErrorSeverity(BackgroundErrorReason reason,
+                                    Status::Code code, Status::SubCode subcode);
 
-   Status SetBGError(const Status& bg_err, BackgroundErrorReason reason);
+  Status SetBGError(const Status& bg_err, BackgroundErrorReason reason);
 
-   Status GetBGError() { return bg_error_; }
+  Status GetBGError() { return bg_error_; }
 
-   Status GetRecoveryError() { return recovery_error_; }
+  Status GetRecoveryError() { return recovery_error_; }
 
-   Status ClearBGError();
+  Status ClearBGError();
 
-   bool IsDBStopped() {
-     return !bg_error_.ok() &&
-            bg_error_.severity() >= Status::Severity::kHardError;
-    }
+  bool IsDBStopped() {
+    return !bg_error_.ok() &&
+           bg_error_.severity() >= Status::Severity::kHardError;
+  }
 
-    bool IsBGWorkStopped() {
-      return !bg_error_.ok() &&
-             (bg_error_.severity() >= Status::Severity::kHardError ||
-              !auto_recovery_);
-    }
+  bool IsBGWorkStopped() {
+    return !bg_error_.ok() &&
+           (bg_error_.severity() >= Status::Severity::kHardError ||
+            !auto_recovery_);
+  }
 
-    bool IsRecoveryInProgress() { return recovery_in_prog_; }
+  bool IsRecoveryInProgress() { return recovery_in_prog_; }
 
-    Status RecoverFromBGError(bool is_manual = false);
-    void CancelErrorRecovery();
+  Status RecoverFromBGError(bool is_manual = false);
+  void CancelErrorRecovery();
 
-   private:
-    DBImpl* db_;
-    const ImmutableDBOptions& db_options_;
-    Status bg_error_;
-    // A separate Status variable used to record any errors during the
-    // recovery process from hard errors
-    Status recovery_error_;
-    InstrumentedMutex* db_mutex_;
-    // A flag indicating whether automatic recovery from errors is enabled
-    bool auto_recovery_;
-    bool recovery_in_prog_;
+ private:
+  DBImpl* db_;
+  const ImmutableDBOptions& db_options_;
+  Status bg_error_;
+  // A separate Status variable used to record any errors during the
+  // recovery process from hard errors
+  Status recovery_error_;
+  InstrumentedMutex* db_mutex_;
+  // A flag indicating whether automatic recovery from errors is enabled
+  bool auto_recovery_;
+  bool recovery_in_prog_;
 
-    Status OverrideNoSpaceError(Status bg_error, bool* auto_recovery);
-    void RecoverFromNoSpace();
+  Status OverrideNoSpaceError(Status bg_error, bool* auto_recovery);
+  void RecoverFromNoSpace();
 };
 
-}
+}  // namespace TERARKDB_NAMESPACE

@@ -11,9 +11,10 @@
 
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/trace_reader_writer.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class ColumnFamilyHandle;
 class ColumnFamilyData;
@@ -97,4 +98,4 @@ class Replayer {
   std::unordered_map<uint32_t, ColumnFamilyHandle*> cf_map_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

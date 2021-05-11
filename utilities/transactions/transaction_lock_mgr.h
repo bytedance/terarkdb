@@ -13,13 +13,14 @@
 #include <vector>
 
 #include "monitoring/instrumented_mutex.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/transaction.h"
 #include "util/autovector.h"
 #include "util/hash_map.h"
 #include "util/thread_local.h"
 #include "utilities/transactions/pessimistic_transaction.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class ColumnFamilyHandle;
 struct LockInfo;
@@ -154,5 +155,5 @@ class TransactionLockMgr {
   void operator=(const TransactionLockMgr&);
 };
 
-}  //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

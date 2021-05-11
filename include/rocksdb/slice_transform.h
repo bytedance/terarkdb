@@ -16,9 +16,10 @@
 
 #include <string>
 
+#include "rocksdb/terark_namespace.h"
 #include "utilities/util/factory.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Slice;
 
@@ -29,8 +30,7 @@ class Slice;
  * ColumnFamilyOptions.
  */
 class SliceTransform
-    : public terark::Factoryable<SliceTransform*,
-                                           const std::string&> {
+    : public terark::Factoryable<SliceTransform*, const std::string&> {
  public:
   virtual ~SliceTransform(){};
 
@@ -104,4 +104,4 @@ extern const SliceTransform* NewCappedPrefixTransform(size_t cap_len);
 
 extern const SliceTransform* NewNoopTransform();
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

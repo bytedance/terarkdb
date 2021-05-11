@@ -5,11 +5,13 @@
 
 #pragma once
 #include <memory>
+
+#include "rocksdb/terark_namespace.h"
 #include "util/testharness.h"
 #include "utilities/cassandra/format.h"
 #include "utilities/cassandra/serialize.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace cassandra {
 extern const char kData[];
 extern const char kExpiringData[];
@@ -18,9 +20,7 @@ extern const int8_t kColumn;
 extern const int8_t kTombstone;
 extern const int8_t kExpiringColumn;
 
-
-std::shared_ptr<ColumnBase> CreateTestColumn(int8_t mask,
-                                             int8_t index,
+std::shared_ptr<ColumnBase> CreateTestColumn(int8_t mask, int8_t index,
                                              int64_t timestamp);
 
 std::tuple<int8_t, int8_t, int64_t> CreateTestColumnSpec(int8_t mask,
@@ -32,15 +32,11 @@ RowValue CreateTestRowValue(
 
 RowValue CreateRowTombstone(int64_t timestamp);
 
-void VerifyRowValueColumns(
-  std::vector<std::shared_ptr<ColumnBase>> &columns,
-  std::size_t index_of_vector,
-  int8_t expected_mask,
-  int8_t expected_index,
-  int64_t expected_timestamp
-);
+void VerifyRowValueColumns(std::vector<std::shared_ptr<ColumnBase>> &columns,
+                           std::size_t index_of_vector, int8_t expected_mask,
+                           int8_t expected_index, int64_t expected_timestamp);
 
 int64_t ToMicroSeconds(int64_t seconds);
 int32_t ToSeconds(int64_t microseconds);
-}
-}
+}  // namespace cassandra
+}  // namespace TERARKDB_NAMESPACE

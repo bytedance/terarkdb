@@ -7,12 +7,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
-#include <string.h>
-#include "util/coding.h"
 #include "util/hash.h"
+
+#include <string.h>
+
+#include "rocksdb/terark_namespace.h"
+#include "util/coding.h"
 #include "util/util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 uint32_t Hash(const char* data, size_t n, uint32_t seed) {
   // Similar to murmur hash
@@ -54,4 +57,4 @@ uint32_t Hash(const char* data, size_t n, uint32_t seed) {
   return h;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

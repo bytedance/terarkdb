@@ -5,7 +5,10 @@
 
 #include "db/event_helpers.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+#include "util/string_util.h"
+
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 template <class T>
@@ -99,6 +102,32 @@ void EventHelpers::LogAndNotifyTableFileCreationFinished(
               << "num_data_blocks" << table_properties.num_data_blocks
               << "num_entries" << table_properties.num_entries
               << "filter_policy_name" << table_properties.filter_policy_name;
+      if (!table_properties.dependence.empty()) {
+        jwriter << "dependence";
+        auto& dependence = table_properties.dependence;
+        if (event_logger->GetInfoLogLevel() == DEBUG_LEVEL) {
+          jwriter.StartArray();
+          for (auto& d : dependence) {
+            jwriter << d.file_number;
+          }
+          jwriter.EndArray();
+        } else {
+          jwriter << dependence.size();
+        }
+      }
+      if (!table_properties.inheritance_tree.empty()) {
+        jwriter << "inheritance_tree";
+        auto& inheritance_tree = table_properties.inheritance_tree;
+        if (event_logger->GetInfoLogLevel() == DEBUG_LEVEL) {
+          jwriter.StartArray();
+          for (auto v : inheritance_tree) {
+            jwriter << v;
+          }
+          jwriter.EndArray();
+        } else {
+          jwriter << inheritance_tree.size();
+        }
+      }
 
       // user collected properties
       for (const auto& prop : table_properties.readable_properties) {
@@ -192,4 +221,4 @@ void EventHelpers::NotifyOnErrorRecoveryCompleted(
 #endif  // ROCKSDB_LITE
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

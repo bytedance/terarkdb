@@ -11,8 +11,9 @@
 #include <vector>
 
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Env;
 class Logger;
@@ -122,4 +123,4 @@ extern SstFileManager* NewSstFileManager(
 
 extern std::string RemoveTrashExtension(const std::string& fname);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

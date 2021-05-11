@@ -6,8 +6,9 @@
 #include "db/logs_with_prep_tracker.h"
 
 #include "port/likely.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 void LogsWithPrepTracker::MarkLogAsHavingPrepSectionFlushed(uint64_t log) {
   assert(log != 0);
   std::lock_guard<std::mutex> lock(prepared_section_completed_mutex_);
@@ -64,4 +65,4 @@ uint64_t LogsWithPrepTracker::FindMinLogContainingOutstandingPrep() {
   // no such log found
   return 0;
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

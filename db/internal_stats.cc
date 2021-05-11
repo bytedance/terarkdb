@@ -22,10 +22,11 @@
 
 #include "db/column_family.h"
 #include "db/db_impl.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block_based_table_factory.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE
 
@@ -248,7 +249,6 @@ static const std::string num_running_flushes = "num-running-flushes";
 static const std::string actual_delayed_write_rate =
     "actual-delayed-write-rate";
 static const std::string is_write_stopped = "is-write-stopped";
-static const std::string estimate_oldest_key_time = "estimate-oldest-key-time";
 static const std::string block_cache_capacity = "block-cache-capacity";
 static const std::string block_cache_usage = "block-cache-usage";
 static const std::string block_cache_pinned_usage = "block-cache-pinned-usage";
@@ -330,8 +330,6 @@ const std::string DB::Properties::kActualDelayedWriteRate =
     rocksdb_prefix + actual_delayed_write_rate;
 const std::string DB::Properties::kIsWriteStopped =
     rocksdb_prefix + is_write_stopped;
-const std::string DB::Properties::kEstimateOldestKeyTime =
-    rocksdb_prefix + estimate_oldest_key_time;
 const std::string DB::Properties::kBlockCacheCapacity =
     rocksdb_prefix + block_cache_capacity;
 const std::string DB::Properties::kBlockCacheUsage =
@@ -460,9 +458,6 @@ const std::unordered_map<std::string, DBPropertyInfo>
           nullptr}},
         {DB::Properties::kIsWriteStopped,
          {false, nullptr, &InternalStats::HandleIsWriteStopped, nullptr,
-          nullptr}},
-        {DB::Properties::kEstimateOldestKeyTime,
-         {false, nullptr, &InternalStats::HandleEstimateOldestKeyTime, nullptr,
           nullptr}},
         {DB::Properties::kBlockCacheCapacity,
          {false, nullptr, &InternalStats::HandleBlockCacheCapacity, nullptr,
@@ -860,36 +855,6 @@ bool InternalStats::HandleIsWriteStopped(uint64_t* value, DBImpl* db,
   return true;
 }
 
-bool InternalStats::HandleEstimateOldestKeyTime(uint64_t* value, DBImpl* /*db*/,
-                                                Version* /*version*/) {
-  // TODO(yiwu): The property is currently available for fifo compaction
-  // with allow_compaction = false. This is because we don't propagate
-  // oldest_key_time on compaction.
-  if (cfd_->ioptions()->compaction_style != kCompactionStyleFIFO ||
-      cfd_->GetCurrentMutableCFOptions()
-          ->compaction_options_fifo.allow_compaction) {
-    return false;
-  }
-
-  TablePropertiesCollection collection;
-  auto s = cfd_->current()->GetPropertiesOfAllTables(&collection);
-  if (!s.ok()) {
-    return false;
-  }
-  *value = std::numeric_limits<uint64_t>::max();
-  for (auto& p : collection) {
-    *value = std::min(*value, p.second->oldest_key_time);
-    if (*value == 0) {
-      break;
-    }
-  }
-  if (*value > 0) {
-    *value = std::min({cfd_->mem()->ApproximateOldestKeyTime(),
-                       cfd_->imm()->ApproximateOldestKeyTime(), *value});
-  }
-  return *value > 0 && *value < std::numeric_limits<uint64_t>::max();
-}
-
 bool InternalStats::HandleBlockCacheStat(Cache** block_cache) {
   assert(block_cache != nullptr);
   auto* table_factory = cfd_->ioptions()->table_factory;
@@ -1087,10 +1052,7 @@ void InternalStats::DumpCFMapStats(
     CompactionStats* compaction_stats_sum) {
   const VersionStorageInfo* vstorage = cfd_->current()->storage_info();
 
-  int num_levels_to_check =
-      (cfd_->ioptions()->compaction_style != kCompactionStyleFIFO)
-          ? vstorage->num_levels() - 1
-          : 1;
+  int num_levels_to_check = vstorage->num_levels() - 1;
 
   // Compaction scores are sorted based on its value. Restore them to the
   // level order
@@ -1376,4 +1338,4 @@ const DBPropertyInfo* GetPropertyInfo(const Slice& /*property*/) {
 
 #endif  // !ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

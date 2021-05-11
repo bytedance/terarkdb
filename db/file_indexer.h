@@ -12,11 +12,13 @@
 #include <functional>
 #include <limits>
 #include <vector>
+
 #include "port/port.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/arena.h"
 #include "util/autovector.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Comparator;
 struct FileMetaData;
@@ -60,7 +62,7 @@ class FileIndexer {
 
   enum {
     // MSVC version 1800 still does not have constexpr for ::max()
-    kLevelMaxIndex = rocksdb::port::kMaxInt32
+    kLevelMaxIndex = TERARKDB_NAMESPACE::port::kMaxInt32
   };
 
  private:
@@ -69,7 +71,7 @@ class FileIndexer {
 
   struct IndexUnit {
     IndexUnit()
-      : smallest_lb(0), largest_lb(0), smallest_rb(-1), largest_rb(-1) {}
+        : smallest_lb(0), largest_lb(0), smallest_rb(-1), largest_rb(-1) {}
     // During file search, a key is compared against smallest and largest
     // from a FileMetaData. It can have 3 possible outcomes:
     // (1) key is smaller than smallest, implying it is also smaller than
@@ -139,4 +141,4 @@ class FileIndexer {
   int32_t* level_rb_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

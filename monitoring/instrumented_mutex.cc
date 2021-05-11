@@ -7,6 +7,7 @@
 
 #include "monitoring/perf_context_imp.h"
 #include "monitoring/thread_status_util.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/sync_point.h"
 #include "util/util.h"
 
@@ -14,7 +15,7 @@
 #include <boost/stacktrace.hpp>
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace {
 Statistics* stats_for_report(Env* env, Statistics* stats) {
   if (env != nullptr && stats != nullptr &&
@@ -173,4 +174,4 @@ bool InstrumentedCondVar::TimedWaitInternal(uint64_t abs_time_us) {
   return r;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

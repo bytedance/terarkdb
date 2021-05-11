@@ -19,10 +19,11 @@
 #include "rocksdb/perf_context.h"
 #include "rocksdb/perf_level.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/random.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class DBPropertiesTest : public DBTestBase {
  public:
@@ -257,7 +258,8 @@ void GetExpectedTableProperties(
   expected_tp->num_merge_operands = kMergeCount;
   expected_tp->num_range_deletions = kRangeDeletionCount;
   expected_tp->num_data_blocks =
-      kTableCount * (kKeysPerTable * (kKeySize - kEncodingSavePerKey + kValueSize)) /
+      kTableCount *
+      (kKeysPerTable * (kKeySize - kEncodingSavePerKey + kValueSize)) /
       kBlockSize;
   expected_tp->data_size =
       kTableCount * (kKeysPerTable * (kKeySize + 8 + kValueSize));
@@ -361,7 +363,8 @@ TEST_F(DBPropertiesTest, AggregatedTableProperties) {
         std::string start = RandomString(&rnd, kKeySize);
         std::string end = start;
         end.resize(kValueSize);
-        db_->DeleteRange(WriteOptions(), db_->DefaultColumnFamily(), start, end);
+        db_->DeleteRange(WriteOptions(), db_->DefaultColumnFamily(), start,
+                         end);
       }
       db_->Flush(FlushOptions());
     }
@@ -392,7 +395,7 @@ TEST_F(DBPropertiesTest, ReadLatencyHistogramByLevel) {
   options.max_bytes_for_level_base = 4500 << 10;
   options.target_file_size_base = 98 << 10;
   options.max_write_buffer_number = 2;
-  options.statistics = rocksdb::CreateDBStatistics();
+  options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   options.max_open_files = 100;
 
   BlockBasedTableOptions table_options;
@@ -1074,7 +1077,8 @@ class CountingUserTblPropCollector : public TablePropertiesCollector {
     std::string encoded;
     PutVarint32(&encoded, count_);
     *properties = UserCollectedProperties{
-        {"CountingUserTblPropCollector", message_}, {"Count", encoded},
+        {"CountingUserTblPropCollector", message_},
+        {"Count", encoded},
     };
     return Status::OK();
   }
@@ -1409,80 +1413,6 @@ TEST_F(DBPropertiesTest, EstimateNumKeysUnderflow) {
   ASSERT_EQ(0, num_keys);
 }
 
-TEST_F(DBPropertiesTest, EstimateOldestKeyTime) {
-  std::unique_ptr<MockTimeEnv> mock_env(new MockTimeEnv(Env::Default()));
-  uint64_t oldest_key_time = 0;
-  Options options;
-  options.env = mock_env.get();
-
-  // "rocksdb.estimate-oldest-key-time" only available to fifo compaction.
-  mock_env->set_current_time(100);
-  for (auto compaction : {kCompactionStyleLevel, kCompactionStyleUniversal,
-                          kCompactionStyleNone}) {
-    options.compaction_style = compaction;
-    options.create_if_missing = true;
-    DestroyAndReopen(options);
-    ASSERT_OK(Put("foo", "bar"));
-    ASSERT_FALSE(dbfull()->GetIntProperty(
-        DB::Properties::kEstimateOldestKeyTime, &oldest_key_time));
-  }
-
-  options.compaction_style = kCompactionStyleFIFO;
-  options.compaction_options_fifo.ttl = 300;
-  options.compaction_options_fifo.allow_compaction = false;
-  DestroyAndReopen(options);
-
-  mock_env->set_current_time(100);
-  ASSERT_OK(Put("k1", "v1"));
-  ASSERT_TRUE(dbfull()->GetIntProperty(DB::Properties::kEstimateOldestKeyTime,
-                                       &oldest_key_time));
-  ASSERT_EQ(100, oldest_key_time);
-  ASSERT_OK(Flush());
-  ASSERT_EQ("1", FilesPerLevel());
-  ASSERT_TRUE(dbfull()->GetIntProperty(DB::Properties::kEstimateOldestKeyTime,
-                                       &oldest_key_time));
-  ASSERT_EQ(100, oldest_key_time);
-
-  mock_env->set_current_time(200);
-  ASSERT_OK(Put("k2", "v2"));
-  ASSERT_OK(Flush());
-  ASSERT_EQ("2", FilesPerLevel());
-  ASSERT_TRUE(dbfull()->GetIntProperty(DB::Properties::kEstimateOldestKeyTime,
-                                       &oldest_key_time));
-  ASSERT_EQ(100, oldest_key_time);
-
-  mock_env->set_current_time(300);
-  ASSERT_OK(Put("k3", "v3"));
-  ASSERT_OK(Flush());
-  ASSERT_EQ("3", FilesPerLevel());
-  ASSERT_TRUE(dbfull()->GetIntProperty(DB::Properties::kEstimateOldestKeyTime,
-                                       &oldest_key_time));
-  ASSERT_EQ(100, oldest_key_time);
-
-  mock_env->set_current_time(450);
-  ASSERT_OK(dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr));
-  ASSERT_EQ("2", FilesPerLevel());
-  ASSERT_TRUE(dbfull()->GetIntProperty(DB::Properties::kEstimateOldestKeyTime,
-                                       &oldest_key_time));
-  ASSERT_EQ(200, oldest_key_time);
-
-  mock_env->set_current_time(550);
-  ASSERT_OK(dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr));
-  ASSERT_EQ("1", FilesPerLevel());
-  ASSERT_TRUE(dbfull()->GetIntProperty(DB::Properties::kEstimateOldestKeyTime,
-                                       &oldest_key_time));
-  ASSERT_EQ(300, oldest_key_time);
-
-  mock_env->set_current_time(650);
-  ASSERT_OK(dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr));
-  ASSERT_EQ("", FilesPerLevel());
-  ASSERT_FALSE(dbfull()->GetIntProperty(DB::Properties::kEstimateOldestKeyTime,
-                                        &oldest_key_time));
-
-  // Close before mock_env destructs.
-  Close();
-}
-
 TEST_F(DBPropertiesTest, SstFilesSize) {
   struct TestListener : public EventListener {
     void OnCompactionCompleted(DB* db,
@@ -1695,10 +1625,10 @@ TEST_F(DBPropertiesTest, BlockCacheProperties) {
 }
 
 #endif  // ROCKSDB_LITE
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

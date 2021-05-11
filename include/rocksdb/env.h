@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/thread_status.h"
 
 #ifdef _WIN32
@@ -34,7 +35,7 @@
 #undef GetCurrentTime
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class FileLock;
 class Logger;
@@ -1422,4 +1423,4 @@ Env* NewTimedEnv(Env* base_env);
 // This is a env forwarding method defined in env/env_io_prof.cc
 Env* NewIOProfEnv(Env* base_env);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

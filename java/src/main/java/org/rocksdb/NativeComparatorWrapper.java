@@ -9,7 +9,7 @@ package org.rocksdb;
  * A simple abstraction to allow a Java class to wrap a custom comparator
  * implemented in C++.
  *
- * The native comparator must directly extend rocksdb::Comparator.
+ * The native comparator must directly extend TERARKDB_NAMESPACE::Comparator.
  */
 public abstract class NativeComparatorWrapper
     extends AbstractComparator<Slice> {

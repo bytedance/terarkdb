@@ -18,12 +18,13 @@
 #include "db/snapshot_checker.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/transaction_db.h"
 #include "utilities/transactions/pessimistic_transaction.h"
 #include "utilities/transactions/transaction_lock_mgr.h"
 #include "utilities/transactions/write_prepared_txn.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class PessimisticTransactionDB : public TransactionDB {
  public:
@@ -193,5 +194,5 @@ class WriteCommittedTxnDB : public PessimisticTransactionDB {
                        WriteBatch* updates) override;
 };
 
-}  //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

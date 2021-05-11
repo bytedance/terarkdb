@@ -6,9 +6,10 @@
 
 #include <string>
 
+#include "rocksdb/terark_namespace.h"
 #include "util/mutexlock.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 LIRSHandleTable::LIRSHandleTable() : list_(nullptr), length_(0), elems_(0) {
   Resize();
@@ -541,4 +542,4 @@ std::shared_ptr<Cache> NewLIRSCache(
                                      std::move(memory_allocator));
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

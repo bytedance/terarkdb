@@ -3,14 +3,15 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
-#include <vector>
 #include <string>
+#include <vector>
 
+#include "rocksdb/terark_namespace.h"
 #include "table/merging_iterator.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class MergerTest : public testing::Test {
  public:
@@ -172,7 +173,7 @@ TEST_F(MergerTest, SeekToLastTest) {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

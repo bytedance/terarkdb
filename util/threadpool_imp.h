@@ -12,9 +12,10 @@
 #include <memory>
 
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/threadpool.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class ThreadPoolImpl : public ThreadPool {
  public:
@@ -109,4 +110,4 @@ class ThreadPoolImpl : public ThreadPool {
   std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

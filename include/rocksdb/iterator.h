@@ -19,11 +19,13 @@
 #pragma once
 
 #include <string>
+
 #include "rocksdb/cleanable.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Iterator : public Cleanable {
  public:
@@ -117,4 +119,4 @@ extern Iterator* NewEmptyIterator();
 // Return an empty iterator with the specified status.
 extern Iterator* NewErrorIterator(const Status& status);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

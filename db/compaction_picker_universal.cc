@@ -24,14 +24,14 @@
 #include "db/column_family.h"
 #include "db/map_builder.h"
 #include "monitoring/statistics.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/filename.h"
 #include "util/log_buffer.h"
-#include "util/random.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
 #include "utilities/util/function.hpp"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace {
 // Used in universal compaction when trivial move is enabled.
 // This structure is used for the construction of min heap
@@ -395,9 +395,10 @@ Compaction* UniversalCompactionPicker::PickCompaction(
       mutable_cf_options.compaction_options_universal.allow_trivial_move;
   if (c->compaction_reason() != CompactionReason::kTrivialMoveLevel &&
       allow_trivial_move) {
-    // check level has map or link sst
+    // check level has map sst or sst marked for compaction
     for (auto& level_files : *c->inputs()) {
-      if (vstorage->has_map_sst(level_files.level)) {
+      if (vstorage->has_map_sst(level_files.level) ||
+          vstorage->has_marked_for_compaction(level_files.level)) {
         allow_trivial_move = false;
         break;
       }
@@ -506,11 +507,11 @@ Compaction* UniversalCompactionPicker::PickCompaction(
 
 Compaction* UniversalCompactionPicker::CompactRange(
     const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
-    VersionStorageInfo* vstorage, int input_level, int output_level,
-    uint32_t output_path_id, uint32_t max_subcompactions,
-    const InternalKey* begin, const InternalKey* end,
-    InternalKey** compaction_end, bool* manual_conflict,
-    const std::unordered_set<uint64_t>* files_being_compact) {
+    SeparationType separation_type, VersionStorageInfo* vstorage,
+    int input_level, int output_level, uint32_t output_path_id,
+    uint32_t max_subcompactions, const InternalKey* begin,
+    const InternalKey* end, InternalKey** compaction_end, bool* manual_conflict,
+    const chash_set<uint64_t>* files_being_compact) {
   if (input_level == ColumnFamilyData::kCompactAllLevels &&
       ioptions_.enable_lazy_compaction) {
     auto hit_sst = [&](const FileMetaData* f) {
@@ -624,6 +625,7 @@ Compaction* UniversalCompactionPicker::CompactRange(
       params.max_subcompactions = 1;
       params.compaction_type = kMapCompaction;
     } else {
+      params.separation_type = separation_type;
       *compaction_end = nullptr;
     }
     return RegisterCompaction(new Compaction(std::move(params)));
@@ -631,14 +633,15 @@ Compaction* UniversalCompactionPicker::CompactRange(
 
   if (!ioptions_.enable_lazy_compaction) {
     return CompactionPicker::CompactRange(
-        cf_name, mutable_cf_options, vstorage, input_level, output_level,
-        output_path_id, max_subcompactions, begin, end, compaction_end,
-        manual_conflict, files_being_compact);
+        cf_name, mutable_cf_options, separation_type, vstorage, input_level,
+        output_level, output_path_id, max_subcompactions, begin, end,
+        compaction_end, manual_conflict, files_being_compact);
   }
   LogBuffer log_buffer(InfoLogLevel::INFO_LEVEL, ioptions_.info_log);
-  auto c = PickRangeCompaction(
-      cf_name, mutable_cf_options, vstorage, input_level, begin, end,
-      max_subcompactions, files_being_compact, manual_conflict, &log_buffer);
+  auto c =
+      PickRangeCompaction(cf_name, mutable_cf_options, separation_type,
+                          vstorage, input_level, begin, end, max_subcompactions,
+                          files_being_compact, manual_conflict, &log_buffer);
   log_buffer.FlushBufferToLog();
   return c;
 }
@@ -1442,6 +1445,6 @@ Compaction* UniversalCompactionPicker::PickCompactionToReduceSortedRuns(
   return new Compaction(std::move(params));
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // !ROCKSDB_LITE

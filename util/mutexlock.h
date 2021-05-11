@@ -9,12 +9,15 @@
 
 #pragma once
 #include <assert.h>
+
 #include <atomic>
 #include <mutex>
 #include <thread>
-#include "port/port.h"
 
-namespace rocksdb {
+#include "port/port.h"
+#include "rocksdb/terark_namespace.h"
+
+namespace TERARKDB_NAMESPACE {
 
 // Helper class that locks a mutex on construction and unlocks the mutex when
 // the destructor of the MutexLock object is invoked.
@@ -28,16 +31,14 @@ namespace rocksdb {
 
 class MutexLock {
  public:
-  explicit MutexLock(port::Mutex *mu) : mu_(mu) {
-    this->mu_->Lock();
-  }
+  explicit MutexLock(port::Mutex *mu) : mu_(mu) { this->mu_->Lock(); }
   ~MutexLock() { this->mu_->Unlock(); }
 
  private:
   port::Mutex *const mu_;
   // No copying allowed
-  MutexLock(const MutexLock&);
-  void operator=(const MutexLock&);
+  MutexLock(const MutexLock &);
+  void operator=(const MutexLock &);
 };
 
 //
@@ -47,16 +48,14 @@ class MutexLock {
 //
 class ReadLock {
  public:
-  explicit ReadLock(port::RWMutex *mu) : mu_(mu) {
-    this->mu_->ReadLock();
-  }
+  explicit ReadLock(port::RWMutex *mu) : mu_(mu) { this->mu_->ReadLock(); }
   ~ReadLock() { this->mu_->ReadUnlock(); }
 
  private:
   port::RWMutex *const mu_;
   // No copying allowed
-  ReadLock(const ReadLock&);
-  void operator=(const ReadLock&);
+  ReadLock(const ReadLock &);
+  void operator=(const ReadLock &);
 };
 
 //
@@ -81,16 +80,14 @@ class ReadUnlock {
 //
 class WriteLock {
  public:
-  explicit WriteLock(port::RWMutex *mu) : mu_(mu) {
-    this->mu_->WriteLock();
-  }
+  explicit WriteLock(port::RWMutex *mu) : mu_(mu) { this->mu_->WriteLock(); }
   ~WriteLock() { this->mu_->WriteUnlock(); }
 
  private:
   port::RWMutex *const mu_;
   // No copying allowed
-  WriteLock(const WriteLock&);
-  void operator=(const WriteLock&);
+  WriteLock(const WriteLock &);
+  void operator=(const WriteLock &);
 };
 
 //
@@ -128,4 +125,4 @@ class SpinMutex {
   std::atomic<bool> locked_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

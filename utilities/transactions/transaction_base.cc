@@ -7,18 +7,19 @@
 
 #include "utilities/transactions/transaction_base.h"
 
-#include "db/db_impl.h"
 #include "db/column_family.h"
+#include "db/db_impl.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/db.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 TransactionBaseImpl::TransactionBaseImpl(
     DB* db, const WriteOptions& write_options,
-    const rocksdb::WriteBatchEntryIndexFactory* index_factory)
+    const TERARKDB_NAMESPACE::WriteBatchEntryIndexFactory* index_factory)
     : db_(db),
       dbimpl_(reinterpret_cast<DBImpl*>(db)),
       write_options_(write_options),
@@ -179,16 +180,15 @@ Status TransactionBaseImpl::RollbackToSavePoint() {
     return Status::NotFound();
   }
 }
-  
+
 Status TransactionBaseImpl::PopSavePoint() {
-  if (save_points_ == nullptr ||
-      save_points_->empty()) {
+  if (save_points_ == nullptr || save_points_->empty()) {
     // No SavePoint yet.
     assert(write_batch_.PopSavePoint().IsNotFound());
     return Status::NotFound();
   }
 
-  assert(!save_points_->empty()); 
+  assert(!save_points_->empty());
   save_points_->pop();
   return write_batch_.PopSavePoint();
 }
@@ -720,6 +720,6 @@ Status TransactionBaseImpl::RebuildFromWriteBatch(WriteBatch* src_batch) {
 WriteBatch* TransactionBaseImpl::GetCommitTimeWriteBatch() {
   return &commit_time_batch_;
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

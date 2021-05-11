@@ -11,12 +11,14 @@
 
 #include "utilities/persistent_cache/persistent_cache_tier.h"
 
-#include "inttypes.h"
+#include <inttypes.h>
 
-#include <string>
 #include <sstream>
+#include <string>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+
+namespace TERARKDB_NAMESPACE {
 
 std::string PersistentCacheConfig::ToString() const {
   std::string ret;
@@ -163,6 +165,6 @@ bool PersistentTieredCache::IsCompressed() {
   return tiers_.front()->IsCompressed();
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif

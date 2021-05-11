@@ -10,9 +10,11 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 enum ColCompressionType {
   kColNoCompression,
@@ -216,4 +218,4 @@ struct KVPairColBufEncoders {
     value_checksum_buf->Finish();
   }
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

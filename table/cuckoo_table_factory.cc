@@ -6,12 +6,12 @@
 #ifndef ROCKSDB_LITE
 #include "table/cuckoo_table_factory.h"
 
-#include "db/dbformat.h"
 #include "rocksdb/convenience.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/cuckoo_table_builder.h"
 #include "table/cuckoo_table_reader.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 Status CuckooTableFactory::NewTableReader(
     const TableReaderOptions& table_reader_options,
@@ -102,5 +102,5 @@ static TableFactory* CuckooCreator(const std::string& options, Status* s) {
 
 TERARK_FACTORY_REGISTER_EX(CuckooTableFactory, "CuckooTable", &CuckooCreator);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

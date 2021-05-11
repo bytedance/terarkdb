@@ -14,10 +14,11 @@
 #include "rocksdb/db.h"
 #include "rocksdb/iterator.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 #include "util/arena.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class DBImpl;
 class Env;
@@ -170,5 +171,5 @@ class ForwardIterator : public InternalIterator, public SVDestructCallback {
   Arena arena_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

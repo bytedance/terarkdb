@@ -5,13 +5,13 @@
 
 #include "util/log_buffer.h"
 
-#include "port/sys_time.h"
 #include "port/port.h"
+#include "port/sys_time.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
-LogBuffer::LogBuffer(const InfoLogLevel log_level,
-                     Logger*info_log)
+LogBuffer::LogBuffer(const InfoLogLevel log_level, Logger* info_log)
     : log_level_(log_level), info_log_(info_log) {}
 
 void LogBuffer::AddLogToBuffer(size_t max_log_size, const char* format,
@@ -90,4 +90,4 @@ void LogToBuffer(LogBuffer* log_buffer, const char* format, ...) {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

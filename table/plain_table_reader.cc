@@ -18,6 +18,7 @@
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/options.h"
 #include "rocksdb/statistics.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block.h"
 #include "table/bloom_block.h"
 #include "table/filter_block.h"
@@ -36,7 +37,7 @@
 #include "util/stop_watch.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 
@@ -777,5 +778,5 @@ LazyBuffer PlainTableIterator::value() const {
 
 Status PlainTableIterator::status() const { return status_; }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

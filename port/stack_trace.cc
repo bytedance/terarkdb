@@ -5,29 +5,32 @@
 //
 #include "port/stack_trace.h"
 
-#if defined(ROCKSDB_LITE) || !(defined(ROCKSDB_BACKTRACE) || defined(OS_MACOSX)) || \
-    defined(CYGWIN) || defined(OS_FREEBSD) || defined(OS_SOLARIS)
+#include "rocksdb/terark_namespace.h"
+
+#if defined(ROCKSDB_LITE) ||                                                  \
+    !(defined(ROCKSDB_BACKTRACE) || defined(OS_MACOSX)) || defined(CYGWIN) || \
+    defined(OS_FREEBSD) || defined(OS_SOLARIS)
 
 // noop
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace port {
 void InstallStackTraceHandler() {}
 void PrintStack(int /*first_frames_to_skip*/) {}
 }  // namespace port
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #else
 
+#include <cxxabi.h>
 #include <execinfo.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <cxxabi.h>
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace port {
 
 namespace {
@@ -133,6 +136,6 @@ void InstallStackTraceHandler() {
 }
 
 }  // namespace port
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif

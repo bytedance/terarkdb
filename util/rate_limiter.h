@@ -13,13 +13,15 @@
 #include <atomic>
 #include <chrono>
 #include <deque>
+
 #include "port/port.h"
 #include "rocksdb/env.h"
 #include "rocksdb/rate_limiter.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/mutexlock.h"
 #include "util/random.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class GenericRateLimiter : public RateLimiter {
  public:
@@ -110,4 +112,4 @@ class GenericRateLimiter : public RateLimiter {
   std::chrono::microseconds tuned_time_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

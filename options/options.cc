@@ -24,18 +24,17 @@
 #include "rocksdb/compaction_filter.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/env.h"
-#include "rocksdb/memtablerep.h"
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/sst_file_manager.h"
 #include "rocksdb/table.h"
-#include "rocksdb/table_properties.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/wal_filter.h"
 #include "table/block_based_table_factory.h"
 #include "util/compression.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 AdvancedColumnFamilyOptions::AdvancedColumnFamilyOptions() {
   assert(memtable_factory.get() != nullptr);
@@ -78,7 +77,6 @@ AdvancedColumnFamilyOptions::AdvancedColumnFamilyOptions(const Options& options)
       compaction_style(options.compaction_style),
       compaction_pri(options.compaction_pri),
       compaction_options_universal(options.compaction_options_universal),
-      compaction_options_fifo(options.compaction_options_fifo),
       max_sequential_skip_in_iterations(
           options.max_sequential_skip_in_iterations),
       memtable_factory(options.memtable_factory),
@@ -86,6 +84,7 @@ AdvancedColumnFamilyOptions::AdvancedColumnFamilyOptions(const Options& options)
           options.table_properties_collector_factories),
       max_successive_merges(options.max_successive_merges),
       optimize_filters_for_hits(options.optimize_filters_for_hits),
+      optimize_range_deletion(options.optimize_range_deletion),
       paranoid_file_checks(options.paranoid_file_checks),
       force_consistency_checks(options.force_consistency_checks),
       report_bg_io_stats(options.report_bg_io_stats),
@@ -123,6 +122,9 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
                    value_meta_extractor_factory
                        ? value_meta_extractor_factory->Name()
                        : "None");
+  ROCKS_LOG_HEADER(
+      log, "   Options.ttl_extractor_factory: %s",
+      ttl_extractor_factory ? ttl_extractor_factory->Name() : "None");
   ROCKS_LOG_HEADER(log, "       Options.compaction_filter: %s",
                    compaction_filter ? compaction_filter->Name() : "None");
   ROCKS_LOG_HEADER(
@@ -144,20 +146,20 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
   if (!compression_per_level.empty()) {
     for (unsigned int i = 0; i < compression_per_level.size(); i++) {
       ROCKS_LOG_HEADER(
-          log, "       Options.compression[%d]: %s", i,
+          log, "         Options.compression[%d]: %s", i,
           CompressionTypeToString(compression_per_level[i]).c_str());
     }
   } else {
-    ROCKS_LOG_HEADER(log, "         Options.compression: %s",
+    ROCKS_LOG_HEADER(log, "             Options.compression: %s",
                      CompressionTypeToString(compression).c_str());
   }
   ROCKS_LOG_HEADER(
-      log, "                 Options.bottommost_compression: %s",
+      log, "  Options.bottommost_compression: %s",
       bottommost_compression == kDisableCompressionOption
           ? "Disabled"
           : CompressionTypeToString(bottommost_compression).c_str());
   ROCKS_LOG_HEADER(
-      log, "      Options.prefix_extractor: %s",
+      log, "        Options.prefix_extractor: %s",
       prefix_extractor == nullptr ? "nullptr" : prefix_extractor->Name());
   ROCKS_LOG_HEADER(log,
                    "  Options.memtable_insert_with_hint_prefix_extractor: %s",
@@ -307,13 +309,6 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
   }
   ROCKS_LOG_HEADER(log, " Options.compaction_options_universal.stop_style: %s",
                    str_compaction_stop_style.c_str());
-  ROCKS_LOG_HEADER(
-      log, "Options.compaction_options_fifo.max_table_files_size: %" PRIu64,
-      compaction_options_fifo.max_table_files_size);
-  ROCKS_LOG_HEADER(log, "Options.compaction_options_fifo.allow_compaction: %d",
-                   compaction_options_fifo.allow_compaction);
-  ROCKS_LOG_HEADER(log, "Options.compaction_options_fifo.ttl: %" PRIu64,
-                   compaction_options_fifo.ttl);
   std::string collector_names;
   for (const auto& collector_factory : table_properties_collector_factories) {
     collector_names.append(collector_factory->Name());
@@ -345,6 +340,8 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
       max_successive_merges);
   ROCKS_LOG_HEADER(log, "              Options.optimize_filters_for_hits: %d",
                    optimize_filters_for_hits);
+  ROCKS_LOG_HEADER(log, "                Options.optimize_range_deletion: %d",
+                   optimize_range_deletion);
   ROCKS_LOG_HEADER(log, "                   Options.paranoid_file_checks: %d",
                    paranoid_file_checks);
   ROCKS_LOG_HEADER(log, "               Options.force_consistency_checks: %d",
@@ -585,4 +582,4 @@ ReadOptions::ReadOptions(bool cksum, bool cache)
       aio_concurrency(32),
       iter_start_seqnum(0) {}
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

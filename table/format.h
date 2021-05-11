@@ -9,6 +9,7 @@
 
 #pragma once
 #include <stdint.h>
+
 #include <string>
 #ifdef ROCKSDB_MALLOC_USABLE_SIZE
 #ifdef OS_FREEBSD
@@ -17,18 +18,18 @@
 #include <malloc.h>
 #endif
 #endif
+#include "options/cf_options.h"
+#include "port/port.h"  // noexcept
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table.h"
-
-#include "options/cf_options.h"
-#include "port/port.h"  // noexcept
+#include "rocksdb/terark_namespace.h"
 #include "table/persistent_cache_options.h"
 #include "util/file_reader_writer.h"
 #include "util/memory_allocator.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class RandomAccessFile;
 struct ReadOptions;
@@ -76,8 +77,8 @@ class BlockHandle {
   static const BlockHandle kNullBlockHandle;
 };
 
-inline uint32_t GetCompressFormatForVersion(
-    CompressionType compression_type, uint32_t version) {
+inline uint32_t GetCompressFormatForVersion(CompressionType compression_type,
+                                            uint32_t version) {
 #ifdef NDEBUG
   (void)compression_type;
 #endif
@@ -195,7 +196,7 @@ inline CompressionType get_block_compression_type(const char* block_data,
 }
 
 struct BlockContents {
-  Slice data;     // Actual contents of data
+  Slice data;  // Actual contents of data
   CacheAllocationPtr allocation;
 
 #ifndef NDEBUG
@@ -301,4 +302,4 @@ inline BlockHandle::BlockHandle()
 inline BlockHandle::BlockHandle(uint64_t _offset, uint64_t _size)
     : offset_(_offset), size_(_size) {}
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

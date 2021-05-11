@@ -9,9 +9,10 @@
 
 #include <atomic>
 
+#include "rocksdb/terark_namespace.h"
 #include "util/mutexlock.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // LRU element definition
 //
@@ -169,6 +170,6 @@ class LRUList {
   T* tail_ = nullptr;         // back (hot)
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif

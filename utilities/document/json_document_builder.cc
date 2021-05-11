@@ -5,45 +5,41 @@
 
 #ifndef ROCKSDB_LITE
 #include <assert.h>
-#include <limits>
 #include <stdint.h>
+
+#include <limits>
+
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/json_document.h"
 #include "third-party/fbson/FbsonWriter.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
+
 JSONDocumentBuilder::JSONDocumentBuilder()
-: writer_(new fbson::FbsonWriter()) {
-}
+    : writer_(new fbson::FbsonWriter()) {}
 
 JSONDocumentBuilder::JSONDocumentBuilder(fbson::FbsonOutStream* out)
-: writer_(new fbson::FbsonWriter(*out)) {
-}
+    : writer_(new fbson::FbsonWriter(*out)) {}
 
-void JSONDocumentBuilder::Reset() {
-  writer_->reset();
-}
+void JSONDocumentBuilder::Reset() { writer_->reset(); }
 
 bool JSONDocumentBuilder::WriteStartArray() {
   return writer_->writeStartArray();
 }
 
-bool JSONDocumentBuilder::WriteEndArray() {
-  return writer_->writeEndArray();
-}
+bool JSONDocumentBuilder::WriteEndArray() { return writer_->writeEndArray(); }
 
 bool JSONDocumentBuilder::WriteStartObject() {
   return writer_->writeStartObject();
 }
 
-bool JSONDocumentBuilder::WriteEndObject() {
-  return writer_->writeEndObject();
-}
+bool JSONDocumentBuilder::WriteEndObject() { return writer_->writeEndObject(); }
 
 bool JSONDocumentBuilder::WriteKeyValue(const std::string& key,
                                         const JSONDocument& value) {
   assert(key.size() <= std::numeric_limits<uint8_t>::max());
-  size_t bytesWritten = writer_->writeKey(key.c_str(),
-    static_cast<uint8_t>(key.size()));
+  size_t bytesWritten =
+      writer_->writeKey(key.c_str(), static_cast<uint8_t>(key.size()));
   if (bytesWritten == 0) {
     return false;
   }
@@ -60,22 +56,20 @@ bool JSONDocumentBuilder::WriteJSONDocument(const JSONDocument& value) {
       return writer_->writeDouble(value.GetDouble());
     case JSONDocument::kBool:
       return writer_->writeBool(value.GetBool());
-    case JSONDocument::kString:
-    {
+    case JSONDocument::kString: {
       bool res = writer_->writeStartString();
       if (!res) {
         return false;
       }
       const std::string& str = value.GetString();
-      res = writer_->writeString(str.c_str(),
-                  static_cast<uint32_t>(str.size()));
+      res =
+          writer_->writeString(str.c_str(), static_cast<uint32_t>(str.size()));
       if (!res) {
         return false;
       }
       return writer_->writeEndString();
     }
-    case JSONDocument::kArray:
-    {
+    case JSONDocument::kArray: {
       bool res = WriteStartArray();
       if (!res) {
         return false;
@@ -88,8 +82,7 @@ bool JSONDocumentBuilder::WriteJSONDocument(const JSONDocument& value) {
       }
       return WriteEndArray();
     }
-    case JSONDocument::kObject:
-    {
+    case JSONDocument::kObject: {
       bool res = WriteStartObject();
       if (!res) {
         return false;
@@ -106,15 +99,14 @@ bool JSONDocumentBuilder::WriteJSONDocument(const JSONDocument& value) {
 }
 
 JSONDocument JSONDocumentBuilder::GetJSONDocument() {
-  fbson::FbsonValue* value =
-      fbson::FbsonDocument::createValue(writer_->getOutput()->getBuffer(),
-                       static_cast<uint32_t>(writer_->getOutput()->getSize()));
+  fbson::FbsonValue* value = fbson::FbsonDocument::createValue(
+      writer_->getOutput()->getBuffer(),
+      static_cast<uint32_t>(writer_->getOutput()->getSize()));
   return JSONDocument(value, true);
 }
 
-JSONDocumentBuilder::~JSONDocumentBuilder() {
-}
+JSONDocumentBuilder::~JSONDocumentBuilder() {}
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

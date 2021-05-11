@@ -15,8 +15,9 @@
 #include "port/stack_trace.h"
 #include "rocksdb/iostats_context.h"
 #include "rocksdb/perf_context.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // A dumb ReadCallback which saying every key is committed.
 class DummyReadCallback : public ReadCallback {
@@ -57,6 +58,7 @@ class FlushBlockEveryKeyPolicy : public FlushBlockPolicy {
     }
     return true;
   }
+
  private:
   bool start_ = false;
 };
@@ -119,7 +121,7 @@ TEST_P(DBIteratorTest, NonBlockingIteration) {
   do {
     ReadOptions non_blocking_opts, regular_opts;
     Options options = CurrentOptions();
-    options.statistics = rocksdb::CreateDBStatistics();
+    options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
     non_blocking_opts.read_tier = kBlockCacheTier;
     CreateAndReopenWithCF({"pikachu"}, options);
     // write one kv to the database.
@@ -520,7 +522,7 @@ TEST_P(DBIteratorTest, IterReseek) {
   Options options = CurrentOptions(options_override);
   options.max_sequential_skip_in_iterations = 3;
   options.create_if_missing = true;
-  options.statistics = rocksdb::CreateDBStatistics();
+  options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   DestroyAndReopen(options);
   CreateAndReopenWithCF({"pikachu"}, options);
 
@@ -937,7 +939,8 @@ TEST_P(DBIteratorTest, DBIteratorBoundTest) {
     iter->Next();
 
     ASSERT_TRUE(iter->Valid());
-    ASSERT_EQ(static_cast<int>(get_perf_context()->internal_delete_skipped_count), 2);
+    ASSERT_EQ(
+        static_cast<int>(get_perf_context()->internal_delete_skipped_count), 2);
 
     // now testing with iterate_bound
     Slice prefix("c");
@@ -960,7 +963,8 @@ TEST_P(DBIteratorTest, DBIteratorBoundTest) {
     // even though the key is deleted
     // hence internal_delete_skipped_count should be 0
     ASSERT_TRUE(!iter->Valid());
-    ASSERT_EQ(static_cast<int>(get_perf_context()->internal_delete_skipped_count), 0);
+    ASSERT_EQ(
+        static_cast<int>(get_perf_context()->internal_delete_skipped_count), 0);
   }
 }
 
@@ -968,7 +972,7 @@ TEST_P(DBIteratorTest, DBIteratorBoundMultiSeek) {
   Options options = CurrentOptions();
   options.env = env_;
   options.create_if_missing = true;
-  options.statistics = rocksdb::CreateDBStatistics();
+  options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   options.prefix_extractor = nullptr;
   DestroyAndReopen(options);
   ASSERT_OK(Put("a", "0"));
@@ -1022,19 +1026,19 @@ TEST_P(DBIteratorTest, DBIteratorBoundMultiSeek) {
 TEST_P(DBIteratorTest, DBIteratorBoundOptimizationTest) {
   int upper_bound_hits = 0;
   Options options = CurrentOptions();
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "BlockBasedTable::BlockEntryIteratorState::KeyReachedUpperBound",
       [&upper_bound_hits](void* arg) {
         assert(arg != nullptr);
         upper_bound_hits += (*static_cast<bool*>(arg) ? 1 : 0);
       });
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
   options.env = env_;
   options.create_if_missing = true;
   options.prefix_extractor = nullptr;
   BlockBasedTableOptions table_options;
   table_options.flush_block_policy_factory =
-    std::make_shared<FlushBlockEveryKeyPolicyFactory>();
+      std::make_shared<FlushBlockEveryKeyPolicyFactory>();
   options.table_factory.reset(NewBlockBasedTableFactory(table_options));
 
   DestroyAndReopen(options);
@@ -1443,7 +1447,7 @@ TEST_P(DBIteratorTest, IterPrevKeyCrossingBlocksRandomized) {
 
 TEST_P(DBIteratorTest, IteratorWithLocalStatistics) {
   Options options = CurrentOptions();
-  options.statistics = rocksdb::CreateDBStatistics();
+  options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   DestroyAndReopen(options);
 
   Random rnd(301);
@@ -1482,7 +1486,7 @@ TEST_P(DBIteratorTest, IteratorWithLocalStatistics) {
     }
 
     delete iter;
-    //ASSERT_EQ(bytes, get_perf_context()->iter_read_bytes);
+    // ASSERT_EQ(bytes, get_perf_context()->iter_read_bytes);
     SetPerfLevel(kDisable);
     total_bytes += bytes;
   };
@@ -1509,7 +1513,7 @@ TEST_P(DBIteratorTest, IteratorWithLocalStatistics) {
     }
 
     delete iter;
-    //ASSERT_EQ(bytes, get_perf_context()->iter_read_bytes);
+    // ASSERT_EQ(bytes, get_perf_context()->iter_read_bytes);
     SetPerfLevel(kDisable);
     total_bytes += bytes;
   };
@@ -1531,8 +1535,8 @@ TEST_P(DBIteratorTest, IteratorWithLocalStatistics) {
   ASSERT_EQ(TestGetTickerCount(options, NUMBER_DB_PREV), (uint64_t)total_prev);
   ASSERT_EQ(TestGetTickerCount(options, NUMBER_DB_PREV_FOUND),
             (uint64_t)total_prev_found);
-  //ASSERT_EQ(TestGetTickerCount(options, ITER_BYTES_READ), (uint64_t)total_bytes);
-
+  // ASSERT_EQ(TestGetTickerCount(options, ITER_BYTES_READ),
+  // (uint64_t)total_bytes);
 }
 
 TEST_P(DBIteratorTest, ReadAhead) {
@@ -1542,7 +1546,7 @@ TEST_P(DBIteratorTest, ReadAhead) {
   options.disable_auto_compactions = true;
   options.blob_size = -1;
   options.write_buffer_size = 4 << 20;
-  options.statistics = rocksdb::CreateDBStatistics();
+  options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   BlockBasedTableOptions table_options;
   table_options.block_size = 1024;
   table_options.no_block_cache = true;
@@ -1620,7 +1624,7 @@ TEST_P(DBIteratorTest, DBIteratorSkipRecentDuplicatesTest) {
   options.max_sequential_skip_in_iterations = 3;
   options.prefix_extractor = nullptr;
   options.write_buffer_size = 1 << 27;  // big enough to avoid flush
-  options.statistics = rocksdb::CreateDBStatistics();
+  options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   DestroyAndReopen(options);
 
   // Insert.
@@ -1662,8 +1666,8 @@ TEST_P(DBIteratorTest, DBIteratorSkipRecentDuplicatesTest) {
   EXPECT_EQ(get_perf_context()->internal_merge_count, 0);
   EXPECT_GE(get_perf_context()->internal_recent_skipped_count, 2);
   EXPECT_GE(get_perf_context()->seek_on_memtable_count, 2);
-  EXPECT_EQ(1, options.statistics->getTickerCount(
-                 NUMBER_OF_RESEEKS_IN_ITERATION));
+  EXPECT_EQ(1,
+            options.statistics->getTickerCount(NUMBER_OF_RESEEKS_IN_ITERATION));
 }
 
 TEST_P(DBIteratorTest, Refresh) {
@@ -1912,7 +1916,7 @@ TEST_P(DBIteratorTest, UpperBoundWithPrevReseek) {
 
 TEST_P(DBIteratorTest, SkipStatistics) {
   Options options = CurrentOptions();
-  options.statistics = rocksdb::CreateDBStatistics();
+  options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   DestroyAndReopen(options);
 
   int skip_count = 0;
@@ -1940,7 +1944,7 @@ TEST_P(DBIteratorTest, SkipStatistics) {
   }
   ASSERT_EQ(count, 3);
   delete iter;
-  skip_count += 8; // 3 deletes + 3 original keys + 2 lower in sequence
+  skip_count += 8;  // 3 deletes + 3 original keys + 2 lower in sequence
   ASSERT_EQ(skip_count, TestGetTickerCount(options, NUMBER_ITER_SKIP));
 
   iter = NewIterator(ReadOptions());
@@ -1951,7 +1955,7 @@ TEST_P(DBIteratorTest, SkipStatistics) {
   }
   ASSERT_EQ(count, 3);
   delete iter;
-  skip_count += 8; // Same as above, but in reverse order
+  skip_count += 8;  // Same as above, but in reverse order
   ASSERT_EQ(skip_count, TestGetTickerCount(options, NUMBER_ITER_SKIP));
 
   ASSERT_OK(Put("aa", "1"));
@@ -1969,18 +1973,18 @@ TEST_P(DBIteratorTest, SkipStatistics) {
 
   iter = NewIterator(ro);
   count = 0;
-  for(iter->Seek("aa"); iter->Valid(); iter->Next()) {
+  for (iter->Seek("aa"); iter->Valid(); iter->Next()) {
     ASSERT_OK(iter->status());
     count++;
   }
   ASSERT_EQ(count, 1);
   delete iter;
-  skip_count += 6; // 3 deletes + 3 original keys
+  skip_count += 6;  // 3 deletes + 3 original keys
   ASSERT_EQ(skip_count, TestGetTickerCount(options, NUMBER_ITER_SKIP));
 
   iter = NewIterator(ro);
   count = 0;
-  for(iter->SeekToLast(); iter->Valid(); iter->Prev()) {
+  for (iter->SeekToLast(); iter->Valid(); iter->Prev()) {
     ASSERT_OK(iter->status());
     count++;
   }
@@ -2238,10 +2242,10 @@ TEST_F(DBIteratorWithReadCallbackTest, ReadCallback) {
   delete iter;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

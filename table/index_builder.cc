@@ -8,20 +8,20 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "table/index_builder.h"
+
 #include <assert.h>
-#include <inttypes.h>
 
 #include <list>
-#include <string>
 
 #include "rocksdb/comparator.h"
 #include "rocksdb/flush_block_policy.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/format.h"
-#include "table/partitioned_filter_block.h"
 
 // Without anonymous namespace here, we fail the warning -Wmissing-prototypes
-namespace rocksdb {
-// using namespace rocksdb;
+namespace TERARKDB_NAMESPACE {
+
+// using namespace TERARKDB_NAMESPACE;
 // Create a index builder based on its type.
 IndexBuilder* IndexBuilder::CreateIndexBuilder(
     BlockBasedTableOptions::IndexType index_type,
@@ -35,24 +35,20 @@ IndexBuilder* IndexBuilder::CreateIndexBuilder(
       result = new ShortenedIndexBuilder(
           comparator, table_opt.index_block_restart_interval,
           table_opt.format_version, use_value_delta_encoding);
-    }
-  break;
+    } break;
     case BlockBasedTableOptions::kHashSearch: {
       result = new HashIndexBuilder(comparator, int_key_slice_transform,
                                     table_opt.index_block_restart_interval,
                                     table_opt.format_version,
                                     use_value_delta_encoding);
-    }
-  break;
+    } break;
     case BlockBasedTableOptions::kTwoLevelIndexSearch: {
       result = PartitionedIndexBuilder::CreateIndexBuilder(
           comparator, use_value_delta_encoding, table_opt);
-    }
-    break;
+    } break;
     default: {
       assert(!"Do not recognize the index type ");
-    }
-  break;
+    } break;
   }
   return result;
 }
@@ -211,4 +207,4 @@ Status PartitionedIndexBuilder::Finish(
 }
 
 size_t PartitionedIndexBuilder::NumPartitions() const { return partition_cnt_; }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

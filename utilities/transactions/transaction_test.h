@@ -10,14 +10,17 @@
 #endif
 
 #include <inttypes.h>
+
 #include <algorithm>
 #include <functional>
 #include <string>
 #include <thread>
 
 #include "db/db_impl.h"
+#include "port/port.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/transaction.h"
 #include "rocksdb/utilities/transaction_db.h"
 #include "table/mock_table.h"
@@ -32,9 +35,7 @@
 #include "utilities/merge_operators/string_append/stringappend.h"
 #include "utilities/transactions/pessimistic_transaction_db.h"
 
-#include "port/port.h"
-
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Return true if the ith bit is set in combination represented by comb
 bool IsInCombination(size_t i, size_t comb) { return comb & (size_t(1) << i); }
@@ -450,4 +451,4 @@ class TransactionStressTest : public TransactionTest {};
 
 class MySQLStyleTransactionTest : public TransactionTest {};
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

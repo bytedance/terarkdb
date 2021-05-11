@@ -22,6 +22,7 @@
 
 #include "monitoring/perf_context_imp.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/transaction_db_mutex.h"
 #include "util/cast_util.h"
 #include "util/murmurhash.h"
@@ -29,7 +30,7 @@
 #include "util/thread_local.h"
 #include "utilities/transactions/pessimistic_transaction_db.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct LockInfo {
   bool exclusive;
@@ -401,10 +402,10 @@ Status TransactionLockMgr::AcquireWithTimeout(
       }
 
       if (result.IsTimedOut()) {
-          timed_out = true;
-          // Even though we timed out, we will still make one more attempt to
-          // acquire lock below (it is possible the lock expired and we
-          // were never signaled).
+        timed_out = true;
+        // Even though we timed out, we will still make one more attempt to
+        // acquire lock below (it is possible the lock expired and we
+        // were never signaled).
       }
 
       if (result.ok() || result.IsTimedOut()) {
@@ -446,8 +447,10 @@ bool TransactionLockMgr::IncrementWaiters(
     const autovector<TransactionID>& wait_ids, const std::string& key,
     const uint32_t& cf_id, const bool& exclusive, Env* const env) {
   auto id = txn->GetID();
-  std::vector<int> queue_parents(static_cast<size_t>(txn->GetDeadlockDetectDepth()));
-  std::vector<TransactionID> queue_values(static_cast<size_t>(txn->GetDeadlockDetectDepth()));
+  std::vector<int> queue_parents(
+      static_cast<size_t>(txn->GetDeadlockDetectDepth()));
+  std::vector<TransactionID> queue_values(
+      static_cast<size_t>(txn->GetDeadlockDetectDepth()));
   std::lock_guard<std::mutex> lock(wait_txn_map_mutex_);
   assert(!wait_txn_map_.Contains(id));
 
@@ -748,5 +751,5 @@ void TransactionLockMgr::Resize(uint32_t target_size) {
   dlock_buffer_.Resize(target_size);
 }
 
-}  //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

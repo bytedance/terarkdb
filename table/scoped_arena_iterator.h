@@ -7,12 +7,13 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #pragma once
 
-#include "table/internal_iterator.h"
 #include "port/port.h"
+#include "rocksdb/terark_namespace.h"
+#include "table/internal_iterator.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
+
 class ScopedArenaIterator {
-
   void reset(InternalIterator* iter) ROCKSDB_NOEXCEPT {
     if (iter_ != nullptr) {
       iter_->~InternalIterator();
@@ -21,7 +22,6 @@ class ScopedArenaIterator {
   }
 
  public:
-
   explicit ScopedArenaIterator(InternalIterator* iter = nullptr)
       : iter_(iter) {}
 
@@ -51,11 +51,9 @@ class ScopedArenaIterator {
     return res;
   }
 
-  ~ScopedArenaIterator() {
-    reset(nullptr);
-  }
+  ~ScopedArenaIterator() { reset(nullptr); }
 
  private:
   InternalIterator* iter_;
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

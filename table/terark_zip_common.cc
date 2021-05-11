@@ -4,11 +4,9 @@
 
 #include <ctime>
 #include <terark/idx/terark_zip_index.hpp>
-#include <terark/io/byte_swap.hpp>
-#include <terark/util/mmap.hpp>
 #include <terark/util/throw.hpp>
 
-#include "table/terark_zip_table.h"
+#include "rocksdb/terark_namespace.h"
 
 #ifdef _MSC_VER
 #include <io.h>
@@ -19,7 +17,7 @@
 #include <sys/types.h>
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 const char* StrDateTimeNow() {
   static thread_local char buf[64];
@@ -40,4 +38,4 @@ std::string demangle(const char* name) {
 #endif
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

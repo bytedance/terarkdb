@@ -8,18 +8,20 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "util/testharness.h"
+
 #include <string>
 #include <thread>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+
+namespace TERARKDB_NAMESPACE {
 namespace test {
 
 ::testing::AssertionResult AssertStatus(const char* s_expr, const Status& s) {
   if (s.ok()) {
     return ::testing::AssertionSuccess();
   } else {
-    return ::testing::AssertionFailure() << s_expr << std::endl
-                                         << s.ToString();
+    return ::testing::AssertionFailure() << s_expr << std::endl << s.ToString();
   }
 }
 
@@ -53,4 +55,4 @@ int RandomSeed() {
 }
 
 }  // namespace test
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

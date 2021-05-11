@@ -15,13 +15,14 @@
 #include "rocksdb/convenience.h"
 #include "rocksdb/env.h"
 #include "rocksdb/iterator.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/date_tiered_db.h"
 #include "table/merging_iterator.h"
 #include "util/coding.h"
 #include "util/filename.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Open the db inside DateTieredDBImpl because options needs pointer to its ttl
 DateTieredDBImpl::DateTieredDBImpl(
@@ -407,5 +408,5 @@ Iterator* DateTieredDBImpl::NewIterator(const ReadOptions& opts) {
   }
   return db_iter;
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

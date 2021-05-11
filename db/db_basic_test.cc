@@ -9,12 +9,13 @@
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
 #include "rocksdb/perf_context.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/fault_injection_test_env.h"
 #if !defined(ROCKSDB_LITE)
 #include "util/sync_point.h"
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class DBBasicTest : public DBTestBase {
  public:
@@ -24,14 +25,64 @@ class DBBasicTest : public DBTestBase {
 TEST_F(DBBasicTest, OpenWhenOpen) {
   Options options = CurrentOptions();
   options.env = env_;
-  rocksdb::DB* db2 = nullptr;
-  rocksdb::Status s = DB::Open(options, dbname_, &db2);
+  TERARKDB_NAMESPACE::DB* db2 = nullptr;
+  TERARKDB_NAMESPACE::Status s = DB::Open(options, dbname_, &db2);
 
   ASSERT_EQ(Status::Code::kIOError, s.code());
   ASSERT_EQ(Status::SubCode::kNone, s.subcode());
   ASSERT_TRUE(strstr(s.getState(), "lock ") != nullptr);
 
   delete db2;
+}
+
+TEST_F(DBBasicTest, UniqueSession) {
+  Options options = CurrentOptions();
+  std::string sid1, sid2, sid3, sid4;
+
+  db_->GetDbSessionId(sid1);
+  Reopen(options);
+  db_->GetDbSessionId(sid2);
+  ASSERT_OK(Put("foo", "v1"));
+  db_->GetDbSessionId(sid4);
+  Reopen(options);
+  db_->GetDbSessionId(sid3);
+
+  ASSERT_NE(sid1, sid2);
+  ASSERT_NE(sid1, sid3);
+  ASSERT_NE(sid2, sid3);
+
+  ASSERT_EQ(sid2, sid4);
+
+#ifndef ROCKSDB_LITE
+  Close();
+  ASSERT_OK(ReadOnlyReopen(options));
+  db_->GetDbSessionId(sid1);
+  // Test uniqueness between readonly open (sid1) and regular open (sid3)
+  ASSERT_NE(sid1, sid3);
+  Close();
+  ASSERT_OK(ReadOnlyReopen(options));
+  db_->GetDbSessionId(sid2);
+  ASSERT_EQ("v1", Get("foo"));
+  db_->GetDbSessionId(sid3);
+
+  ASSERT_NE(sid1, sid2);
+
+  ASSERT_EQ(sid2, sid3);
+#endif  // ROCKSDB_LITE
+
+  CreateAndReopenWithCF({"goku"}, options);
+  db_->GetDbSessionId(sid1);
+  ASSERT_OK(Put("bar", "e1"));
+  db_->GetDbSessionId(sid2);
+  ASSERT_EQ("e1", Get("bar"));
+  db_->GetDbSessionId(sid3);
+  ReopenWithColumnFamilies({"default", "goku"}, options);
+  db_->GetDbSessionId(sid4);
+
+  ASSERT_EQ(sid1, sid2);
+  ASSERT_EQ(sid2, sid3);
+
+  ASSERT_NE(sid1, sid4);
 }
 
 #ifndef ROCKSDB_LITE
@@ -369,7 +420,7 @@ TEST_F(DBBasicTest, FLUSH) {
     get_perf_context()->Reset();
     Get(1, "foo");
     ASSERT_TRUE((int)get_perf_context()->get_from_output_files_time > 0);
-    //ASSERT_EQ(2, (int)get_perf_context()->get_read_bytes);
+    // ASSERT_EQ(2, (int)get_perf_context()->get_read_bytes);
 
     ReopenWithColumnFamilies({"default", "pikachu"}, CurrentOptions());
     ASSERT_EQ("v1", Get(1, "foo"));
@@ -857,45 +908,44 @@ TEST_F(DBBasicTest, MmapAndBufferOptions) {
 #endif
 
 class TestEnv : public EnvWrapper {
-  public:
-    explicit TestEnv() : EnvWrapper(Env::Default()),
-                close_count(0) { }
+ public:
+  explicit TestEnv() : EnvWrapper(Env::Default()), close_count(0) {}
 
-    class TestLogger : public Logger {
-      public:
-        using Logger::Logv;
-        TestLogger(TestEnv *env_ptr) : Logger() { env = env_ptr; }
-        ~TestLogger() {
-          if (!closed_) {
-            CloseHelper();
-          }
-        }
-        virtual void Logv(const char* /*format*/, va_list /*ap*/) override{};
-
-       protected:
-        virtual Status CloseImpl() override {
-          return CloseHelper();
-        }
-      private:
-        Status CloseHelper() {
-          env->CloseCountInc();;
-          return Status::IOError();
-        }
-        TestEnv *env;
-    };
-
-    void CloseCountInc() { close_count++; }
-
-    int GetCloseCount() { return close_count; }
-
-    virtual Status NewLogger(const std::string& /*fname*/,
-                             std::shared_ptr<Logger>* result) {
-      result->reset(new TestLogger(this));
-      return Status::OK();
+  class TestLogger : public Logger {
+   public:
+    using Logger::Logv;
+    TestLogger(TestEnv* env_ptr) : Logger() { env = env_ptr; }
+    ~TestLogger() {
+      if (!closed_) {
+        CloseHelper();
+      }
     }
+    virtual void Logv(const char* /*format*/, va_list /*ap*/) override{};
+
+   protected:
+    virtual Status CloseImpl() override { return CloseHelper(); }
 
    private:
-    int close_count;
+    Status CloseHelper() {
+      env->CloseCountInc();
+      ;
+      return Status::IOError();
+    }
+    TestEnv* env;
+  };
+
+  void CloseCountInc() { close_count++; }
+
+  int GetCloseCount() { return close_count; }
+
+  virtual Status NewLogger(const std::string& /*fname*/,
+                           std::shared_ptr<Logger>* result) {
+    result->reset(new TestLogger(this));
+    return Status::OK();
+  }
+
+ private:
+  int close_count;
 };
 
 TEST_F(DBBasicTest, DBClose) {
@@ -948,7 +998,7 @@ TEST_F(DBBasicTest, DBCloseFlushError) {
   Options options = GetDefaultOptions();
   options.create_if_missing = true;
   options.manual_wal_flush = true;
-  options.write_buffer_size=100;
+  options.write_buffer_size = 100;
   options.env = fault_injection_env.get();
 
   Reopen(options);
@@ -964,10 +1014,10 @@ TEST_F(DBBasicTest, DBCloseFlushError) {
   Destroy(options);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

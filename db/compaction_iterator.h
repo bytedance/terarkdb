@@ -16,13 +16,14 @@
 #include "db/snapshot_checker.h"
 #include "options/cf_options.h"
 #include "rocksdb/compaction_filter.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/iterator_wrapper.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class CompactionIterator {
  public:
-    friend class CompactionIteratorToInternalIterator;
+  friend class CompactionIteratorToInternalIterator;
 
   // A wrapper around Compaction. Has a much smaller interface, only what
   // CompactionIterator uses. Tests can override it.
@@ -32,6 +33,9 @@ class CompactionIterator {
         : compaction_(compaction) {}
 
     virtual ~CompactionProxy() = default;
+    virtual SeparationType separation_type() const {
+      return compaction_->separation_type();
+    }
     virtual int level(size_t /*compaction_input_level*/ = 0) const {
       return compaction_->level();
     }
@@ -60,33 +64,34 @@ class CompactionIterator {
     const Compaction* compaction_;
   };
 
-  CompactionIterator(
-      InternalIterator* input, SeparateHelper* separate_helper,
-      const Slice* end, const Comparator* cmp, MergeHelper* merge_helper,
-      SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
-      SequenceNumber earliest_write_conflict_snapshot,
-      const SnapshotChecker* snapshot_checker, Env* env,
-      bool report_detailed_time, bool expect_valid_internal_key,
-      CompactionRangeDelAggregator* range_del_agg,
-      const Compaction* compaction = nullptr,
-      BlobConfig blob_config = BlobConfig{size_t(-1), 0.0},
-      const CompactionFilter* compaction_filter = nullptr,
-      const std::atomic<bool>* shutting_down = nullptr,
-      const SequenceNumber preserve_deletes_seqnum = 0);
+  CompactionIterator(InternalIterator* input, SeparateHelper* separate_helper,
+                     const Slice* end, const Comparator* cmp,
+                     MergeHelper* merge_helper, SequenceNumber last_sequence,
+                     std::vector<SequenceNumber>* snapshots,
+                     SequenceNumber earliest_write_conflict_snapshot,
+                     const SnapshotChecker* snapshot_checker, Env* env,
+                     bool report_detailed_time, bool expect_valid_internal_key,
+                     CompactionRangeDelAggregator* range_del_agg,
+                     const Compaction* compaction = nullptr,
+                     BlobConfig blob_config = BlobConfig{size_t(-1), 0.0},
+                     const CompactionFilter* compaction_filter = nullptr,
+                     const std::atomic<bool>* shutting_down = nullptr,
+                     const SequenceNumber preserve_deletes_seqnum = 0);
 
   // Constructor with custom CompactionProxy, used for tests.
-  CompactionIterator(
-      InternalIterator* input, SeparateHelper* separate_helper,
-      const Slice* end, const Comparator* cmp, MergeHelper* merge_helper,
-      SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
-      SequenceNumber earliest_write_conflict_snapshot,
-      const SnapshotChecker* snapshot_checker, Env* env,
-      bool report_detailed_time, bool expect_valid_internal_key,
-      CompactionRangeDelAggregator* range_del_agg,
-      std::unique_ptr<CompactionProxy> compaction, BlobConfig blob_config,
-      const CompactionFilter* compaction_filter = nullptr,
-      const std::atomic<bool>* shutting_down = nullptr,
-      const SequenceNumber preserve_deletes_seqnum = 0);
+  CompactionIterator(InternalIterator* input, SeparateHelper* separate_helper,
+                     const Slice* end, const Comparator* cmp,
+                     MergeHelper* merge_helper, SequenceNumber last_sequence,
+                     std::vector<SequenceNumber>* snapshots,
+                     SequenceNumber earliest_write_conflict_snapshot,
+                     const SnapshotChecker* snapshot_checker, Env* env,
+                     bool report_detailed_time, bool expect_valid_internal_key,
+                     CompactionRangeDelAggregator* range_del_agg,
+                     std::unique_ptr<CompactionProxy> compaction,
+                     BlobConfig blob_config,
+                     const CompactionFilter* compaction_filter = nullptr,
+                     const std::atomic<bool>* shutting_down = nullptr,
+                     const SequenceNumber preserve_deletes_seqnum = 0);
 
   ~CompactionIterator();
 
@@ -146,7 +151,7 @@ class CompactionIterator {
   const SequenceNumber earliest_write_conflict_snapshot_;
   const SnapshotChecker* const snapshot_checker_;
   Env* env_;
-  //bool report_detailed_time_;
+  // bool report_detailed_time_;
   bool expect_valid_internal_key_;
   CompactionRangeDelAggregator* range_del_agg_;
   std::unique_ptr<CompactionProxy> compaction_;
@@ -212,8 +217,13 @@ class CompactionIterator {
   // uncommitted values by providing a SnapshotChecker object.
   bool current_key_committed_;
 
+  bool do_separate_value_;
+  bool do_rebuild_blob_;
+  bool do_combine_value_;
+
   size_t filter_sample_interval_ = 64;
   size_t filter_hit_count_ = 0;
+
  public:
   bool IsShuttingDown() {
     // This is a best-effort facility, so memory_order_relaxed is sufficient.
@@ -222,7 +232,7 @@ class CompactionIterator {
 };
 
 InternalIterator* NewCompactionIterator(
-    CompactionIterator*(*new_compaction_iter_callback)(void*), void* arg,
+    CompactionIterator* (*new_compaction_iter_callback)(void*), void* arg,
     const Slice* start_user_key = nullptr);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

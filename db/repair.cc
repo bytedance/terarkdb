@@ -80,6 +80,7 @@
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/write_buffer_manager.h"
 #include "table/scoped_arena_iterator.h"
 #include "util/c_style_callback.h"
@@ -88,7 +89,7 @@
 #include "util/string_util.h"
 #include "utilities/util/function.hpp"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 
@@ -433,12 +434,14 @@ class Repairer {
         }
         return range_del_iters;
       };
+      auto& moptions = *cfd->GetLatestMutableCFOptions();
       status = BuildTable(
-          dbname_, &vset_, env_, *cfd->ioptions(),
-          *cfd->GetLatestMutableCFOptions(), env_options_, table_cache_,
-          c_style_callback(get_arena_input_iter), &get_arena_input_iter,
-          c_style_callback(get_range_del_iters), &get_range_del_iters, &meta,
-          cfd->internal_comparator(), cfd->int_tbl_prop_collector_factories(),
+          dbname_, &vset_, env_, *cfd->ioptions(), moptions, env_options_,
+          table_cache_, c_style_callback(get_arena_input_iter),
+          &get_arena_input_iter, c_style_callback(get_range_del_iters),
+          &get_range_del_iters, &meta, cfd->internal_comparator(),
+          cfd->int_tbl_prop_collector_factories(moptions),
+          cfd->int_tbl_prop_collector_factories_for_blob(moptions),
           cfd->GetID(), cfd->GetName(), {}, kMaxSequenceNumber,
           snapshot_checker, kNoCompression, CompressionOptions(), false,
           nullptr /* internal_stats */, TableFileCreationReason::kRecovery,
@@ -671,7 +674,7 @@ class Repairer {
       t->meta.prop.max_read_amp = props->max_read_amp;
       t->meta.prop.read_amp = props->read_amp;
       t->meta.prop.dependence = props->dependence;
-      t->meta.prop.inheritance_chain = props->inheritance_chain;
+      t->meta.prop.inheritance = InheritanceTreeToSet(props->inheritance_tree);
     }
     return status;
   }
@@ -805,6 +808,6 @@ Status RepairDB(const std::string& dbname, const Options& options) {
   return repairer.Run();
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

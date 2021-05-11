@@ -11,12 +11,13 @@
 #include <vector>
 
 #include "port/port.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/logging.h"
 #include "util/stop_watch.h"
 #include "util/sync_point.h"
 #include "utilities/persistent_cache/block_cache_tier_file.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 //
 // BlockCacheImpl
@@ -133,7 +134,7 @@ Status BlockCacheTier::Close() {
   return Status::OK();
 }
 
-template<class T>
+template <class T>
 void Add(std::map<std::string, double>* stats, const std::string& key,
          const T& t) {
   stats->insert({key, static_cast<double>(t)});
@@ -149,8 +150,7 @@ PersistentCache::StatsType BlockCacheTier::Stats() {
       stats_.bytes_read_.Average());
   Add(&stats, "persistentcache.blockcachetier.insert_dropped",
       stats_.insert_dropped_);
-  Add(&stats, "persistentcache.blockcachetier.cache_hits",
-      stats_.cache_hits_);
+  Add(&stats, "persistentcache.blockcachetier.cache_hits", stats_.cache_hits_);
   Add(&stats, "persistentcache.blockcachetier.cache_misses",
       stats_.cache_misses_);
   Add(&stats, "persistentcache.blockcachetier.cache_errors",
@@ -222,7 +222,7 @@ Status BlockCacheTier::InsertImpl(const Slice& key, const Slice& data) {
   assert(data.size());
   assert(cache_file_);
 
-  StopWatchNano timer(opt_.env, /*auto_start=*/ true);
+  StopWatchNano timer(opt_.env, /*auto_start=*/true);
 
   WriteLock _(&lock_);
 
@@ -265,7 +265,7 @@ Status BlockCacheTier::InsertImpl(const Slice& key, const Slice& data) {
 
 Status BlockCacheTier::Lookup(const Slice& key, std::unique_ptr<char[]>* val,
                               size_t* size) {
-  StopWatchNano timer(opt_.env, /*auto_start=*/ true);
+  StopWatchNano timer(opt_.env, /*auto_start=*/true);
 
   LBA lba;
   bool status;
@@ -327,10 +327,9 @@ Status BlockCacheTier::NewCacheFile() {
   TEST_SYNC_POINT_CALLBACK("BlockCacheTier::NewCacheFile:DeleteDir",
                            (void*)(GetCachePath().c_str()));
 
-  std::unique_ptr<WriteableCacheFile> f(
-    new WriteableCacheFile(opt_.env, &buffer_allocator_, &writer_,
-                           GetCachePath(), writer_cache_id_,
-                           opt_.cache_file_size, opt_.log));
+  std::unique_ptr<WriteableCacheFile> f(new WriteableCacheFile(
+      opt_.env, &buffer_allocator_, &writer_, GetCachePath(), writer_cache_id_,
+      opt_.cache_file_size, opt_.log));
 
   bool status = f->Create(opt_.enable_direct_writes, opt_.enable_direct_reads);
   if (!status) {
@@ -420,6 +419,6 @@ Status NewPersistentCache(Env* const env, const std::string& path,
   return s;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ifndef ROCKSDB_LITE

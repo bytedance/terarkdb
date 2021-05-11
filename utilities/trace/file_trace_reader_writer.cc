@@ -5,11 +5,12 @@
 
 #include "utilities/trace/file_trace_reader_writer.h"
 
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
 #include "util/trace_replay.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 const unsigned int FileTraceReader::kBufferSize = 1024;  // 1KB
 
@@ -117,4 +118,4 @@ Status NewFileTraceWriter(Env* env, const EnvOptions& env_options,
   return s;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

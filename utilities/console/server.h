@@ -10,8 +10,9 @@
 #include "gujia_impl.h"
 #include "resp_machine.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 class DBImpl;
 }
 
@@ -20,9 +21,9 @@ using namespace gujia;
 
 struct ServerRunner;
 
-int ServerMain(ServerRunner* runner, rocksdb::DBImpl* db,
-               const std::string& path, rocksdb::Env* env,
-               rocksdb::Logger* log);
+int ServerMain(ServerRunner* runner, TERARKDB_NAMESPACE::DBImpl* db,
+               const std::string& path, TERARKDB_NAMESPACE::Env* env,
+               TERARKDB_NAMESPACE::Logger* log);
 
 struct Client {
   RespMachine resp;
@@ -37,8 +38,8 @@ struct Client {
 };
 
 struct ServerRunner {
-  ServerRunner(rocksdb::DBImpl* db, const std::string& path, rocksdb::Env* env,
-               rocksdb::Logger* log) {
+  ServerRunner(TERARKDB_NAMESPACE::DBImpl* db, const std::string& path,
+               TERARKDB_NAMESPACE::Env* env, TERARKDB_NAMESPACE::Logger* log) {
     auto p = &path;
     std::thread job([this, db, p, env, log]() {
       ServerMain(this, db, *p, env, log);

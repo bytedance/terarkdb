@@ -10,10 +10,12 @@
 #endif
 
 #include "utilities/transactions/write_unprepared_txn_db.h"
+
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/transaction_db.h"
 #include "util/cast_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Instead of reconstructing a Transaction object, and calling rollback on it,
 // we can be more efficient with RollbackRecoveredTransaction by skipping
@@ -363,9 +365,8 @@ Iterator* WriteUnpreparedTxnDB::NewIterator(const ReadOptions& options,
   auto* cfd = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family)->cfd();
   auto* state =
       new IteratorState(this, snapshot_seq, own_snapshot, min_uncommitted, txn);
-  auto* db_iter =
-      db_impl_->NewIteratorImpl(options, cfd, snapshot_seq, &state->callback,
-                                !ALLOW_REFRESH);
+  auto* db_iter = db_impl_->NewIteratorImpl(options, cfd, snapshot_seq,
+                                            &state->callback, !ALLOW_REFRESH);
   db_iter->RegisterCleanup(CleanupWriteUnpreparedTxnDBIterator, state, nullptr);
   return db_iter;
 }
@@ -394,5 +395,5 @@ Status KeySetBuilder::MergeCF(uint32_t cf, const Slice& key,
   return Status::OK();
 }
 
-}  //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

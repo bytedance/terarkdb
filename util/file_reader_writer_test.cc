@@ -4,13 +4,16 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 #include "util/file_reader_writer.h"
+
 #include <algorithm>
 #include <vector>
+
+#include "rocksdb/terark_namespace.h"
 #include "util/random.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class WritableFileWriterTest : public testing::Test {};
 
@@ -322,7 +325,7 @@ INSTANTIATE_TEST_CASE_P(
     NExceedReadaheadTest, ReadaheadRandomAccessFileTest,
     ::testing::ValuesIn(ReadaheadRandomAccessFileTest::GetReadaheadSizeList()));
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

@@ -15,6 +15,7 @@
 
 #include "options/options_helper.h"
 #include "rocksdb/convenience.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/testharness.h"
 
 #ifndef GFLAGS
@@ -25,7 +26,7 @@ using GFLAGS_NAMESPACE::ParseCommandLineFlags;
 DEFINE_bool(enable_print, false, "Print options generated to console.");
 #endif  // GFLAGS
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Verify options are settable from options strings.
 // We take the approach that depends on compiler behavior that copy constructor
@@ -273,6 +274,9 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
                              "manifest_preallocation_size=1222;"
                              "allow_mmap_writes=false;"
                              "stats_dump_period_sec=70127;"
+                             "stats_persist_period_sec=54321;"
+                             "persist_stats_to_disk=true;"
+                             "stats_history_buffer_size=14159;"
                              "allow_fallocate=true;"
                              "allow_mmap_reads=false;"
                              "use_direct_reads=false;"
@@ -353,6 +357,8 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
        sizeof(std::shared_ptr<MergeOperator>)},
       {offset_of(&ColumnFamilyOptions::value_meta_extractor_factory),
        sizeof(const std::shared_ptr<ValueExtractorFactory>)},
+      {offset_of(&ColumnFamilyOptions::ttl_extractor_factory),
+       sizeof(const std::shared_ptr<TtlExtractorFactory>)},
       {offset_of(&ColumnFamilyOptions::compaction_filter),
        sizeof(const CompactionFilter*)},
       {offset_of(&ColumnFamilyOptions::compaction_filter_factory),
@@ -450,12 +456,11 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
       "paranoid_file_checks=true;"
       "force_consistency_checks=true;"
       "inplace_update_num_locks=7429;"
-      "optimize_filters_for_hits=false;"
       "level_compaction_dynamic_level_bytes=false;"
       "enable_lazy_compaction=true;"
       "pin_table_properties_in_reader=false;"
       "inplace_update_support=true;"
-      "compaction_style=kCompactionStyleFIFO;"
+      "compaction_style=kCompactionStyleUniversal;"
       "compaction_pri=kMinOverlappingRatio;"
       "hard_pending_compaction_bytes_limit=0;"
       "disable_auto_compactions=false;"
@@ -463,16 +468,23 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
       "blob_large_key_ratio=0.5;"
       "blob_size=1024;"
       "blob_gc_ratio=0.05;"
+      "target_blob_file_size=0;"
+      "blob_file_defragment_size=0;"
+      "max_blob_files=0;"
+      "max_dependence_blob_overlap=1024;"
+      "optimize_filters_for_hits=false;"
+      "optimize_range_deletion=false;"
       "report_bg_io_stats=true;"
-      "ttl=60;"
-      "compaction_options_fifo={max_table_files_size=3;ttl=100;allow_"
+      "ttl_gc_ratio=3.000;"
+      "ttl_max_scan_gap=1;"
       "compaction=false;};",
       new_options));
 
   ASSERT_EQ(unset_bytes_base,
             NumUnsetBytes(new_options_ptr, sizeof(ColumnFamilyOptions),
                           kColumnFamilyOptionsBlacklist));
-
+  EXPECT_EQ(new_options->ttl_gc_ratio, 3.000);
+  EXPECT_EQ(new_options->ttl_max_scan_gap, 1);
   options->~ColumnFamilyOptions();
   new_options->~ColumnFamilyOptions();
 
@@ -483,7 +495,7 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
 #endif  // OS_LINUX || OS_WIN
 #endif  // !ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

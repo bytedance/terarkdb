@@ -13,12 +13,13 @@
 #include <functional>
 #include <set>
 
+#include "rocksdb/terark_namespace.h"
 #include "util/autovector.h"
 #include "util/kv_map.h"
 #include "util/vector_iterator.h"
 #include "utilities/util/valvec.hpp"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 FragmentedRangeTombstoneList::FragmentedRangeTombstoneList(
     std::unique_ptr<InternalIteratorBase<Slice>> unfragmented_tombstones,
@@ -117,8 +118,7 @@ void FragmentedRangeTombstoneList::FragmentTombstones(
       for (auto flush_it = it; flush_it != cur_end_keys.end(); ++flush_it) {
         seqnums_to_flush.push_back(flush_it->sequence);
       }
-      terark::sort_a(seqnums_to_flush,
-                               std::greater<SequenceNumber>());
+      terark::sort_a(seqnums_to_flush, std::greater<SequenceNumber>());
 
       size_t start_idx = tombstone_seqs_.size();
       size_t end_idx = start_idx + seqnums_to_flush.size();
@@ -417,4 +417,4 @@ FragmentedRangeTombstoneIterator::SplitBySnapshot(
   return splits;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

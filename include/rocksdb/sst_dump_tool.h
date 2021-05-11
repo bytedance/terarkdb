@@ -5,13 +5,15 @@
 #ifndef ROCKSDB_LITE
 #pragma once
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+
+namespace TERARKDB_NAMESPACE {
 
 class SSTDumpTool {
  public:
   int Run(int argc, char** argv);
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

@@ -6,13 +6,14 @@
 #pragma once
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/utilities/checkpoint.h"
-
 #include <string>
+
 #include "rocksdb/db.h"
+#include "rocksdb/terark_namespace.h"
+#include "rocksdb/utilities/checkpoint.h"
 #include "util/filename.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class CheckpointImpl : public Checkpoint {
  public:
@@ -51,6 +52,6 @@ class CheckpointImpl : public Checkpoint {
   DB* db_;
 };
 
-}  //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

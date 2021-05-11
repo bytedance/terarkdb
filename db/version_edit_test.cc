@@ -8,22 +8,22 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "db/version_edit.h"
+
+#include "rocksdb/terark_namespace.h"
 #include "util/sync_point.h"
 #include "util/testharness.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 namespace {
-  TablePropertyCache GetPropCache(
+TablePropertyCache GetPropCache(
     uint8_t purpose, std::initializer_list<uint64_t> dependence = {},
-    std::initializer_list<uint64_t> inheritance_chain = {}) {
-    std::vector<Dependence> dep;
-    for (auto& d : dependence) dep.emplace_back(Dependence{d, 1});
-    return TablePropertyCache{
-        0, 0, 1, 1, 0, purpose, 0, 0, dep, inheritance_chain
-    };
-  }
+    std::initializer_list<uint64_t> inheritance = {}) {
+  std::vector<Dependence> dep;
+  for (auto& d : dependence) dep.emplace_back(Dependence{d, 1});
+  return TablePropertyCache{0, 0, 1, 1, 0, purpose, 0, 0, dep, inheritance};
 }
+}  // namespace
 
 static void TestEncodeDecode(const VersionEdit& edit) {
   std::string encoded, encoded2;
@@ -47,7 +47,8 @@ TEST_F(VersionEditTest, EncodeDecode) {
     edit.AddFile(3, kBig + 300 + i, kBig32Bit + 400 + i, 0,
                  InternalKey("foo", kBig + 500 + i, kTypeValue),
                  InternalKey("zoo", kBig + 600 + i, kTypeDeletion),
-                 kBig + 500 + i, kBig + 600 + i, false, GetPropCache(1, {2U, 3U}, {}));
+                 kBig + 500 + i, kBig + 600 + i, false,
+                 GetPropCache(1, {2U, 3U}, {}));
     edit.DeleteFile(4, kBig + 700 + i);
   }
 
@@ -121,7 +122,7 @@ TEST_F(VersionEditTest, ForwardCompatibleNewFile4) {
 
   // Call back function to add extra customized builds.
   bool first = true;
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "VersionEdit::EncodeTo:NewFile4:CustomizeFields", [&](void* arg) {
         std::string* str = reinterpret_cast<std::string*>(arg);
         PutVarint32(str, 33);
@@ -134,9 +135,9 @@ TEST_F(VersionEditTest, ForwardCompatibleNewFile4) {
           PutLengthPrefixedSlice(str, str2);
         }
       });
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
   edit.EncodeTo(&encoded);
-  rocksdb::SyncPoint::GetInstance()->DisableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
 
   VersionEdit parsed;
   Status s = parsed.DecodeFrom(encoded);
@@ -165,15 +166,15 @@ TEST_F(VersionEditTest, NewFile4NotSupportedField) {
   std::string encoded;
 
   // Call back function to add extra customized builds.
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "VersionEdit::EncodeTo:NewFile4:CustomizeFields", [&](void* arg) {
         std::string* str = reinterpret_cast<std::string*>(arg);
         const std::string str1 = "s";
         PutLengthPrefixedSlice(str, str1);
       });
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
   edit.EncodeTo(&encoded);
-  rocksdb::SyncPoint::GetInstance()->DisableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
 
   VersionEdit parsed;
   Status s = parsed.DecodeFrom(encoded);
@@ -182,7 +183,8 @@ TEST_F(VersionEditTest, NewFile4NotSupportedField) {
 
 TEST_F(VersionEditTest, EncodeEmptyFile) {
   VersionEdit edit;
-  edit.AddFile(0, 0, 0, 0, InternalKey(), InternalKey(), 0, 0, false, GetPropCache(0, {}, {}));
+  edit.AddFile(0, 0, 0, 0, InternalKey(), InternalKey(), 0, 0, false,
+               GetPropCache(0, {}, {}));
   std::string buffer;
   ASSERT_TRUE(!edit.EncodeTo(&buffer));
 }
@@ -216,7 +218,7 @@ TEST_F(VersionEditTest, AtomicGroupTest) {
   TestEncodeDecode(edit);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

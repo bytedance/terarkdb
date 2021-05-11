@@ -8,6 +8,7 @@
 #pragma once
 
 #include <stdint.h>
+
 #include <memory>
 #include <string>
 
@@ -15,8 +16,9 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // PersistentCache
 //
@@ -64,4 +66,4 @@ Status NewPersistentCache(Env* const env, const std::string& path,
                           const std::shared_ptr<Logger>& log,
                           const bool optimized_for_nvm,
                           std::shared_ptr<PersistentCache>* cache);
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

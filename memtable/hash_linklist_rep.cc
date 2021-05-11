@@ -17,11 +17,12 @@
 #include "rocksdb/memtablerep.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/slice_transform.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/arena.h"
 #include "util/murmurhash.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace {
 
 typedef const char* Key;
@@ -893,5 +894,5 @@ MemTableRepFactory* NewHashLinkListRepFactory(
 
 ROCKSDB_REGISTER_MEM_TABLE("hash_linkedlist", HashLinkListRepFactory);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

@@ -25,7 +25,7 @@ public class DBOptions
    * Construct DBOptions.
    *
    * This constructor will create (by allocating a block of memory)
-   * an {@code rocksdb::DBOptions} in the c++ side.
+   * an {@code TERARKDB_NAMESPACE::DBOptions} in the c++ side.
    */
   public DBOptions() {
     super(newDBOptions());

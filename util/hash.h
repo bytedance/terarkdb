@@ -14,8 +14,9 @@
 #include <stdint.h>
 
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 extern uint32_t Hash(const char* data, size_t n, uint32_t seed);
 
@@ -32,4 +33,4 @@ struct SliceHasher {
   uint32_t operator()(const Slice& s) const { return GetSliceHash(s); }
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

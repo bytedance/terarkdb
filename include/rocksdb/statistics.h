@@ -8,13 +8,15 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 /**
  * Keep adding ticker's here.
@@ -312,6 +314,7 @@ enum Histograms : uint32_t {
   PICK_COMPACTION_TIME,
   PICK_GARBAGE_COLLECTION_TIME,
   INSTALL_SUPER_VERSION_TIME,
+  BUILD_VERSION_TIME,
 
   HISTOGRAM_ENUM_MAX,
 };
@@ -368,6 +371,11 @@ class Statistics {
     return std::string("ToString(): not implemented");
   }
 
+  virtual bool getTickerMap(std::map<std::string, uint64_t>*) const {
+    // Do nothing by default
+    return false;
+  };
+
   // Override this function to disable particular histogram collection
   virtual bool HistEnabledForType(uint32_t type) const {
     return type < HISTOGRAM_ENUM_MAX;
@@ -379,4 +387,4 @@ class Statistics {
 // Create a concrete DBStatistics object
 std::shared_ptr<Statistics> CreateDBStatistics();
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

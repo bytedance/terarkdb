@@ -9,8 +9,9 @@
 
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Simple implementation of SlicePart variants of Put().  Child classes
 // can override these method with more performant solutions if they choose.
@@ -91,4 +92,4 @@ Status WriteBatchBase::Merge(const SliceParts& key, const SliceParts& value) {
   return Merge(key_slice, value_slice);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

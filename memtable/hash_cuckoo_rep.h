@@ -9,10 +9,11 @@
 #pragma once
 #ifndef ROCKSDB_LITE
 #include "port/port.h"
-#include "rocksdb/slice_transform.h"
 #include "rocksdb/memtablerep.h"
+#include "rocksdb/slice_transform.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class HashCuckooRepFactory : public MemTableRepFactory {
  public:
@@ -41,5 +42,5 @@ class HashCuckooRepFactory : public MemTableRepFactory {
   size_t average_data_size_;
   const unsigned int hash_function_count_;
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

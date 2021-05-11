@@ -20,13 +20,14 @@
 #include "rocksdb/rate_limiter.h"
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block_based_table_factory.h"
 #include "table/plain_table_factory.h"
 #include "table/terark_zip_table.h"
 #include "util/cast_util.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
                          const MutableDBOptions& mutable_db_options) {
@@ -87,6 +88,11 @@ DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
   options.allow_fallocate = immutable_db_options.allow_fallocate;
   options.is_fd_close_on_exec = immutable_db_options.is_fd_close_on_exec;
   options.stats_dump_period_sec = mutable_db_options.stats_dump_period_sec;
+  options.stats_persist_period_sec =
+      mutable_db_options.stats_persist_period_sec;
+  options.persist_stats_to_disk = immutable_db_options.persist_stats_to_disk;
+  options.stats_history_buffer_size =
+      mutable_db_options.stats_history_buffer_size;
   options.advise_random_on_open = immutable_db_options.advise_random_on_open;
   options.allow_mmap_populate = immutable_db_options.allow_mmap_populate;
   options.write_buffer_flush_pri = immutable_db_options.write_buffer_flush_pri;
@@ -164,6 +170,15 @@ ColumnFamilyOptions BuildColumnFamilyOptions(
   cf_opts.blob_size = mutable_cf_options.blob_size;
   cf_opts.blob_large_key_ratio = mutable_cf_options.blob_large_key_ratio;
   cf_opts.blob_gc_ratio = mutable_cf_options.blob_gc_ratio;
+  cf_opts.target_blob_file_size = mutable_cf_options.target_blob_file_size;
+  cf_opts.blob_file_defragment_size =
+      mutable_cf_options.blob_file_defragment_size;
+  cf_opts.max_blob_files = mutable_cf_options.max_blob_files;
+  cf_opts.max_dependence_blob_overlap =
+      mutable_cf_options.max_dependence_blob_overlap;
+  cf_opts.optimize_filters_for_hits =
+      mutable_cf_options.optimize_filters_for_hits;
+  cf_opts.optimize_range_deletion = mutable_cf_options.optimize_range_deletion;
   cf_opts.soft_pending_compaction_bytes_limit =
       mutable_cf_options.soft_pending_compaction_bytes_limit;
   cf_opts.hard_pending_compaction_bytes_limit =
@@ -182,15 +197,12 @@ ColumnFamilyOptions BuildColumnFamilyOptions(
       mutable_cf_options.max_bytes_for_level_base;
   cf_opts.max_bytes_for_level_multiplier =
       mutable_cf_options.max_bytes_for_level_multiplier;
-  cf_opts.ttl = mutable_cf_options.ttl;
+  cf_opts.ttl_gc_ratio = mutable_cf_options.ttl_gc_ratio;
+  cf_opts.ttl_max_scan_gap = mutable_cf_options.ttl_max_scan_gap;
 
-  cf_opts.max_bytes_for_level_multiplier_additional.clear();
-  for (auto value :
-       mutable_cf_options.max_bytes_for_level_multiplier_additional) {
-    cf_opts.max_bytes_for_level_multiplier_additional.emplace_back(value);
-  }
+  cf_opts.max_bytes_for_level_multiplier_additional =
+      mutable_cf_options.max_bytes_for_level_multiplier_additional;
 
-  cf_opts.compaction_options_fifo = mutable_cf_options.compaction_options_fifo;
   cf_opts.compaction_options_universal =
       mutable_cf_options.compaction_options_universal;
 
@@ -213,7 +225,6 @@ std::map<CompactionStyle, std::string>
     OptionsHelper::compaction_style_to_string = {
         {kCompactionStyleLevel, "kCompactionStyleLevel"},
         {kCompactionStyleUniversal, "kCompactionStyleUniversal"},
-        {kCompactionStyleFIFO, "kCompactionStyleFIFO"},
         {kCompactionStyleNone, "kCompactionStyleNone"}};
 
 std::map<CompactionPri, std::string> OptionsHelper::compaction_pri_to_string = {
@@ -328,21 +339,6 @@ bool ParseVectorCompressionType(
       start = end + 1;
     }
   }
-  return true;
-}
-
-// This is to handle backward compatibility, where compaction_options_fifo
-// could be assigned a single scalar value, say, like "23", which would be
-// assigned to max_table_files_size.
-bool FIFOCompactionOptionsSpecialCase(const std::string& opt_str,
-                                      CompactionOptionsFIFO* options) {
-  if (opt_str.find("=") != std::string::npos) {
-    // New format. Go do your new parsing using ParseStructOptions.
-    return false;
-  }
-
-  // Old format. Parse just a single uint64_t value.
-  options->max_table_files_size = ParseUint64(opt_str);
   return true;
 }
 
@@ -471,6 +467,19 @@ bool ParseValueExtractorFactory(
   return true;
 }
 
+bool ParseTtlExtractorFactory(
+    const std::string& ttl_extractor_factory_name,
+    std::shared_ptr<const TtlExtractorFactory>* ttl_extractor_factory) {
+  if (ttl_extractor_factory_name == kNullptrString) {
+    ttl_extractor_factory->reset();
+    return true;
+  }
+  ttl_extractor_factory->reset(TtlExtractorFactory::create(
+      ttl_extractor_factory_name, Slice() /* ttl_extractor_factory_option */));
+  // ttl extractor can be null, so always return true
+  return true;
+}
+
 bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
                        const std::string& value) {
   switch (opt_type) {
@@ -550,15 +559,6 @@ bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
       return ParseEnum<InfoLogLevel>(
           info_log_level_string_map, value,
           reinterpret_cast<InfoLogLevel*>(opt_address));
-    case OptionType::kCompactionOptionsFIFO: {
-      if (!FIFOCompactionOptionsSpecialCase(
-              value, reinterpret_cast<CompactionOptionsFIFO*>(opt_address))) {
-        return ParseStructOptions<CompactionOptionsFIFO>(
-            value, reinterpret_cast<CompactionOptionsFIFO*>(opt_address),
-            fifo_compaction_options_type_info);
-      }
-      return true;
-    }
     case OptionType::kLRUCacheOptions: {
       return ParseStructOptions<LRUCacheOptions>(
           value, reinterpret_cast<LRUCacheOptions*>(opt_address),
@@ -585,6 +585,10 @@ bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
           value,
           reinterpret_cast<std::shared_ptr<const ValueExtractorFactory>*>(
               opt_address));
+    case OptionType::kTtlExtractorFactory:
+      return ParseTtlExtractorFactory(
+          value, reinterpret_cast<std::shared_ptr<const TtlExtractorFactory>*>(
+                     opt_address));
     default:
       return false;
   }
@@ -750,10 +754,6 @@ bool SerializeSingleOptionHelper(const char* opt_address,
       return SerializeEnum<InfoLogLevel>(
           info_log_level_string_map,
           *reinterpret_cast<const InfoLogLevel*>(opt_address), value);
-    case OptionType::kCompactionOptionsFIFO:
-      return SerializeStruct<CompactionOptionsFIFO>(
-          *reinterpret_cast<const CompactionOptionsFIFO*>(opt_address), value,
-          fifo_compaction_options_type_info);
     case OptionType::kCompactionOptionsUniversal:
       return SerializeStruct<CompactionOptionsUniversal>(
           *reinterpret_cast<const CompactionOptionsUniversal*>(opt_address),
@@ -1060,8 +1060,8 @@ Status ParseColumnFamilyOption(const std::string& name,
             "unable to parse the specified CF option " + name);
       }
       new_options->table_factory.reset(NewTerarkZipTableFactory(
-          tzto,
-          std::shared_ptr<rocksdb::TableFactory>(NewBlockBasedTableFactory())));
+          tzto, std::shared_ptr<TERARKDB_NAMESPACE::TableFactory>(
+                    NewBlockBasedTableFactory())));
 #endif
     } else {
       auto iter = cf_options_type_info.find(name);
@@ -1215,6 +1215,111 @@ Status ParseDBOption(const std::string& name, const std::string& org_value,
   } catch (const std::exception&) {
     return Status::InvalidArgument("Unable to parse DBOptions:", name);
   }
+  return Status::OK();
+}
+
+Status GetMemTableRepFactoryFromString(
+    const std::string& opts_str,
+    std::unique_ptr<MemTableRepFactory>* new_mem_factory) {
+  std::vector<std::string> opts_list = StringSplit(opts_str, ':');
+  size_t len = opts_list.size();
+  auto invalid_arg = [&] {
+    return Status::InvalidArgument("Can't parse memtable_factory option ",
+                                   opts_str);
+  };
+  if (opts_list.empty()) {
+    return invalid_arg();
+  }
+
+  MemTableRepFactory* mem_factory = nullptr;
+
+  if (opts_list[0] == "skip_list") {
+    // Expecting format
+    // skip_list:<lookahead>
+    if (len > 2) {
+      return invalid_arg();
+    } else if (2 == len) {
+      size_t lookahead = ParseSizeT(opts_list[1]);
+      mem_factory = new SkipListFactory(lookahead);
+    } else if (1 == len) {
+      mem_factory = new SkipListFactory();
+    }
+  } else if (opts_list[0] == "prefix_hash") {
+    // Expecting format
+    // prfix_hash:<hash_bucket_count>
+    if (len > 2) {
+      return invalid_arg();
+    } else if (2 == len) {
+      size_t hash_bucket_count = ParseSizeT(opts_list[1]);
+      mem_factory = NewHashSkipListRepFactory(hash_bucket_count);
+    } else if (1 == len) {
+      mem_factory = NewHashSkipListRepFactory();
+    }
+  } else if (opts_list[0] == "hash_linkedlist") {
+    // Expecting format
+    // hash_linkedlist:<hash_bucket_count>
+    if (len > 2) {
+      return invalid_arg();
+    } else if (2 == len) {
+      size_t hash_bucket_count = ParseSizeT(opts_list[1]);
+      mem_factory = NewHashLinkListRepFactory(hash_bucket_count);
+    } else if (1 == len) {
+      mem_factory = NewHashLinkListRepFactory();
+    }
+  } else if (opts_list[0] == "vector") {
+    // Expecting format
+    // vector:<count>
+    if (len > 2) {
+      return invalid_arg();
+    } else if (2 == len) {
+      size_t count = ParseSizeT(opts_list[1]);
+      mem_factory = new VectorRepFactory(count);
+    } else if (1 == len) {
+      mem_factory = new VectorRepFactory();
+    }
+  } else if (opts_list[0] == "cuckoo") {
+    // Expecting format
+    // cuckoo:<write_buffer_size>
+    if (len > 2) {
+      return invalid_arg();
+    } else if (2 == len) {
+      size_t write_buffer_size = ParseSizeT(opts_list[1]);
+      mem_factory = NewHashCuckooRepFactory(write_buffer_size);
+    } else if (1 == len) {
+      return invalid_arg();
+    }
+  } else if (opts_list[0] == "dualhash_linklist") {
+    if (len > 3) {
+      return invalid_arg();
+    }
+    size_t preallocate_hash_buckets = 0;
+    if (len == 3) {
+      preallocate_hash_buckets = ParseSizeT(opts_list[2]);
+      --len;
+    }
+    if (2 == len) {
+      size_t hash_bucket_count = ParseSizeT(opts_list[1]);
+      mem_factory = NewConcurrentHashDualListReqFactory(
+          hash_bucket_count, 0, 4096, preallocate_hash_buckets, true);
+    } else if (1 == len) {
+      mem_factory = NewConcurrentHashDualListReqFactory();
+    }
+  } else {
+    std::unordered_map<std::string, std::string> opts_map;
+    if (len > 2) {
+      return invalid_arg();
+    } else if (2 == len) {
+      StringToMap(opts_list[1], &opts_map);
+    }
+    Status s;
+    mem_factory = CreateMemTableRepFactory(opts_list[0], opts_map, &s);
+    if (!mem_factory) return s;
+  }
+
+  if (mem_factory != nullptr) {
+    new_mem_factory->reset(mem_factory);
+  }
+
   return Status::OK();
 }
 
@@ -1392,8 +1497,8 @@ Status GetTableFactoryFromMap(
       return s;
     }
     table_factory->reset(NewTerarkZipTableFactory(
-        tzt_opt,
-        std::shared_ptr<rocksdb::TableFactory>(NewBlockBasedTableFactory())));
+        tzt_opt, std::shared_ptr<TERARKDB_NAMESPACE::TableFactory>(
+                     NewBlockBasedTableFactory())));
     return Status::OK();
 #endif
   }
@@ -1597,6 +1702,17 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offsetof(struct DBOptions, stats_dump_period_sec), OptionType::kUInt,
           OptionVerificationType::kNormal, true,
           offsetof(struct MutableDBOptions, stats_dump_period_sec)}},
+        {"stats_persist_period_sec",
+         {offsetof(struct DBOptions, stats_persist_period_sec),
+          OptionType::kUInt, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableDBOptions, stats_persist_period_sec)}},
+        {"persist_stats_to_disk",
+         {offsetof(struct DBOptions, persist_stats_to_disk),
+          OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},
+        {"stats_history_buffer_size",
+         {offsetof(struct DBOptions, stats_history_buffer_size),
+          OptionType::kSizeT, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableDBOptions, stats_history_buffer_size)}},
         {"fail_if_options_file_error",
          {offsetof(struct DBOptions, fail_if_options_file_error),
           OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},
@@ -1692,7 +1808,6 @@ std::unordered_map<std::string, CompactionStyle>
     OptionsHelper::compaction_style_string_map = {
         {"kCompactionStyleLevel", kCompactionStyleLevel},
         {"kCompactionStyleUniversal", kCompactionStyleUniversal},
-        {"kCompactionStyleFIFO", kCompactionStyleFIFO},
         {"kCompactionStyleNone", kCompactionStyleNone}};
 
 std::unordered_map<std::string, CompactionPri>
@@ -1811,6 +1926,22 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offset_of(&ColumnFamilyOptions::blob_gc_ratio), OptionType::kDouble,
           OptionVerificationType::kNormal, true,
           offsetof(struct MutableCFOptions, blob_gc_ratio)}},
+        {"target_blob_file_size",
+         {offset_of(&ColumnFamilyOptions::target_blob_file_size),
+          OptionType::kUInt64T, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, target_blob_file_size)}},
+        {"blob_file_defragment_size",
+         {offset_of(&ColumnFamilyOptions::blob_file_defragment_size),
+          OptionType::kUInt64T, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, blob_file_defragment_size)}},
+        {"max_blob_files",
+         {offset_of(&ColumnFamilyOptions::max_blob_files), OptionType::kSizeT,
+          OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, max_blob_files)}},
+        {"max_dependence_blob_overlap",
+         {offset_of(&ColumnFamilyOptions::max_dependence_blob_overlap),
+          OptionType::kSizeT, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, max_dependence_blob_overlap)}},
         {"filter_deletes",
          {0, OptionType::kBoolean, OptionVerificationType::kDeprecated, true,
           0}},
@@ -1828,7 +1959,12 @@ std::unordered_map<std::string, OptionTypeInfo>
           OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},
         {"optimize_filters_for_hits",
          {offset_of(&ColumnFamilyOptions::optimize_filters_for_hits),
-          OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},
+          OptionType::kBoolean, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, optimize_filters_for_hits)}},
+        {"optimize_range_deletion",
+         {offset_of(&ColumnFamilyOptions::optimize_range_deletion),
+          OptionType::kBoolean, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, optimize_range_deletion)}},
         {"paranoid_file_checks",
          {offset_of(&ColumnFamilyOptions::paranoid_file_checks),
           OptionType::kBoolean, OptionVerificationType::kNormal, true,
@@ -2019,34 +2155,19 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offset_of(&ColumnFamilyOptions::compaction_pri),
           OptionType::kCompactionPri, OptionVerificationType::kNormal, false,
           0}},
-        {"compaction_options_fifo",
-         {offset_of(&ColumnFamilyOptions::compaction_options_fifo),
-          OptionType::kCompactionOptionsFIFO, OptionVerificationType::kNormal,
-          true, offsetof(struct MutableCFOptions, compaction_options_fifo)}},
         {"compaction_options_universal",
          {offset_of(&ColumnFamilyOptions::compaction_options_universal),
           OptionType::kCompactionOptionsUniversal,
           OptionVerificationType::kNormal, true,
           offsetof(struct MutableCFOptions, compaction_options_universal)}},
-        {"ttl",
-         {offset_of(&ColumnFamilyOptions::ttl), OptionType::kUInt64T,
+        {"ttl_gc_ratio",
+         {offset_of(&ColumnFamilyOptions::ttl_gc_ratio), OptionType::kDouble,
           OptionVerificationType::kNormal, true,
-          offsetof(struct MutableCFOptions, ttl)}}};
-
-std::unordered_map<std::string, OptionTypeInfo>
-    OptionsHelper::fifo_compaction_options_type_info = {
-        {"max_table_files_size",
-         {offset_of(&CompactionOptionsFIFO::max_table_files_size),
-          OptionType::kUInt64T, OptionVerificationType::kNormal, true,
-          offsetof(struct CompactionOptionsFIFO, max_table_files_size)}},
-        {"ttl",
-         {offset_of(&CompactionOptionsFIFO::ttl), OptionType::kUInt64T,
+          offsetof(struct MutableCFOptions, ttl_gc_ratio)}},
+        {"ttl_max_scan_gap",
+         {offset_of(&ColumnFamilyOptions::ttl_max_scan_gap), OptionType::kSizeT,
           OptionVerificationType::kNormal, true,
-          offsetof(struct CompactionOptionsFIFO, ttl)}},
-        {"allow_compaction",
-         {offset_of(&CompactionOptionsFIFO::allow_compaction),
-          OptionType::kBoolean, OptionVerificationType::kNormal, true,
-          offsetof(struct CompactionOptionsFIFO, allow_compaction)}}};
+          offsetof(struct MutableCFOptions, ttl_max_scan_gap)}}};
 
 std::unordered_map<std::string, OptionTypeInfo>
     OptionsHelper::universal_compaction_options_type_info = {
@@ -2114,4 +2235,4 @@ std::unordered_map<std::string, TerarkZipTableOptions::EntropyAlgo>
 
 #endif  // !ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

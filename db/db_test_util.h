@@ -39,6 +39,7 @@
 #include "rocksdb/sst_file_writer.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/checkpoint.h"
 #include "table/block_based_table_factory.h"
 #include "table/mock_table.h"
@@ -48,14 +49,13 @@
 #include "util/filename.h"
 #include "util/mock_time_env.h"
 #include "util/mutexlock.h"
-
 #include "util/string_util.h"
 #include "util/sync_point.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 #include "utilities/merge_operators.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 namespace anon {
 class AtomicCounter {
@@ -289,9 +289,7 @@ class SpecialEnv : public EnvWrapper {
       Env::IOPriority GetIOPriority() override {
         return base_->GetIOPriority();
       }
-      bool use_direct_io() const override {
-        return base_->use_direct_io();
-      }
+      bool use_direct_io() const override { return base_->use_direct_io(); }
       Status Allocate(uint64_t offset, uint64_t len) override {
         return base_->Allocate(offset, len);
       }
@@ -681,6 +679,7 @@ class DBTestBase : public testing::Test {
     kConcurrentSkipList = 29,
     kPipelinedWrite = 30,
     kConcurrentWALWrites = 31,
+    kOptimizeRangeDeletion,
     kDirectIO,
     kLevelSubcompactions,
     kBlockBasedTableWithIndexRestartInterval,
@@ -978,6 +977,20 @@ class DBTestBase : public testing::Test {
   uint64_t TestGetTickerCount(const Options& options, Tickers ticker_type) {
     return options.statistics->getTickerCount(ticker_type);
   }
+
+  uint64_t TestGetAndResetTickerCount(const Options& options,
+                                      Tickers ticker_type) {
+    return options.statistics->getAndResetTickerCount(ticker_type);
+  }
+
+  // Note: reverting this setting within the same test run is not yet
+  // supported
+  void SetTimeElapseOnlySleepOnReopen(DBOptions* options);
+
+ private:  // Prone to error on direct use
+  void MaybeInstallTimeElapseOnlySleep(const DBOptions& options);
+
+  bool time_elapse_only_sleep_on_reopen_ = false;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

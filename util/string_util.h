@@ -11,7 +11,9 @@
 #include <unordered_map>
 #include <vector>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+
+namespace TERARKDB_NAMESPACE {
 
 class Slice;
 
@@ -125,4 +127,4 @@ bool SerializeIntVector(const std::vector<int>& vec, std::string* value);
 
 extern const std::string kNullptrString;
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

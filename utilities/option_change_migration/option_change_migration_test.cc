@@ -8,10 +8,14 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "rocksdb/utilities/option_change_migration.h"
+
 #include <set>
+
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+
+namespace TERARKDB_NAMESPACE {
 
 class DBOptionChangeMigrationTests
     : public DBTestBase,
@@ -416,10 +420,10 @@ TEST_F(DBOptionChangeMigrationTest, CompactedSrcToUniversal) {
 }
 
 #endif  // ROCKSDB_LITE
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

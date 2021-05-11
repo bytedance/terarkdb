@@ -16,8 +16,9 @@
 
 #include "port/likely.h"
 #include "rocksdb/statistics.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // The order of items listed in  Tickers should be the same as
 // the order listed in TickersNameMap
@@ -172,6 +173,7 @@ const std::vector<std::pair<Histograms, std::string>> HistogramsNameMap = {
     {PICK_COMPACTION_TIME, "rocksdb.pick.compaction.micros"},
     {PICK_GARBAGE_COLLECTION_TIME, "rocksdb.pick.gc.micros"},
     {INSTALL_SUPER_VERSION_TIME, "rocksdb.install.super.version.micros"},
+    {BUILD_VERSION_TIME, "rocksdb.build.version.micros"},
 };
 
 std::shared_ptr<Statistics> CreateDBStatistics() {
@@ -328,8 +330,21 @@ std::string StatisticsImpl::ToString() const {
   return res;
 }
 
+bool StatisticsImpl::getTickerMap(
+    std::map<std::string, uint64_t>* stats_map) const {
+  assert(stats_map);
+  if (!stats_map) return false;
+  stats_map->clear();
+  MutexLock lock(&aggregate_lock_);
+  for (const auto& t : TickersNameMap) {
+    assert(t.first < TICKER_ENUM_MAX);
+    (*stats_map)[t.second.c_str()] = getTickerCountLocked(t.first);
+  }
+  return true;
+}
+
 bool StatisticsImpl::HistEnabledForType(uint32_t type) const {
   return type < HISTOGRAM_ENUM_MAX;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -17,7 +17,7 @@
 #endif
 
 #include <algorithm>
-#include <cstdio>
+#include <cinttypes>
 #include <map>
 #include <set>
 #include <stdexcept>
@@ -27,37 +27,28 @@
 #include <utility>
 #include <vector>
 
-#include "db/builder.h"
-#include "db/compaction_job.h"
 #include "db/db_info_dumper.h"
 #include "db/db_iter.h"
 #include "db/dbformat.h"
 #include "db/error_handler.h"
 #include "db/event_helpers.h"
 #include "db/external_sst_file_ingestion_job.h"
-#include "db/flush_job.h"
 #include "db/forward_iterator.h"
 #include "db/job_context.h"
-#include "db/log_reader.h"
 #include "db/log_writer.h"
 #include "db/malloc_stats.h"
 #include "db/map_builder.h"
 #include "db/memtable.h"
-#include "db/memtable_list.h"
 #include "db/merge_context.h"
-#include "db/merge_helper.h"
+#include "db/periodic_work_scheduler.h"
 #include "db/range_tombstone_fragmenter.h"
 #include "db/table_cache.h"
-#include "db/table_properties_collector.h"
-#include "db/transaction_log_impl.h"
 #include "db/version_set.h"
 #include "db/write_batch_internal.h"
-#include "db/write_callback.h"
-#include "memtable/hash_linklist_rep.h"
-#include "memtable/hash_skiplist_rep.h"
+#include "monitoring/in_memory_stats_history.h"
 #include "monitoring/iostats_context_imp.h"
 #include "monitoring/perf_context_imp.h"
-#include "monitoring/thread_status_updater.h"
+#include "monitoring/persistent_stats_history.h"
 #include "monitoring/thread_status_util.h"
 #include "options/cf_options.h"
 #include "options/options_helper.h"
@@ -70,16 +61,13 @@
 #include "rocksdb/env.h"
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/statistics.h"
+#include "rocksdb/stats_history.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table.h"
-#include "rocksdb/write_buffer_manager.h"
-#include "table/block.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block_based_table_factory.h"
 #include "table/merging_iterator.h"
-#include "table/table_builder.h"
 #include "table/two_level_iterator.h"
-#include "tools/sst_dump_tool_imp.h"
-#include "util/auto_roll_logger.h"
 #include "util/autovector.h"
 #include "util/build_version.h"
 #include "util/c_style_callback.h"
@@ -91,16 +79,14 @@
 #include "util/filename.h"
 #include "util/log_buffer.h"
 #include "util/logging.h"
-#include "util/mutexlock.h"
 #include "util/sst_file_manager_impl.h"
 #include "util/stop_watch.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
 #include "utilities/trace/bytedance_metrics_reporter.h"
+
 #if !defined(_MSC_VER) && !defined(__APPLE__)
 #include <sys/unistd.h>
-
-
 
 #endif
 #include "utilities/util/valvec.hpp"
@@ -112,23 +98,25 @@
 
 #ifdef WITH_TERARK_ZIP
 #include <table/terark_zip_table.h>
-#include <terark/util/fiber_pool.hpp>
+
 #include <terark/thread/fiber_yield.hpp>
+#include <terark/util/fiber_pool.hpp>
 #endif
 
 #ifdef BOOSTLIB
 #include <boost/fiber/all.hpp>
 #endif
-//#include <boost/context/pooled_fixedsize_stack.hpp>
-
 
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
+
 const std::string kDefaultColumnFamilyName("default");
 const uint64_t kDumpStatsWaitMicroseconds = 10000;
+const std::string kPersistentStatsColumnFamilyName(
+    "___rocksdb_stats_history___");
 void DumpRocksDBBuildVersion(Logger* log);
 
 CompressionType GetCompressionFlush(
@@ -210,6 +198,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       log_dir_synced_(false),
       log_empty_(true),
       default_cf_handle_(nullptr),
+      persist_stats_cf_handle_(nullptr),
       log_sync_cv_(&mutex_),
       total_log_size_(0),
       max_total_in_memory_state_(0),
@@ -255,6 +244,9 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       bg_compaction_paused_(0),
       refitting_level_(false),
       opened_successfully_(false),
+#ifndef ROCKSDB_LITE
+      periodic_work_scheduler_(nullptr),
+#endif  // ROCKSDB_LITE
       two_write_queues_(options.two_write_queues),
       manual_wal_flush_(options.manual_wal_flush),
       seq_per_batch_(seq_per_batch),
@@ -358,7 +350,8 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       new ColumnFamilyMemTablesImpl(versions_->GetColumnFamilySet()));
 
   DumpRocksDBBuildVersion(immutable_db_options_.info_log.get());
-  DumpDBFileSummary(immutable_db_options_, dbname_);
+  SetDbSessionId();
+  DumpDBFileSummary(immutable_db_options_, dbname_, db_session_id_);
   immutable_db_options_.Dump(immutable_db_options_.info_log.get());
   mutable_db_options_.Dump(immutable_db_options_.info_log.get());
   DumpSupportInfo(immutable_db_options_.info_log.get());
@@ -505,16 +498,13 @@ void DBImpl::CancelAllBackgroundWork(bool wait) {
   ROCKS_LOG_INFO(immutable_db_options_.info_log,
                  "Shutdown: canceling all background work");
 
-  InstrumentedMutexLock l(&mutex_);
-  // To avoid deadlock, `thread_dump_stats_->cancel()` needs to be called
-  // before grabbing db mutex because the actual worker function
-  // `DBImpl::DumpStats()` also holds db mutex
-  if (thread_dump_stats_ != nullptr) {
-    mutex_.Unlock();
-    thread_dump_stats_->cancel();
-    mutex_.Lock();
-    thread_dump_stats_.reset();
+#ifndef ROCKSDB_LITE
+  if (periodic_work_scheduler_ != nullptr) {
+    periodic_work_scheduler_->Unregister(this);
   }
+#endif  // !ROCKSDB_LITE
+
+  InstrumentedMutexLock l(&mutex_);
   if (!shutting_down_.load(std::memory_order_acquire) &&
       has_unpersisted_data_.load(std::memory_order_relaxed) &&
       !mutable_db_options_.avoid_flush_during_shutdown) {
@@ -623,10 +613,17 @@ Status DBImpl::CloseHelper() {
   }
   memtable_info_queue_.clear();
 
-  if (default_cf_handle_ != nullptr) {
+  if (default_cf_handle_ != nullptr || persist_stats_cf_handle_ != nullptr) {
     // we need to delete handle outside of lock because it does its own locking
     mutex_.Unlock();
-    delete default_cf_handle_;
+    if (default_cf_handle_) {
+      delete default_cf_handle_;
+      default_cf_handle_ = nullptr;
+    }
+    if (persist_stats_cf_handle_) {
+      delete persist_stats_cf_handle_;
+      persist_stats_cf_handle_ = nullptr;
+    }
     mutex_.Lock();
   }
 
@@ -762,19 +759,230 @@ void DBImpl::PrintStatistics() {
   }
 }
 
-void DBImpl::StartTimedTasks() {
-  unsigned int stats_dump_period_sec = 0;
+void DBImpl::StartPeriodicWorkScheduler() {
+#ifndef ROCKSDB_LITE
   {
     InstrumentedMutexLock l(&mutex_);
-    stats_dump_period_sec = mutable_db_options_.stats_dump_period_sec;
-    if (stats_dump_period_sec > 0) {
-      if (!thread_dump_stats_) {
-        thread_dump_stats_.reset(new rocksdb::RepeatableThread(
-            [this]() { DBImpl::DumpStats(); }, "dump_st", env_,
-            stats_dump_period_sec * 1000000));
+    periodic_work_scheduler_ = PeriodicWorkScheduler::Default();
+    TEST_SYNC_POINT_CALLBACK("DBImpl::StartPeriodicWorkScheduler:Init",
+                             &periodic_work_scheduler_);
+  }
+
+  periodic_work_scheduler_->Register(
+      this, mutable_db_options_.stats_dump_period_sec,
+      mutable_db_options_.stats_persist_period_sec);
+#endif  // !ROCKSDB_LITE
+}
+
+// esitmate the total size of stats_history_
+size_t DBImpl::EstimateInMemoryStatsHistorySize() const {
+  size_t size_total =
+      sizeof(std::map<uint64_t, std::map<std::string, uint64_t>>);
+  if (stats_history_.size() == 0) return size_total;
+  size_t size_per_slice =
+      sizeof(uint64_t) + sizeof(std::map<std::string, uint64_t>);
+  // non-empty map, stats_history_.begin() guaranteed to exist
+  std::map<std::string, uint64_t> sample_slice(stats_history_.begin()->second);
+  for (const auto& pairs : sample_slice) {
+    size_per_slice +=
+        pairs.first.capacity() + sizeof(pairs.first) + sizeof(pairs.second);
+  }
+  size_total = size_per_slice * stats_history_.size();
+  return size_total;
+}
+
+void DBImpl::PersistStats() {
+  TEST_SYNC_POINT("DBImpl::PersistStats:Entry");
+#ifndef ROCKSDB_LITE
+  if (shutdown_initiated_) {
+    return;
+  }
+  TEST_SYNC_POINT("DBImpl::PersistStats:StartRunning");
+  uint64_t now_seconds = env_->NowMicros() / 1000 * 1000;
+  Statistics* statistics = immutable_db_options_.statistics.get();
+  if (!statistics) {
+    return;
+  }
+  size_t stats_history_size_limit = 0;
+  {
+    InstrumentedMutexLock l(&mutex_);
+    stats_history_size_limit = mutable_db_options_.stats_history_buffer_size;
+  }
+
+  std::map<std::string, uint64_t> stats_map;
+  if (!statistics->getTickerMap(&stats_map)) {
+    return;
+  }
+
+  if (immutable_db_options_.persist_stats_to_disk) {
+    WriteBatch batch;
+    if (stats_slice_initialized_) {
+      for (const auto& stat : stats_map) {
+        char key[100];
+        int length =
+            EncodePersistentStatsKey(now_seconds, stat.first, 100, key);
+        // calculate the delta from last time
+        if (stats_slice_.find(stat.first) != stats_slice_.end()) {
+          uint64_t delta = stat.second - stats_slice_[stat.first];
+          batch.Put(persist_stats_cf_handle_, Slice(key, std::min(100, length)),
+                    ToString(delta));
+        }
       }
     }
+    stats_slice_initialized_ = true;
+    std::swap(stats_slice_, stats_map);
+    WriteOptions wo;
+    wo.low_pri = true;
+    wo.no_slowdown = true;
+    wo.sync = false;
+    Status s = Write(wo, &batch);
+    if (!s.ok()) {
+      ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                     "Writing to persistent stats CF failed -- %s\n",
+                     s.ToString().c_str());
+    }
+    // TODO(Zhongyi): add purging for persisted data
+  } else {
+    InstrumentedMutexLock l(&stats_history_mutex_);
+    // calculate the delta from last time
+    if (stats_slice_initialized_) {
+      std::map<std::string, uint64_t> stats_delta;
+      for (const auto& stat : stats_map) {
+        if (stats_slice_.find(stat.first) != stats_slice_.end()) {
+          stats_delta[stat.first] = stat.second - stats_slice_[stat.first];
+        }
+      }
+      stats_history_[now_seconds] = stats_delta;
+    }
+    stats_slice_initialized_ = true;
+    std::swap(stats_slice_, stats_map);
+    TEST_SYNC_POINT("DBImpl::PersistStats:StatsCopied");
+
+    // delete older stats snapshots to control memory consumption
+    bool purge_needed =
+        EstimateInMemoryStatsHistorySize() > stats_history_size_limit;
+    while (purge_needed && !stats_history_.empty()) {
+      stats_history_.erase(stats_history_.begin());
+      purge_needed =
+          EstimateInMemoryStatsHistorySize() > stats_history_size_limit;
+    }
   }
+
+  TEST_SYNC_POINT("DBImpl::PersistStats:End");
+#endif  // !ROCKSDB_LITE
+}
+
+bool DBImpl::FindStatsByTime(uint64_t start_time, uint64_t end_time,
+                             uint64_t* new_time,
+                             std::map<std::string, uint64_t>* stats_map) {
+  assert(new_time);
+  assert(stats_map);
+  if (!new_time || !stats_map) return false;
+  // lock when search for start_time
+  {
+    InstrumentedMutexLock l(&stats_history_mutex_);
+    auto it = stats_history_.lower_bound(start_time);
+    if (it != stats_history_.end() && it->first < end_time) {
+      // make a copy for timestamp and stats_map
+      *new_time = it->first;
+      *stats_map = it->second;
+      return true;
+    } else {
+      return false;
+    }
+  }
+}
+
+Status DBImpl::GetStatsHistory(
+    uint64_t start_time, uint64_t end_time,
+    std::unique_ptr<StatsHistoryIterator>* stats_iterator) {
+  if (!stats_iterator) {
+    return Status::InvalidArgument("stats_iterator not preallocated.");
+  }
+  if (immutable_db_options_.persist_stats_to_disk) {
+    stats_iterator->reset(
+        new PersistentStatsHistoryIterator(start_time, end_time, this));
+  } else {
+    stats_iterator->reset(
+        new InMemoryStatsHistoryIterator(start_time, end_time, this));
+  }
+  return (*stats_iterator)->status();
+}
+
+void DBImpl::ScheduleTtlGC() {
+  TEST_SYNC_POINT("DBImpl:ScheduleTtlGC");
+  uint64_t nowSeconds = env_->NowMicros() / 1000U / 1000U;
+  LogBuffer log_buffer_info(InfoLogLevel::INFO_LEVEL,
+                            immutable_db_options_.info_log.get());
+  LogBuffer log_buffer_debug(InfoLogLevel::DEBUG_LEVEL,
+                             immutable_db_options_.info_log.get());
+
+  auto should_marked_for_compacted = [&](int level, uint64_t file_number,
+                                         uint64_t earliest_time_begin_compact,
+                                         uint64_t latest_time_end_compact,
+                                         uint64_t now) {
+    bool should_mark =
+        std::min(earliest_time_begin_compact, latest_time_end_compact) <= now;
+    if (should_mark) {
+      ROCKS_LOG_BUFFER(&log_buffer_info,
+                       "SST #%" PRIu64
+                       " marked for compaction @L%d , property: (%" PRIu64
+                       " , %" PRIu64 ") now: %" PRIu64,
+                       file_number, level, earliest_time_begin_compact,
+                       latest_time_end_compact, now);
+    }
+    return should_mark;
+  };
+  mutex_.Lock();
+  for (auto cfd : *versions_->GetColumnFamilySet()) {
+    uint64_t new_mark_count = 0;
+    uint64_t old_mark_count = 0;
+    uint64_t total_count = 0;
+    if (!cfd->initialized() || cfd->IsDropped() ||
+        cfd->ioptions()->ttl_extractor_factory == nullptr) {
+      continue;
+    }
+    VersionStorageInfo* vstorage = cfd->current()->storage_info();
+    for (int l = 0; l < vstorage->num_non_empty_levels(); l++) {
+      for (auto meta : vstorage->LevelFiles(l)) {
+        if (meta->being_compacted) {
+          continue;
+        }
+        ++total_count;
+        old_mark_count += meta->marked_for_compaction;
+        TEST_SYNC_POINT("DBImpl:Exist-SST");
+        if (!meta->marked_for_compaction &&
+            should_marked_for_compacted(
+                l, meta->fd.GetNumber(), meta->prop.earliest_time_begin_compact,
+                meta->prop.latest_time_end_compact, nowSeconds)) {
+          meta->marked_for_compaction = true;
+        }
+        if (meta->marked_for_compaction) {
+          new_mark_count++;
+          TEST_SYNC_POINT("DBImpl:ScheduleTtlGC-mark");
+        }
+      }
+    }
+    if (new_mark_count > old_mark_count) {
+      vstorage->ComputeCompactionScore(*cfd->ioptions(),
+                                       *cfd->GetLatestMutableCFOptions());
+      if (!cfd->queued_for_compaction()) {
+        AddToCompactionQueue(cfd);
+        unscheduled_compactions_++;
+      }
+    }
+    ROCKS_LOG_BUFFER(&log_buffer_debug,
+                     "[%s] SSTs total marked = %" PRIu64
+                     ", new marked = %" PRIu64 ", file count: %" PRIu64,
+                     cfd->GetName().c_str(), old_mark_count, new_mark_count,
+                     total_count);
+  }
+  if (unscheduled_compactions_ > 0) {
+    MaybeScheduleFlushOrCompaction();
+  }
+  mutex_.Unlock();
+  log_buffer_info.FlushBufferToLog();
+  log_buffer_debug.FlushBufferToLog();
 }
 
 void DBImpl::DumpStats() {
@@ -792,6 +1000,7 @@ void DBImpl::DumpStats() {
   }
   std::vector<ColumnFamilyData*> cfd_vec;
   std::string stats;
+  TEST_SYNC_POINT("DBImpl::DumpStats:StartRunning");
   {
     InstrumentedMutexLock l(&mutex_);
     for (auto cfd : *versions_->GetColumnFamilySet()) {
@@ -860,6 +1069,13 @@ void DBImpl::ScheduleBgFree(JobContext* job_context, SuperVersion* sv) {
     SchedulePurge();
   }
 }
+void DBImpl::FlushInfoLog() {
+  if (shutdown_initiated_) {
+    return;
+  }
+  TEST_SYNC_POINT("DBImpl::FlushInfoLog:StartRunning");
+  LogFlush(immutable_db_options_.info_log);
+}
 
 Directory* DBImpl::GetDataDir(ColumnFamilyData* cfd, size_t path_id) const {
   assert(cfd);
@@ -902,7 +1118,7 @@ Status DBImpl::SetOptions(
   SuperVersionContext sv_context(/* create_superversion */ true);
   {
     InstrumentedMutexLock l(&mutex_);
-    s = cfd->SetOptions(options_map);
+    s = cfd->SetOptions(immutable_db_options_, options_map);
     if (s.ok()) {
       new_options = *cfd->GetLatestMutableCFOptions();
       // Append new version to recompute compaction score.
@@ -982,19 +1198,15 @@ Status DBImpl::SetDBOptions(
         MaybeScheduleFlushOrCompaction();
       }
       if (new_options.stats_dump_period_sec !=
-          mutable_db_options_.stats_dump_period_sec) {
-        if (thread_dump_stats_) {
-          mutex_.Unlock();
-          thread_dump_stats_->cancel();
-          mutex_.Lock();
-        }
-        if (new_options.stats_dump_period_sec > 0) {
-          thread_dump_stats_.reset(new rocksdb::RepeatableThread(
-              [this]() { DBImpl::DumpStats(); }, "dump_st", env_,
-              new_options.stats_dump_period_sec * 1000000));
-        } else {
-          thread_dump_stats_.reset();
-        }
+              mutable_db_options_.stats_dump_period_sec ||
+          new_options.stats_persist_period_sec !=
+              mutable_db_options_.stats_persist_period_sec) {
+        mutex_.Unlock();
+        periodic_work_scheduler_->Unregister(this);
+        periodic_work_scheduler_->Register(
+            this, new_options.stats_dump_period_sec,
+            new_options.stats_persist_period_sec);
+        mutex_.Lock();
       }
       write_controller_.set_max_delayed_write_rate(
           new_options.delayed_write_rate);
@@ -1417,6 +1629,10 @@ ColumnFamilyHandle* DBImpl::DefaultColumnFamily() const {
   return default_cf_handle_;
 }
 
+ColumnFamilyHandle* DBImpl::PersistentStatsColumnFamily() const {
+  return persist_stats_cf_handle_;
+}
+
 Status DBImpl::Get(const ReadOptions& read_options,
                    ColumnFamilyHandle* column_family, const Slice& key,
                    LazyBuffer* value) {
@@ -1802,7 +2018,7 @@ std::vector<Status> DBImpl::MultiGet(
   PERF_TIMER_STOP(get_post_process_time);
 
   return stat_list;
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 Status DBImpl::CreateColumnFamily(const ColumnFamilyOptions& cf_options,
                                   const std::string& column_family,
@@ -1939,8 +2155,8 @@ Status DBImpl::CreateColumnFamilyImpl(const ColumnFamilyOptions& cf_options,
       write_thread_.EnterUnbatched(&w, &mutex_);
       // LogAndApply will both write the creation in MANIFEST and create
       // ColumnFamilyData object
-      s = versions_->LogAndApply(nullptr, MutableCFOptions(cf_options), &edit,
-                                 &mutex_, directories_.GetDbDir(), false,
+      s = versions_->LogAndApply(nullptr, MutableCFOptions(cf_options, env_),
+                                 &edit, &mutex_, directories_.GetDbDir(), false,
                                  &cf_options);
       write_thread_.ExitUnbatched(&w);
     }
@@ -2767,6 +2983,7 @@ Status DBImpl::DeleteFile(std::string name) {
       job_context.Clean(nullptr);
       return Status::InvalidArgument("File in level 0, but not oldest");
     }
+    metadata->being_compacted = true;
     edit.SetColumnFamily(cfd->GetID());
     edit.DeleteFile(level, number);
     status = versions_->LogAndApply(cfd, *cfd->GetLatestMutableCFOptions(),
@@ -2776,6 +2993,7 @@ Status DBImpl::DeleteFile(std::string name) {
           cfd, &job_context.superversion_contexts[0],
           *cfd->GetLatestMutableCFOptions(), FlushReason::kDeleteFiles);
     }
+    metadata->being_compacted = false;
     FindObsoleteFiles(&job_context, false);
   }  // lock released here
 
@@ -3003,8 +3221,8 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
           status = map_builder.Build(
               {CompactionInputFiles{i, vstorage->LevelFiles(i)}}, deleted_range,
               {}, i /* level */, vstorage->LevelFiles(i)[0]->fd.GetPathId(),
-              cfd, input_version, &edit, nullptr /* file_meta */,
-              nullptr /* porp */, &deleted_files);
+              cfd, false /* optimize_range_deletion */, input_version, &edit,
+              nullptr /* file_meta */, nullptr /* porp */, &deleted_files);
           if (!status.ok()) {
             break;
           }
@@ -3015,7 +3233,8 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
             }
             status = map_builder.Build(
                 {CompactionInputFiles{i, {f}}}, deleted_range, {},
-                i /* level */, f->fd.GetPathId(), cfd, input_version, &edit,
+                i /* level */, f->fd.GetPathId(), cfd,
+                false /* optimize_range_deletion */, input_version, &edit,
                 nullptr /* file_meta */, nullptr /* porp */, &deleted_files);
             if (!status.ok()) {
               break;
@@ -3196,6 +3415,21 @@ Status DBImpl::GetDbIdentity(std::string& identity) const {
     identity.pop_back();
   }
   return s;
+}
+
+Status DBImpl::GetDbSessionId(std::string& session_id) const {
+  session_id.assign(db_session_id_);
+  return Status::OK();
+}
+
+void DBImpl::SetDbSessionId() {
+  // GenerateUniqueId() generates an identifier
+  // that has a negligible probability of being duplicated
+  db_session_id_ = env_->GenerateUniqueId();
+  // Remove the extra '\n' at the end if there is one
+  if (!db_session_id_.empty() && db_session_id_.back() == '\n') {
+    db_session_id_.pop_back();
+  }
 }
 
 // Default implementation -- returns not supported status
@@ -3615,8 +3849,7 @@ Status DBImpl::DeleteObsoleteOptionsFiles() {
     FileType type;
     if (ParseFileName(filename, &file_number, &type) && type == kOptionsFile) {
       options_filenames.insert(
-          {std::numeric_limits<uint64_t>::max() - file_number,
-           GetName() + "/" + filename});
+          {port::kMaxUint64 - file_number, GetName() + "/" + filename});
     }
   }
 
@@ -3998,7 +4231,8 @@ Status DBImpl::VerifyChecksum() {
         const auto& fd = vstorage->LevelFiles(i)[j]->fd;
         std::string fname = TableFileName(cfd->ioptions()->cf_paths,
                                           fd.GetNumber(), fd.GetPathId());
-        s = rocksdb::VerifySstFileChecksum(opts, env_options_, fname);
+        s = TERARKDB_NAMESPACE::VerifySstFileChecksum(opts, env_options_,
+                                                      fname);
       }
     }
     if (!s.ok()) {
@@ -4089,4 +4323,4 @@ Status DBImpl::TraceIteratorSeekForPrev(const uint32_t& cf_id,
 
 #endif  // ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -9,13 +9,15 @@
 #include "port/port.h"
 #include "rocksdb/env.h"
 #include "rocksdb/statistics.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/thread_status.h"
 #include "util/stop_watch.h"
 
 // MUTEX_DEBUG_MILLISECONDS set 0 to disable
 #define MUTEX_DEBUG_MILLISECONDS 0
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
+
 class InstrumentedCondVar;
 
 // A wrapper class for port::Mutex that provides additional layer
@@ -90,4 +92,4 @@ class InstrumentedCondVar {
   int stats_code_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

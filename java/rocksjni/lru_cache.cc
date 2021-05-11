@@ -4,7 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 // This file implements the "bridge" between Java and C++ for
-// rocksdb::LRUCache.
+// TERARKDB_NAMESPACE::LRUCache.
 
 #include <jni.h>
 
@@ -22,7 +22,7 @@ jlong Java_org_rocksdb_LRUCache_newLRUCache(JNIEnv* /*env*/, jclass /*jcls*/,
                                             jboolean jstrict_capacity_limit,
                                             jdouble jhigh_pri_pool_ratio) {
   auto* sptr_lru_cache =
-      new std::shared_ptr<rocksdb::Cache>(rocksdb::NewLRUCache(
+      new std::shared_ptr<TERARKDB_NAMESPACE::Cache>(TERARKDB_NAMESPACE::NewLRUCache(
           static_cast<size_t>(jcapacity), static_cast<int>(jnum_shard_bits),
           static_cast<bool>(jstrict_capacity_limit),
           static_cast<double>(jhigh_pri_pool_ratio)));
@@ -38,6 +38,6 @@ void Java_org_rocksdb_LRUCache_disposeInternal(JNIEnv* /*env*/,
                                                jobject /*jobj*/,
                                                jlong jhandle) {
   auto* sptr_lru_cache =
-      reinterpret_cast<std::shared_ptr<rocksdb::Cache>*>(jhandle);
+      reinterpret_cast<std::shared_ptr<TERARKDB_NAMESPACE::Cache>*>(jhandle);
   delete sptr_lru_cache;  // delete std::shared_ptr
 }

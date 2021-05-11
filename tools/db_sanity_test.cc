@@ -5,22 +5,22 @@
 
 #include <cstdio>
 #include <cstdlib>
-#include <vector>
 #include <memory>
+#include <vector>
 
-#include "rocksdb/db.h"
-#include "rocksdb/options.h"
-#include "rocksdb/env.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/status.h"
 #include "rocksdb/comparator.h"
-#include "rocksdb/table.h"
-#include "rocksdb/slice_transform.h"
+#include "rocksdb/db.h"
+#include "rocksdb/env.h"
 #include "rocksdb/filter_policy.h"
-#include "port/port.h"
+#include "rocksdb/options.h"
+#include "rocksdb/slice.h"
+#include "rocksdb/slice_transform.h"
+#include "rocksdb/status.h"
+#include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class SanityTest {
  public:
@@ -273,7 +273,7 @@ bool RunSanityTests(const std::string& command, const std::string& path) {
 }
 }  // namespace
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   std::string path, command;
@@ -291,7 +291,7 @@ int main(int argc, char** argv) {
     path += "/";
   }
 
-  bool sanity_ok = rocksdb::RunSanityTests(command, path);
+  bool sanity_ok = TERARKDB_NAMESPACE::RunSanityTests(command, path);
 
   return sanity_ok ? 0 : 1;
 }

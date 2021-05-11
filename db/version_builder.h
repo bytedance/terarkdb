@@ -10,8 +10,9 @@
 #pragma once
 #include "rocksdb/env.h"
 #include "rocksdb/slice_transform.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class TableCache;
 class VersionStorageInfo;
@@ -43,10 +44,14 @@ class VersionBuilder {
   void UpgradeFileMetaData(const SliceTransform* prefix_extractor,
                            int max_threads = 1);
 
+  struct Context {
+    virtual ~Context() = default;
+  };
+
  private:
   class Rep;
   Rep* rep_;
 };
 
 extern bool NewestFirstBySeqNo(FileMetaData* a, FileMetaData* b);
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -17,7 +17,7 @@
 #include "rocksdb/utilities/options_util.h"
 #include "rocksdb/utilities/juxtapose_db.h"
 
-using namespace rocksdb;
+using namespace TERARKDB_NAMESPACE;
 
 int main()
 {

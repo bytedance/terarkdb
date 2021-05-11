@@ -14,9 +14,10 @@
 #include <memory>
 #include <thread>
 
+#include "rocksdb/terark_namespace.h"
 #include "utilities/persistent_cache/block_cache_tier.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 static const double kStressFactor = .125;
 
@@ -24,7 +25,7 @@ static const double kStressFactor = .125;
 static void OnOpenForRead(void* arg) {
   int* val = static_cast<int*>(arg);
   *val &= ~O_DIRECT;
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "NewRandomAccessFile:O_DIRECT",
       std::bind(OnOpenForRead, std::placeholders::_1));
 }
@@ -32,7 +33,7 @@ static void OnOpenForRead(void* arg) {
 static void OnOpenForWrite(void* arg) {
   int* val = static_cast<int*>(arg);
   *val &= ~O_DIRECT;
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "NewWritableFile:O_DIRECT",
       std::bind(OnOpenForWrite, std::placeholders::_1));
 }
@@ -104,7 +105,8 @@ std::unique_ptr<PersistentCacheTier> NewBlockCache(
     Env* env, const std::string& path,
     const uint64_t max_size = std::numeric_limits<uint64_t>::max(),
     const bool enable_direct_writes = false) {
-  const uint32_t max_file_size = static_cast<uint32_t>(12 * 1024 * 1024 * kStressFactor);
+  const uint32_t max_file_size =
+      static_cast<uint32_t>(12 * 1024 * 1024 * kStressFactor);
   auto log = std::make_shared<ConsoleLogger>();
   PersistentCacheConfig opt(env, path, max_size, log);
   opt.cache_file_size = max_file_size;
@@ -121,7 +123,8 @@ std::unique_ptr<PersistentTieredCache> NewTieredCache(
     Env* env, const std::string& path, const uint64_t max_volatile_cache_size,
     const uint64_t max_block_cache_size =
         std::numeric_limits<uint64_t>::max()) {
-  const uint32_t max_file_size = static_cast<uint32_t>(12 * 1024 * 1024 * kStressFactor);
+  const uint32_t max_file_size =
+      static_cast<uint32_t>(12 * 1024 * 1024 * kStressFactor);
   auto log = std::make_shared<ConsoleLogger>();
   auto opt = PersistentCacheConfig(env, path, max_block_cache_size, log);
   opt.cache_file_size = max_file_size;
@@ -134,11 +137,11 @@ std::unique_ptr<PersistentTieredCache> NewTieredCache(
 PersistentCacheTierTest::PersistentCacheTierTest()
     : path_(test::PerThreadDBPath("cache_test")) {
 #ifdef OS_LINUX
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
-  rocksdb::SyncPoint::GetInstance()->SetCallBack("NewRandomAccessFile:O_DIRECT",
-                                                 OnOpenForRead);
-  rocksdb::SyncPoint::GetInstance()->SetCallBack("NewWritableFile:O_DIRECT",
-                                                 OnOpenForWrite);
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
+      "NewRandomAccessFile:O_DIRECT", OnOpenForRead);
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
+      "NewWritableFile:O_DIRECT", OnOpenForWrite);
 #endif
 }
 
@@ -146,15 +149,15 @@ PersistentCacheTierTest::PersistentCacheTierTest()
 TEST_F(PersistentCacheTierTest, DISABLED_BlockCacheInsertWithFileCreateError) {
   cache_ = NewBlockCache(Env::Default(), path_,
                          /*size=*/std::numeric_limits<uint64_t>::max(),
-                         /*direct_writes=*/ false);
-  rocksdb::SyncPoint::GetInstance()->SetCallBack( 
-    "BlockCacheTier::NewCacheFile:DeleteDir", OnDeleteDir);
+                         /*direct_writes=*/false);
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
+      "BlockCacheTier::NewCacheFile:DeleteDir", OnDeleteDir);
 
-  RunNegativeInsertTest(/*nthreads=*/ 1,
+  RunNegativeInsertTest(/*nthreads=*/1,
                         /*max_keys*/
-                          static_cast<size_t>(10 * 1024 * kStressFactor));
+                        static_cast<size_t>(10 * 1024 * kStressFactor));
 
-  rocksdb::SyncPoint::GetInstance()->ClearAllCallBacks();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->ClearAllCallBacks();
 }
 
 #if defined(TRAVIS) || defined(ROCKSDB_VALGRIND_RUN)
@@ -190,7 +193,8 @@ TEST_F(PersistentCacheTierTest, VolatileCacheInsertWithEviction) {
   for (auto nthreads : {1, 5}) {
     for (auto max_keys : {1 * 1024 * 1024 * kStressFactor}) {
       cache_ = std::make_shared<VolatileCacheTier>(
-          /*compressed=*/true, /*size=*/static_cast<size_t>(1 * 1024 * 1024 * kStressFactor));
+          /*compressed=*/true,
+          /*size=*/static_cast<size_t>(1 * 1024 * 1024 * kStressFactor));
       RunInsertTestWithEviction(nthreads, static_cast<size_t>(max_keys));
     }
   }
@@ -214,8 +218,9 @@ TEST_F(PersistentCacheTierTest, BlockCacheInsert) {
 TEST_F(PersistentCacheTierTest, BlockCacheInsertWithEviction) {
   for (auto nthreads : {1, 5}) {
     for (auto max_keys : {1 * 1024 * 1024 * kStressFactor}) {
-      cache_ = NewBlockCache(Env::Default(), path_,
-                             /*max_size=*/static_cast<size_t>(200 * 1024 * 1024 * kStressFactor));
+      cache_ = NewBlockCache(
+          Env::Default(), path_,
+          /*max_size=*/static_cast<size_t>(200 * 1024 * 1024 * kStressFactor));
       RunInsertTestWithEviction(nthreads, static_cast<size_t>(max_keys));
     }
   }
@@ -226,8 +231,9 @@ TEST_F(PersistentCacheTierTest, TieredCacheInsert) {
   for (auto nthreads : {1, 5}) {
     for (auto max_keys :
          {10 * 1024 * kStressFactor, 1 * 1024 * 1024 * kStressFactor}) {
-      cache_ = NewTieredCache(Env::Default(), path_,
-                              /*memory_size=*/static_cast<size_t>(1 * 1024 * 1024 * kStressFactor));
+      cache_ = NewTieredCache(
+          Env::Default(), path_,
+          /*memory_size=*/static_cast<size_t>(1 * 1024 * 1024 * kStressFactor));
       RunInsertTest(nthreads, static_cast<size_t>(max_keys));
     }
   }
@@ -241,7 +247,8 @@ TEST_F(PersistentCacheTierTest, TieredCacheInsertWithEviction) {
       cache_ = NewTieredCache(
           Env::Default(), path_,
           /*memory_size=*/static_cast<size_t>(1 * 1024 * 1024 * kStressFactor),
-          /*block_cache_size*/ static_cast<size_t>(200 * 1024 * 1024 * kStressFactor));
+          /*block_cache_size*/
+          static_cast<size_t>(200 * 1024 * 1024 * kStressFactor));
       RunInsertTestWithEviction(nthreads, static_cast<size_t>(max_keys));
     }
   }
@@ -260,7 +267,8 @@ std::shared_ptr<PersistentCacheTier> MakeBlockCache(const std::string& dbname) {
 std::shared_ptr<PersistentCacheTier> MakeTieredCache(
     const std::string& dbname) {
   const auto memory_size = 1 * 1024 * 1024 * kStressFactor;
-  return NewTieredCache(Env::Default(), dbname, static_cast<size_t>(memory_size));
+  return NewTieredCache(Env::Default(), dbname,
+                        static_cast<size_t>(memory_size));
 }
 
 #ifdef OS_LINUX
@@ -270,8 +278,8 @@ static void UniqueIdCallback(void* arg) {
     *result = 0;
   }
 
-  rocksdb::SyncPoint::GetInstance()->ClearTrace();
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->ClearTrace();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "GetUniqueIdFromFile:FS_IOC_GETVERSION", UniqueIdCallback);
 }
 #endif
@@ -293,11 +301,11 @@ TEST_F(PersistentCacheTierTest, FactoryTest) {
 
 PersistentCacheDBTest::PersistentCacheDBTest() : DBTestBase("/cache_test") {
 #ifdef OS_LINUX
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "GetUniqueIdFromFile:FS_IOC_GETVERSION", UniqueIdCallback);
-  rocksdb::SyncPoint::GetInstance()->SetCallBack("NewRandomAccessFile:O_DIRECT",
-                                                 OnOpenForRead);
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
+      "NewRandomAccessFile:O_DIRECT", OnOpenForRead);
 #endif
 }
 
@@ -315,8 +323,8 @@ void PersistentCacheDBTest::RunTest(
   for (size_t iter = 0; iter < max_usecase; iter++) {
     Options options;
     options.write_buffer_size =
-      static_cast<size_t>(64 * 1024 * kStressFactor);  // small write buffer
-    options.statistics = rocksdb::CreateDBStatistics();
+        static_cast<size_t>(64 * 1024 * kStressFactor);  // small write buffer
+    options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
     options = CurrentOptions(options);
 
     // setup page cache
@@ -324,7 +332,7 @@ void PersistentCacheDBTest::RunTest(
     BlockBasedTableOptions table_options;
     table_options.cache_index_and_filter_blocks = true;
 
-    const size_t size_max = std::numeric_limits<size_t>::max();
+    const size_t size_max = port::kMaxUint64;
 
     switch (iter) {
       case 0:
@@ -460,7 +468,7 @@ TEST_F(PersistentCacheDBTest, TieredCacheTest) {
 }
 #endif
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

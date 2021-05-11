@@ -481,7 +481,7 @@ public class ReadOptions extends RocksObject {
   // Hold a reference to any iterate upper/lower bound that was set on this object
   // until we're destroyed or it's overwritten. That way the caller can freely
   // leave scope without us losing the Java Slice object, which during close()
-  // would also reap its associated rocksdb::Slice native object since it's
+  // would also reap its associated TERARKDB_NAMESPACE::Slice native object since it's
   // possibly (likely) to be an owning handle.
   protected Slice iterateUpperBoundSlice_;
   protected Slice iterateLowerBoundSlice_;

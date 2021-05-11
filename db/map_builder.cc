@@ -26,6 +26,7 @@
 #include "db/event_helpers.h"
 #include "db/range_del_aggregator.h"
 #include "monitoring/thread_status_util.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/merging_iterator.h"
 #include "table/two_level_iterator.h"
 #include "util/c_style_callback.h"
@@ -33,7 +34,7 @@
 #include "util/sst_file_manager_impl.h"
 #include "version_set.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct FileMetaDataBoundBuilder {
   const InternalKeyComparator* icomp;
@@ -116,6 +117,7 @@ struct RangeWithDepend {
   Slice point[2];
   bool include[2];
   bool has_delete_range;
+  bool marked_for_compaction;
   bool stable;
   std::vector<MapSstElement::LinkTarget> dependence;
 
@@ -133,6 +135,7 @@ struct RangeWithDepend {
     include[0] = true;
     include[1] = true;
     has_delete_range = false;
+    marked_for_compaction = f->marked_for_compaction;
     stable = false;
     dependence.emplace_back(MapSstElement::LinkTarget{f->fd.GetNumber(), 0});
   }
@@ -143,6 +146,7 @@ struct RangeWithDepend {
     include[0] = map_element.include_smallest;
     include[1] = map_element.include_largest;
     has_delete_range = map_element.has_delete_range;
+    marked_for_compaction = map_element.marked_for_compaction;
     stable = true;
     dependence = map_element.link;
   }
@@ -160,6 +164,7 @@ struct RangeWithDepend {
     include[0] = false;
     include[1] = true;
     has_delete_range = false;
+    marked_for_compaction = false;
     stable = false;
   }
 };
@@ -304,6 +309,7 @@ class MapSstElementIterator : public MapSstRangeIterator {
       map_elements_.include_smallest = where_->include[0];
       map_elements_.include_largest = where_->include[1];
       map_elements_.has_delete_range = where_->has_delete_range;
+      map_elements_.marked_for_compaction = where_->marked_for_compaction;
       bool stable = where_->stable;
       auto& links = map_elements_.link = where_->dependence;
       assert(!map_elements_.include_smallest);
@@ -667,6 +673,8 @@ Status AdjustRange(const InternalKeyComparator* ic, InternalIterator* iter,
     split.include[0] = false;
     split.include[1] = true;
     split.has_delete_range = last->has_delete_range || range->has_delete_range;
+    split.marked_for_compaction =
+        last->marked_for_compaction || range->marked_for_compaction;
     split.stable = false;
     split.dependence = last->dependence;
     merge_dependence(split.dependence, range->dependence);
@@ -758,6 +766,7 @@ std::vector<RangeWithDepend> PartitionRangeWithDepend(
   auto put_depend = [&](const RangeWithDepend* a, const RangeWithDepend* b) {
     auto& dependence = output.back().dependence;
     auto& has_delete_range = output.back().has_delete_range;
+    auto& marked_for_compaction = output.back().marked_for_compaction;
     auto& stable = output.back().stable;
     assert(a != nullptr || b != nullptr);
     switch (type) {
@@ -769,12 +778,16 @@ std::vector<RangeWithDepend> PartitionRangeWithDepend(
             dependence.insert(dependence.end(), b->dependence.begin(),
                               b->dependence.end());
             has_delete_range = a->has_delete_range || b->has_delete_range;
+            marked_for_compaction =
+                a->marked_for_compaction || b->marked_for_compaction;
           } else {
             has_delete_range = a->has_delete_range;
+            marked_for_compaction = a->marked_for_compaction;
             stable = a->stable;
           }
         } else {
           has_delete_range = b->has_delete_range;
+          marked_for_compaction = b->marked_for_compaction;
           stable = b->stable;
           dependence = b->dependence;
         }
@@ -782,6 +795,7 @@ std::vector<RangeWithDepend> PartitionRangeWithDepend(
       case PartitionType::kDelete:
         if (b == nullptr) {
           has_delete_range = a->has_delete_range;
+          marked_for_compaction = a->marked_for_compaction;
           stable = a->stable;
           dependence = a->dependence;
         } else {
@@ -791,6 +805,7 @@ std::vector<RangeWithDepend> PartitionRangeWithDepend(
       case PartitionType::kExtract:
         if (a != nullptr && b != nullptr) {
           has_delete_range = a->has_delete_range;
+          marked_for_compaction = a->marked_for_compaction;
           stable = a->stable;
           dependence = a->dependence;
           assert(b->dependence.empty());
@@ -954,8 +969,9 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
                          const std::vector<Range>& deleted_range,
                          const std::vector<FileMetaData*>& added_files,
                          int output_level, uint32_t output_path_id,
-                         ColumnFamilyData* cfd, Version* version,
-                         VersionEdit* edit, FileMetaData* file_meta_ptr,
+                         ColumnFamilyData* cfd, bool optimize_range_deletion,
+                         Version* version, VersionEdit* edit,
+                         FileMetaData* file_meta_ptr,
                          std::unique_ptr<TableProperties>* prop_ptr,
                          std::set<FileMetaData*>* deleted_files) {
   assert(output_level != 0 || inputs.front().level == 0);
@@ -1121,11 +1137,6 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
       range_del_iter_vec.emplace_back(std::move(range_del_it));
     }
   }
-  bool build_range_deletion_ranges =
-      cfd->ioptions()->compaction_style ==
-          CompactionStyle::kCompactionStyleLevel &&
-      cfd->ioptions()->enable_lazy_compaction &&
-      output_level < vstorage->num_non_empty_levels() - 1;
 
   ScopedArenaIterator tombstone_iter;
   if (!tombstones.empty()) {
@@ -1138,8 +1149,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     }
     tombstone_iter.set(builder.Finish());
   }
-  if (build_range_deletion_ranges && !tombstones.empty() &&
-      !level_ranges.empty()) {
+  if (optimize_range_deletion && !tombstones.empty() && !level_ranges.empty()) {
     std::vector<RangeWithDepend> ranges;
     auto uc = icomp.user_comparator();
     Slice last_end_key;
@@ -1168,6 +1178,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
         r.include[0] = false;
         r.include[1] = true;
         r.has_delete_range = true;
+        r.marked_for_compaction = false;
         r.stable = false;
       }
       last_end_key = ExtractUserKey(ranges.back().point[1]);
@@ -1295,7 +1306,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     prop_ptr->swap(prop);
   }
   return s;
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
                          const std::vector<Range>& push_range, int output_level,
@@ -1927,6 +1938,7 @@ struct MapElementIterator : public InternalIterator {
       element_.include_smallest = true;
       element_.include_largest = true;
       element_.has_delete_range = false;  // for pick_range_deletion
+      element_.marked_for_compaction = f->marked_for_compaction;
       element_.link.clear();
       element_.link.emplace_back(
           MapSstElement::LinkTarget{f->fd.GetNumber(), f->fd.GetFileSize()});
@@ -1994,4 +2006,4 @@ struct PartitionRangeTest {
 static PartitionRangeTest init_test;
 #endif
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -10,8 +10,9 @@
 #include "data_block_footer.h"
 
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 const int kDataBlockIndexTypeBitShift = 31;
 
@@ -56,4 +57,4 @@ void UnPackIndexTypeAndNumRestarts(
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -7,16 +7,18 @@
 #include <cstdint>
 #include <unordered_map>
 
+#include "rocksdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 #include "util/arena.h"
+#include "util/chash_map.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct FileMetaData;
 class RangeDelAggregator;
 class TableReader;
 
-typedef std::unordered_map<uint64_t, FileMetaData*> DependenceMap;
+typedef chash_map<uint64_t, FileMetaData*> DependenceMap;
 
 class IteratorCache {
  public:
@@ -59,4 +61,4 @@ class IteratorCache {
   std::unordered_map<uint64_t, CacheItem> iterator_map_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

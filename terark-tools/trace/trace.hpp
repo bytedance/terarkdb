@@ -21,7 +21,7 @@
 #include <table/terark_zip_internal.h>
 #include <table/terark_zip_table.h>
 
-using namespace rocksdb;
+using namespace TERARKDB_NAMESPACE;
 
 namespace terark {
 

@@ -4,9 +4,11 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 #include "util/auto_roll_logger.h"
+
+#include "rocksdb/terark_namespace.h"
 #include "util/mutexlock.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE
 // -- AutoRollLogger
@@ -39,8 +41,8 @@ void AutoRollLogger::RollLogFile() {
   uint64_t now = env_->NowMicros();
   std::string old_fname;
   do {
-    old_fname = OldInfoLogFileName(
-      dbname_, now, db_absolute_path_, db_log_dir_);
+    old_fname =
+        OldInfoLogFileName(dbname_, now, db_absolute_path_, db_log_dir_);
     now++;
   } while (env_->FileExists(old_fname).ok());
   env_->RenameFile(log_fname_, old_fname);
@@ -54,7 +56,7 @@ std::string AutoRollLogger::ValistToString(const char* format,
   char buffer[MAXBUFFERSIZE];
 
   int count = vsnprintf(buffer, MAXBUFFERSIZE, format, args);
-  (void) count;
+  (void)count;
   assert(count >= 0);
 
   return buffer;
@@ -174,4 +176,4 @@ Status CreateLoggerFromOptions(const std::string& dbname,
   return s;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -13,6 +13,7 @@ int main() {
 
 #include "monitoring/histogram.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/file_reader_writer.h"
 #include "util/gflags_compat.h"
 #include "util/testharness.h"
@@ -29,7 +30,7 @@ DEFINE_int32(record_interval, 10000, "Interval between records (microSec)");
 DEFINE_int32(bytes_per_sync, 0, "bytes_per_sync parameter in EnvOptions");
 DEFINE_bool(enable_sync, false, "sync after each write.");
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 void RunBenchmark() {
   std::string file_name = test::PerThreadDBPath("log_write_benchmark.log");
   Env* env = Env::Default();
@@ -69,14 +70,14 @@ void RunBenchmark() {
   fprintf(stderr, "Distribution of latency of append+flush: \n%s",
           hist.ToString().c_str());
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   SetUsageMessage(std::string("\nUSAGE:\n") + std::string(argv[0]) +
                   " [OPTIONS]...");
   ParseCommandLineFlags(&argc, &argv, true);
 
-  rocksdb::RunBenchmark();
+  TERARKDB_NAMESPACE::RunBenchmark();
   return 0;
 }
 

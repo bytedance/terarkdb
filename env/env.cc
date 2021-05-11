@@ -15,11 +15,13 @@
 #include "port/port.h"
 #include "port/sys_time.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/arena.h"
 #include "util/autovector.h"
 #include "utilities/util/factory.h"
 #include "utilities/util/function.hpp"
-namespace rocksdb {
+
+namespace TERARKDB_NAMESPACE {
 
 Env::~Env() {}
 
@@ -421,9 +423,8 @@ EnvOptions::EnvOptions() {
   AssignEnvOptions(this, options);
 }
 
-#define FROM_ENV_bool(field)                                                \
-  (field = terark::getEnvBool("EnvOptions_" TERARK_PP_STR(field), \
-                                        field))
+#define FROM_ENV_bool(field) \
+  (field = terark::getEnvBool("EnvOptions_" TERARK_PP_STR(field), field))
 
 void EnvOptions::InitFromEnvVar() {
   FROM_ENV_bool(use_aio_reads);
@@ -434,4 +435,4 @@ void EnvOptions::InitFromEnvVar() {
   FROM_ENV_bool(use_aio_reads);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

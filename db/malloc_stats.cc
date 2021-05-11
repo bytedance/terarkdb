@@ -10,13 +10,14 @@
 #include "db/malloc_stats.h"
 
 #ifndef ROCKSDB_LITE
-#include <memory>
 #include <string.h>
 
+#include <memory>
+
 #include "port/jemalloc_helper.h"
+#include "rocksdb/terark_namespace.h"
 
-
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 #ifdef ROCKSDB_JEMALLOC
 
@@ -55,5 +56,5 @@ void DumpMallocStats(std::string* stats) {
 #else
 void DumpMallocStats(std::string*) {}
 #endif  // ROCKSDB_JEMALLOC
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // !ROCKSDB_LITE

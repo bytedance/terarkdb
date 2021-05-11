@@ -5,23 +5,8 @@
  *      Author: leipeng
  */
 
-// project headers
-#include "terark_zip_table.h"
+#include "table/terark_zip_table.h"
 
-#include <terark/idx/terark_zip_index.hpp>
-
-#include "terark_zip_common.h"
-#include "terark_zip_internal.h"
-#include "terark_zip_table_reader.h"
-
-// std headers
-#include <util/arena.h>  // for #include <sys/mman.h>
-
-#include <cstdint>
-#include <cstdlib>
-#include <fstream>
-#include <future>
-#include <random>
 #ifdef _MSC_VER
 #include <io.h>
 #else
@@ -29,19 +14,26 @@
 #include <sys/types.h>
 #endif
 
-// boost headers
 #include <boost/predef/other/endian.h>
 
 #include <boost/archive/iterators/binary_from_base64.hpp>
 #include <boost/archive/iterators/transform_width.hpp>
-
-// rocksdb headers
-#include <table/meta_blocks.h>
-
-// terark headers
+#include <cstdint>
+#include <cstdlib>
+#include <fstream>
+#include <future>
+#include <random>
+#include <terark/idx/terark_zip_index.hpp>
 #include <terark/lcast.hpp>
 #include <terark/util/tmpfile.hpp>
 #include <terark/zbs/xxhash_helper.hpp>
+
+#include "rocksdb/terark_namespace.h"
+#include "table/meta_blocks.h"
+#include "table/terark_zip_common.h"
+#include "table/terark_zip_internal.h"
+#include "table/terark_zip_table_reader.h"
+#include "util/arena.h"  // for #include <sys/mman.h>
 
 static std::once_flag PrintVersionHashInfoFlag;
 
@@ -52,18 +44,20 @@ const char* git_version_hash_info_zbs();
 const char* git_version_hash_info_idx();
 #endif
 
-void PrintVersionHashInfo(rocksdb::Logger* info_log) {
+void PrintVersionHashInfo(TERARKDB_NAMESPACE::Logger* info_log) {
   std::call_once(PrintVersionHashInfoFlag, [info_log] {
 #if !defined(_MSC_VER) && !defined(BUILD_BY_CMAKE)
     INFO(info_log, "core %s", git_version_hash_info_core());
     INFO(info_log, "fsa %s", git_version_hash_info_fsa());
     INFO(info_log, "zbs %s", git_version_hash_info_zbs());
     INFO(info_log, "idx %s", git_version_hash_info_idx());
+#else
+    (void)info_log;
 #endif
   });
 }
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 terark::profiling g_pf;
 
@@ -430,11 +424,11 @@ std::string TerarkZipTableFactory::GetPrintableTableOptions() const {
   char buffer[kBufferSize];
   const auto& tzto = table_options_;
 
-#define M_String(name)                                      \
-  ret.append(#name);                                        \
-  ret.append("                         : " + strlen(#name), \
-             27 - strlen(#name));                           \
-  ret.append(tzto.name);                                    \
+#define M_String(name)                                                   \
+  ret.append(#name);                                                     \
+  ret.append((const char*)"                         : " + strlen(#name), \
+             27 - strlen(#name));                                        \
+  ret.append(tzto.name);                                                 \
   ret.append("\n")
 
 #define M_NumFmt(name, fmt) PrintBuf("%-24s : " fmt "\n", #name, tzto.name)
@@ -722,4 +716,4 @@ TERARK_FACTORY_REGISTER_EX(TerarkZipTableFactory, "TerarkZipTable",
                                                              s);
                            }));
 
-} /* namespace rocksdb */
+} /* namespace TERARKDB_NAMESPACE */

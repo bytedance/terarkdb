@@ -4,15 +4,16 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 #pragma once
-#include "rocksdb/statistics.h"
-
-#include <vector>
 #include <atomic>
+#include <map>
 #include <string>
+#include <vector>
 
 #include "monitoring/histogram.h"
 #include "port/likely.h"
 #include "port/port.h"
+#include "rocksdb/statistics.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/core_local.h"
 #include "util/mutexlock.h"
 
@@ -27,7 +28,7 @@
 #define TOSTRING(x) STRINGIFY(x)
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 enum TickersInternal : uint32_t {
   INTERNAL_TICKER_ENUM_START = TICKER_ENUM_MAX,
@@ -56,6 +57,7 @@ class StatisticsImpl : public Statistics {
 
   virtual Status Reset() override;
   virtual std::string ToString() const override;
+  virtual bool getTickerMap(std::map<std::string, uint64_t>*) const override;
   virtual bool HistEnabledForType(uint32_t type) const override;
 
  private:
@@ -80,13 +82,14 @@ class StatisticsImpl : public Statistics {
                   INTERNAL_HISTOGRAM_ENUM_MAX * sizeof(HistogramImpl)) %
                      CACHE_LINE_SIZE)] ROCKSDB_FIELD_UNUSED;
 #endif
-    void *operator new(size_t s) { return port::cacheline_aligned_alloc(s); }
-    void *operator new[](size_t s) { return port::cacheline_aligned_alloc(s); }
-    void operator delete(void *p) { port::cacheline_aligned_free(p); }
-    void operator delete[](void *p) { port::cacheline_aligned_free(p); }
+    void* operator new(size_t s) { return port::cacheline_aligned_alloc(s); }
+    void* operator new[](size_t s) { return port::cacheline_aligned_alloc(s); }
+    void operator delete(void* p) { port::cacheline_aligned_free(p); }
+    void operator delete[](void* p) { port::cacheline_aligned_free(p); }
   };
 
-  static_assert(sizeof(StatisticsData) % CACHE_LINE_SIZE == 0, "Expected " TOSTRING(CACHE_LINE_SIZE) "-byte aligned");
+  static_assert(sizeof(StatisticsData) % CACHE_LINE_SIZE == 0,
+                "Expected " TOSTRING(CACHE_LINE_SIZE) "-byte aligned");
 
   CoreLocalArray<StatisticsData> per_core_stats_;
 
@@ -118,4 +121,4 @@ inline void SetTickerCount(Statistics* statistics, uint32_t ticker_type,
   }
 }
 
-}
+}  // namespace TERARKDB_NAMESPACE

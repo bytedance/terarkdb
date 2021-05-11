@@ -24,13 +24,14 @@
 #include "rocksdb/cache.h"
 #include "rocksdb/convenience.h"
 #include "rocksdb/flush_block_policy.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block_based_table_builder.h"
 #include "table/block_based_table_reader.h"
 #include "table/format.h"
 #include "util/mutexlock.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 void TailPrefetchStats::RecordEffectiveSize(size_t len) {
   MutexLock l(&mutex_);
@@ -618,7 +619,7 @@ static TableFactory* BlockedCreator(const std::string& options, Status* s) {
   return nullptr;
 }
 
-TERARK_FACTORY_REGISTER_EX(BlockBasedTableFactory,
-                          "BlockBasedTable", &BlockedCreator);
+TERARK_FACTORY_REGISTER_EX(BlockBasedTableFactory, "BlockBasedTable",
+                           &BlockedCreator);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

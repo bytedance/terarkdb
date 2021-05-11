@@ -8,6 +8,7 @@
 #ifndef ROCKSDB_LITE
 
 #include <assert.h>
+
 #include <list>
 #include <vector>
 
@@ -16,9 +17,10 @@
 #endif
 
 #include "include/rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/mutexlock.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // HashTable<T, Hash, Equal>
 //
@@ -233,6 +235,6 @@ class HashTable {
   std::unique_ptr<port::RWMutex[]> locks_;  // Granular locks
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif

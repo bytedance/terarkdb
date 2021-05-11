@@ -5,17 +5,19 @@
 
 #ifndef ROCKSDB_LITE
 
-#include <vector>
-#include <string>
-#include <set>
-
 #include "rocksdb/utilities/spatial_db.h"
+
+#include <set>
+#include <string>
+#include <vector>
+
+#include "rocksdb/terark_namespace.h"
 #include "util/compression.h"
+#include "util/random.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
-#include "util/random.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace spatial {
 
 class SpatialDBTest : public testing::Test {
@@ -289,7 +291,7 @@ TEST_F(SpatialDBTest, RandomizedTest) {
 }
 
 }  // namespace spatial
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

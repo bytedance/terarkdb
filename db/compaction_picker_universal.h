@@ -11,8 +11,9 @@
 #ifndef ROCKSDB_LITE
 
 #include "db/compaction_picker.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 class UniversalCompactionPicker : public CompactionPicker {
  public:
   UniversalCompactionPicker(TableCache* table_cache,
@@ -28,11 +29,12 @@ class UniversalCompactionPicker : public CompactionPicker {
 
   Compaction* CompactRange(
       const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
-      VersionStorageInfo* vstorage, int input_level, int output_level,
-      uint32_t output_path_id, uint32_t max_subcompactions,
-      const InternalKey* begin, const InternalKey* end,
-      InternalKey** compaction_end, bool* manual_conflict,
-      const std::unordered_set<uint64_t>* files_being_compact) override;
+      SeparationType separation_type, VersionStorageInfo* vstorage,
+      int input_level, int output_level, uint32_t output_path_id,
+      uint32_t max_subcompactions, const InternalKey* begin,
+      const InternalKey* end, InternalKey** compaction_end,
+      bool* manual_conflict,
+      const chash_set<uint64_t>* files_being_compact) override;
 
   int MaxOutputLevel() const override { return NumberLevels() - 1; }
 
@@ -85,5 +87,5 @@ class UniversalCompactionPicker : public CompactionPicker {
                             const MutableCFOptions& mutable_cf_options,
                             uint64_t file_size);
 };
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // !ROCKSDB_LITE

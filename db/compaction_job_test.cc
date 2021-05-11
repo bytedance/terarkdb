@@ -8,8 +8,6 @@
 #include "db/compaction_job.h"
 
 #include <algorithm>
-#include <map>
-#include <string>
 #include <tuple>
 
 #include "db/column_family.h"
@@ -18,6 +16,7 @@
 #include "rocksdb/cache.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/write_buffer_manager.h"
 #include "table/mock_table.h"
 #include "util/file_reader_writer.h"
@@ -26,7 +25,7 @@
 #include "util/testutil.h"
 #include "utilities/merge_operators.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 
@@ -72,7 +71,7 @@ class CompactionJobTest : public testing::Test {
         dbname_(test::PerThreadDBPath("compaction_job_test")),
         db_options_(),
         mutable_db_options_(),
-        mutable_cf_options_(cf_options_),
+        mutable_cf_options_(cf_options_, env_),
         table_cache_(NewLRUCache(50000, 16)),
         write_buffer_manager_(db_options_.db_write_buffer_size),
         versions_(new VersionSet(dbname_, &db_options_, env_options_,
@@ -946,7 +945,7 @@ TEST_F(CompactionJobTest, CorruptionAfterDeletion) {
   RunCompaction({files}, expected_results);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

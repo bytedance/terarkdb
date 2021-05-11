@@ -7,9 +7,11 @@
 #include "metrics.h"
 #endif
 
+#include "rocksdb/terark_namespace.h"
 #include "util/logging.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
+
 #ifdef TERARKDB_ENABLE_METRICS
 static std::mutex metrics_mtx;
 static std::atomic<bool> metrics_init{false};
@@ -50,7 +52,7 @@ static int GetThreadID() {
 namespace {
 static ByteDanceHistReporterHandle dummy_hist_("", "", nullptr);
 static ByteDanceCountReporterHandle dummy_count_("", "", nullptr);
-}
+}  // namespace
 #endif
 
 #ifdef TERARKDB_ENABLE_METRICS
@@ -180,8 +182,7 @@ ByteDanceMetricsReporterFactory::ByteDanceMetricsReporterFactory(
 }
 #else
 ByteDanceMetricsReporterFactory::ByteDanceMetricsReporterFactory(
-    const std::string& /*ns*/) {
-}
+    const std::string& /*ns*/) {}
 #endif
 
 #ifdef TERARKDB_ENABLE_METRICS
@@ -231,4 +232,4 @@ ByteDanceMetricsReporterFactory::BuildCountReporter(const std::string& /*name*/,
   return &dummy_count_;
 }
 #endif
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

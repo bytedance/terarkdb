@@ -11,8 +11,9 @@ extern "C" {
 }
 
 #include "rocksdb/compaction_filter.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace lua {
 
 const std::string kFilterFunctionName = "Filter";
@@ -158,7 +159,8 @@ const char* RocksLuaCompactionFilter::Name() const {
         "return value is not a string while string is expected");
   } else {
     const char* name_buf = lua_tostring(lua_state, -1);
-    const size_t name_size __attribute__((__unused__)) = lua_strlen(lua_state, -1);
+    const size_t name_size __attribute__((__unused__)) =
+        lua_strlen(lua_state, -1);
     assert(name_buf[name_size] == '\0');
     assert(strlen(name_buf) <= name_size);
     name_ = name_buf;
@@ -238,5 +240,5 @@ const char* RocksLuaCompactionFilterFactory::Name() const {
 }
 
 }  // namespace lua
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // defined(LUA) && !defined(ROCKSDB_LITE)

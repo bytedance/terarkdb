@@ -8,15 +8,18 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "memtable/inlineskiplist.h"
+
 #include <set>
 #include <unordered_set>
+
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/concurrent_arena.h"
 #include "util/hash.h"
 #include "util/random.h"
 #include "util/testharness.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Our test skip list stores 8-byte unsigned integers
 typedef uint64_t Key;
@@ -34,9 +37,7 @@ static Key Decode(const char* key) {
 struct TestComparator {
   typedef Key DecodedType;
 
-  static DecodedType decode_key(const char* b) {
-    return Decode(b);
-  }
+  static DecodedType decode_key(const char* b) { return Decode(b); }
 
   int operator()(const char* a, const char* b) const {
     if (Decode(a) < Decode(b)) {
@@ -637,7 +638,7 @@ TEST_F(InlineSkipTest, ConcurrentInsert2) { RunConcurrentInsert(2); }
 TEST_F(InlineSkipTest, ConcurrentInsert3) { RunConcurrentInsert(3); }
 
 #endif  // ROCKSDB_VALGRIND_RUN
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

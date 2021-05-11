@@ -10,13 +10,14 @@
 #include <string>
 
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Returns an Env that translates paths such that the root directory appears to
 // be chroot_dir. chroot_dir should refer to an existing directory.
 Env* NewChrootEnv(Env* base_env, const std::string& chroot_dir);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // !defined(ROCKSDB_LITE) && !defined(OS_WIN)

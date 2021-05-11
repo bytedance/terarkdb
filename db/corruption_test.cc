@@ -9,27 +9,27 @@
 
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/db.h"
-
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
 #include <sys/stat.h>
-#include <sys/types.h>
+
 #include "db/db_impl.h"
 #include "db/log_format.h"
 #include "db/version_set.h"
 #include "rocksdb/cache.h"
 #include "rocksdb/convenience.h"
+#include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/write_batch.h"
 #include "util/filename.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 static const int kValueSize = 1000;
 
@@ -64,8 +64,8 @@ class CorruptionTest : public testing::Test {
   }
 
   ~CorruptionTest() {
-     delete db_;
-     DestroyDB(dbname_, Options());
+    delete db_;
+    DestroyDB(dbname_, Options());
   }
 
   void CloseDb() {
@@ -86,14 +86,12 @@ class CorruptionTest : public testing::Test {
     return DB::Open(opt, dbname_, &db_);
   }
 
-  void Reopen(Options* options = nullptr) {
-    ASSERT_OK(TryReopen(options));
-  }
+  void Reopen(Options* options = nullptr) { ASSERT_OK(TryReopen(options)); }
 
   void RepairDB() {
     delete db_;
     db_ = nullptr;
-    ASSERT_OK(::rocksdb::RepairDB(dbname_, options_));
+    ASSERT_OK(::TERARKDB_NAMESPACE::RepairDB(dbname_, options_));
   }
 
   void Build(int n, int flush_every = 0) {
@@ -104,7 +102,7 @@ class CorruptionTest : public testing::Test {
         DBImpl* dbi = reinterpret_cast<DBImpl*>(db_);
         dbi->TEST_FlushMemTable();
       }
-      //if ((i % 100) == 0) fprintf(stderr, "@ %d of %d\n", i, n);
+      // if ((i % 100) == 0) fprintf(stderr, "@ %d of %d\n", i, n);
       Slice key = Key(i, &key_space);
       batch.Clear();
       batch.Put(key, Value(i, &value_space));
@@ -129,8 +127,7 @@ class CorruptionTest : public testing::Test {
          iter->Next()) {
       uint64_t key;
       Slice in(iter->key());
-      if (!ConsumeDecimalNumber(&in, &key) ||
-          !in.empty() ||
+      if (!ConsumeDecimalNumber(&in, &key) || !in.empty() ||
           key < next_expected) {
         bad_keys++;
         continue;
@@ -145,10 +142,11 @@ class CorruptionTest : public testing::Test {
     }
     delete iter;
 
-    fprintf(stderr,
-      "expected=%d..%d; got=%d; bad_keys=%d; bad_values=%d; missed=%llu\n",
-            min_expected, max_expected, correct, bad_keys, bad_values,
-            static_cast<unsigned long long>(missed));
+    fprintf(
+        stderr,
+        "expected=%d..%d; got=%d; bad_keys=%d; bad_values=%d; missed=%llu\n",
+        min_expected, max_expected, correct, bad_keys, bad_values,
+        static_cast<unsigned long long>(missed));
     ASSERT_LE(min_expected, correct);
     ASSERT_GE(max_expected, correct);
   }
@@ -198,8 +196,7 @@ class CorruptionTest : public testing::Test {
     std::string fname;
     int picked_number = -1;
     for (size_t i = 0; i < filenames.size(); i++) {
-      if (ParseFileName(filenames[i], &number, &type) &&
-          type == filetype &&
+      if (ParseFileName(filenames[i], &number, &type) && type == filetype &&
           static_cast<int>(number) > picked_number) {  // Pick latest file
         fname = dbname_ + "/" + filenames[i];
         picked_number = static_cast<int>(number);
@@ -223,7 +220,6 @@ class CorruptionTest : public testing::Test {
     }
     FAIL() << "no file found at level";
   }
-
 
   int Property(const std::string& name) {
     std::string property;
@@ -272,7 +268,7 @@ TEST_F(CorruptionTest, Recovery) {
   // is not available for WAL though.
   CloseDb();
 #endif
-  Corrupt(kLogFile, 19, 1);      // WriteBatch tag for first record
+  Corrupt(kLogFile, 19, 1);  // WriteBatch tag for first record
   Corrupt(kLogFile, log::kBlockSize + 1000, 1);  // Somewhere in second block
   ASSERT_TRUE(!TryReopen().ok());
   options_.paranoid_checks = false;
@@ -510,7 +506,7 @@ TEST_F(CorruptionTest, FileSystemStateCorrupted) {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

@@ -6,67 +6,65 @@
 #ifndef ROCKSDB_LITE
 
 #include "rocksdb/utilities/env_librados.h"
-#include <rados/librados.hpp>
-#include "env/mock_env.h"
-#include "util/testharness.h"
 
-#include "rocksdb/db.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/options.h"
-#include "util/random.h"
 #include <chrono>
 #include <ostream>
+#include <rados/librados.hpp>
+
+#include "env/mock_env.h"
+#include "rocksdb/db.h"
+#include "rocksdb/options.h"
+#include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/transaction_db.h"
+#include "util/random.h"
+#include "util/testharness.h"
 
 class Timer {
   typedef std::chrono::high_resolution_clock high_resolution_clock;
   typedef std::chrono::milliseconds milliseconds;
-public:
-  explicit Timer(bool run = false)
-  {
-    if (run)
-      Reset();
+
+ public:
+  explicit Timer(bool run = false) {
+    if (run) Reset();
   }
-  void Reset()
-  {
-    _start = high_resolution_clock::now();
-  }
-  milliseconds Elapsed() const
-  {
-    return std::chrono::duration_cast<milliseconds>(high_resolution_clock::now() - _start);
+  void Reset() { _start = high_resolution_clock::now(); }
+
+  milliseconds Elapsed() const {
+    return std::chrono::duration_cast<milliseconds>(
+        high_resolution_clock::now() - _start);
   }
   template <typename T, typename Traits>
-  friend std::basic_ostream<T, Traits>& operator<<(std::basic_ostream<T, Traits>& out, const Timer& timer)
-  {
+  friend std::basic_ostream<T, Traits>& operator<<(
+      std::basic_ostream<T, Traits>& out, const Timer& timer) {
     return out << timer.Elapsed().count();
   }
-private:
+
+ private:
   high_resolution_clock::time_point _start;
 };
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class EnvLibradosTest : public testing::Test {
-public:
+ public:
   // we will use all of these below
   const std::string db_name = "env_librados_test_db";
   const std::string db_pool = db_name + "_pool";
-  const char *keyring = "admin";
-  const char *config = "../ceph/src/ceph.conf";
+  const char* keyring = "admin";
+  const char* config = "../ceph/src/ceph.conf";
 
   EnvLibrados* env_;
   const EnvOptions soptions_;
 
-  EnvLibradosTest()
-    : env_(new EnvLibrados(db_name, config, db_pool)) {
-  }
+  EnvLibradosTest() : env_(new EnvLibrados(db_name, config, db_pool)) {}
   ~EnvLibradosTest() {
     delete env_;
     librados::Rados rados;
     int ret = 0;
     do {
-      ret = rados.init("admin"); // just use the client.admin keyring
-      if (ret < 0) { // let's handle any error that might have come back
+      ret = rados.init("admin");  // just use the client.admin keyring
+      if (ret < 0) {  // let's handle any error that might have come back
         std::cerr << "couldn't initialize rados! error " << ret << std::endl;
         ret = EXIT_FAILURE;
         break;
@@ -75,8 +73,8 @@ public:
       ret = rados.conf_read_file(config);
       if (ret < 0) {
         // This could fail if the config file is malformed, but it'd be hard.
-        std::cerr << "failed to parse config file " << config
-                  << "! error" << ret << std::endl;
+        std::cerr << "failed to parse config file " << config << "! error"
+                  << ret << std::endl;
         ret = EXIT_FAILURE;
         break;
       }
@@ -99,7 +97,8 @@ public:
       int delete_ret = rados.pool_delete(db_pool.c_str());
       if (delete_ret < 0) {
         // be careful not to
-        std::cerr << "We failed to delete our test pool!" << db_pool << delete_ret << std::endl;
+        std::cerr << "We failed to delete our test pool!" << db_pool
+                  << delete_ret << std::endl;
         ret = EXIT_FAILURE;
       }
     } while (0);
@@ -135,11 +134,9 @@ TEST_F(EnvLibradosTest, Basics) {
   ASSERT_OK(writable_file->Append("abc"));
   writable_file.reset();
 
-
   // Check for expected size.
   ASSERT_OK(env_->GetFileSize("/dir/f", &file_size));
   ASSERT_EQ(3U, file_size);
-
 
   // Check that renaming works.
   ASSERT_TRUE(!env_->RenameFile("/dir/non_existent", "/dir/g").ok());
@@ -153,10 +150,11 @@ TEST_F(EnvLibradosTest, Basics) {
   std::unique_ptr<SequentialFile> seq_file;
   std::unique_ptr<RandomAccessFile> rand_file;
   ASSERT_TRUE(
-    !env_->NewSequentialFile("/dir/non_existent", &seq_file, soptions_).ok());
+      !env_->NewSequentialFile("/dir/non_existent", &seq_file, soptions_).ok());
   ASSERT_TRUE(!seq_file);
-  ASSERT_TRUE(!env_->NewRandomAccessFile("/dir/non_existent", &rand_file,
-                                         soptions_).ok());
+  ASSERT_TRUE(
+      !env_->NewRandomAccessFile("/dir/non_existent", &rand_file, soptions_)
+           .ok());
   ASSERT_TRUE(!rand_file);
 
   // Check that deleting works.
@@ -389,17 +387,13 @@ TEST_F(EnvLibradosTest, DBLoadKeysInRandomOrder) {
   Status s1 = DB::Open(options1, kDBPath1, &db1);
   assert(s1.ok());
 
-  rocksdb::Random64 r1(time(nullptr));
+  TERARKDB_NAMESPACE::Random64 r1(time(nullptr));
 
   timer.Reset();
   for (int i = 0; i < max_loop; ++i) {
-    snprintf(key,
-             20,
-             "%16lx",
+    snprintf(key, 20, "%16lx",
              (unsigned long)r1.Uniform(std::numeric_limits<uint64_t>::max()));
-    snprintf(value,
-             20,
-             "%16lx",
+    snprintf(value, 20, "%16lx",
              (unsigned long)r1.Uniform(std::numeric_limits<uint64_t>::max()));
     // Put key-value
     s1 = db1->Put(WriteOptions(), key, value);
@@ -425,17 +419,13 @@ TEST_F(EnvLibradosTest, DBLoadKeysInRandomOrder) {
   Status s2 = DB::Open(options2, kDBPath2, &db2);
   assert(s2.ok());
 
-  rocksdb::Random64 r2(time(nullptr));
+  TERARKDB_NAMESPACE::Random64 r2(time(nullptr));
 
   timer.Reset();
   for (int i = 0; i < max_loop; ++i) {
-    snprintf(key,
-             20,
-             "%16lx",
+    snprintf(key, 20, "%16lx",
              (unsigned long)r2.Uniform(std::numeric_limits<uint64_t>::max()));
-    snprintf(value,
-             20,
-             "%16lx",
+    snprintf(value, 20, "%16lx",
              (unsigned long)r2.Uniform(std::numeric_limits<uint64_t>::max()));
     // Put key-value
     s2 = db2->Put(WriteOptions(), key, value);
@@ -450,7 +440,8 @@ TEST_F(EnvLibradosTest, DBBulkLoadKeysInRandomOrder) {
   int max_loop = 1 << 6;
   int bulk_size = 1 << 15;
   Timer timer(false);
-  std::cout << "Test size : loop(" << max_loop << "); bulk_size(" << bulk_size << ")" << std::endl;
+  std::cout << "Test size : loop(" << max_loop << "); bulk_size(" << bulk_size
+            << ")" << std::endl;
   /**********************************
             use default env
   ***********************************/
@@ -467,19 +458,15 @@ TEST_F(EnvLibradosTest, DBBulkLoadKeysInRandomOrder) {
   Status s1 = DB::Open(options1, kDBPath1, &db1);
   assert(s1.ok());
 
-  rocksdb::Random64 r1(time(nullptr));
+  TERARKDB_NAMESPACE::Random64 r1(time(nullptr));
 
   timer.Reset();
   for (int i = 0; i < max_loop; ++i) {
     WriteBatch batch;
     for (int j = 0; j < bulk_size; ++j) {
-      snprintf(key,
-               20,
-               "%16lx",
+      snprintf(key, 20, "%16lx",
                (unsigned long)r1.Uniform(std::numeric_limits<uint64_t>::max()));
-      snprintf(value,
-               20,
-               "%16lx",
+      snprintf(value, 20, "%16lx",
                (unsigned long)r1.Uniform(std::numeric_limits<uint64_t>::max()));
       batch.Put(key, value);
     }
@@ -506,19 +493,15 @@ TEST_F(EnvLibradosTest, DBBulkLoadKeysInRandomOrder) {
   Status s2 = DB::Open(options2, kDBPath2, &db2);
   assert(s2.ok());
 
-  rocksdb::Random64 r2(time(nullptr));
+  TERARKDB_NAMESPACE::Random64 r2(time(nullptr));
 
   timer.Reset();
   for (int i = 0; i < max_loop; ++i) {
     WriteBatch batch;
     for (int j = 0; j < bulk_size; ++j) {
-      snprintf(key,
-               20,
-               "%16lx",
+      snprintf(key, 20, "%16lx",
                (unsigned long)r2.Uniform(std::numeric_limits<uint64_t>::max()));
-      snprintf(value,
-               20,
-               "%16lx",
+      snprintf(value, 20, "%16lx",
                (unsigned long)r2.Uniform(std::numeric_limits<uint64_t>::max()));
       batch.Put(key, value);
     }
@@ -534,7 +517,8 @@ TEST_F(EnvLibradosTest, DBBulkLoadKeysInSequentialOrder) {
   int max_loop = 1 << 6;
   int bulk_size = 1 << 15;
   Timer timer(false);
-  std::cout << "Test size : loop(" << max_loop << "); bulk_size(" << bulk_size << ")" << std::endl;
+  std::cout << "Test size : loop(" << max_loop << "); bulk_size(" << bulk_size
+            << ")" << std::endl;
   /**********************************
             use default env
   ***********************************/
@@ -551,19 +535,14 @@ TEST_F(EnvLibradosTest, DBBulkLoadKeysInSequentialOrder) {
   Status s1 = DB::Open(options1, kDBPath1, &db1);
   assert(s1.ok());
 
-  rocksdb::Random64 r1(time(nullptr));
+  TERARKDB_NAMESPACE::Random64 r1(time(nullptr));
 
   timer.Reset();
   for (int i = 0; i < max_loop; ++i) {
     WriteBatch batch;
     for (int j = 0; j < bulk_size; ++j) {
-      snprintf(key,
-               20,
-               "%019lld",
-               (long long)(i * bulk_size + j));
-      snprintf(value,
-               20,
-               "%16lx",
+      snprintf(key, 20, "%019lld", (long long)(i * bulk_size + j));
+      snprintf(value, 20, "%16lx",
                (unsigned long)r1.Uniform(std::numeric_limits<uint64_t>::max()));
       batch.Put(key, value);
     }
@@ -590,19 +569,15 @@ TEST_F(EnvLibradosTest, DBBulkLoadKeysInSequentialOrder) {
   Status s2 = DB::Open(options2, kDBPath2, &db2);
   assert(s2.ok());
 
-  rocksdb::Random64 r2(time(nullptr));
+  TERARKDB_NAMESPACE::Random64 r2(time(nullptr));
 
   timer.Reset();
   for (int i = 0; i < max_loop; ++i) {
     WriteBatch batch;
     for (int j = 0; j < bulk_size; ++j) {
-      snprintf(key,
-               20,
-               "%16lx",
+      snprintf(key, 20, "%16lx",
                (unsigned long)r2.Uniform(std::numeric_limits<uint64_t>::max()));
-      snprintf(value,
-               20,
-               "%16lx",
+      snprintf(value, 20, "%16lx",
                (unsigned long)r2.Uniform(std::numeric_limits<uint64_t>::max()));
       batch.Put(key, value);
     }
@@ -619,7 +594,8 @@ TEST_F(EnvLibradosTest, DBRandomRead) {
   int bulk_size = 1 << 10;
   int read_loop = 1 << 20;
   Timer timer(false);
-  std::cout << "Test size : keys_num(" << max_loop << ", " << bulk_size << "); read_loop(" << read_loop << ")" << std::endl;
+  std::cout << "Test size : keys_num(" << max_loop << ", " << bulk_size
+            << "); read_loop(" << read_loop << ")" << std::endl;
   /**********************************
             use default env
   ***********************************/
@@ -636,19 +612,13 @@ TEST_F(EnvLibradosTest, DBRandomRead) {
   Status s1 = DB::Open(options1, kDBPath1, &db1);
   assert(s1.ok());
 
-  rocksdb::Random64 r1(time(nullptr));
-
+  TERARKDB_NAMESPACE::Random64 r1(time(nullptr));
 
   for (int i = 0; i < max_loop; ++i) {
     WriteBatch batch;
     for (int j = 0; j < bulk_size; ++j) {
-      snprintf(key,
-               20,
-               "%019lld",
-               (long long)(i * bulk_size + j));
-      snprintf(value,
-               20,
-               "%16lx",
+      snprintf(key, 20, "%019lld", (long long)(i * bulk_size + j));
+      snprintf(value, 20, "%16lx",
                (unsigned long)r1.Uniform(std::numeric_limits<uint64_t>::max()));
       batch.Put(key, value);
     }
@@ -661,10 +631,7 @@ TEST_F(EnvLibradosTest, DBRandomRead) {
     base1 = r1.Uniform(max_loop);
     offset1 = r1.Uniform(bulk_size);
     std::string value1;
-    snprintf(key,
-             20,
-             "%019lld",
-             (long long)(base1 * bulk_size + offset1));
+    snprintf(key, 20, "%019lld", (long long)(base1 * bulk_size + offset1));
     s1 = db1->Get(ReadOptions(), key, &value1);
     assert(s1.ok());
   }
@@ -688,18 +655,13 @@ TEST_F(EnvLibradosTest, DBRandomRead) {
   Status s2 = DB::Open(options2, kDBPath2, &db2);
   assert(s2.ok());
 
-  rocksdb::Random64 r2(time(nullptr));
+  TERARKDB_NAMESPACE::Random64 r2(time(nullptr));
 
   for (int i = 0; i < max_loop; ++i) {
     WriteBatch batch;
     for (int j = 0; j < bulk_size; ++j) {
-      snprintf(key,
-               20,
-               "%019lld",
-               (long long)(i * bulk_size + j));
-      snprintf(value,
-               20,
-               "%16lx",
+      snprintf(key, 20, "%019lld", (long long)(i * bulk_size + j));
+      snprintf(value, 20, "%16lx",
                (unsigned long)r2.Uniform(std::numeric_limits<uint64_t>::max()));
       batch.Put(key, value);
     }
@@ -713,10 +675,7 @@ TEST_F(EnvLibradosTest, DBRandomRead) {
     base2 = r2.Uniform(max_loop);
     offset2 = r2.Uniform(bulk_size);
     std::string value2;
-    snprintf(key,
-             20,
-             "%019lld",
-             (long long)(base2 * bulk_size + offset2));
+    snprintf(key, 20, "%019lld", (long long)(base2 * bulk_size + offset2));
     s2 = db2->Get(ReadOptions(), key, &value2);
     if (!s2.ok()) {
       std::cout << s2.ToString() << std::endl;
@@ -728,7 +687,7 @@ TEST_F(EnvLibradosTest, DBRandomRead) {
 }
 
 class EnvLibradosMutipoolTest : public testing::Test {
-public:
+ public:
   // we will use all of these below
   const std::string client_name = "client.admin";
   const std::string cluster_name = "ceph";
@@ -738,22 +697,23 @@ public:
   const std::string wal_dir = "/wal";
   const std::string wal_pool = db_name + "_wal_pool";
   const size_t write_buffer_size = 1 << 20;
-  const char *keyring = "admin";
-  const char *config = "../ceph/src/ceph.conf";
+  const char* keyring = "admin";
+  const char* config = "../ceph/src/ceph.conf";
 
   EnvLibrados* env_;
   const EnvOptions soptions_;
 
   EnvLibradosMutipoolTest() {
-    env_ = new EnvLibrados(client_name, cluster_name, flags, db_name, config, db_pool, wal_dir, wal_pool, write_buffer_size);
+    env_ = new EnvLibrados(client_name, cluster_name, flags, db_name, config,
+                           db_pool, wal_dir, wal_pool, write_buffer_size);
   }
   ~EnvLibradosMutipoolTest() {
     delete env_;
     librados::Rados rados;
     int ret = 0;
     do {
-      ret = rados.init("admin"); // just use the client.admin keyring
-      if (ret < 0) { // let's handle any error that might have come back
+      ret = rados.init("admin");  // just use the client.admin keyring
+      if (ret < 0) {  // let's handle any error that might have come back
         std::cerr << "couldn't initialize rados! error " << ret << std::endl;
         ret = EXIT_FAILURE;
         break;
@@ -762,8 +722,8 @@ public:
       ret = rados.conf_read_file(config);
       if (ret < 0) {
         // This could fail if the config file is malformed, but it'd be hard.
-        std::cerr << "failed to parse config file " << config
-                  << "! error" << ret << std::endl;
+        std::cerr << "failed to parse config file " << config << "! error"
+                  << ret << std::endl;
         ret = EXIT_FAILURE;
         break;
       }
@@ -786,13 +746,15 @@ public:
       int delete_ret = rados.pool_delete(db_pool.c_str());
       if (delete_ret < 0) {
         // be careful not to
-        std::cerr << "We failed to delete our test pool!" << db_pool << delete_ret << std::endl;
+        std::cerr << "We failed to delete our test pool!" << db_pool
+                  << delete_ret << std::endl;
         ret = EXIT_FAILURE;
       }
       delete_ret = rados.pool_delete(wal_pool.c_str());
       if (delete_ret < 0) {
         // be careful not to
-        std::cerr << "We failed to delete our test pool!" << wal_pool << delete_ret << std::endl;
+        std::cerr << "We failed to delete our test pool!" << wal_pool
+                  << delete_ret << std::endl;
         ret = EXIT_FAILURE;
       }
     } while (0);
@@ -803,7 +765,8 @@ TEST_F(EnvLibradosMutipoolTest, Basics) {
   uint64_t file_size;
   std::unique_ptr<WritableFile> writable_file;
   std::vector<std::string> children;
-  std::vector<std::string> v = {"/tmp/dir1", "/tmp/dir2", "/tmp/dir3", "/tmp/dir4", "dir"};
+  std::vector<std::string> v = {"/tmp/dir1", "/tmp/dir2", "/tmp/dir3",
+                                "/tmp/dir4", "dir"};
 
   for (size_t i = 0; i < v.size(); ++i) {
     std::string dir = v[i];
@@ -835,14 +798,13 @@ TEST_F(EnvLibradosMutipoolTest, Basics) {
     ASSERT_OK(writable_file->Append("abc"));
     writable_file.reset();
 
-
     // Check for expected size.
     ASSERT_OK(env_->GetFileSize(dir_f.c_str(), &file_size));
     ASSERT_EQ(3U, file_size);
 
-
     // Check that renaming works.
-    ASSERT_TRUE(!env_->RenameFile(dir_non_existent.c_str(), dir_g.c_str()).ok());
+    ASSERT_TRUE(
+        !env_->RenameFile(dir_non_existent.c_str(), dir_g.c_str()).ok());
     ASSERT_OK(env_->RenameFile(dir_f.c_str(), dir_g.c_str()));
     ASSERT_EQ(Status::NotFound(), env_->FileExists(dir_f.c_str()));
     ASSERT_OK(env_->FileExists(dir_g.c_str()));
@@ -853,10 +815,12 @@ TEST_F(EnvLibradosMutipoolTest, Basics) {
     std::unique_ptr<SequentialFile> seq_file;
     std::unique_ptr<RandomAccessFile> rand_file;
     ASSERT_TRUE(
-      !env_->NewSequentialFile(dir_non_existent.c_str(), &seq_file, soptions_).ok());
+        !env_->NewSequentialFile(dir_non_existent.c_str(), &seq_file, soptions_)
+             .ok());
     ASSERT_TRUE(!seq_file);
     ASSERT_TRUE(!env_->NewRandomAccessFile(dir_non_existent.c_str(), &rand_file,
-                                           soptions_).ok());
+                                           soptions_)
+                     .ok());
     ASSERT_TRUE(!rand_file);
 
     // Check that deleting works.
@@ -917,7 +881,8 @@ TEST_F(EnvLibradosMutipoolTest, DBBulkLoadKeysInRandomOrder) {
   int max_loop = 1 << 6;
   int bulk_size = 1 << 15;
   Timer timer(false);
-  std::cout << "Test size : loop(" << max_loop << "); bulk_size(" << bulk_size << ")" << std::endl;
+  std::cout << "Test size : loop(" << max_loop << "); bulk_size(" << bulk_size
+            << ")" << std::endl;
   /**********************************
             use default env
   ***********************************/
@@ -935,19 +900,15 @@ TEST_F(EnvLibradosMutipoolTest, DBBulkLoadKeysInRandomOrder) {
   Status s1 = DB::Open(options1, kDBPath1, &db1);
   assert(s1.ok());
 
-  rocksdb::Random64 r1(time(nullptr));
+  TERARKDB_NAMESPACE::Random64 r1(time(nullptr));
 
   timer.Reset();
   for (int i = 0; i < max_loop; ++i) {
     WriteBatch batch;
     for (int j = 0; j < bulk_size; ++j) {
-      snprintf(key,
-               20,
-               "%16lx",
+      snprintf(key, 20, "%16lx",
                (unsigned long)r1.Uniform(std::numeric_limits<uint64_t>::max()));
-      snprintf(value,
-               20,
-               "%16lx",
+      snprintf(value, 20, "%16lx",
                (unsigned long)r1.Uniform(std::numeric_limits<uint64_t>::max()));
       batch.Put(key, value);
     }
@@ -978,19 +939,15 @@ TEST_F(EnvLibradosMutipoolTest, DBBulkLoadKeysInRandomOrder) {
   }
   assert(s2.ok());
 
-  rocksdb::Random64 r2(time(nullptr));
+  TERARKDB_NAMESPACE::Random64 r2(time(nullptr));
 
   timer.Reset();
   for (int i = 0; i < max_loop; ++i) {
     WriteBatch batch;
     for (int j = 0; j < bulk_size; ++j) {
-      snprintf(key,
-               20,
-               "%16lx",
+      snprintf(key, 20, "%16lx",
                (unsigned long)r2.Uniform(std::numeric_limits<uint64_t>::max()));
-      snprintf(value,
-               20,
-               "%16lx",
+      snprintf(value, 20, "%16lx",
                (unsigned long)r2.Uniform(std::numeric_limits<uint64_t>::max()));
       batch.Put(key, value);
     }
@@ -1128,7 +1085,7 @@ TEST_F(EnvLibradosMutipoolTest, DBTransactionDB) {
   DestroyDB(kDBPath, options);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

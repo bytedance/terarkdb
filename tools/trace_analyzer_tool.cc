@@ -38,6 +38,7 @@
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table_properties.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/ldb_cmd.h"
 #include "rocksdb/write_batch.h"
 #include "table/meta_blocks.h"
@@ -162,7 +163,7 @@ DEFINE_double(sample_ratio, 1.0,
               "If the trace size is extremely huge or user want to sample "
               "the trace when analyzing, sample ratio can be set (0, 1.0]");
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 std::map<std::string, int> taOptToIndex = {
     {"get", 0},           {"put", 1},
@@ -188,7 +189,8 @@ uint64_t MultiplyCheckOverflow(uint64_t op1, uint64_t op2) {
   return (op1 * op2);
 }
 
-void DecodeCFAndKeyFromString(std::string& buffer, uint32_t* cf_id, Slice* key) {
+void DecodeCFAndKeyFromString(std::string& buffer, uint32_t* cf_id,
+                              Slice* key) {
   Slice buf(buffer);
   GetFixed32(&buf, cf_id);
   GetLengthPrefixedSlice(&buf, key);
@@ -271,8 +273,8 @@ TraceAnalyzer::TraceAnalyzer(std::string& trace_path, std::string& output_path,
     : trace_name_(trace_path),
       output_path_(output_path),
       analyzer_opts_(_analyzer_opts) {
-  rocksdb::EnvOptions env_options;
-  env_ = rocksdb::Env::Default();
+  TERARKDB_NAMESPACE::EnvOptions env_options;
+  env_ = TERARKDB_NAMESPACE::Env::Default();
   offset_ = 0;
   c_time_ = 0;
   total_requests_ = 0;
@@ -690,7 +692,8 @@ Status TraceAnalyzer::MakeStatisticKeyStatsOrPrefix(TraceStats& stats) {
     // write the prefix cut of the accessed keys
     if (FLAGS_output_prefix_cut > 0 && stats.a_prefix_cut_f) {
       if (record.first.compare(0, FLAGS_output_prefix_cut, prefix) != 0) {
-        std::string prefix_out = rocksdb::LDBCommand::StringToHex(prefix);
+        std::string prefix_out =
+            TERARKDB_NAMESPACE::LDBCommand::StringToHex(prefix);
         if (prefix_count == 0) {
           prefix_ave_access = 0.0;
         } else {
@@ -776,7 +779,7 @@ Status TraceAnalyzer::MakeStatisticCorrelation(TraceStats& stats,
 
 // Process the statistics of QPS
 Status TraceAnalyzer::MakeStatisticQPS() {
-  if(begin_time_ == 0) {
+  if (begin_time_ == 0) {
     begin_time_ = trace_create_time_;
   }
   uint32_t duration =
@@ -904,7 +907,7 @@ Status TraceAnalyzer::MakeStatisticQPS() {
               stat.second.a_qps_prefix_stats.end()) {
             for (auto& qps_prefix : stat.second.a_qps_prefix_stats[qps_time]) {
               std::string qps_prefix_out =
-                  rocksdb::LDBCommand::StringToHex(qps_prefix.first);
+                  TERARKDB_NAMESPACE::LDBCommand::StringToHex(qps_prefix.first);
               ret = sprintf(buffer_, "The prefix: %s Access count: %u\n",
                             qps_prefix_out.c_str(), qps_prefix.second);
               if (ret < 0) {
@@ -1055,7 +1058,7 @@ Status TraceAnalyzer::ReProcessing() {
             return s;
           }
 
-          input_key = rocksdb::LDBCommand::HexToString(get_key);
+          input_key = TERARKDB_NAMESPACE::LDBCommand::HexToString(get_key);
           for (int type = 0; type < kTaTypeNum; type++) {
             if (!ta_[type].enabled) {
               continue;
@@ -1084,7 +1087,7 @@ Status TraceAnalyzer::ReProcessing() {
                   0) {
                 prefix[type] = input_key.substr(0, FLAGS_output_prefix_cut);
                 std::string prefix_out =
-                    rocksdb::LDBCommand::StringToHex(prefix[type]);
+                    TERARKDB_NAMESPACE::LDBCommand::StringToHex(prefix[type]);
                 ret = sprintf(buffer_, "%" PRIu64 " %s\n", cfs_[cf_id].w_count,
                               prefix_out.c_str());
                 if (ret < 0) {
@@ -1415,7 +1418,8 @@ Status TraceAnalyzer::OpenStatsOutputFiles(const std::string& type,
 // create the output path of the files to be opened
 Status TraceAnalyzer::CreateOutputFile(
     const std::string& type, const std::string& cf_name,
-    const std::string& ending, std::unique_ptr<rocksdb::WritableFile>* f_ptr) {
+    const std::string& ending,
+    std::unique_ptr<TERARKDB_NAMESPACE::WritableFile>* f_ptr) {
   std::string path;
   path = output_path_ + "/" + FLAGS_output_prefix + "-" + type + "-" + cf_name +
          "-" + ending;
@@ -1801,8 +1805,8 @@ void TraceAnalyzer::PrintStatistics() {
         printf("The Top %d keys that are accessed:\n",
                FLAGS_print_top_k_access);
         while (!stat.top_k_queue.empty()) {
-          std::string hex_key =
-              rocksdb::LDBCommand::StringToHex(stat.top_k_queue.top().second);
+          std::string hex_key = TERARKDB_NAMESPACE::LDBCommand::StringToHex(
+              stat.top_k_queue.top().second);
           printf("Access_count: %" PRIu64 " %s\n", stat.top_k_queue.top().first,
                  hex_key.c_str());
           stat.top_k_queue.pop();
@@ -1900,7 +1904,7 @@ Status TraceAnalyzer::WriteTraceSequence(const uint32_t& type,
                                          const std::string& key,
                                          const size_t value_size,
                                          const uint64_t ts) {
-  std::string hex_key = rocksdb::LDBCommand::StringToHex(key);
+  std::string hex_key = TERARKDB_NAMESPACE::LDBCommand::StringToHex(key);
   int ret;
   ret =
       sprintf(buffer_, "%u %u %zu %" PRIu64 "\n", type, cf_id, value_size, ts);
@@ -1935,7 +1939,7 @@ int trace_analyzer_tool(int argc, char** argv) {
     exit(1);
   }
 
-  rocksdb::Status s = analyzer->PrepareProcessing();
+  TERARKDB_NAMESPACE::Status s = analyzer->PrepareProcessing();
   if (!s.ok()) {
     fprintf(stderr, "%s\n", s.getState());
     fprintf(stderr, "Cannot initiate the trace reader\n");
@@ -1974,7 +1978,7 @@ int trace_analyzer_tool(int argc, char** argv) {
 
   return 0;
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // Endif of Gflag
 #endif  // RocksDB LITE

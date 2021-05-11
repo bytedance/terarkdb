@@ -34,13 +34,16 @@
 #include "table/block_builder.h"
 
 #include <assert.h>
+
 #include <algorithm>
+
 #include "db/dbformat.h"
 #include "rocksdb/comparator.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/data_block_footer.h"
 #include "util/coding.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 BlockBuilder::BlockBuilder(
     int block_restart_interval, bool use_delta_encoding,
@@ -64,14 +67,14 @@ BlockBuilder::BlockBuilder(
       assert(0);
   }
   assert(block_restart_interval_ >= 1);
-  restarts_.push_back(0);       // First restart point is at offset 0
+  restarts_.push_back(0);  // First restart point is at offset 0
   estimate_ = sizeof(uint32_t) + sizeof(uint32_t);
 }
 
 void BlockBuilder::Reset() {
   buffer_.clear();
   restarts_.clear();
-  restarts_.push_back(0);       // First restart point is at offset 0
+  restarts_.push_back(0);  // First restart point is at offset 0
   estimate_ = sizeof(uint32_t) + sizeof(uint32_t);
   counter_ = 0;
   finished_ = false;
@@ -81,8 +84,8 @@ void BlockBuilder::Reset() {
   }
 }
 
-size_t BlockBuilder::EstimateSizeAfterKV(const Slice& key, const Slice& value)
-  const {
+size_t BlockBuilder::EstimateSizeAfterKV(const Slice& key,
+                                         const Slice& value) const {
   size_t estimate = CurrentSizeEstimate();
   // Note: this is an imprecise estimate as it accounts for the whole key size
   // instead of non-shared key size.
@@ -95,13 +98,13 @@ size_t BlockBuilder::EstimateSizeAfterKV(const Slice& key, const Slice& value)
           : value.size() / 2;
 
   if (counter_ >= block_restart_interval_) {
-    estimate += sizeof(uint32_t); // a new restart entry.
+    estimate += sizeof(uint32_t);  // a new restart entry.
   }
 
-  estimate += sizeof(int32_t); // varint for shared prefix length.
+  estimate += sizeof(int32_t);  // varint for shared prefix length.
   // Note: this is an imprecise estimate as we will have to encoded size, one
   // for shared key and one for non-shared key.
-  estimate += VarintLength(key.size()); // varint for key length.
+  estimate += VarintLength(key.size());  // varint for key length.
   if (!use_value_delta_encoding_ || (counter_ >= block_restart_interval_)) {
     estimate += VarintLength(value.size());  // varint for value length.
   }
@@ -193,4 +196,4 @@ void BlockBuilder::Add(const Slice& key, const Slice& value,
   estimate_ += buffer_.size() - curr_size;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

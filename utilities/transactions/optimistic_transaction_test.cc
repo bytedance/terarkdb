@@ -9,19 +9,18 @@
 #include <string>
 #include <thread>
 
+#include "port/port.h"
 #include "rocksdb/db.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/optimistic_transaction_db.h"
 #include "rocksdb/utilities/transaction.h"
-#include "util/crc32c.h"
-#include "util/logging.h"
 #include "util/random.h"
 #include "util/testharness.h"
 #include "util/transaction_test_util.h"
-#include "port/port.h"
 
 using std::string;
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class OptimisticTransactionTest : public testing::Test {
  public:
@@ -48,7 +47,7 @@ class OptimisticTransactionTest : public testing::Test {
     Open();
   }
 
-private:
+ private:
   void Open() {
     Status s = OptimisticTransactionDB::Open(options, dbname, &txn_db);
     assert(s.ok());
@@ -1355,7 +1354,8 @@ TEST_F(OptimisticTransactionTest, SequenceNumberAfterRecoverTest) {
   WriteOptions write_options;
   OptimisticTransactionOptions transaction_options;
 
-  Transaction* transaction(txn_db->BeginTransaction(write_options, transaction_options));
+  Transaction* transaction(
+      txn_db->BeginTransaction(write_options, transaction_options));
   Status s = transaction->Put("foo", "val");
   ASSERT_OK(s);
   s = transaction->Put("foo2", "val");
@@ -1378,7 +1378,7 @@ TEST_F(OptimisticTransactionTest, SequenceNumberAfterRecoverTest) {
   delete transaction;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

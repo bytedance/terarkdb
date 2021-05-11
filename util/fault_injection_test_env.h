@@ -21,11 +21,12 @@
 #include "env/mock_env.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/filename.h"
 #include "util/mutexlock.h"
 #include "util/random.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class TestWritableFile;
 class FaultInjectionTestEnv;
@@ -67,8 +68,7 @@ class TestWritableFile : public WritableFile {
   virtual Status Flush() override;
   virtual Status Sync() override;
   virtual bool IsSyncThreadSafe() const override { return true; }
-  virtual Status PositionedAppend(const Slice& data,
-                                  uint64_t offset) override {
+  virtual Status PositionedAppend(const Slice& data, uint64_t offset) override {
     return target_->PositionedAppend(data, offset);
   }
   virtual bool use_direct_io() const override {
@@ -162,15 +162,15 @@ class FaultInjectionTestEnv : public EnvWrapper {
     MutexLock l(&mutex_);
     return filesystem_active_;
   }
-  void SetFilesystemActiveNoLock(bool active,
-      Status error = Status::Corruption("Not active")) {
+  void SetFilesystemActiveNoLock(
+      bool active, Status error = Status::Corruption("Not active")) {
     filesystem_active_ = active;
     if (!active) {
       error_ = error;
     }
   }
   void SetFilesystemActive(bool active,
-      Status error = Status::Corruption("Not active")) {
+                           Status error = Status::Corruption("Not active")) {
     MutexLock l(&mutex_);
     SetFilesystemActiveNoLock(active, error);
   }
@@ -187,4 +187,4 @@ class FaultInjectionTestEnv : public EnvWrapper {
   Status error_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

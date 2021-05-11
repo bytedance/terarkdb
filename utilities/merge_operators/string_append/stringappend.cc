@@ -12,9 +12,10 @@
 
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "utilities/merge_operators.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Constructor: also specify the delimiter character.
 StringAppendOperator::StringAppendOperator(char delim_char)
@@ -67,4 +68,4 @@ TERARK_FACTORY_REGISTER(StringAppendOperator, &NewStringAppendOperator);
 TERARK_FACTORY_REGISTER_EX(StringAppendOperator, "stringappendtest",
                            &NewStringAppendOperator);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

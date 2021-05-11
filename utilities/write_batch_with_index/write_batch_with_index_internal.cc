@@ -15,11 +15,12 @@
 #include "memtable/skiplist.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/db.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/write_batch_with_index.h"
 #include "util/coding.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Env;
 class Logger;
@@ -377,6 +378,6 @@ const WriteBatchEntryIndexFactory* GetWriteBatchEntryIndexFactory(
 
 ROCKSDB_REGISTER_WRITE_BATCH_WITH_INDEX(skip_list);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // !ROCKSDB_LITE

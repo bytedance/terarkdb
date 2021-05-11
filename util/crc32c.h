@@ -10,9 +10,12 @@
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
+
 #include <string>
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
+
+namespace TERARKDB_NAMESPACE {
 namespace crc32c {
 
 extern std::string IsFastCrc32Supported();
@@ -23,9 +26,7 @@ extern std::string IsFastCrc32Supported();
 extern uint32_t Extend(uint32_t init_crc, const char* data, size_t n);
 
 // Return the crc32c of data[0,n-1]
-inline uint32_t Value(const char* data, size_t n) {
-  return Extend(0, data, n);
-}
+inline uint32_t Value(const char* data, size_t n) { return Extend(0, data, n); }
 
 static const uint32_t kMaskDelta = 0xa282ead8ul;
 
@@ -46,4 +47,4 @@ inline uint32_t Unmask(uint32_t masked_crc) {
 }
 
 }  // namespace crc32c
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

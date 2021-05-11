@@ -3,6 +3,8 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
+#include "db/table_properties_collector.h"
+
 #include <map>
 #include <memory>
 #include <string>
@@ -11,9 +13,9 @@
 
 #include "db/db_impl.h"
 #include "db/dbformat.h"
-#include "db/table_properties_collector.h"
 #include "options/cf_options.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block_based_table_factory.h"
 #include "table/meta_blocks.h"
 #include "table/plain_table_factory.h"
@@ -23,7 +25,7 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class TablePropertiesTest : public testing::Test,
                             public testing::WithParamInterface<bool> {
@@ -57,30 +59,30 @@ void MakeBuilder(const Options& options, const ImmutableCFOptions& ioptions,
 }  // namespace
 
 // Collects keys that starts with "A" in a table.
-class RegularKeysStartWithA: public TablePropertiesCollector {
+class RegularKeysStartWithA : public TablePropertiesCollector {
  public:
   const char* Name() const override { return "RegularKeysStartWithA"; }
 
   Status Finish(UserCollectedProperties* properties) override {
-     std::string encoded;
-     std::string encoded_num_puts;
-     std::string encoded_num_deletes;
-     std::string encoded_num_single_deletes;
-     std::string encoded_num_size_changes;
-     PutVarint32(&encoded, count_);
-     PutVarint32(&encoded_num_puts, num_puts_);
-     PutVarint32(&encoded_num_deletes, num_deletes_);
-     PutVarint32(&encoded_num_single_deletes, num_single_deletes_);
-     PutVarint32(&encoded_num_size_changes, num_size_changes_);
-     *properties = UserCollectedProperties{
-         {"TablePropertiesTest", message_},
-         {"Count", encoded},
-         {"NumPuts", encoded_num_puts},
-         {"NumDeletes", encoded_num_deletes},
-         {"NumSingleDeletes", encoded_num_single_deletes},
-         {"NumSizeChanges", encoded_num_size_changes},
-     };
-     return Status::OK();
+    std::string encoded;
+    std::string encoded_num_puts;
+    std::string encoded_num_deletes;
+    std::string encoded_num_single_deletes;
+    std::string encoded_num_size_changes;
+    PutVarint32(&encoded, count_);
+    PutVarint32(&encoded_num_puts, num_puts_);
+    PutVarint32(&encoded_num_deletes, num_deletes_);
+    PutVarint32(&encoded_num_single_deletes, num_single_deletes_);
+    PutVarint32(&encoded_num_size_changes, num_size_changes_);
+    *properties = UserCollectedProperties{
+        {"TablePropertiesTest", message_},
+        {"Count", encoded},
+        {"NumPuts", encoded_num_puts},
+        {"NumDeletes", encoded_num_deletes},
+        {"NumSingleDeletes", encoded_num_single_deletes},
+        {"NumSizeChanges", encoded_num_size_changes},
+    };
+    return Status::OK();
   }
 
   Status AddUserKey(const Slice& user_key, const Slice& /*value*/,
@@ -253,16 +255,21 @@ void TestCustomizedTablePropertiesCollector(
   std::unique_ptr<WritableFileWriter> writer;
   const ImmutableCFOptions ioptions(options);
   const MutableCFOptions moptions(options);
-  std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
+  std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
       int_tbl_prop_collector_factories;
+  std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
+      int_tbl_prop_collector_factories_storage;
   if (test_int_tbl_prop_collector) {
-    int_tbl_prop_collector_factories.emplace_back(
+    int_tbl_prop_collector_factories =
+        &int_tbl_prop_collector_factories_storage;
+    int_tbl_prop_collector_factories->emplace_back(
         new RegularKeysStartWithAFactory(backward_mode));
   } else {
-    GetIntTblPropCollectorFactory(ioptions, &int_tbl_prop_collector_factories);
+    int_tbl_prop_collector_factories =
+        moptions.int_tbl_prop_collector_factories.get();
   }
   MakeBuilder(options, ioptions, moptions, internal_comparator,
-              &int_tbl_prop_collector_factories, &writer, &builder);
+              int_tbl_prop_collector_factories, &writer, &builder);
 
   SequenceNumber seqNum = 0U;
   for (const auto& kv : kvs) {
@@ -276,8 +283,7 @@ void TestCustomizedTablePropertiesCollector(
   test::StringSink* fwf =
       static_cast<test::StringSink*>(writer->writable_file());
   std::unique_ptr<RandomAccessFileReader> fake_file_reader(
-      test::GetRandomAccessFileReader(
-          new test::StringSource(fwf->contents())));
+      test::GetRandomAccessFileReader(new test::StringSource(fwf->contents())));
   TableProperties* props;
   Status s = ReadTableProperties(fake_file_reader.get(), fwf->contents().size(),
                                  magic_number, ioptions, &props,
@@ -327,7 +333,7 @@ void TestCustomizedTablePropertiesCollector(
 TEST_P(TablePropertiesTest, CustomizedTablePropertiesCollector) {
   // Test properties collectors with internal keys or regular keys
   // for block based table
-  for (bool encode_as_internal : { true, false }) {
+  for (bool encode_as_internal : {true, false}) {
     Options options;
     BlockBasedTableOptions table_options;
     table_options.flush_block_policy_factory =
@@ -382,7 +388,7 @@ void TestInternalKeyPropertiesCollector(
   Options options;
   test::PlainInternalKeyComparator pikc(options.comparator);
 
-  std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
+  std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
       int_tbl_prop_collector_factories;
   options.table_factory = table_factory;
   if (sanitized) {
@@ -394,18 +400,18 @@ void TestInternalKeyPropertiesCollector(
     // HACK: Set options.info_log to avoid writing log in
     // SanitizeOptions().
     options.info_log = std::make_shared<test::NullLogger>();
-    options = SanitizeOptions("db",            // just a place holder
+    options = SanitizeOptions("db",  // just a place holder
                               options);
-    ImmutableCFOptions ioptions(options);
-    GetIntTblPropCollectorFactory(ioptions, &int_tbl_prop_collector_factories);
-    options.comparator = comparator;
   }
-  const ImmutableCFOptions ioptions(options);
+  ImmutableCFOptions ioptions(options);
   MutableCFOptions moptions(options);
+  int_tbl_prop_collector_factories =
+      moptions.int_tbl_prop_collector_factories.get();
+  options.comparator = options.comparator;
 
   for (int iter = 0; iter < 2; ++iter) {
     MakeBuilder(options, ioptions, moptions, pikc,
-                &int_tbl_prop_collector_factories, &writable, &builder);
+                int_tbl_prop_collector_factories, &writable, &builder);
     for (const auto& k : keys) {
       ASSERT_OK(builder->Add(k.Encode(), LazyBuffer("val")));
     }
@@ -419,9 +425,9 @@ void TestInternalKeyPropertiesCollector(
         test::GetRandomAccessFileReader(
             new test::StringSource(fwf->contents())));
     TableProperties* props;
-    Status s =
-        ReadTableProperties(reader.get(), fwf->contents().size(), magic_number,
-                            ioptions, &props, true /* compression_type_missing */);
+    Status s = ReadTableProperties(reader.get(), fwf->contents().size(),
+                                   magic_number, ioptions, &props,
+                                   true /* compression_type_missing */);
     ASSERT_OK(s);
 
     std::unique_ptr<TableProperties> props_guard(props);
@@ -494,7 +500,7 @@ INSTANTIATE_TEST_CASE_P(InternalKeyPropertiesCollector, TablePropertiesTest,
 INSTANTIATE_TEST_CASE_P(CustomizedTablePropertiesCollector, TablePropertiesTest,
                         ::testing::Bool());
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

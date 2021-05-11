@@ -15,9 +15,10 @@ extern "C" {
 #include <string>
 #include <vector>
 
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/lua/rocks_lua_custom_library.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace lua {
 class LuaStateWrapper {
  public:
@@ -51,5 +52,5 @@ class LuaStateWrapper {
   lua_State* lua_state_;
 };
 }  // namespace lua
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // LUA

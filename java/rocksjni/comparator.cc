@@ -4,7 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 // This file implements the "bridge" between Java and C++ for
-// rocksdb::Comparator.
+// TERARKDB_NAMESPACE::Comparator.
 
 #include <jni.h>
 #include <stdio.h>
@@ -29,8 +29,8 @@ jlong Java_org_rocksdb_Comparator_createNewComparator0(JNIEnv* env,
                                                        jobject jobj,
                                                        jlong copt_handle) {
   auto* copt =
-      reinterpret_cast<rocksdb::ComparatorJniCallbackOptions*>(copt_handle);
-  auto* c = new rocksdb::ComparatorJniCallback(env, jobj, copt);
+      reinterpret_cast<TERARKDB_NAMESPACE::ComparatorJniCallbackOptions*>(copt_handle);
+  auto* c = new TERARKDB_NAMESPACE::ComparatorJniCallback(env, jobj, copt);
   return reinterpret_cast<jlong>(c);
 }
 // </editor-fold>
@@ -45,8 +45,8 @@ jlong Java_org_rocksdb_Comparator_createNewComparator0(JNIEnv* env,
 jlong Java_org_rocksdb_DirectComparator_createNewDirectComparator0(
     JNIEnv* env, jobject jobj, jlong copt_handle) {
   auto* copt =
-      reinterpret_cast<rocksdb::ComparatorJniCallbackOptions*>(copt_handle);
-  auto* c = new rocksdb::DirectComparatorJniCallback(env, jobj, copt);
+      reinterpret_cast<TERARKDB_NAMESPACE::ComparatorJniCallbackOptions*>(copt_handle);
+  auto* c = new TERARKDB_NAMESPACE::DirectComparatorJniCallback(env, jobj, copt);
   return reinterpret_cast<jlong>(c);
 }
 
@@ -57,7 +57,7 @@ jlong Java_org_rocksdb_DirectComparator_createNewDirectComparator0(
  */
 void Java_org_rocksdb_NativeComparatorWrapper_disposeInternal(
     JNIEnv* /*env*/, jobject /*jobj*/, jlong jcomparator_handle) {
-  auto* comparator = reinterpret_cast<rocksdb::Comparator*>(jcomparator_handle);
+  auto* comparator = reinterpret_cast<TERARKDB_NAMESPACE::Comparator*>(jcomparator_handle);
   delete comparator;
 }
 // </editor-fold>

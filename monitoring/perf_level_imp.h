@@ -4,10 +4,11 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 #pragma once
-#include "rocksdb/perf_level.h"
 #include "port/port.h"
+#include "rocksdb/perf_level.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 #ifdef ROCKSDB_SUPPORT_THREAD_LOCAL
 extern __thread PerfLevel perf_level;
@@ -15,4 +16,4 @@ extern __thread PerfLevel perf_level;
 extern PerfLevel perf_level;
 #endif
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

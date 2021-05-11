@@ -11,15 +11,17 @@
 int main() { fprintf(stderr, "Please install gflags to run tools\n"); }
 #else
 
+#include <sys/time.h>
+#include <unistd.h>
+
 #include <atomic>
 #include <functional>
 #include <string>
 #include <unordered_map>
-#include <unistd.h>
-#include <sys/time.h>
 
 #include "port/port_posix.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/gflags_compat.h"
 #include "util/mutexlock.h"
 #include "util/random.h"
@@ -32,7 +34,7 @@ DEFINE_int32(nthread_write, 1, "insert %");
 DEFINE_int32(nthread_read, 1, "lookup %");
 DEFINE_int32(nthread_erase, 1, "erase %");
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 //
 // HashTableImpl interface
@@ -269,7 +271,7 @@ class GranularLockImpl : public HashTableImpl<size_t, string> {
   HashTable<Node, Hash, Equal> impl_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 //
 // main
@@ -284,18 +286,20 @@ int main(int argc, char** argv) {
   //
   printf("Micro benchmarking std::unordered_map \n");
   {
-    rocksdb::SimpleImpl impl;
-    rocksdb::HashTableBenchmark _(&impl, FLAGS_nsec, FLAGS_nthread_write,
-                                  FLAGS_nthread_read, FLAGS_nthread_erase);
+    TERARKDB_NAMESPACE::SimpleImpl impl;
+    TERARKDB_NAMESPACE::HashTableBenchmark _(
+        &impl, FLAGS_nsec, FLAGS_nthread_write, FLAGS_nthread_read,
+        FLAGS_nthread_erase);
   }
   //
   // Micro benchmark scalable hash table
   //
   printf("Micro benchmarking scalable hash map \n");
   {
-    rocksdb::GranularLockImpl impl;
-    rocksdb::HashTableBenchmark _(&impl, FLAGS_nsec, FLAGS_nthread_write,
-                                  FLAGS_nthread_read, FLAGS_nthread_erase);
+    TERARKDB_NAMESPACE::GranularLockImpl impl;
+    TERARKDB_NAMESPACE::HashTableBenchmark _(
+        &impl, FLAGS_nsec, FLAGS_nthread_write, FLAGS_nthread_read,
+        FLAGS_nthread_erase);
   }
 
   return 0;

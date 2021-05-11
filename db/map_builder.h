@@ -15,9 +15,10 @@
 #include "db/dbformat.h"
 #include "db/log_writer.h"
 #include "rocksdb/db.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/iterator_cache.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 struct FileMetaData;
 struct FileMetaDataBoundBuilder;
@@ -60,7 +61,8 @@ class MapBuilder {
   Status Build(const std::vector<CompactionInputFiles>& inputs,
                const std::vector<Range>& deleted_range,
                const std::vector<FileMetaData*>& added_files, int output_level,
-               uint32_t output_path_id, ColumnFamilyData* cfd, Version* version,
+               uint32_t output_path_id, ColumnFamilyData* cfd,
+               bool optimize_range_deletion, Version* version,
                VersionEdit* edit, FileMetaData* file_meta = nullptr,
                std::unique_ptr<TableProperties>* porp = nullptr,
                std::set<FileMetaData*>* deleted_files = nullptr);
@@ -103,4 +105,4 @@ extern InternalIterator* NewMapElementIterator(
 extern bool IsPerfectRange(const Range& range, const FileMetaData* f,
                            const InternalKeyComparator& icomp);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

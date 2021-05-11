@@ -3,14 +3,15 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 //
-#include <ratio>
-
 #include "db/write_controller.h"
 
+#include <ratio>
+
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/testharness.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class WriteControllerTest : public testing::Test {};
 
@@ -127,7 +128,7 @@ TEST_F(WriteControllerTest, SanityTest) {
   ASSERT_FALSE(controller.IsStopped());
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

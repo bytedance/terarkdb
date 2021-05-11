@@ -17,10 +17,11 @@
 
 #include "db/dbformat.h"
 #include "rocksdb/cache.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/arena.h"
 #include "util/autovector.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class VersionSet;
 
@@ -91,16 +92,18 @@ struct TablePropertyCache {
     kHasSnapshots = 1ULL << 1,
     kNoRangeDeletions = 1ULL << 2,
   };
-  uint64_t num_entries = 0;                 // the number of entries.
-  uint64_t num_deletions = 0;               // the number of deletion entries.
-  uint64_t raw_key_size = 0;                // total uncompressed key size.
-  uint64_t raw_value_size = 0;              // total uncompressed value size.
-  uint8_t flags = 0;                        // save flags
-  uint8_t purpose = 0;                      // zero for essence sst
-  uint16_t max_read_amp = 1;                // max read amp from sst
-  float read_amp = 1;                       // expt read amp from sst
-  std::vector<Dependence> dependence;       // make these sst hidden
-  std::vector<uint64_t> inheritance_chain;  // inheritance chain
+  uint64_t num_entries = 0;            // the number of entries.
+  uint64_t num_deletions = 0;          // the number of deletion entries.
+  uint64_t raw_key_size = 0;           // total uncompressed key size.
+  uint64_t raw_value_size = 0;         // total uncompressed value size.
+  uint8_t flags = 0;                   // save flags
+  uint8_t purpose = 0;                 // zero for essence sst
+  uint16_t max_read_amp = 1;           // max read amp from sst
+  float read_amp = 1;                  // expt read amp from sst
+  std::vector<Dependence> dependence;  // make these sst hidden
+  std::vector<uint64_t> inheritance;   // inheritance set
+  uint64_t earliest_time_begin_compact = port::kMaxUint64;
+  uint64_t latest_time_end_compact = port::kMaxUint64;
 
   bool is_map_sst() const { return purpose == kMapSst; }
   bool has_range_deletions() const { return (flags & kNoRangeDeletions) == 0; }
@@ -245,7 +248,18 @@ struct LevelFilesBrief {
 class VersionEdit {
  public:
   VersionEdit() { Clear(); }
-  ~VersionEdit() {}
+  ~VersionEdit() = default;
+
+  struct ApplyCallback {
+    void (*callback)(void*, const Status&);
+    void* args;
+
+    operator bool() const { return callback != nullptr; }
+    void operator()(const Status& s) const {
+      assert(callback != nullptr);
+      callback(args, s);
+    }
+  };
 
   void Clear();
 
@@ -316,8 +330,13 @@ class VersionEdit {
 
   void SetApplyCallback(void (*apply_callback)(void*, const Status&),
                         void* apply_callback_arg) {
-    apply_callback_ = apply_callback;
-    apply_callback_arg_ = apply_callback_arg;
+    assert(apply_callback != nullptr);
+    apply_callback_vec_.emplace_back(
+        ApplyCallback{apply_callback, apply_callback_arg});
+  }
+  void SetApplyCallback(ApplyCallback callback) {
+    assert(callback);
+    apply_callback_vec_.emplace_back(callback);
   }
 
   // Number of edits
@@ -361,8 +380,8 @@ class VersionEdit {
     return new_files_;
   }
   void DoApplyCallback(const Status& s) {
-    if (apply_callback_ != nullptr) {
-      apply_callback_(apply_callback_arg_, s);
+    for (auto& apply_callback : apply_callback_vec_) {
+      apply_callback(s);
     }
   }
 
@@ -402,8 +421,9 @@ class VersionEdit {
 
   DeletedFileSet deleted_files_;
   std::vector<std::pair<int, FileMetaData>> new_files_;
-  void (*apply_callback_)(void*, const Status&);
-  void* apply_callback_arg_;
+
+  //
+  autovector<ApplyCallback, 2> apply_callback_vec_;
 
   // Each version edit record should have column_family_ set
   // If it's not set, it is default (0)
@@ -420,4 +440,4 @@ class VersionEdit {
   uint32_t remaining_entries_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

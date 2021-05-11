@@ -6,9 +6,10 @@
 #pragma once
 #ifndef ROCKSDB_LITE
 
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/transaction_db_mutex.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class TransactionDBMutex;
 class TransactionDBCondVar;
@@ -21,6 +22,6 @@ class TransactionDBMutexFactoryImpl : public TransactionDBMutexFactory {
   std::shared_ptr<TransactionDBCondVar> AllocateCondVar() override;
 };
 
-}  //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

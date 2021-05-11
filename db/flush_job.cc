@@ -38,6 +38,7 @@
 #include "rocksdb/statistics.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/block.h"
 #include "table/block_based_table_factory.h"
 #include "table/merging_iterator.h"
@@ -54,7 +55,7 @@
 #include "util/stop_watch.h"
 #include "util/sync_point.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 const char* GetFlushReasonString(FlushReason flush_reason) {
   switch (flush_reason) {
@@ -82,6 +83,8 @@ const char* GetFlushReasonString(FlushReason flush_reason) {
       return "Manual Flush";
     case FlushReason::kErrorRecovery:
       return "Error Recovery";
+    case FlushReason::kInstallTimeout:
+      return "Install Timeout";
     default:
       return "Invalid";
   }
@@ -125,7 +128,8 @@ FlushJob::FlushJob(
       flush_load_(flush_load),
       edit_(nullptr),
       base_(nullptr),
-      pick_memtable_called(false) {
+      pick_memtable_called_(false),
+      is_install_timeout_(false) {
   // Update the thread status to indicate flush.
   ReportStartedFlush();
   TEST_SYNC_POINT("FlushJob::FlushJob()");
@@ -160,8 +164,8 @@ void FlushJob::RecordFlushIOStats() {
 
 void FlushJob::PickMemTable() {
   db_mutex_->AssertHeld();
-  assert(!pick_memtable_called);
-  pick_memtable_called = true;
+  assert(!pick_memtable_called_);
+  pick_memtable_called_ = true;
   // Save the contents of the earliest memtable as a new Table
   cfd_->imm()->PickMemtablesToFlush(max_memtable_id_, &mems_);
   if (mems_.empty()) {
@@ -193,12 +197,23 @@ void FlushJob::PickMemTable() {
 Status FlushJob::Run(LogsWithPrepTracker* prep_tracker) {
   TEST_SYNC_POINT("FlushJob::Start");
   db_mutex_->AssertHeld();
-  assert(pick_memtable_called);
+  assert(pick_memtable_called_);
   AutoThreadOperationStageUpdater stage_run(ThreadStatus::STAGE_FLUSH_RUN);
   if (mems_.empty()) {
     ROCKS_LOG_BUFFER(log_buffer_, "[%s] Nothing in memtable to flush",
                      cfd_->GetName().c_str());
-    return Status::OK();
+    Status s;
+    if (write_manifest_) {
+      s = cfd_->imm()->TryInstallMemtableFlushResults(
+          cfd_, mutable_cf_options_, mems_, prep_tracker, versions_, db_mutex_,
+          0 /* file_number */, &job_context_->memtables_to_free, db_directory_,
+          log_buffer_, kDefaultInstallMemtableTimeoutMicros);
+      if (s.IsIncomplete() && s.subcode() == Status::kInstallTimeout) {
+        is_install_timeout_ = true;
+        return Status::OK();
+      }
+    }
+    return s;
   }
 
   // I/O measurement variables
@@ -226,14 +241,18 @@ Status FlushJob::Run(LogsWithPrepTracker* prep_tracker) {
   }
 
   if (!s.ok()) {
-    cfd_->imm()->RollbackMemtableFlush(mems_, meta_[0].fd.GetNumber());
+    cfd_->imm()->RollbackMemtableFlush(mems_, meta_[0].fd.GetNumber(), s);
   } else if (write_manifest_) {
     TEST_SYNC_POINT("FlushJob::InstallResults");
     // Replace immutable memtable with the generated Table
     s = cfd_->imm()->TryInstallMemtableFlushResults(
         cfd_, mutable_cf_options_, mems_, prep_tracker, versions_, db_mutex_,
         meta_[0].fd.GetNumber(), &job_context_->memtables_to_free,
-        db_directory_, log_buffer_);
+        db_directory_, log_buffer_, kDefaultInstallMemtableTimeoutMicros);
+    if (s.IsIncomplete() && s.subcode() == Status::kInstallTimeout) {
+      is_install_timeout_ = true;
+      s = Status::OK();
+    }
   }
 
   RecordFlushIOStats();
@@ -375,7 +394,9 @@ Status FlushJob::WriteLevel0Table() {
           mutable_cf_options_, env_options_, cfd_->table_cache(),
           c_style_callback(get_arena_input_iter), &get_arena_input_iter,
           c_style_callback(get_range_del_iters), &get_range_del_iters, &meta_,
-          cfd_->internal_comparator(), cfd_->int_tbl_prop_collector_factories(),
+          cfd_->internal_comparator(),
+          cfd_->int_tbl_prop_collector_factories(mutable_cf_options_),
+          cfd_->int_tbl_prop_collector_factories_for_blob(mutable_cf_options_),
           cfd_->GetID(), cfd_->GetName(), existing_snapshots_,
           earliest_write_conflict_snapshot_, snapshot_checker_,
           output_compression_, cfd_->ioptions()->compression_opts,
@@ -383,6 +404,14 @@ Status FlushJob::WriteLevel0Table() {
           TableFileCreationReason::kFlush, event_logger_, job_context_->job_id,
           Env::IO_HIGH, &table_properties_, 0 /* level */, flush_load_,
           current_time, oldest_key_time, write_hint);
+      if (s.ok() && cfd_->ioptions()->ttl_extractor_factory != nullptr) {
+        ROCKS_LOG_INFO(db_options_.info_log,
+                       "FlushOutput earliest_time_begin_compact = %" PRIu64
+                       ", latest_time_end_compact = %" PRIu64,
+                       meta_[0].prop.earliest_time_begin_compact,
+                       meta_[0].prop.latest_time_end_compact);
+      }
+
       LogFlush(db_options_.info_log);
     }
     ROCKS_LOG_INFO(db_options_.info_log,
@@ -433,4 +462,4 @@ Status FlushJob::WriteLevel0Table() {
   return s;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

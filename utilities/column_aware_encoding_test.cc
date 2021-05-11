@@ -6,12 +6,14 @@
 #ifndef ROCKSDB_LITE
 
 #include <vector>
+
+#include "rocksdb/terark_namespace.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 #include "utilities/col_buf_decoder.h"
 #include "utilities/col_buf_encoder.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class ColumnAwareEncodingTest : public testing::Test {
  public:
@@ -59,9 +61,11 @@ TEST_P(ColumnAwareEncodingTestWithSize, NoCompressionEncodeDecode) {
   const char* encoded_data_ptr = encoded_data.c_str();
   uint64_t expected_encoded_val;
   if (col_size == 8) {
-    expected_encoded_val = port::kLittleEndian ? 0x0807060504030201 : 0x0102030405060708;
+    expected_encoded_val =
+        port::kLittleEndian ? 0x0807060504030201 : 0x0102030405060708;
   } else if (col_size == 4) {
-    expected_encoded_val = port::kLittleEndian ? 0x08070605 : 0x0102030400000000;
+    expected_encoded_val =
+        port::kLittleEndian ? 0x08070605 : 0x0102030400000000;
   }
   uint64_t encoded_val = 0;
   for (int i = 0; i < row_count; ++i) {
@@ -122,9 +126,11 @@ TEST_P(ColumnAwareEncodingTestWithSize, RleEncodeDecode) {
   memcpy(&encoded_val, encoded_data_ptr, col_size);
   uint64_t expected_encoded_val;
   if (col_size == 8) {
-    expected_encoded_val = port::kLittleEndian ? 0x0807060504030201 : 0x0102030405060708;
+    expected_encoded_val =
+        port::kLittleEndian ? 0x0807060504030201 : 0x0102030405060708;
   } else if (col_size == 4) {
-    expected_encoded_val = port::kLittleEndian ? 0x08070605 : 0x0102030400000000;
+    expected_encoded_val =
+        port::kLittleEndian ? 0x08070605 : 0x0102030400000000;
   }
   // Check correctness of encoded value
   ASSERT_EQ(expected_encoded_val, encoded_val);
@@ -158,8 +164,10 @@ TEST_P(ColumnAwareEncodingTestWithSize, DeltaEncodeDecode) {
   std::unique_ptr<ColBufEncoder> col_buf_encoder(
       new FixedLengthColBufEncoder(col_size, kColDeltaVarint, false, true));
   std::string str_buf;
-  uint64_t base_val1 = port::kLittleEndian ? 0x0102030405060708 : 0x0807060504030201;
-  uint64_t base_val2 = port::kLittleEndian ? 0x0202030405060708 : 0x0807060504030202;
+  uint64_t base_val1 =
+      port::kLittleEndian ? 0x0102030405060708 : 0x0807060504030201;
+  uint64_t base_val2 =
+      port::kLittleEndian ? 0x0202030405060708 : 0x0807060504030202;
   uint64_t val1 = 0, val2 = 0;
   memcpy(&val1, &base_val1, col_size);
   memcpy(&val2, &base_val2, col_size);
@@ -235,7 +243,7 @@ TEST_F(ColumnAwareEncodingTest, ChunkBufEncodeDecode) {
   delete[] decoded_data_base;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

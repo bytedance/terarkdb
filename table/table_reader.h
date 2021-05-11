@@ -9,12 +9,14 @@
 
 #pragma once
 #include <memory>
+
 #include "db/range_tombstone_fragmenter.h"
 #include "rocksdb/cache.h"
 #include "rocksdb/slice_transform.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Cache;
 class Iterator;
@@ -121,7 +123,7 @@ class TableReader {
   }
 
   virtual void SetTableCacheHandle(Cache* /*table_cache*/,
-                                   Cache::Handle */*handle*/) {}
+                                   Cache::Handle* /*handle*/) {}
 
   void UpdateMaxCoveringTombstoneSeq(
       const ReadOptions& readOptions, const Slice& user_key,
@@ -130,4 +132,4 @@ class TableReader {
   virtual void Close() {}
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

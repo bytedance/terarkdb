@@ -9,6 +9,8 @@
 
 #if !defined(ROCKSDB_LITE) && !defined(OS_WIN)
 
+#include "rocksdb/utilities/backupable_db.h"
+
 #include <algorithm>
 #include <string>
 
@@ -17,9 +19,9 @@
 #include "port/port.h"
 #include "port/stack_trace.h"
 #include "rocksdb/rate_limiter.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/transaction_log.h"
 #include "rocksdb/types.h"
-#include "rocksdb/utilities/backupable_db.h"
 #include "rocksdb/utilities/options_util.h"
 #include "util/file_reader_writer.h"
 #include "util/filename.h"
@@ -31,7 +33,7 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 
@@ -41,20 +43,19 @@ class DummyDB : public StackableDB {
  public:
   /* implicit */
   DummyDB(const Options& options, const std::string& dbname)
-     : StackableDB(nullptr), options_(options), dbname_(dbname),
-       deletions_enabled_(true), sequence_number_(0) {}
+      : StackableDB(nullptr),
+        options_(options),
+        dbname_(dbname),
+        deletions_enabled_(true),
+        sequence_number_(0) {}
 
   virtual SequenceNumber GetLatestSequenceNumber() const override {
     return ++sequence_number_;
   }
 
-  virtual const std::string& GetName() const override {
-    return dbname_;
-  }
+  virtual const std::string& GetName() const override { return dbname_; }
 
-  virtual Env* GetEnv() const override {
-    return options_.env;
-  }
+  virtual Env* GetEnv() const override { return options_.env; }
 
   using DB::GetOptions;
   virtual Options GetOptions(
@@ -93,12 +94,10 @@ class DummyDB : public StackableDB {
   class DummyLogFile : public LogFile {
    public:
     /* implicit */
-     DummyLogFile(const std::string& path, bool alive = true)
-         : path_(path), alive_(alive) {}
+    DummyLogFile(const std::string& path, bool alive = true)
+        : path_(path), alive_(alive) {}
 
-    virtual std::string PathName() const override {
-      return path_;
-    }
+    virtual std::string PathName() const override { return path_; }
 
     virtual uint64_t LogNumber() const override {
       // what business do you have calling this method?
@@ -116,14 +115,12 @@ class DummyDB : public StackableDB {
       return kMaxSequenceNumber;
     }
 
-    virtual uint64_t SizeFileBytes() const override {
-      return 0;
-    }
+    virtual uint64_t SizeFileBytes() const override { return 0; }
 
    private:
     std::string path_;
     bool alive_;
-  }; // DummyLogFile
+  };  // DummyLogFile
 
   virtual Status GetSortedWalFiles(VectorLogPtr& files) override {
     EXPECT_TRUE(!deletions_enabled_);
@@ -141,12 +138,13 @@ class DummyDB : public StackableDB {
   std::vector<std::string> live_files_;
   // pair<filename, alive?>
   std::vector<std::pair<std::string, bool>> wal_files_;
+
  private:
   Options options_;
   std::string dbname_;
   bool deletions_enabled_;
   mutable SequenceNumber sequence_number_;
-}; // DummyDB
+};  // DummyDB
 
 class TestEnv : public EnvWrapper {
  public:
@@ -173,6 +171,7 @@ class TestEnv : public EnvWrapper {
       size_left = (n > size_left) ? size_left - n : 0;
       return Status::OK();
     }
+
    private:
     size_t size_left = 200;
     Random rnd_;
@@ -392,7 +391,7 @@ class FileManager : public EnvWrapper {
   Status DeleteRandomFileInDir(const std::string& dir) {
     std::vector<std::string> children;
     GetChildren(dir, &children);
-    if (children.size() <= 2) { // . and ..
+    if (children.size() <= 2) {  // . and ..
       return Status::NotFound("");
     }
     while (true) {
@@ -494,7 +493,7 @@ class FileManager : public EnvWrapper {
 
  private:
   Random rnd_;
-}; // FileManager
+};  // FileManager
 
 // utility functions
 static size_t FillDB(DB* db, int from, int to) {
@@ -549,7 +548,7 @@ class BackupableDBTest : public testing::Test {
     // set up db options
     options_.create_if_missing = true;
     options_.paranoid_checks = true;
-    options_.write_buffer_size = 1 << 17; // 128KB
+    options_.write_buffer_size = 1 << 17;  // 128KB
     options_.env = test_db_env_.get();
     options_.wal_dir = dbname_;
 
@@ -682,7 +681,7 @@ class BackupableDBTest : public testing::Test {
   std::unique_ptr<FileManager> file_manager_;
 
   // all the dbs!
-  DummyDB* dummy_db_; // BackupableDB owns dummy_db_
+  DummyDB* dummy_db_;  // BackupableDB owns dummy_db_
   std::unique_ptr<DB> db_;
   std::unique_ptr<BackupEngine> backup_engine_;
 
@@ -691,7 +690,7 @@ class BackupableDBTest : public testing::Test {
 
  protected:
   std::unique_ptr<BackupableDBOptions> backupable_options_;
-}; // BackupableDBTest
+};  // BackupableDBTest
 
 void AppendPath(const std::string& path, std::vector<std::string>& v) {
   for (auto& f : v) {
@@ -1061,7 +1060,8 @@ TEST_F(BackupableDBTest, BackupOptions) {
     db_.reset();
     db_.reset(OpenDB());
     ASSERT_OK(backup_engine_->CreateNewBackup(db_.get(), true));
-    rocksdb::GetLatestOptionsFileName(db_->GetName(), options_.env, &name);
+    TERARKDB_NAMESPACE::GetLatestOptionsFileName(db_->GetName(), options_.env,
+                                                 &name);
     ASSERT_OK(file_manager_->FileExists(OptionsPath(backupdir_, i) + name));
     backup_chroot_env_->GetChildren(OptionsPath(backupdir_, i), &filenames);
     for (auto fn : filenames) {
@@ -1082,7 +1082,7 @@ TEST_F(BackupableDBTest, SetOptionsBackupRaceCondition) {
        {"BackupableDBTest::SetOptionsBackupRaceCondition:AfterSetOptions",
         "CheckpointImpl::CreateCheckpoint:SavedLiveFiles2"}});
   SyncPoint::GetInstance()->EnableProcessing();
-  rocksdb::port::Thread setoptions_thread{[this]() {
+  TERARKDB_NAMESPACE::port::Thread setoptions_thread{[this]() {
     TEST_SYNC_POINT(
         "BackupableDBTest::SetOptionsBackupRaceCondition:BeforeSetOptions");
     DBImpl* dbi = static_cast<DBImpl*>(db_.get());
@@ -1484,20 +1484,21 @@ TEST_F(BackupableDBTest, ChangeManifestDuringBackupCreation) {
   OpenDBAndBackupEngine(true);
   FillDB(db_.get(), 0, 100);
 
-  rocksdb::SyncPoint::GetInstance()->LoadDependency({
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->LoadDependency({
       {"CheckpointImpl::CreateCheckpoint:SavedLiveFiles1",
        "VersionSet::LogAndApply:WriteManifest"},
       {"VersionSet::LogAndApply:WriteManifestDone",
        "CheckpointImpl::CreateCheckpoint:SavedLiveFiles2"},
   });
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
 
-  rocksdb::port::Thread flush_thread{[this]() { ASSERT_OK(db_->Flush(FlushOptions())); }};
+  TERARKDB_NAMESPACE::port::Thread flush_thread{
+      [this]() { ASSERT_OK(db_->Flush(FlushOptions())); }};
 
   ASSERT_OK(backup_engine_->CreateNewBackup(db_.get(), false));
 
   flush_thread.join();
-  rocksdb::SyncPoint::GetInstance()->DisableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
 
   // The last manifest roll would've already been cleaned up by the full scan
   // that happens when CreateNewBackup invokes EnableFileDeletions. We need to
@@ -1743,12 +1744,12 @@ TEST_P(BackupableDBTestWithParam, BackupUsingDirectIO) {
   }
 }
 
-}  // anon namespace
+}  // namespace
 
-} //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

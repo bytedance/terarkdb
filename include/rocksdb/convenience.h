@@ -12,9 +12,10 @@
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/terark_zip_table.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE
 // The following set of functions provide a way to construct RocksDB Options
@@ -65,8 +66,7 @@ namespace rocksdb {
 //   - CompressionType: valid values are "kNoCompression",
 //     "kSnappyCompression", "kZlibCompression", "kBZip2Compression", ...
 //   - CompactionStyle: valid values are "kCompactionStyleLevel",
-//     "kCompactionStyleUniversal", "kCompactionStyleFIFO", and
-//     "kCompactionStyleNone".
+//     "kCompactionStyleUniversal" and "kCompactionStyleNone".
 //
 
 // Take a default ColumnFamilyOptions "base_options" in addition to a
@@ -290,8 +290,8 @@ Status GetPlainTableOptionsFromMap(
 Status GetTerarkZipTableOptionsFromMap(
     const TerarkZipTableOptions& table_options,
     const std::unordered_map<std::string, std::string>& opts_map,
-    TerarkZipTableOptions* new_table_options, bool input_strings_escaped = false,
-    bool ignore_unknown_options = false);
+    TerarkZipTableOptions* new_table_options,
+    bool input_strings_escaped = false, bool ignore_unknown_options = false);
 
 // Take a string representation of option names and  values, apply them into the
 // base_options, and return the new options as a result. The string has the
@@ -301,15 +301,13 @@ Status GetTerarkZipTableOptionsFromMap(
 // BlockBasedTableOptions as part of the string for block-based table factory:
 //   "write_buffer_size=1024;block_based_table_factory={block_size=4k};"
 //   "max_write_buffer_num=2"
-Status GetColumnFamilyOptionsFromString(
-    const ColumnFamilyOptions& base_options,
-    const std::string& opts_str,
-    ColumnFamilyOptions* new_options);
+Status GetColumnFamilyOptionsFromString(const ColumnFamilyOptions& base_options,
+                                        const std::string& opts_str,
+                                        ColumnFamilyOptions* new_options);
 
-Status GetDBOptionsFromString(
-    const DBOptions& base_options,
-    const std::string& opts_str,
-    DBOptions* new_options);
+Status GetDBOptionsFromString(const DBOptions& base_options,
+                              const std::string& opts_str,
+                              DBOptions* new_options);
 
 Status GetStringFromDBOptions(std::string* opts_str,
                               const DBOptions& db_options,
@@ -325,18 +323,15 @@ Status GetStringFromCompressionType(std::string* compression_str,
 std::vector<CompressionType> GetSupportedCompressions();
 
 Status GetBlockBasedTableOptionsFromString(
-    const BlockBasedTableOptions& table_options,
-    const std::string& opts_str,
+    const BlockBasedTableOptions& table_options, const std::string& opts_str,
     BlockBasedTableOptions* new_table_options);
 
-Status GetPlainTableOptionsFromString(
-    const PlainTableOptions& table_options,
-    const std::string& opts_str,
-    PlainTableOptions* new_table_options);
+Status GetPlainTableOptionsFromString(const PlainTableOptions& table_options,
+                                      const std::string& opts_str,
+                                      PlainTableOptions* new_table_options);
 
 Status GetTerarkZipTableOptionsFromString(
-    const TerarkZipTableOptions& table_options,
-    const std::string& opts_str,
+    const TerarkZipTableOptions& table_options, const std::string& opts_str,
     TerarkZipTableOptions* new_table_options);
 
 Status GetMemTableRepFactoryFromString(
@@ -373,4 +368,4 @@ Status VerifySstFileChecksum(const Options& options,
                              const std::string& file_path);
 #endif  // ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

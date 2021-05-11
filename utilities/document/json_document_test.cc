@@ -5,16 +5,17 @@
 
 #ifndef ROCKSDB_LITE
 
+#include "rocksdb/utilities/json_document.h"
+
 #include <map>
 #include <set>
 #include <string>
 
-#include "rocksdb/utilities/json_document.h"
-
-#include "util/testutil.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/testharness.h"
+#include "util/testutil.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace {
 void AssertField(const JSONDocument& json, const std::string& field) {
   ASSERT_TRUE(json.Contains(field));
@@ -52,9 +53,7 @@ void AssertField(const JSONDocument& json, const std::string& field,
 
 class JSONDocumentTest : public testing::Test {
  public:
-  JSONDocumentTest()
-  : rnd_(101)
-  {}
+  JSONDocumentTest() : rnd_(101) {}
 
   void AssertSampleJSON(const JSONDocument& json) {
     AssertField(json, "title", std::string("json"));
@@ -189,7 +188,7 @@ TEST_F(JSONDocumentTest, MakeByTypeTest) {
 
 TEST_F(JSONDocumentTest, Parsing) {
   std::unique_ptr<JSONDocument> parsed_json(
-          JSONDocument::ParseJSON(kSampleJSON.c_str()));
+      JSONDocument::ParseJSON(kSampleJSON.c_str()));
   ASSERT_TRUE(parsed_json->IsOwner());
   ASSERT_TRUE(parsed_json != nullptr);
   AssertSampleJSON(*parsed_json);
@@ -212,14 +211,14 @@ TEST_F(JSONDocumentTest, Parsing) {
 
 TEST_F(JSONDocumentTest, Serialization) {
   std::unique_ptr<JSONDocument> parsed_json(
-            JSONDocument::ParseJSON(kSampleJSON.c_str()));
+      JSONDocument::ParseJSON(kSampleJSON.c_str()));
   ASSERT_TRUE(parsed_json != nullptr);
   ASSERT_TRUE(parsed_json->IsOwner());
   std::string serialized;
   parsed_json->Serialize(&serialized);
 
   std::unique_ptr<JSONDocument> deserialized_json(
-            JSONDocument::Deserialize(Slice(serialized)));
+      JSONDocument::Deserialize(Slice(serialized)));
   ASSERT_TRUE(deserialized_json != nullptr);
   AssertSampleJSON(*deserialized_json);
 
@@ -270,7 +269,7 @@ TEST_F(JSONDocumentTest, OperatorEqualsTest) {
   ASSERT_TRUE(arrayWithInt32Doc->IsArray());
   ASSERT_TRUE((*arrayWithInt32Doc)[0].IsInt64());
   ASSERT_TRUE((*arrayWithInt32Doc)[0] ==
-               JSONDocument(static_cast<int64_t>(1000000)));
+              JSONDocument(static_cast<int64_t>(1000000)));
 
   // kDouble
   ASSERT_TRUE(JSONDocument(15.) != JSONDocument());
@@ -288,13 +287,13 @@ TEST_F(JSONDocumentTest, JSONDocumentBuilderTest) {
   ASSERT_TRUE(builder.WriteJSONDocument(1));
 
   ASSERT_TRUE(builder.WriteStartArray());
-    ASSERT_TRUE(builder.WriteJSONDocument(123));
-    ASSERT_TRUE(builder.WriteJSONDocument("a"));
-    ASSERT_TRUE(builder.WriteJSONDocument("b"));
+  ASSERT_TRUE(builder.WriteJSONDocument(123));
+  ASSERT_TRUE(builder.WriteJSONDocument("a"));
+  ASSERT_TRUE(builder.WriteJSONDocument("b"));
   ASSERT_TRUE(builder.WriteEndArray());
 
   ASSERT_TRUE(builder.WriteStartObject());
-    ASSERT_TRUE(builder.WriteKeyValue("b", "c"));
+  ASSERT_TRUE(builder.WriteKeyValue("b", "c"));
   ASSERT_TRUE(builder.WriteEndObject());
 
   ASSERT_TRUE(builder.WriteEndArray());
@@ -304,7 +303,7 @@ TEST_F(JSONDocumentTest, JSONDocumentBuilderTest) {
 
 TEST_F(JSONDocumentTest, OwnershipTest) {
   std::unique_ptr<JSONDocument> parsed(
-          JSONDocument::ParseJSON(kSampleJSON.c_str()));
+      JSONDocument::ParseJSON(kSampleJSON.c_str()));
   ASSERT_TRUE(parsed != nullptr);
   ASSERT_TRUE(parsed->IsOwner());
 
@@ -325,7 +324,7 @@ TEST_F(JSONDocumentTest, OwnershipTest) {
   ASSERT_TRUE(!moved_from_non_owner.IsOwner());
 }
 
-}  //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

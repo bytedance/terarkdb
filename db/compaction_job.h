@@ -44,6 +44,7 @@
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/memtablerep.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/transaction_log.h"
 #include "table/scoped_arena_iterator.h"
 #include "util/autovector.h"
@@ -51,7 +52,7 @@
 #include "util/stop_watch.h"
 #include "util/thread_local.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Arena;
 class ErrorHandler;
@@ -130,7 +131,7 @@ class CompactionJob {
       const Slice* next_table_min_key = nullptr);
   Status FinishCompactionOutputBlob(
       const Status& input_status, SubcompactionState* sub_compact,
-      const std::vector<uint64_t>& inheritance_chain);
+      const std::vector<uint64_t>& inheritance_tree);
   Status InstallCompactionResults(const MutableCFOptions& mutable_cf_options);
   void RecordCompactionIOStats();
   Status OpenCompactionOutputFile(SubcompactionState* sub_compact);
@@ -199,4 +200,4 @@ class CompactionJob {
   Env::WriteLifeTimeHint write_hint_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

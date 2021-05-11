@@ -16,6 +16,7 @@ int main() {
 #endif
 
 #include <inttypes.h>
+
 #include <algorithm>
 #include <atomic>
 #include <functional>
@@ -25,6 +26,7 @@ int main() {
 
 #include "dynamic_bloom.h"
 #include "port/port.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/arena.h"
 #include "util/gflags_compat.h"
 #include "util/logging.h"
@@ -38,7 +40,7 @@ DEFINE_int32(bits_per_key, 10, "");
 DEFINE_int32(num_probes, 6, "");
 DEFINE_bool(enable_perf, false, "");
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 static Slice Key(uint64_t i, char* buffer) {
   memcpy(buffer, &i, sizeof(i));
@@ -138,8 +140,8 @@ TEST_F(DynamicBloomTest, VaryingLengths) {
 
       // All added keys must match
       for (uint64_t i = 0; i < num; i++) {
-        ASSERT_TRUE(bloom.MayContain(Key(i, buffer))) << "Num " << num
-                                                      << "; key " << i;
+        ASSERT_TRUE(bloom.MayContain(Key(i, buffer)))
+            << "Num " << num << "; key " << i;
       }
 
       // Check false positive rate
@@ -273,8 +275,9 @@ TEST_F(DynamicBloomTest, concurrent_with_perf) {
       }
 
       uint64_t elapsed = timer.ElapsedNanos();
-      fprintf(stderr, "standard bloom, avg parallel add latency %" PRIu64
-                      " nanos/key\n",
+      fprintf(stderr,
+              "standard bloom, avg parallel add latency %" PRIu64
+              " nanos/key\n",
               elapsed / num_keys);
 
       timer.Start();
@@ -295,8 +298,9 @@ TEST_F(DynamicBloomTest, concurrent_with_perf) {
       }
 
       elapsed = timer.ElapsedNanos();
-      fprintf(stderr, "standard bloom, avg parallel hit latency %" PRIu64
-                      " nanos/key\n",
+      fprintf(stderr,
+              "standard bloom, avg parallel hit latency %" PRIu64
+              " nanos/key\n",
               elapsed / num_keys);
 
       timer.Start();
@@ -321,14 +325,15 @@ TEST_F(DynamicBloomTest, concurrent_with_perf) {
       }
 
       elapsed = timer.ElapsedNanos();
-      fprintf(stderr, "standard bloom, avg parallel miss latency %" PRIu64
-                      " nanos/key, %f%% false positive rate\n",
+      fprintf(stderr,
+              "standard bloom, avg parallel miss latency %" PRIu64
+              " nanos/key, %f%% false positive rate\n",
               elapsed / num_keys, false_positives.load() * 100.0 / num_keys);
     }
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

@@ -7,9 +7,11 @@
 #include "utilities/table_properties_collectors/compact_on_deletion_collector.h"
 
 #include <memory>
+
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/table_properties_collectors.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 CompactOnDeletionCollector::CompactOnDeletionCollector(
     size_t sliding_window_size, size_t deletion_trigger)
@@ -53,7 +55,7 @@ Status CompactOnDeletionCollector::AddUserKey(const Slice& /*key*/,
     // the number of deletion keys in the oldest bucket in the
     // observation window.
     assert(num_deletions_in_observation_window_ >=
-        num_deletions_in_buckets_[current_bucket_]);
+           num_deletions_in_buckets_[current_bucket_]);
     num_deletions_in_observation_window_ -=
         num_deletions_in_buckets_[current_bucket_];
     num_deletions_in_buckets_[current_bucket_] = 0;
@@ -74,17 +76,16 @@ Status CompactOnDeletionCollector::AddUserKey(const Slice& /*key*/,
 TablePropertiesCollector*
 CompactOnDeletionCollectorFactory::CreateTablePropertiesCollector(
     TablePropertiesCollectorFactory::Context /*context*/) {
-  return new CompactOnDeletionCollector(
-      sliding_window_size_.load(), deletion_trigger_.load());
+  return new CompactOnDeletionCollector(sliding_window_size_.load(),
+                                        deletion_trigger_.load());
 }
 
 std::shared_ptr<CompactOnDeletionCollectorFactory>
-    NewCompactOnDeletionCollectorFactory(
-        size_t sliding_window_size,
-        size_t deletion_trigger) {
+NewCompactOnDeletionCollectorFactory(size_t sliding_window_size,
+                                     size_t deletion_trigger) {
   return std::shared_ptr<CompactOnDeletionCollectorFactory>(
-      new CompactOnDeletionCollectorFactory(
-          sliding_window_size, deletion_trigger));
+      new CompactOnDeletionCollectorFactory(sliding_window_size,
+                                            deletion_trigger));
 }
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // !ROCKSDB_LITE

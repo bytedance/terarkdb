@@ -8,15 +8,16 @@
 #include "monitoring/thread_status_updater.h"
 #include "monitoring/thread_status_util.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 #ifndef NDEBUG
 // the delay for debugging purpose.
 static std::atomic<int> states_delay[ThreadStatus::NUM_STATE_TYPES];
 
-void ThreadStatusUtil::TEST_SetStateDelay(
-    const ThreadStatus::StateType state, int micro) {
+void ThreadStatusUtil::TEST_SetStateDelay(const ThreadStatus::StateType state,
+                                          int micro) {
   states_delay[state].store(micro, std::memory_order_relaxed);
 }
 
@@ -29,4 +30,4 @@ void ThreadStatusUtil::TEST_StateDelay(const ThreadStatus::StateType state) {
 
 #endif  // !NDEBUG
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

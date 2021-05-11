@@ -16,8 +16,9 @@
 #include "rocksdb/cleanable.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // State pattern
 
@@ -513,4 +514,4 @@ extern LazyBuffer LazyBufferReference(const LazyBuffer& buffer);
 extern LazyBuffer LazyBufferRemoveSuffix(const LazyBuffer* buffer,
                                          size_t fixed_len);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -4,15 +4,18 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include "rocksdb/utilities/sim_cache.h"
+
 #include <atomic>
+
 #include "monitoring/statistics.h"
 #include "port/port.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/file_reader_writer.h"
 #include "util/mutexlock.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 
@@ -90,8 +93,8 @@ class CacheActivityLogger {
     log_line += key.ToString(true);
     log_line += " - ";
     AppendNumberTo(&log_line, size);
-  // @lint-ignore TXT2 T25377293 Grandfathered in
-		log_line += "\n";
+    // @lint-ignore TXT2 T25377293 Grandfathered in
+    log_line += "\n";
 
     // line format: "ADD - <KEY> - <KEY-SIZE>"
     MutexLock l(&mutex_);
@@ -179,9 +182,9 @@ class SimCacheImpl : public SimCache {
     // *Lambda function without capture can be assgined to a function pointer
     Handle* h = key_only_cache_->Lookup(key);
     if (h == nullptr) {
-      key_only_cache_->Insert(key, nullptr, charge,
-                              [](const Slice& /*k*/, void* /*v*/) {}, nullptr,
-                              priority);
+      key_only_cache_->Insert(
+          key, nullptr, charge, [](const Slice& /*k*/, void* /*v*/) {}, nullptr,
+          priority);
     } else {
       key_only_cache_->Release(h);
     }
@@ -341,4 +344,4 @@ std::shared_ptr<SimCache> NewSimCache(std::shared_ptr<Cache> cache,
   return std::make_shared<SimCacheImpl>(cache, sim_capacity, num_shard_bits);
 }
 
-}  // end namespace rocksdb
+}  // end namespace TERARKDB_NAMESPACE

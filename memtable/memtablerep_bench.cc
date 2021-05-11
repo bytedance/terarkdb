@@ -34,6 +34,7 @@ int main() {
 #include "rocksdb/memtablerep.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice_transform.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/write_buffer_manager.h"
 #include "util/arena.h"
 #include "util/gflags_compat.h"
@@ -65,7 +66,8 @@ DEFINE_string(memtablerep, "skiplist",
               "\tvector              -- backed by an std::vector\n"
               "\thashskiplist        -- backed by a hash skip list\n"
               "\thashlinklist        -- backed by a hash linked list\n"
-              "\tcuckoo              -- backed by a cuckoo hash table");
+              "\tcuckoo              -- backed by a cuckoo hash table\n"
+              "\tpatricia_trie       -- backed by a patricia trie\n");
 
 DEFINE_int64(bucket_count, 1000000,
              "bucket_count parameter to pass into NewHashSkiplistRepFactory or "
@@ -133,7 +135,7 @@ DEFINE_int64(seed, 0,
              "Seed base for random number generators. "
              "When 0 it is deterministic.");
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 struct CallbackVerifyArgs {
@@ -199,7 +201,7 @@ class KeyGenerator {
         return values_[next_++];
     }
     assert(false);
-    return std::numeric_limits<uint64_t>::max();
+    return port::kMaxUint64;
   }
 
  private:
@@ -247,24 +249,14 @@ class FillBenchmarkThread : public BenchmarkThread {
                         num_ops, read_hits) {}
 
   void FillOne() {
-    char* buf = nullptr;
-    auto internal_key_size = 16;
-    auto encoded_len =
-        FLAGS_item_size + VarintLength(internal_key_size) + internal_key_size;
-    KeyHandle handle = table_->Allocate(encoded_len, &buf);
-    assert(buf != nullptr);
-    char* p = EncodeVarint32(buf, internal_key_size);
+    std::string user_key;
     auto key = key_gen_->Next();
-    EncodeFixed64(p, key);
-    p += 8;
-    EncodeFixed64(p, ++(*sequence_));
-    p += 8;
+    PutFixed64(&user_key, key);
+    InternalKey internal_key(user_key, ++(*sequence_), kTypeValue);
     Slice bytes = generator_.Generate(FLAGS_item_size);
-    memcpy(p, bytes.data(), FLAGS_item_size);
-    p += FLAGS_item_size;
-    assert(p == buf + encoded_len);
-    table_->Insert(handle);
-    *bytes_written_ += encoded_len;
+    table_->InsertKeyValue(internal_key.Encode(), bytes);
+    *bytes_written_ +=
+        MemTableRep::EncodeKeyValueSize(internal_key.Encode(), bytes);
   }
 
   void operator()() override {
@@ -287,9 +279,7 @@ class ConcurrentFillBenchmarkThread : public FillBenchmarkThread {
   }
 
   void operator()() override {
-    // # of read threads will be total threads - write threads (always 1). Loop
-    // while all reads complete.
-    while ((*threads_done_).load() < (FLAGS_num_threads - 1)) {
+    for (unsigned int i = 0; i < num_ops_; ++i) {
       FillOne();
     }
   }
@@ -478,8 +468,8 @@ class FillBenchmark : public Benchmark {
     num_write_ops_per_thread_ = FLAGS_num_operations;
   }
 
-  void RunThreads(std::vector<port::Thread>* /*threads*/, uint64_t* bytes_written,
-                  uint64_t* bytes_read, bool /*write*/,
+  void RunThreads(std::vector<port::Thread>* /*threads*/,
+                  uint64_t* bytes_written, uint64_t* bytes_read, bool /*write*/,
                   uint64_t* read_hits) override {
     FillBenchmarkThread(table_, key_gen_, bytes_written, bytes_read, sequence_,
                         num_write_ops_per_thread_, read_hits)();
@@ -564,7 +554,7 @@ class ReadWriteBenchmark : public Benchmark {
   }
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 void PrintWarnings() {
 #if defined(__GNUC__) && !defined(__OPTIMIZE__)
@@ -578,51 +568,59 @@ void PrintWarnings() {
 }
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   SetUsageMessage(std::string("\nUSAGE:\n") + std::string(argv[0]) +
                   " [OPTIONS]...");
   ParseCommandLineFlags(&argc, &argv, true);
 
   PrintWarnings();
 
-  rocksdb::Options options;
+  TERARKDB_NAMESPACE::Options options;
 
-  std::unique_ptr<rocksdb::MemTableRepFactory> factory;
+  std::unique_ptr<TERARKDB_NAMESPACE::MemTableRepFactory> factory;
   if (FLAGS_memtablerep == "skiplist") {
-    factory.reset(new rocksdb::SkipListFactory);
+    factory.reset(new TERARKDB_NAMESPACE::SkipListFactory);
 #ifndef ROCKSDB_LITE
+  } else if (FLAGS_memtablerep == "patricia_trie") {
+#ifdef WITH_TERARK_ZIP
+    factory.reset(TERARKDB_NAMESPACE::NewPatriciaTrieRepFactory());
+#else
+    fprintf(stderr,
+            "ERROR: NewPatriciaTrieRepFactory only works WITH_TERARK_ZIP=ON\n");
+    return -1;
+#endif
   } else if (FLAGS_memtablerep == "vector") {
-    factory.reset(new rocksdb::VectorRepFactory);
+    factory.reset(new TERARKDB_NAMESPACE::VectorRepFactory);
   } else if (FLAGS_memtablerep == "hashskiplist") {
-    factory.reset(rocksdb::NewHashSkipListRepFactory(
+    factory.reset(TERARKDB_NAMESPACE::NewHashSkipListRepFactory(
         FLAGS_bucket_count, FLAGS_hashskiplist_height,
         FLAGS_hashskiplist_branching_factor));
     options.prefix_extractor.reset(
-        rocksdb::NewFixedPrefixTransform(FLAGS_prefix_length));
+        TERARKDB_NAMESPACE::NewFixedPrefixTransform(FLAGS_prefix_length));
   } else if (FLAGS_memtablerep == "hashlinklist") {
-    factory.reset(rocksdb::NewHashLinkListRepFactory(
+    factory.reset(TERARKDB_NAMESPACE::NewHashLinkListRepFactory(
         FLAGS_bucket_count, FLAGS_huge_page_tlb_size,
         FLAGS_bucket_entries_logging_threshold,
         FLAGS_if_log_bucket_dist_when_flash, FLAGS_threshold_use_skiplist));
     options.prefix_extractor.reset(
-        rocksdb::NewFixedPrefixTransform(FLAGS_prefix_length));
+        TERARKDB_NAMESPACE::NewFixedPrefixTransform(FLAGS_prefix_length));
   } else if (FLAGS_memtablerep == "cuckoo") {
-    factory.reset(rocksdb::NewHashCuckooRepFactory(
+    factory.reset(TERARKDB_NAMESPACE::NewHashCuckooRepFactory(
         FLAGS_write_buffer_size, FLAGS_average_data_size,
         static_cast<uint32_t>(FLAGS_hash_function_count)));
     options.prefix_extractor.reset(
-        rocksdb::NewFixedPrefixTransform(FLAGS_prefix_length));
+        TERARKDB_NAMESPACE::NewFixedPrefixTransform(FLAGS_prefix_length));
 #endif  // ROCKSDB_LITE
   } else {
     fprintf(stdout, "Unknown memtablerep: %s\n", FLAGS_memtablerep.c_str());
     exit(1);
   }
 
-  rocksdb::InternalKeyComparator internal_key_comp(
-      rocksdb::BytewiseComparator());
-  rocksdb::MemTable::KeyComparator key_comp(internal_key_comp);
-  rocksdb::Arena arena;
-  rocksdb::WriteBufferManager wb(FLAGS_write_buffer_size);
+  TERARKDB_NAMESPACE::InternalKeyComparator internal_key_comp(
+      TERARKDB_NAMESPACE::BytewiseComparator());
+  TERARKDB_NAMESPACE::MemTable::KeyComparator key_comp(internal_key_comp);
+  TERARKDB_NAMESPACE::Arena arena;
+  TERARKDB_NAMESPACE::WriteBufferManager wb(FLAGS_write_buffer_size);
   uint64_t sequence;
   const bool needs_dup_key_check = false;
   auto createMemtableRep = [&] {
@@ -631,57 +629,57 @@ int main(int argc, char** argv) {
                                       options.prefix_extractor.get(),
                                       options.info_log.get());
   };
-  std::unique_ptr<rocksdb::MemTableRep> memtablerep;
-  rocksdb::Random64 rng(FLAGS_seed);
+  std::unique_ptr<TERARKDB_NAMESPACE::MemTableRep> memtablerep;
+  TERARKDB_NAMESPACE::Random64 rng(FLAGS_seed);
   const char* benchmarks = FLAGS_benchmarks.c_str();
   while (benchmarks != nullptr) {
-    std::unique_ptr<rocksdb::KeyGenerator> key_gen;
+    std::unique_ptr<TERARKDB_NAMESPACE::KeyGenerator> key_gen;
     const char* sep = strchr(benchmarks, ',');
-    rocksdb::Slice name;
+    TERARKDB_NAMESPACE::Slice name;
     if (sep == nullptr) {
       name = benchmarks;
       benchmarks = nullptr;
     } else {
-      name = rocksdb::Slice(benchmarks, sep - benchmarks);
+      name = TERARKDB_NAMESPACE::Slice(benchmarks, sep - benchmarks);
       benchmarks = sep + 1;
     }
-    std::unique_ptr<rocksdb::Benchmark> benchmark;
-    if (name == rocksdb::Slice("fillseq")) {
+    std::unique_ptr<TERARKDB_NAMESPACE::Benchmark> benchmark;
+    if (name == TERARKDB_NAMESPACE::Slice("fillseq")) {
       memtablerep.reset(createMemtableRep());
-      key_gen.reset(new rocksdb::KeyGenerator(&rng, rocksdb::SEQUENTIAL,
-                                              FLAGS_num_operations));
-      benchmark.reset(new rocksdb::FillBenchmark(memtablerep.get(),
-                                                 key_gen.get(), &sequence));
-    } else if (name == rocksdb::Slice("fillrandom")) {
+      key_gen.reset(new TERARKDB_NAMESPACE::KeyGenerator(
+          &rng, TERARKDB_NAMESPACE::SEQUENTIAL, FLAGS_num_operations));
+      benchmark.reset(new TERARKDB_NAMESPACE::FillBenchmark(
+          memtablerep.get(), key_gen.get(), &sequence));
+    } else if (name == TERARKDB_NAMESPACE::Slice("fillrandom")) {
       memtablerep.reset(createMemtableRep());
-      key_gen.reset(new rocksdb::KeyGenerator(&rng, rocksdb::UNIQUE_RANDOM,
-                                              FLAGS_num_operations));
-      benchmark.reset(new rocksdb::FillBenchmark(memtablerep.get(),
-                                                 key_gen.get(), &sequence));
-    } else if (name == rocksdb::Slice("readrandom")) {
-      key_gen.reset(new rocksdb::KeyGenerator(&rng, rocksdb::RANDOM,
-                                              FLAGS_num_operations));
-      benchmark.reset(new rocksdb::ReadBenchmark(memtablerep.get(),
-                                                 key_gen.get(), &sequence));
-    } else if (name == rocksdb::Slice("readseq")) {
-      key_gen.reset(new rocksdb::KeyGenerator(&rng, rocksdb::SEQUENTIAL,
-                                              FLAGS_num_operations));
-      benchmark.reset(
-          new rocksdb::SeqReadBenchmark(memtablerep.get(), &sequence));
-    } else if (name == rocksdb::Slice("readwrite")) {
+      key_gen.reset(new TERARKDB_NAMESPACE::KeyGenerator(
+          &rng, TERARKDB_NAMESPACE::UNIQUE_RANDOM, FLAGS_num_operations));
+      benchmark.reset(new TERARKDB_NAMESPACE::FillBenchmark(
+          memtablerep.get(), key_gen.get(), &sequence));
+    } else if (name == TERARKDB_NAMESPACE::Slice("readrandom")) {
+      key_gen.reset(new TERARKDB_NAMESPACE::KeyGenerator(
+          &rng, TERARKDB_NAMESPACE::RANDOM, FLAGS_num_operations));
+      benchmark.reset(new TERARKDB_NAMESPACE::ReadBenchmark(
+          memtablerep.get(), key_gen.get(), &sequence));
+    } else if (name == TERARKDB_NAMESPACE::Slice("readseq")) {
+      key_gen.reset(new TERARKDB_NAMESPACE::KeyGenerator(
+          &rng, TERARKDB_NAMESPACE::SEQUENTIAL, FLAGS_num_operations));
+      benchmark.reset(new TERARKDB_NAMESPACE::SeqReadBenchmark(
+          memtablerep.get(), &sequence));
+    } else if (name == TERARKDB_NAMESPACE::Slice("readwrite")) {
       memtablerep.reset(createMemtableRep());
-      key_gen.reset(new rocksdb::KeyGenerator(&rng, rocksdb::RANDOM,
-                                              FLAGS_num_operations));
-      benchmark.reset(new rocksdb::ReadWriteBenchmark<
-          rocksdb::ConcurrentReadBenchmarkThread>(memtablerep.get(),
-                                                  key_gen.get(), &sequence));
-    } else if (name == rocksdb::Slice("seqreadwrite")) {
+      key_gen.reset(new TERARKDB_NAMESPACE::KeyGenerator(
+          &rng, TERARKDB_NAMESPACE::RANDOM, FLAGS_num_operations));
+      benchmark.reset(new TERARKDB_NAMESPACE::ReadWriteBenchmark<
+                      TERARKDB_NAMESPACE::ConcurrentReadBenchmarkThread>(
+          memtablerep.get(), key_gen.get(), &sequence));
+    } else if (name == TERARKDB_NAMESPACE::Slice("seqreadwrite")) {
       memtablerep.reset(createMemtableRep());
-      key_gen.reset(new rocksdb::KeyGenerator(&rng, rocksdb::RANDOM,
-                                              FLAGS_num_operations));
-      benchmark.reset(new rocksdb::ReadWriteBenchmark<
-          rocksdb::SeqConcurrentReadBenchmarkThread>(memtablerep.get(),
-                                                     key_gen.get(), &sequence));
+      key_gen.reset(new TERARKDB_NAMESPACE::KeyGenerator(
+          &rng, TERARKDB_NAMESPACE::RANDOM, FLAGS_num_operations));
+      benchmark.reset(new TERARKDB_NAMESPACE::ReadWriteBenchmark<
+                      TERARKDB_NAMESPACE::SeqConcurrentReadBenchmarkThread>(
+          memtablerep.get(), key_gen.get(), &sequence));
     } else {
       std::cout << "WARNING: skipping unknown benchmark '" << name.ToString()
                 << std::endl;

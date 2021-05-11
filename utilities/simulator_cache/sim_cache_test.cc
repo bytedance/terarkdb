@@ -4,11 +4,14 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include "rocksdb/utilities/sim_cache.h"
+
 #include <cstdlib>
+
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class SimCacheTest : public DBTestBase {
  private:
@@ -34,7 +37,7 @@ class SimCacheTest : public DBTestBase {
     Options options = CurrentOptions();
     options.create_if_missing = true;
     // options.compression = kNoCompression;
-    options.statistics = rocksdb::CreateDBStatistics();
+    options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
     options.table_factory.reset(new BlockBasedTableFactory(table_options));
     return options;
   }
@@ -193,8 +196,8 @@ TEST_F(SimCacheTest, SimCacheLogging) {
   ASSERT_EQ(add_num, num_block_entries);
 
   // Log things again but stop logging automatically after reaching 512 bytes
- // @lint-ignore TXT2 T25377293 Grandfathered in
-	int max_size = 512;
+  // @lint-ignore TXT2 T25377293 Grandfathered in
+  int max_size = 512;
   ASSERT_OK(sim_cache->StartActivityLogging(log_file, env_, max_size));
   for (int it = 0; it < 10; it++) {
     for (int i = 0; i < num_block_entries; i++) {
@@ -205,15 +208,15 @@ TEST_F(SimCacheTest, SimCacheLogging) {
 
   uint64_t fsize = 0;
   ASSERT_OK(env_->GetFileSize(log_file, &fsize));
-	// error margin of 100 bytes
+  // error margin of 100 bytes
   ASSERT_LT(fsize, max_size + 100);
-	ASSERT_GT(fsize, max_size - 100);
+  ASSERT_GT(fsize, max_size - 100);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

@@ -11,9 +11,10 @@
 
 #include "rocksdb/db.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/stackable_db.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace spatial {
 
 // NOTE: SpatialDB is experimental and we might change its API without warning.
@@ -257,5 +258,5 @@ class SpatialDB : public StackableDB {
 };
 
 }  // namespace spatial
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // ROCKSDB_LITE

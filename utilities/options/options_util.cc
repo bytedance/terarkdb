@@ -9,9 +9,11 @@
 
 #include "options/options_parser.h"
 #include "rocksdb/options.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/filename.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
+
 Status LoadOptionsFromFile(const std::string& file_name, Env* env,
                            DBOptions* db_options,
                            std::vector<ColumnFamilyDescriptor>* cf_descs,
@@ -33,8 +35,8 @@ Status LoadOptionsFromFile(const std::string& file_name, Env* env,
   return Status::OK();
 }
 
-Status GetLatestOptionsFileName(const std::string& dbpath,
-                                Env* env, std::string* options_file_name) {
+Status GetLatestOptionsFileName(const std::string& dbpath, Env* env,
+                                std::string* options_file_name) {
   Status s;
   std::string latest_file_name;
   uint64_t latest_time_stamp = 0;
@@ -98,5 +100,5 @@ Status CheckOptionsCompatibility(
       kDefaultLevel, ignore_unknown_options);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 #endif  // !ROCKSDB_LITE

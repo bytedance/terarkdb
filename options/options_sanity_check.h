@@ -8,8 +8,11 @@
 #include <string>
 #include <unordered_map>
 
+#include "rocksdb/terark_namespace.h"
+
 #ifndef ROCKSDB_LITE
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
+
 // This enum defines the RocksDB options sanity level.
 enum OptionsSanityCheckLevel : unsigned char {
   // Performs no sanity check at all.
@@ -23,7 +26,7 @@ enum OptionsSanityCheckLevel : unsigned char {
 
 // The sanity check level for DB options
 static const std::unordered_map<std::string, OptionsSanityCheckLevel>
-    sanity_level_db_options {};
+    sanity_level_db_options{};
 
 // The sanity check level for column-family options
 static const std::unordered_map<std::string, OptionsSanityCheckLevel>
@@ -34,7 +37,7 @@ static const std::unordered_map<std::string, OptionsSanityCheckLevel>
 
 // The sanity check level for block-based table options
 static const std::unordered_map<std::string, OptionsSanityCheckLevel>
-    sanity_level_bbt_options {};
+    sanity_level_bbt_options{};
 
 OptionsSanityCheckLevel DBOptionSanityCheckLevel(
     const std::string& options_name);
@@ -43,6 +46,6 @@ OptionsSanityCheckLevel CFOptionSanityCheckLevel(
 OptionsSanityCheckLevel BBTOptionSanityCheckLevel(
     const std::string& options_name);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // !ROCKSDB_LITE

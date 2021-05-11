@@ -12,12 +12,13 @@
 
 #include "port/port.h"
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/logging.h"
 #include "util/mutexlock.h"
 #include "util/sst_file_manager_impl.h"
 #include "util/sync_point.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 DeleteScheduler::DeleteScheduler(Env* env, int64_t rate_bytes_per_sec,
                                  Logger* info_log,
@@ -275,7 +276,7 @@ void DeleteScheduler::BackgroundEmptyTrash() {
         // rate limiting is disabled
         total_penlty = 0;
       }
-      // mu_wait_.Lock();q
+      // mu_wait_.Lock();
       TEST_SYNC_POINT_CALLBACK("DeleteScheduler::BackgroundEmptyTrash:Wait",
                                &total_penlty);
 
@@ -383,6 +384,6 @@ void DeleteScheduler::WaitForEmptyTrash() {
   }
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

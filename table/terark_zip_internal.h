@@ -7,26 +7,23 @@
 
 #pragma once
 
-// project headers
-#include "terark_zip_table.h"
-// std headers
 #include <atomic>
-#include <mutex>
-// boost headers
 #include <boost/intrusive_ptr.hpp>
 #include <boost/noncopyable.hpp>
-// rocksdb headers
-#include <options/options_helper.h>
-#include <rocksdb/convenience.h>
-#include <rocksdb/env.h>
-#include <rocksdb/slice.h>
-#include <rocksdb/table.h>
-// terark headers
+#include <mutex>
 #include <terark/fstring.hpp>
 #include <terark/stdtypes.hpp>
 #include <terark/util/profiling.hpp>
 #include <terark/valvec.hpp>
 #include <terark/zbs/lru_page_cache.hpp>
+
+#include "options/options_helper.h"
+#include "rocksdb/convenience.h"
+#include "rocksdb/env.h"
+#include "rocksdb/slice.h"
+#include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
+#include "table/terark_zip_table.h"
 
 //#define DEBUG_TWO_PASS_ITER
 
@@ -42,9 +39,9 @@
 #define TERARK_ROCKSDB_5007(...)
 #endif
 
-void PrintVersion(rocksdb::Logger* info_log);
+void PrintVersion(TERARKDB_NAMESPACE::Logger* info_log);
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 using terark::byte_t;
 using terark::fstring;
@@ -221,4 +218,4 @@ class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
 static auto& terark_zip_table_type_info =
     TerarkZipTableFactory::terark_zip_table_type_info;
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

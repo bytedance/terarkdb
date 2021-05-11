@@ -5,9 +5,11 @@
 #pragma once
 
 #include <stdint.h>
-#include "rocksdb/status.h"
 
-namespace rocksdb {
+#include "rocksdb/status.h"
+#include "rocksdb/terark_namespace.h"
+
+namespace TERARKDB_NAMESPACE {
 
 class Comparator;
 class Iterator;
@@ -19,7 +21,6 @@ class SliceTransform;
 // that index block.
 class BlockPrefixIndex {
  public:
-
   // Maps a key to a list of data blocks that could potentially contain
   // the key, based on the prefix.
   // Returns the total number of relevant blocks, 0 means the key does
@@ -28,7 +29,7 @@ class BlockPrefixIndex {
 
   size_t ApproximateMemoryUsage() const {
     return sizeof(BlockPrefixIndex) +
-      (num_block_array_buffer_entries_ + num_buckets_) * sizeof(uint32_t);
+           (num_block_array_buffer_entries_ + num_buckets_) * sizeof(uint32_t);
   }
 
   // Create hash index by reading from the metadata blocks.
@@ -48,8 +49,7 @@ class BlockPrefixIndex {
   friend Builder;
 
   BlockPrefixIndex(const SliceTransform* internal_prefix_extractor,
-                   uint32_t num_buckets,
-                   uint32_t* buckets,
+                   uint32_t num_buckets, uint32_t* buckets,
                    uint32_t num_block_array_buffer_entries,
                    uint32_t* block_array_buffer)
       : internal_prefix_extractor_(internal_prefix_extractor),
@@ -65,4 +65,4 @@ class BlockPrefixIndex {
   uint32_t* block_array_buffer_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

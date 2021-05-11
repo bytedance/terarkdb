@@ -11,9 +11,10 @@
 
 #include <set>
 
+#include "rocksdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class SeparateHelper;
 
@@ -59,24 +60,50 @@ class IteratorWrapperBase {
   }
 
   // Iterator interface methods
-  bool Valid() const        { return valid_; }
-  Slice key() const         { assert(Valid()); return key_; }
+  bool Valid() const { return valid_; }
+  Slice key() const {
+    assert(Valid());
+    return key_;
+  }
   TValue value() const {
     assert(Valid());
     return iter_->value();
   }
   // Methods below require iter() != nullptr
-  Status status() const     { assert(iter_); return iter_->status(); }
-  void Next()               { assert(iter_); iter_->Next();        Update(); }
-  void Prev()               { assert(iter_); iter_->Prev();        Update(); }
-  void Seek(const Slice& k) { assert(iter_); iter_->Seek(k);       Update(); }
+  Status status() const {
+    assert(iter_);
+    return iter_->status();
+  }
+  void Next() {
+    assert(iter_);
+    iter_->Next();
+    Update();
+  }
+  void Prev() {
+    assert(iter_);
+    iter_->Prev();
+    Update();
+  }
+  void Seek(const Slice& k) {
+    assert(iter_);
+    iter_->Seek(k);
+    Update();
+  }
   void SeekForPrev(const Slice& k) {
     assert(iter_);
     iter_->SeekForPrev(k);
     Update();
   }
-  void SeekToFirst()        { assert(iter_); iter_->SeekToFirst(); Update(); }
-  void SeekToLast()         { assert(iter_); iter_->SeekToLast();  Update(); }
+  void SeekToFirst() {
+    assert(iter_);
+    iter_->SeekToFirst();
+    Update();
+  }
+  void SeekToLast() {
+    assert(iter_);
+    iter_->SeekToLast();
+    Update();
+  }
 
  protected:
   void Update() {
@@ -167,8 +194,14 @@ class LazyInternalIteratorWrapper : public InternalIterator {
 
  public:
   bool Valid() const override { return iter_ && iter_->Valid(); }
-  Slice key() const override { assert(iter_); return iter_->key(); }
-  LazyBuffer value() const override { assert(iter_); return iter_->value(); }
+  Slice key() const override {
+    assert(iter_);
+    return iter_->key();
+  }
+  LazyBuffer value() const override {
+    assert(iter_);
+    return iter_->value();
+  }
   Status status() const override {
     if (!iter_) {
       return Status::OK();
@@ -178,16 +211,36 @@ class LazyInternalIteratorWrapper : public InternalIterator {
     }
     return iter_->status();
   }
-  void Next() override { assert(iter_); iter_->Next(); FilterNext(); }
-  void Prev() override { assert(iter_); iter_->Prev(); FilterPrev(); }
-  void Seek(const Slice& k) override { Init(); iter_->Seek(k); FilterNext(); }
+  void Next() override {
+    assert(iter_);
+    iter_->Next();
+    FilterNext();
+  }
+  void Prev() override {
+    assert(iter_);
+    iter_->Prev();
+    FilterPrev();
+  }
+  void Seek(const Slice& k) override {
+    Init();
+    iter_->Seek(k);
+    FilterNext();
+  }
   void SeekForPrev(const Slice& k) override {
     Init();
     iter_->SeekForPrev(k);
     FilterPrev();
   }
-  void SeekToFirst() override { Init(); iter_->SeekToFirst(); FilterNext(); }
-  void SeekToLast() override { Init(); iter_->SeekToLast(); FilterPrev(); }
+  void SeekToFirst() override {
+    Init();
+    iter_->SeekToFirst();
+    FilterNext();
+  }
+  void SeekToLast() override {
+    Init();
+    iter_->SeekToLast();
+    FilterPrev();
+  }
 
  private:
   void Init() {
@@ -204,4 +257,4 @@ class LazyInternalIteratorWrapper : public InternalIterator {
   std::unique_ptr<InternalIterator> iter_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

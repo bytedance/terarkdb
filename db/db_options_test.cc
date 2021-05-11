@@ -18,11 +18,15 @@
 #include "rocksdb/cache.h"
 #include "rocksdb/convenience.h"
 #include "rocksdb/rate_limiter.h"
+#include "rocksdb/stats_history.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/random.h"
 #include "util/sync_point.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
+
+const int kMicrosInSec = 1000000;
 
 class DBOptionsTest : public DBTestBase {
  public:
@@ -135,19 +139,17 @@ TEST_F(DBOptionsTest, SetBytesPerSync) {
   int i = 0;
   const std::string kValue(kValueSize, 'v');
   ASSERT_EQ(options.bytes_per_sync, dbfull()->GetDBOptions().bytes_per_sync);
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
-      "WritableFileWriter::RangeSync:0", [&](void* /*arg*/) {
-        counter++;
-      });
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
+      "WritableFileWriter::RangeSync:0", [&](void* /*arg*/) { counter++; });
 
   WriteOptions write_opts;
   // should sync approximately 40MB/1MB ~= 40 times.
   for (i = 0; i < 40; i++) {
     Put(Key(i), kValue, write_opts);
   }
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
   ASSERT_OK(dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr));
-  rocksdb::SyncPoint::GetInstance()->DisableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
   low_bytes_per_sync = counter;
   ASSERT_GT(low_bytes_per_sync, 35);
   ASSERT_LT(low_bytes_per_sync, 45);
@@ -161,7 +163,7 @@ TEST_F(DBOptionsTest, SetBytesPerSync) {
   for (i = 0; i < 40; i++) {
     Put(Key(i), kValue, write_opts);
   }
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
   ASSERT_OK(dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr));
   ASSERT_GT(counter, 5);
   ASSERT_LT(counter, 15);
@@ -187,11 +189,9 @@ TEST_F(DBOptionsTest, SetWalBytesPerSync) {
   ASSERT_EQ(512, dbfull()->GetDBOptions().wal_bytes_per_sync);
   int counter = 0;
   int low_bytes_per_sync = 0;
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
-      "WritableFileWriter::RangeSync:0", [&](void* /*arg*/) {
-        counter++;
-      });
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
+      "WritableFileWriter::RangeSync:0", [&](void* /*arg*/) { counter++; });
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
   const std::string kValue(kValueSize, 'v');
   int i = 0;
   for (; i < 10; i++) {
@@ -200,7 +200,7 @@ TEST_F(DBOptionsTest, SetWalBytesPerSync) {
   // Do not flush. If we flush here, SwitchWAL will reuse old WAL file since its
   // empty and will not get the new wal_bytes_per_sync value.
   low_bytes_per_sync = counter;
-  //5242880 = 1024 * 1024 * 5
+  // 5242880 = 1024 * 1024 * 5
   ASSERT_OK(dbfull()->SetDBOptions({{"wal_bytes_per_sync", "5242880"}}));
   ASSERT_EQ(5242880, dbfull()->GetDBOptions().wal_bytes_per_sync);
   counter = 0;
@@ -229,7 +229,7 @@ TEST_F(DBOptionsTest, WritableFileMaxBufferSize) {
 
   std::atomic<int> match_cnt(0);
   std::atomic<int> unmatch_cnt(0);
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "WritableFileWriter::WritableFileWriter:0", [&](void* arg) {
         int value = static_cast<int>(reinterpret_cast<uintptr_t>(arg));
         if (value == buffer_size) {
@@ -238,7 +238,7 @@ TEST_F(DBOptionsTest, WritableFileMaxBufferSize) {
           unmatch_cnt++;
         }
       });
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
   int i = 0;
   for (; i < 3; i++) {
     ASSERT_OK(Put("foo", ToString(i)));
@@ -290,10 +290,8 @@ TEST_F(DBOptionsTest, EnableAutoCompactionAndTriggerStall) {
       options.level0_file_num_compaction_trigger = 1;
       options.level0_stop_writes_trigger = std::numeric_limits<int>::max();
       options.level0_slowdown_writes_trigger = std::numeric_limits<int>::max();
-      options.hard_pending_compaction_bytes_limit =
-          std::numeric_limits<uint64_t>::max();
-      options.soft_pending_compaction_bytes_limit =
-          std::numeric_limits<uint64_t>::max();
+      options.hard_pending_compaction_bytes_limit = port::kMaxUint64;
+      options.soft_pending_compaction_bytes_limit = port::kMaxUint64;
       options.env = env_;
       options.enable_lazy_compaction = false;
       options.blob_size = -1;
@@ -408,7 +406,7 @@ TEST_F(DBOptionsTest, SetOptionsMayTriggerCompaction) {
 TEST_F(DBOptionsTest, SetBackgroundCompactionThreads) {
   Options options;
   options.create_if_missing = true;
-  options.max_background_compactions = 1;   // default value
+  options.max_background_compactions = 1;  // default value
   options.env = env_;
   options.enable_lazy_compaction = false;
   options.blob_size = -1;
@@ -483,7 +481,8 @@ TEST_F(DBOptionsTest, SetDelayedWriteRateOption) {
   options.delayed_write_rate = 2 * 1024U * 1024U;
   options.env = env_;
   Reopen(options);
-  ASSERT_EQ(2 * 1024U * 1024U, dbfull()->TEST_write_controler().max_delayed_write_rate());
+  ASSERT_EQ(2 * 1024U * 1024U,
+            dbfull()->TEST_write_controler().max_delayed_write_rate());
 
   ASSERT_OK(dbfull()->SetDBOptions({{"delayed_write_rate", "20000"}}));
   ASSERT_EQ(20000, dbfull()->TEST_write_controler().max_delayed_write_rate());
@@ -529,41 +528,26 @@ TEST_F(DBOptionsTest, SetStatsDumpPeriodSec) {
 
   for (int i = 0; i < 20; i++) {
     int num = rand() % 5000 + 1;
-    ASSERT_OK(dbfull()->SetDBOptions(
-        {{"stats_dump_period_sec", std::to_string(num)}}));
+    ASSERT_OK(
+        dbfull()->SetDBOptions({{"stats_dump_period_sec", ToString(num)}}));
     ASSERT_EQ(num, dbfull()->GetDBOptions().stats_dump_period_sec);
   }
-}
-
-TEST_F(DBOptionsTest, RunStatsDumpPeriodSec) {
-  Options options;
-  options.create_if_missing = true;
-  options.stats_dump_period_sec = 5;
-  options.enable_lazy_compaction = false;
-  options.blob_size = -1;
-  std::unique_ptr<rocksdb::MockTimeEnv> mock_env;
-  mock_env.reset(new rocksdb::MockTimeEnv(env_));
-  mock_env->set_current_time(0); // in seconds
-  options.env = mock_env.get();
-  int counter = 0;
-  rocksdb::SyncPoint::GetInstance()->SetCallBack(
-      "DBImpl::DumpStats:1", [&](void* /*arg*/) {
-        counter++;
-      });
-  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
-  Reopen(options);
-  ASSERT_EQ(5, dbfull()->GetDBOptions().stats_dump_period_sec);
-  dbfull()->TEST_WaitForTimedTaskRun([&] { mock_env->set_current_time(5); });
-  ASSERT_GE(counter, 1);
-
-  // Test cacel job through SetOptions
-  ASSERT_OK(dbfull()->SetDBOptions({{"stats_dump_period_sec", "0"}}));
-  int old_val = counter;
-  env_->SleepForMicroseconds(10000000);
-  ASSERT_EQ(counter, old_val);
   Close();
 }
 
+TEST_F(DBOptionsTest, SetOptionsStatsPersistPeriodSec) {
+  Options options;
+  options.create_if_missing = true;
+  options.stats_persist_period_sec = 5;
+  options.env = env_;
+  Reopen(options);
+  ASSERT_EQ(5, dbfull()->GetDBOptions().stats_persist_period_sec);
+
+  ASSERT_OK(dbfull()->SetDBOptions({{"stats_persist_period_sec", "12345"}}));
+  ASSERT_EQ(12345, dbfull()->GetDBOptions().stats_persist_period_sec);
+  ASSERT_NOK(dbfull()->SetDBOptions({{"stats_persist_period_sec", "abcde"}}));
+  ASSERT_EQ(12345, dbfull()->GetDBOptions().stats_persist_period_sec);
+}
 static void assert_candidate_files_empty(DBImpl* dbfull, const bool empty) {
   dbfull->TEST_LockMutex();
   JobContext job_context(0);
@@ -647,116 +631,6 @@ TEST_F(DBOptionsTest, SanitizeDelayedWriteRate) {
   ASSERT_EQ(31 * 1024 * 1024, dbfull()->GetDBOptions().delayed_write_rate);
 }
 
-TEST_F(DBOptionsTest, SetFIFOCompactionOptions) {
-  Options options;
-  options.compaction_style = kCompactionStyleFIFO;
-  options.write_buffer_size = 10 << 10;  // 10KB
-  options.arena_block_size = 4096;
-  options.compression = kNoCompression;
-  options.create_if_missing = true;
-  options.compaction_options_fifo.allow_compaction = false;
-  env_->time_elapse_only_sleep_ = false;
-  options.env = env_;
-  options.enable_lazy_compaction = false;
-  options.blob_size = -1;
-
-  // Test dynamically changing compaction_options_fifo.ttl
-  env_->addon_time_.store(0);
-  options.compaction_options_fifo.ttl = 1 * 60 * 60;  // 1 hour
-  ASSERT_OK(TryReopen(options));
-
-  Random rnd(301);
-  for (int i = 0; i < 10; i++) {
-    // Generate and flush a file about 10KB.
-    for (int j = 0; j < 10; j++) {
-      ASSERT_OK(Put(ToString(i * 20 + j), RandomString(&rnd, 980)));
-    }
-    Flush();
-  }
-  ASSERT_OK(dbfull()->TEST_WaitForCompact());
-  ASSERT_EQ(NumTableFilesAtLevel(0), 10);
-
-  // Add 61 seconds to the time.
-  env_->addon_time_.fetch_add(61);
-
-  // No files should be compacted as ttl is set to 1 hour.
-  ASSERT_EQ(dbfull()->GetOptions().compaction_options_fifo.ttl, 3600);
-  dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr);
-  ASSERT_EQ(NumTableFilesAtLevel(0), 10);
-
-  // Set ttl to 1 minute. So all files should get deleted.
-  ASSERT_OK(dbfull()->SetOptions({{"compaction_options_fifo", "{ttl=60;}"}}));
-  ASSERT_EQ(dbfull()->GetOptions().compaction_options_fifo.ttl, 60);
-  dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr);
-  ASSERT_OK(dbfull()->TEST_WaitForCompact());
-  ASSERT_EQ(NumTableFilesAtLevel(0), 0);
-
-  // Test dynamically changing compaction_options_fifo.max_table_files_size
-  env_->addon_time_.store(0);
-  options.compaction_options_fifo.max_table_files_size = 500 << 10;  // 00KB
-  options.compaction_options_fifo.ttl = 0;
-  DestroyAndReopen(options);
-
-  for (int i = 0; i < 10; i++) {
-    // Generate and flush a file about 10KB.
-    for (int j = 0; j < 10; j++) {
-      ASSERT_OK(Put(ToString(i * 20 + j), RandomString(&rnd, 980)));
-    }
-    Flush();
-  }
-  ASSERT_OK(dbfull()->TEST_WaitForCompact());
-  ASSERT_EQ(NumTableFilesAtLevel(0), 10);
-
-  // No files should be compacted as max_table_files_size is set to 500 KB.
-  ASSERT_EQ(dbfull()->GetOptions().compaction_options_fifo.max_table_files_size,
-            500 << 10);
-  dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr);
-  ASSERT_EQ(NumTableFilesAtLevel(0), 10);
-
-  // Set max_table_files_size to 12 KB. So only 1 file should remain now.
-  ASSERT_OK(dbfull()->SetOptions(
-      {{"compaction_options_fifo", "{max_table_files_size=12288;}"}}));
-  ASSERT_EQ(dbfull()->GetOptions().compaction_options_fifo.max_table_files_size,
-            12 << 10);
-  dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr);
-  ASSERT_OK(dbfull()->TEST_WaitForCompact());
-  ASSERT_EQ(NumTableFilesAtLevel(0), 1);
-
-  // Test dynamically changing compaction_options_fifo.allow_compaction
-  options.compaction_options_fifo.max_table_files_size = 500 << 10;  // 500KB
-  options.compaction_options_fifo.ttl = 0;
-  options.compaction_options_fifo.allow_compaction = false;
-  options.level0_file_num_compaction_trigger = 6;
-  DestroyAndReopen(options);
-
-  for (int i = 0; i < 10; i++) {
-    // Generate and flush a file about 10KB.
-    for (int j = 0; j < 10; j++) {
-      ASSERT_OK(Put(ToString(i * 20 + j), RandomString(&rnd, 980)));
-    }
-    Flush();
-  }
-  ASSERT_OK(dbfull()->TEST_WaitForCompact());
-  ASSERT_EQ(NumTableFilesAtLevel(0), 10);
-
-  // No files should be compacted as max_table_files_size is set to 500 KB and
-  // allow_compaction is false
-  ASSERT_EQ(dbfull()->GetOptions().compaction_options_fifo.allow_compaction,
-            false);
-  dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr);
-  ASSERT_EQ(NumTableFilesAtLevel(0), 10);
-
-  // Set allow_compaction to true. So number of files should be between 1 and 5.
-  ASSERT_OK(dbfull()->SetOptions(
-      {{"compaction_options_fifo", "{allow_compaction=true;}"}}));
-  ASSERT_EQ(dbfull()->GetOptions().compaction_options_fifo.allow_compaction,
-            true);
-  dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr);
-  ASSERT_OK(dbfull()->TEST_WaitForCompact());
-  ASSERT_GE(NumTableFilesAtLevel(0), 1);
-  ASSERT_LE(NumTableFilesAtLevel(0), 5);
-}
-
 TEST_F(DBOptionsTest, CompactionReadaheadSizeChange) {
   SpecialEnv env(env_);
   Options options;
@@ -787,10 +661,10 @@ TEST_F(DBOptionsTest, CompactionReadaheadSizeChange) {
 }
 #endif  // ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  rocksdb::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

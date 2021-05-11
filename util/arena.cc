@@ -19,12 +19,13 @@
 #include <sys/mman.h>
 #endif
 #include <algorithm>
-#include "port/port.h"
+
 #include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/logging.h"
 #include "util/sync_point.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // MSVC complains that it is already defined since it is static in the header.
 #ifndef _MSC_VER
@@ -236,4 +237,4 @@ char* Arena::AllocateNewBlock(size_t block_bytes) {
   return block;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

@@ -50,6 +50,7 @@
 #include "port/port.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/compression_context_cache.h"
 #include "util/logging.h"
@@ -81,7 +82,7 @@
 #define EXT4_SUPER_MAGIC 0xEF53
 #endif
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 
@@ -1135,4 +1136,4 @@ Env* Env::Default() {
   return &default_env;
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

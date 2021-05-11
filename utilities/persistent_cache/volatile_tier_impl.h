@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "rocksdb/cache.h"
+#include "rocksdb/terark_namespace.h"
 #include "utilities/persistent_cache/hash_table.h"
 #include "utilities/persistent_cache/hash_table_evictable.h"
 #include "utilities/persistent_cache/persistent_cache_tier.h"
@@ -38,13 +39,14 @@
 // implementation is not concurrent at this point though.
 //
 // The eviction algorithm is LRU
-namespace rocksdb {
+
+namespace TERARKDB_NAMESPACE {
 
 class VolatileCacheTier : public PersistentCacheTier {
  public:
   explicit VolatileCacheTier(
       const bool is_compressed = true,
-      const size_t max_size = std::numeric_limits<size_t>::max())
+      const size_t max_size = port::kMaxUint64)
       : is_compressed_(is_compressed), max_size_(max_size) {}
 
   virtual ~VolatileCacheTier();
@@ -137,6 +139,6 @@ class VolatileCacheTier : public PersistentCacheTier {
   Statistics stats_;
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif

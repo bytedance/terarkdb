@@ -17,6 +17,7 @@
 #include "port/port.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 #include "table/table_builder.h"
 #include "table/table_reader.h"
@@ -25,7 +26,7 @@
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 namespace mock {
 
 stl_wrappers::KVMap MakeMockFile(
@@ -155,8 +156,8 @@ class MockTableBuilder : public TableBuilder {
     return AddToTable(key, value, file_data_.tombstone);
   }
 
-  Status Finish(const TablePropertyCache* prop,
-                const std::vector<uint64_t>*) override {
+  Status Finish(const TablePropertyCache* prop, const std::vector<uint64_t>*,
+                const std::vector<uint64_t>* inheritance_tree) override {
     prop_.num_entries = file_data_.table.size();
     prop_.raw_key_size = file_data_.table.size();
     prop_.raw_value_size = file_data_.table.size();
@@ -165,7 +166,9 @@ class MockTableBuilder : public TableBuilder {
       prop_.max_read_amp = prop->max_read_amp;
       prop_.read_amp = prop->read_amp;
       prop_.dependence = prop->dependence;
-      prop_.inheritance_chain = prop->inheritance_chain;
+    }
+    if (inheritance_tree != nullptr) {
+      prop_.inheritance_tree = *inheritance_tree;
     }
     file_data_.prop = std::make_shared<const TableProperties>(prop_);
     MutexLock lock_guard(&file_system_->mutex);
@@ -236,4 +239,4 @@ class MockTableFactory : public TableFactory {
 };
 
 }  // namespace mock
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

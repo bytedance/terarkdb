@@ -11,6 +11,7 @@
 #include "util/transaction_test_util.h"
 
 #include <inttypes.h>
+
 #include <algorithm>
 #include <numeric>
 #include <random>
@@ -18,13 +19,14 @@
 #include <thread>
 
 #include "rocksdb/db.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/optimistic_transaction_db.h"
 #include "rocksdb/utilities/transaction.h"
 #include "rocksdb/utilities/transaction_db.h"
 #include "util/random.h"
 #include "util/string_util.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 RandomTransactionInserter::RandomTransactionInserter(
     Random64* rand, const WriteOptions& write_options,
@@ -322,6 +324,6 @@ Status RandomTransactionInserter::Verify(DB* db, uint16_t num_sets,
   return Status::OK();
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

@@ -16,7 +16,7 @@
 // filters. Test that the hash values are stable for a set of random strings of
 // varying lengths.
 TEST(HashTest, Values) {
-  using rocksdb::Hash;
+  using TERARKDB_NAMESPACE::Hash;
   constexpr uint32_t kSeed = 0xbc9f1d34;  // Same as BloomHash.
 
   EXPECT_EQ(Hash("", 0, kSeed), 3164544308);

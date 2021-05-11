@@ -30,7 +30,7 @@ using terark::OutputBuffer;
 using terark::LittleEndianDataInput;
 using terark::LittleEndianDataOutput;
 
-using rocksdb::TerarkIndex;
+using TERARKDB_NAMESPACE::TerarkIndex;
 
 enum DataStored {
   standard_ascend = 0,

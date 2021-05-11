@@ -15,10 +15,11 @@
 #include "rocksdb/options.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/universal_compaction.h"
 #include "table/terark_zip_table.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
                          const MutableDBOptions& mutable_db_options);
@@ -64,7 +65,6 @@ enum class OptionType {
   kComparator,
   kCompactionFilter,
   kCompactionFilterFactory,
-  kCompactionOptionsFIFO,
   kCompactionOptionsUniversal,
   kCompactionStopStyle,
   kMergeOperator,
@@ -82,6 +82,7 @@ enum class OptionType {
   kEntropyAlgo,
   kWriteBufferFlushPri,
   kValueExtractorFactory,
+  kTtlExtractorFactory,
   kUnknown
 };
 
@@ -161,8 +162,6 @@ struct OptionsHelper {
 #ifndef ROCKSDB_LITE
   static std::unordered_map<std::string, OptionTypeInfo> cf_options_type_info;
   static std::unordered_map<std::string, OptionTypeInfo>
-      fifo_compaction_options_type_info;
-  static std::unordered_map<std::string, OptionTypeInfo>
       universal_compaction_options_type_info;
   static std::unordered_map<std::string, CompactionStopStyle>
       compaction_stop_style_string_map;
@@ -207,8 +206,6 @@ static auto& compaction_stop_style_to_string =
 static auto& checksum_type_string_map = OptionsHelper::checksum_type_string_map;
 #ifndef ROCKSDB_LITE
 static auto& cf_options_type_info = OptionsHelper::cf_options_type_info;
-static auto& fifo_compaction_options_type_info =
-    OptionsHelper::fifo_compaction_options_type_info;
 static auto& universal_compaction_options_type_info =
     OptionsHelper::universal_compaction_options_type_info;
 static auto& compaction_stop_style_string_map =
@@ -237,4 +234,4 @@ static auto& info_log_level_string_map =
     OptionsHelper::info_log_level_string_map;
 #endif  // !ROCKSDB_LITE
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

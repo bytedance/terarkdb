@@ -9,8 +9,10 @@
 
 #include "rocksdb/filter_policy.h"
 
-namespace rocksdb {
+#include "rocksdb/terark_namespace.h"
 
-FilterPolicy::~FilterPolicy() { }
+namespace TERARKDB_NAMESPACE {
 
-}  // namespace rocksdb
+FilterPolicy::~FilterPolicy() {}
+
+}  // namespace TERARKDB_NAMESPACE

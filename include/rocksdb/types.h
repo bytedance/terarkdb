@@ -6,9 +6,11 @@
 #pragma once
 
 #include <stdint.h>
-#include "rocksdb/slice.h"
 
-namespace rocksdb {
+#include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
+
+namespace TERARKDB_NAMESPACE {
 
 // Define all public custom types here.
 
@@ -39,11 +41,9 @@ struct FullKey {
   SequenceNumber sequence;
   EntryType type;
 
-  FullKey()
-      : sequence(0)
-  {}  // Intentionally left uninitialized (for speed)
+  FullKey() : sequence(0) {}  // Intentionally left uninitialized (for speed)
   FullKey(const Slice& u, const SequenceNumber& seq, EntryType t)
-      : user_key(u), sequence(seq), type(t) { }
+      : user_key(u), sequence(seq), type(t) {}
   std::string DebugString(bool hex = false) const;
 
   void clear() {
@@ -58,4 +58,4 @@ struct FullKey {
 // internal_key is alive.
 bool ParseFullKey(const Slice& internal_key, FullKey* result);
 
-}  //  namespace rocksdb
+}  //  namespace TERARKDB_NAMESPACE

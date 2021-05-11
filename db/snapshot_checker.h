@@ -4,9 +4,10 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #pragma once
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/types.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 // Callback class that control GC of duplicate keys in flush/compaction
 class SnapshotChecker {
@@ -50,4 +51,4 @@ class WritePreparedSnapshotChecker : public SnapshotChecker {
 #endif  // !ROCKSDB_LITE
 };
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

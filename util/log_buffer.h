@@ -5,13 +5,15 @@
 
 #pragma once
 
-#include "rocksdb/env.h"
-#include "util/arena.h"
-#include "util/autovector.h"
-#include "port/sys_time.h"
 #include <ctime>
 
-namespace rocksdb {
+#include "port/sys_time.h"
+#include "rocksdb/env.h"
+#include "rocksdb/terark_namespace.h"
+#include "util/arena.h"
+#include "util/autovector.h"
+
+namespace TERARKDB_NAMESPACE {
 
 class Logger;
 
@@ -52,4 +54,4 @@ extern void LogToBuffer(LogBuffer* log_buffer, size_t max_log_size,
 // Same as previous function, but with default max log size.
 extern void LogToBuffer(LogBuffer* log_buffer, const char* format, ...);
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

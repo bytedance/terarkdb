@@ -17,15 +17,18 @@
 
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class StringAppendTESTOperator : public MergeOperator {
  public:
   // Constructor with delimiter
-  explicit StringAppendTESTOperator(char delim_char): delim_(std::string(1, delim_char)) {};
+  explicit StringAppendTESTOperator(char delim_char)
+      : delim_(std::string(1, delim_char)){};
 
-  explicit StringAppendTESTOperator(std::string delim_str) : delim_(std::move(delim_str)) {};
+  explicit StringAppendTESTOperator(std::string delim_str)
+      : delim_(std::move(delim_str)){};
 
   bool FullMergeV2(const MergeOperationInput& merge_in,
                    MergeOperationOutput* merge_out) const override;
@@ -43,10 +46,9 @@ class StringAppendTESTOperator : public MergeOperator {
                                const std::deque<Slice>& operand_list,
                                std::string* new_value, Logger* logger) const;
 
-  // char delim_;       
-  // Use variable length delimiter.  
+  // char delim_;
+  // Use variable length delimiter.
   std::string delim_;
-
 };
 
-} // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE

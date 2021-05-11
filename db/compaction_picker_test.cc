@@ -8,16 +8,15 @@
 #include <limits>
 #include <string>
 #include <utility>
-#include "db/compaction.h"
-#include "db/compaction_picker_fifo.h"
-#include "db/compaction_picker_universal.h"
 
-#include "util/logging.h"
+#include "db/compaction.h"
+#include "db/compaction_picker_universal.h"
+#include "rocksdb/terark_namespace.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class CountingLogger : public Logger {
  public:
@@ -41,7 +40,6 @@ class CompactionPickerTest : public testing::Test {
   CountingLogger logger_;
   LogBuffer log_buffer_;
   uint32_t file_num_;
-  CompactionOptionsFIFO fifo_options_;
   std::unique_ptr<VersionStorageInfo> vstorage_;
   std::vector<std::unique_ptr<FileMetaData>> files_;
   // does not own FileMetaData
@@ -60,15 +58,13 @@ class CompactionPickerTest : public testing::Test {
         log_buffer_(InfoLogLevel::INFO_LEVEL, &logger_),
         file_num_(1),
         vstorage_(nullptr) {
-    fifo_options_.max_table_files_size = 1;
     mutable_cf_options_.RefreshDerivedOptions(ioptions_);
     ioptions_.cf_paths.emplace_back("dummy",
                                     std::numeric_limits<uint64_t>::max());
     ioptions_.enable_lazy_compaction = false;
   }
 
-  ~CompactionPickerTest() {
-  }
+  ~CompactionPickerTest() {}
 
   void NewVersionStorage(int num_levels, CompactionStyle style) {
     DeleteVersionStorage();
@@ -245,8 +241,8 @@ TEST_F(CompactionPickerTest, NeedsCompactionLevel) {
       NewVersionStorage(kLevels, kCompactionStyleLevel);
       for (int i = 0; i < file_count; ++i) {
         Add(level, i, ToString((i + 100) * 1000).c_str(),
-            ToString((i + 100) * 1000 + 999).c_str(),
-            file_size, 0, i * 100, i * 100 + 99);
+            ToString((i + 100) * 1000 + 999).c_str(), file_size, 0, i * 100,
+            i * 100 + 99);
       }
       UpdateVersionStorageInfo();
       ASSERT_EQ(vstorage_->CompactionScoreLevel(0), level);
@@ -390,13 +386,13 @@ TEST_F(CompactionPickerTest, LevelTriggerDynamic4) {
   ASSERT_EQ(num_levels - 1, compaction->output_level());
 }
 
-// Universal and FIFO Compactions are not supported in ROCKSDB_LITE
+// Universal are not supported in ROCKSDB_LITE
 #ifndef ROCKSDB_LITE
 TEST_F(CompactionPickerTest, NeedsCompactionUniversal) {
   NewVersionStorage(1, kCompactionStyleUniversal);
   EnvOptions env_options;
-  UniversalCompactionPicker universal_compaction_picker(
-      nullptr, env_options, ioptions_, &icmp_);
+  UniversalCompactionPicker universal_compaction_picker(nullptr, env_options,
+                                                        ioptions_, &icmp_);
   UpdateVersionStorageInfo();
   // must return false when there's no files.
   ASSERT_EQ(universal_compaction_picker.NeedsCompaction(vstorage_.get()),
@@ -421,8 +417,8 @@ TEST_F(CompactionPickerTest, CompactionUniversalIngestBehindReservedLevel) {
   ioptions_.allow_ingest_behind = true;
   ioptions_.num_levels = 3;
   EnvOptions env_options;
-  UniversalCompactionPicker universal_compaction_picker(
-      nullptr, env_options, ioptions_, &icmp_);
+  UniversalCompactionPicker universal_compaction_picker(nullptr, env_options,
+                                                        ioptions_, &icmp_);
   UpdateVersionStorageInfo();
   // must return false when there's no files.
   ASSERT_EQ(universal_compaction_picker.NeedsCompaction(vstorage_.get()),
@@ -457,8 +453,8 @@ TEST_F(CompactionPickerTest, CannotTrivialMoveUniversal) {
   mutable_cf_options_.compaction_options_universal.allow_trivial_move = true;
   NewVersionStorage(1, kCompactionStyleUniversal);
   EnvOptions env_options;
-  UniversalCompactionPicker universal_compaction_picker(
-      nullptr, env_options, ioptions_, &icmp_);
+  UniversalCompactionPicker universal_compaction_picker(nullptr, env_options,
+                                                        ioptions_, &icmp_);
   UpdateVersionStorageInfo();
   // must return false when there's no files.
   ASSERT_EQ(universal_compaction_picker.NeedsCompaction(vstorage_.get()),
@@ -490,8 +486,8 @@ TEST_F(CompactionPickerTest, AllowsTrivialMoveUniversal) {
 
   mutable_cf_options_.compaction_options_universal.allow_trivial_move = true;
   EnvOptions env_options;
-  UniversalCompactionPicker universal_compaction_picker(
-      nullptr, env_options, ioptions_, &icmp_);
+  UniversalCompactionPicker universal_compaction_picker(nullptr, env_options,
+                                                        ioptions_, &icmp_);
 
   NewVersionStorage(3, kCompactionStyleUniversal);
 
@@ -510,34 +506,6 @@ TEST_F(CompactionPickerTest, AllowsTrivialMoveUniversal) {
   ASSERT_TRUE(compaction->is_trivial_move());
 }
 
-TEST_F(CompactionPickerTest, NeedsCompactionFIFO) {
-  NewVersionStorage(1, kCompactionStyleFIFO);
-  const int kFileCount =
-      mutable_cf_options_.level0_file_num_compaction_trigger * 3;
-  const uint64_t kFileSize = 100000;
-  const uint64_t kMaxSize = kFileSize * kFileCount / 2;
-
-  fifo_options_.max_table_files_size = kMaxSize;
-  mutable_cf_options_.compaction_options_fifo = fifo_options_;
-  FIFOCompactionPicker fifo_compaction_picker(nullptr, env_options_, ioptions_, &icmp_);
-  UpdateVersionStorageInfo();
-  // must return false when there's no files.
-  ASSERT_EQ(fifo_compaction_picker.NeedsCompaction(vstorage_.get()), false);
-
-  // verify whether compaction is needed based on the current
-  // size of L0 files.
-  uint64_t current_size = 0;
-  for (int i = 1; i <= kFileCount; ++i) {
-    NewVersionStorage(1, kCompactionStyleFIFO);
-    Add(0, i, ToString((i + 100) * 1000).c_str(),
-        ToString((i + 100) * 1000 + 999).c_str(),
-        kFileSize, 0, i * 100, i * 100 + 99);
-    current_size += kFileSize;
-    UpdateVersionStorageInfo();
-    ASSERT_EQ(fifo_compaction_picker.NeedsCompaction(vstorage_.get()),
-              vstorage_->CompactionScore(0) >= 1);
-  }
-}
 #endif  // ROCKSDB_LITE
 
 TEST_F(CompactionPickerTest, CompactionPriMinOverlapping1) {
@@ -664,7 +632,7 @@ TEST_F(CompactionPickerTest, OverlappingUserKeys) {
   UpdateVersionStorageInfo();
 
   std::unique_ptr<Compaction> compaction(level_compaction_picker.PickCompaction(
-              cf_name_, mutable_cf_options_, vstorage_.get(), {}, &log_buffer_));
+      cf_name_, mutable_cf_options_, vstorage_.get(), {}, &log_buffer_));
   ASSERT_TRUE(compaction.get() != nullptr);
   ASSERT_EQ(1U, compaction->num_input_levels());
   ASSERT_EQ(2U, compaction->num_input_files(0));
@@ -683,7 +651,7 @@ TEST_F(CompactionPickerTest, OverlappingUserKeys2) {
   UpdateVersionStorageInfo();
 
   std::unique_ptr<Compaction> compaction(level_compaction_picker.PickCompaction(
-              cf_name_, mutable_cf_options_, vstorage_.get(), {}, &log_buffer_));
+      cf_name_, mutable_cf_options_, vstorage_.get(), {}, &log_buffer_));
   ASSERT_TRUE(compaction.get() != nullptr);
   ASSERT_EQ(2U, compaction->num_input_levels());
   ASSERT_EQ(2U, compaction->num_input_files(0));
@@ -710,7 +678,7 @@ TEST_F(CompactionPickerTest, OverlappingUserKeys3) {
   UpdateVersionStorageInfo();
 
   std::unique_ptr<Compaction> compaction(level_compaction_picker.PickCompaction(
-              cf_name_, mutable_cf_options_, vstorage_.get(), {}, &log_buffer_));
+      cf_name_, mutable_cf_options_, vstorage_.get(), {}, &log_buffer_));
   ASSERT_TRUE(compaction.get() != nullptr);
   ASSERT_EQ(2U, compaction->num_input_levels());
   ASSERT_EQ(5U, compaction->num_input_files(0));
@@ -1389,7 +1357,7 @@ TEST_F(CompactionPickerTest, IsTrivialMoveOn) {
   UpdateVersionStorageInfo();
 
   std::unique_ptr<Compaction> compaction(level_compaction_picker.PickCompaction(
-    cf_name_, mutable_cf_options_, vstorage_.get(), {}, &log_buffer_));
+      cf_name_, mutable_cf_options_, vstorage_.get(), {}, &log_buffer_));
   ASSERT_TRUE(compaction.get() != nullptr);
   ASSERT_TRUE(compaction->IsTrivialMove());
 }
@@ -1410,7 +1378,7 @@ TEST_F(CompactionPickerTest, IsTrivialMoveOff) {
   UpdateVersionStorageInfo();
 
   std::unique_ptr<Compaction> compaction(level_compaction_picker.PickCompaction(
-    cf_name_, mutable_cf_options_, vstorage_.get(), {}, &log_buffer_));
+      cf_name_, mutable_cf_options_, vstorage_.get(), {}, &log_buffer_));
   ASSERT_TRUE(compaction.get() != nullptr);
   ASSERT_FALSE(compaction->IsTrivialMove());
 }
@@ -1458,7 +1426,7 @@ TEST_F(CompactionPickerTest, CacheNextCompactionIndex) {
   ASSERT_EQ(4, vstorage_->NextCompactionIndex(1 /* level */));
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

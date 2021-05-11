@@ -19,8 +19,9 @@
 #include <string>
 
 #include "rocksdb/slice.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace rocksdb {
+namespace TERARKDB_NAMESPACE {
 
 class Status {
  public:
@@ -76,6 +77,7 @@ class Status {
     kSpaceLimit = 8,
     kBadAlloc = 9,
     kRequireMmap = 10,
+    kInstallTimeout = 11,
     kMaxSubCode
   };
 
@@ -362,4 +364,4 @@ inline void Status::swap(Status& y) noexcept {
   std::swap(state_, y.state_);
 }
 
-}  // namespace rocksdb
+}  // namespace TERARKDB_NAMESPACE
