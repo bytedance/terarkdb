@@ -152,7 +152,7 @@ class ZenEnv : public EnvWrapper {
   void ClearFiles();
   Status WriteSnapshotLocked(ZenMetaLog* meta_log);
   Status WriteEndRecord(ZenMetaLog* meta_log);
-  Status RollMetaZone();
+  Status RollMetaZoneLocked();
   Status PersistSnapshot(ZenMetaLog* meta_writer);
   Status PersistRecord(std::string record);
   Status SyncFileMetadata(ZoneFile* zoneFile);
@@ -177,7 +177,7 @@ class ZenEnv : public EnvWrapper {
   }
 
   ZoneFile* GetFile(std::string fname);
-  Status DeleteFile(std::string fname);
+  Status DeleteFile_Internal(std::string fname);
 
  public:
   explicit ZenEnv(ZonedBlockDevice* zbd, Env* env,
@@ -185,7 +185,9 @@ class ZenEnv : public EnvWrapper {
   ~ZenEnv();
 
   Status Mount(bool readonly);
-  Status MkFS(std::string aux_fs_path, uint32_t finish_threshold);
+  Status MkFS(std::string aux_fs_path, uint32_t finish_threshold,
+              uint32_t max_open_limit, uint32_t max_active_limit);
+  std::map<std::string, Env::WriteLifeTimeHint> GetWriteLifeTimeHints();
 
   virtual Status NewSequentialFile(const std::string& fname,
                                    std::unique_ptr<SequentialFile>* result,
@@ -223,12 +225,8 @@ class ZenEnv : public EnvWrapper {
 
   // The directory structure is stored in the aux file system
 
-  Status IsDirectory(const std::string& path, bool* is_dir) override {
-    if (GetFile(path) != nullptr) {
-      *is_dir = false;
-      return Status::OK();
-    }
-    return target()->IsDirectory(ToAuxPath(path), options, is_dir, dbg);
+  Status IsDirectory(const std::string& path, bool* is_dir) {
+    return Status::NotSupported("IsDirectory is not implemented in ZenEnv");
   }
 
   Status NewDirectory(const std::string& name,
@@ -296,9 +294,7 @@ class ZenEnv : public EnvWrapper {
 
   virtual Status ReopenWritableFile(const std::string& fname,
                                     std::unique_ptr<WritableFile>* result,
-                                    const EnvOptions& opts) {
-    return target()->NewWritableFile(fname, result, opts);
-  }
+                                    const EnvOptions& opts);
 
   virtual Status NewRandomRWFile(const std::string& /*fname*/,
                                  std::unique_ptr<RandomRWFile>* /*result*/,

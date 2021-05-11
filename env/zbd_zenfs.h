@@ -26,6 +26,8 @@
 #include "rocksdb/env.h"
 #include "rocksdb/status.h"
 
+#include "libaio.h"
+
 namespace TERARKDB_NAMESPACE {
 
 class ZonedBlockDevice;
@@ -58,6 +60,8 @@ class Zone {
   Status Close();
 
   Status Append(char *data, uint32_t size);
+  Status Append_async(char *data, uint32_t size);
+  Status Sync();
   bool IsUsed();
   bool IsFull();
   bool IsEmpty();
