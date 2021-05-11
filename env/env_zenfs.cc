@@ -7,7 +7,7 @@
 
 #if !defined(ROCKSDB_LITE) && defined(OS_LINUX) && defined(LIBZBD)
 
-#include "env/env_zenfs.h"
+#include "env_zenfs.h"
 
 #include <dirent.h>
 #include <errno.h>
@@ -25,6 +25,77 @@
 #define DEFAULT_ZENV_LOG_PATH "/tmp/"
 
 namespace TERARKDB_NAMESPACE {
+
+Status Superblock::DecodeFrom(Slice* input) {
+  if (input->size() != ENCODED_SIZE) {
+    return Status::Corruption("ZenEnv Superblock",
+                              "Error: Superblock size missmatch");
+  }
+
+  GetFixed32(input, &magic_);
+  memcpy(&uuid_, input->data(), sizeof(uuid_));
+  input->remove_prefix(sizeof(uuid_));
+  GetFixed32(input, &sequence_);
+  GetFixed32(input, &version_);
+  GetFixed32(input, &flags_);
+  GetFixed32(input, &block_size_);
+  GetFixed32(input, &zone_size_);
+  GetFixed32(input, &nr_zones_);
+  GetFixed32(input, &finish_treshold_);
+  memcpy(&aux_fs_path_, input->data(), sizeof(aux_fs_path_));
+  input->remove_prefix(sizeof(aux_fs_path_));
+  GetFixed32(input, &max_active_limit_);
+  GetFixed32(input, &max_open_limit_);
+  memcpy(&reserved_, input->data(), sizeof(reserved_));
+  input->remove_prefix(sizeof(reserved_));
+  assert(input->size() == 0);
+
+  if (magic_ != MAGIC)
+    return Status::Corruption("ZenEnv Superblock", "Error: Magic missmatch");
+  if (version_ != CURRENT_VERSION)
+    return Status::Corruption("ZenEnv Superblock", "Error: Version missmatch");
+
+  return Status::OK();
+}
+
+void Superblock::EncodeTo(std::string* output) {
+  sequence_++; /* Ensure that this superblock representation is unique */
+  output->clear();
+  PutFixed32(output, magic_);
+  output->append(uuid_, sizeof(uuid_));
+  PutFixed32(output, sequence_);
+  PutFixed32(output, version_);
+  PutFixed32(output, flags_);
+  PutFixed32(output, block_size_);
+  PutFixed32(output, zone_size_);
+  PutFixed32(output, nr_zones_);
+  PutFixed32(output, finish_treshold_);
+  output->append(aux_fs_path_, sizeof(aux_fs_path_));
+  PutFixed32(output, max_active_limit_);
+  PutFixed32(output, max_open_limit_);
+  output->append(reserved_, sizeof(reserved_));
+  assert(output->length() == ENCODED_SIZE);
+}
+
+Status Superblock::CompatibleWith(ZonedBlockDevice* zbd) {
+  if (block_size_ != zbd->GetBlockSize())
+    return Status::Corruption("ZenEnv Superblock",
+                              "Error: block size missmatch");
+  if (zone_size_ != (zbd->GetZoneSize() / block_size_))
+    return Status::Corruption("ZenEnv Superblock",
+                              "Error: zone size missmatch");
+  if (nr_zones_ > zbd->GetNrZones())
+    return Status::Corruption("ZenEnv Superblock",
+                              "Error: nr of zones missmatch");
+  if (max_active_limit_ > zbd->GetMaxActiveZones())
+    return Status::Corruption("ZenEnv Superblock",
+                              "Error: active zone limit missmatch");
+  if (max_open_limit_ > zbd->GetMaxOpenZones())
+    return Status::Corruption("ZenEnv Superblock",
+                              "Error: open zone limit missmatch");
+
+  return Status::OK();
+}
 
 Status ZenMetaLog::AddRecord(const Slice& slice) {
   uint32_t record_sz = slice.size();
@@ -185,11 +256,13 @@ void ZenEnv::LogFiles() {
 
 void ZenEnv::ClearFiles() {
   std::map<std::string, ZoneFile*>::iterator it;
+  std::unique_lock<std::mutex> lk(&files_mtx_);
   for (it = files_.begin(); it != files_.end(); it++) delete it->second;
   files_.clear();
 }
 
-Status ZenEnv::WriteSnapshot(ZenMetaLog* meta_log) {
+/* Assumes that files_mutex_ is held */
+Status ZenEnv::WriteSnapshotLocked(ZenMetaLog* meta_log) {
   Status s;
   std::string snapshot;
 
@@ -211,7 +284,8 @@ Status ZenEnv::WriteEndRecord(ZenMetaLog* meta_log) {
   return meta_log->AddRecord(endRecord);
 }
 
-Status ZenEnv::RollMetaZone() {
+/* Assumes the files_mtx_ is held */
+Status ZenEnv::RollMetaZoneLocked() {
   ZenMetaLog* new_meta_log;
   Zone *new_meta_zone, *old_meta_zone;
   Status s;
@@ -259,10 +333,10 @@ Status ZenEnv::PersistSnapshot(ZenMetaLog* meta_writer) {
   files_mtx_.lock();
   metadata_sync_mtx_.lock();
 
-  s = WriteSnapshot(meta_writer);
+  s = WriteSnapshotLocked(meta_writer);
   if (s == Status::NoSpace()) {
     Info(logger_, "Current meta zone full, rolling to next meta zone");
-    s = RollMetaZone();
+    s = RollMetaZoneLocked();
   }
 
   if (!s.ok()) {
@@ -283,7 +357,7 @@ Status ZenEnv::PersistRecord(std::string record) {
   s = meta_log_->AddRecord(record);
   if (s == Status::NoSpace()) {
     Info(logger_, "Current meta zone full, rolling to next meta zone");
-    s = RollMetaZone();
+    s = RollMetaZoneLocked();
     /* After a successfull roll, a complete snapshot has been persisted
      * - no need to write the record update */
   }
@@ -332,10 +406,14 @@ Status ZenEnv::DeleteFile_Internal(std::string fname) {
     std::string record;
 
     zoneFile = files_[fname];
+    files_.erase(fname);
+
     EncodeFileDeletionTo(zoneFile, &record);
     s = PersistRecord(record);
-    if (s.ok()) {
-      files_.erase(fname);
+    if (!s.ok()) {
+      /* Failed to persist the delete, return to a consistent state */
+      files_.insert(std::make_pair(fname.c_str(), zoneFile));
+    } else {
       delete (zoneFile);
     }
   }
@@ -368,7 +446,7 @@ Status ZenEnv::NewRandomAccessFile(const std::string& fname,
         options.use_direct_reads);
 
   if (zoneFile == nullptr) {
-    return Status::NotFound("File does not exist\n");
+    return target()->NewRandomAccessFile(ToAuxPath(fname), result);
   }
 
   result->reset(new ZonedRandomAccessFile(files_[fname], options));
@@ -423,6 +501,19 @@ Status ZenEnv::FileExists(const std::string& fname) {
   }
 }
 
+Status ZenEnv::ReopenWritableFile(const std::string& fname,
+                                   const FileOptions& options,
+                                   std::unique_ptr<FSWritableFile>* result,
+                                   IODebugContext* dbg) {
+  Debug(logger_, "Reopen writable file: %s \n", fname.c_str());
+
+  if (GetFile(fname) != nullptr)
+    return NewWritableFile(fname, options, result, dbg);
+
+  return target()->NewWritableFile(fname, options, result, dbg);
+}
+ 
+
 Status ZenEnv::GetChildren(const std::string& dir,
                             std::vector<std::string>* result) {
   std::map<std::string, ZoneFile*>::iterator it;
@@ -440,7 +531,11 @@ Status ZenEnv::GetChildren(const std::string& dir,
   for (it = files_.begin(); it != files_.end(); it++) {
     std::string fname = it->first;
     if (fname.rfind(dir, 0) == 0) {
-      fname.erase(0, dir.length() + 1);
+      if (dir.back() == '/') {
+        fname.erase(0, dir.length());
+      } else {
+        fname.erase(0, dir.length() + 1);
+      }
       // Don't report grandchildren
       if (fname.find("/") == std::string::npos) {
         result->push_back(fname);
@@ -454,14 +549,19 @@ Status ZenEnv::GetChildren(const std::string& dir,
 
 Status ZenEnv::DeleteFile(const std::string& fname) {
   Status s;
+  ZoneFile *zoneFile = GetFile(fname);
   Debug(logger_, "Delete file: %s \n", fname.c_str());
 
-  if (GetFile(fname) == nullptr) {
+  if (zoneFile == nullptr) {
     return target()->DeleteFile(ToAuxPath(fname));
   }
 
-  s = DeleteFile_Internal(fname);
-  zbd_->LogZoneStats();
+  if (zoneFile->IsOpenForWR()) {
+    s = Status::Busy("Cannot delete, file open for writing: ", fname.c_str());
+  } else {
+    s = DeleteFile_Internal(fname);
+    zbd_->LogZoneStats();
+  }
 
   return s;
 }
@@ -492,7 +592,7 @@ Status ZenEnv::RenameFile(const std::string& f, const std::string& t) {
 
   zoneFile = GetFile(f);
   if (zoneFile != nullptr) {
-    s = DeleteFile_Internal(t);
+    s = DeleteFile(t);
     if (s.ok()) {
       files_mtx_.lock();
       files_.erase(f);
@@ -501,6 +601,14 @@ Status ZenEnv::RenameFile(const std::string& f, const std::string& t) {
       files_mtx_.unlock();
 
       s = SyncFileMetadata(zoneFile);
+      if (!s.ok()) {
+        /* Failed to persist the rename, roll back */
+        files_mtx_.lock();
+        files_.erase(t);
+        zoneFile->Rename(f);
+        files_.insert(std::make_pair(f, zoneFile));
+        files_mtx_.unlock();
+      }
     }
   } else {
     s = target()->RenameFile(ToAuxPath(f), ToAuxPath(t));
@@ -572,6 +680,8 @@ Status ZenEnv::DecodeSnapshotFrom(Slice* input) {
     if (!s.ok()) return s;
 
     files_.insert(std::make_pair(zoneFile->GetFilename(), zoneFile));
+    if (zoneFile->GetID() >= next_file_id_)
+      next_file_id_ = zoneFile->GetID() + 1;
   }
 
   return Status::OK();
@@ -680,9 +790,9 @@ Status ZenEnv::RecoverFrom(ZenMetaLog* log) {
     return Status::NotFound("ZenEnv", "No snapshot found");
 }
 
-#define ZENV_URI_PATTERN "zenfs://"
+#define ZENV_URI_PATTERN "ZenEnv://"
 
-Status ZenEnv::Mount() {
+Status ZenEnv::Mount(bool readonly) {
   std::vector<Zone*> metazones = zbd_->GetMetaZones();
   std::vector<std::unique_ptr<Superblock>> valid_superblocks;
   std::vector<std::unique_ptr<ZenMetaLog>> valid_logs;
@@ -766,6 +876,8 @@ Status ZenEnv::Mount() {
   Info(logger_, "Recovered from zone: %d", (int)valid_zones[r]->GetZoneNr());
   superblock_ = std::move(valid_superblocks[r]);
   zbd_->SetFinishTreshold(superblock_->GetFinishTreshold());
+  zbd_->SetMaxActiveZones(superblock_->GetMaxActiveZoneLimit());
+  zbd_->SetMaxOpenZones(superblock_->GetMaxOpenZoneLimit());
 
   s = target()->CreateDirIfMissing(superblock_->GetAuxFsPath());
   if (!s.ok()) {
@@ -776,33 +888,65 @@ Status ZenEnv::Mount() {
   /* Free up old metadata zones, to get ready to roll */
   for (const auto sm : seq_map) {
     uint32_t i = sm.second;
+    /* Don't reset the current metadata zone */
     if (i != r) {
+      /* Metadata zones are not marked as having valid data, so they can be
+       * reset */
       valid_logs[i].reset();
     }
   }
-  s = RollMetaZone();
-  if (!s.ok()) {
-    Error(logger_, "Failed to roll metadata zone.");
-    return s;
+  
+  if (readonly) {
+    Info(logger_, "Mounting READ ONLY");
+  } else {
+    files_mtx_.lock();
+    s = RollMetaZoneLocked();
+    if (!s.ok()) {
+      files_mtx_.unlock();
+      Error(logger_, "Failed to roll metadata zone.");
+      return s;
+    }
+    files_mtx_.unlock();
   }
 
   Info(logger_, "Superblock sequence %d", (int)superblock_->GetSeq());
   Info(logger_, "Finish threshold %u", superblock_->GetFinishTreshold());
   Info(logger_, "Filesystem mount OK");
-  Info(logger_, "Resetting unused IO Zones..");
-  zbd_->ResetUnusedIOZones();
-  Info(logger_, "  Done");
+  
+  if (!readonly) {
+    Info(logger_, "Resetting unused IO Zones..");
+    zbd_->ResetUnusedIOZones();
+    Info(logger_, "  Done");
+  }
 
   LogFiles();
 
   return Status::OK();
 }
 
-Status ZenEnv::MkFS(std::string aux_fs_path, uint32_t finish_threshold) {
+Status ZenEnv::MkFS(std::string aux_fs_path, uint32_t finish_threshold,
+                    uint32_t max_open_limit, uint32_t max_active_limit) {
   std::vector<Zone*> metazones = zbd_->GetMetaZones();
   std::unique_ptr<ZenMetaLog> log;
   Zone* meta_zone = nullptr;
   Status s;
+
+  /* TODO: check practical limits */
+
+  if (max_open_limit > zbd_->GetMaxOpenZones()) {
+    return Status::InvalidArgument(
+        "Max open zone limit exceeds the device limit\n");
+  }
+
+  if (max_active_limit > zbd_->GetMaxActiveZones()) {
+    return Status::InvalidArgument(
+        "Max active zone limit exceeds the device limit\n");
+  }
+
+  if (max_active_limit < max_open_limit) {
+    return Status::InvalidArgument(
+        "Max open limit must be smaller than max active limit\n");
+  }
 
   if (aux_fs_path.length() > 255) {
     return Status::InvalidArgument(
@@ -844,6 +988,18 @@ Status ZenEnv::MkFS(std::string aux_fs_path, uint32_t finish_threshold) {
   return Status::OK();
 }
 
+std::map<std::string, Env::WriteLifeTimeHint> ZenEnv::GetWriteLifeTimeHints() {
+  std::map<std::string, Env::WriteLifeTimeHint> hint_map;
+
+  for (auto it = files_.begin(); it != files_.end(); it++) {
+    ZoneFile* zoneFile = it->second;
+    std::string filename = it->first;
+    hint_map.insert(std::make_pair(filename, zoneFile->GetWriteLifeTimeHint()));
+  }
+
+  return hint_map;
+}
+
 #ifndef NDEBUG
 static std::string GetLogFilename(std::string bdev) {
   std::ostringstream ss;
@@ -880,7 +1036,7 @@ Status NewZenEnv(Env** env, const std::string& bdevname) {
   }
 
   ZenEnv* zenEnv = new ZenEnv(zbd, Env::Default(), logger);
-  s = zenEnv->Mount();
+  s = zenEnv->Mount(false);
   if (!s.ok()) {
     delete zenEnv;
     return s;
