@@ -38,8 +38,9 @@ struct TerarkZipTableOptions {
   int32_t checksumSmallValSize = 40;
   EntropyAlgo entropyAlgo = kNoEntropy;
 
-  ///    < 0 : only last level using terarkZip
+  /// -1     : only last level using terarkZip
   ///          this is equivalent to terarkZipMinLevel == num_levels-1
+  /// -2     : force use fallback
   /// others : use terarkZip when curlevel >= terarkZipMinLevel
   ///          this includes the two special cases:
   ///                   == 0 : all levels using terarkZip
