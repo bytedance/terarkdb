@@ -30,6 +30,14 @@ namespace TERARKDB_NAMESPACE {
 
 class ZonedBlockDevice;
 
+struct zenfs_aio_ctx {
+  struct iocb iocb;
+  struct iocb *iocbs[1];
+  io_context_t io_ctx;
+  int inflight;
+  int fd;
+};
+
 class Zone {
   ZonedBlockDevice *zbd_;
 
@@ -43,6 +51,7 @@ class Zone {
   bool open_for_write_;
   Env::WriteLifeTimeHint lifetime_;
   std::atomic<long> used_capacity_;
+  struct zenfs_aio_ctx wr_ctx;
 
   Status Reset();
   Status Finish();
@@ -95,6 +104,9 @@ class ZonedBlockDevice {
   Zone *AllocateMetaZone();
 
   uint64_t GetFreeSpace();
+  uint64_t GetUsedSpace();
+  uint64_t GetReclaimableSpace();
+
   std::string GetFilename();
   uint32_t GetBlockSize();
 
@@ -108,12 +120,40 @@ class ZonedBlockDevice {
 
   uint32_t GetZoneSize() { return zone_sz_; }
   uint32_t GetNrZones() { return nr_zones_; }
+  uint32_t GetMaxActiveZones() { return max_nr_active_io_zones_ + 1; };
+  uint32_t GetMaxOpenZones() { return max_nr_open_io_zones_ + 1; };
+
   std::vector<Zone *> GetMetaZones() { return meta_zones; }
 
   void SetFinishTreshold(uint32_t threshold) { finish_threshold_ = threshold; }
 
+  bool SetMaxActiveZones(uint32_t max_active) {
+    if (max_active == 0) /* No limit */
+      return true;
+    if (max_active <= GetMaxActiveZones()) {
+      max_nr_active_io_zones_ = max_active - 1;
+      return true;
+    } else {
+      return false;
+    }
+  }
+  
+  bool SetMaxOpenZones(uint32_t max_open) {
+    if (max_open == 0) /* No limit */
+      return true;
+    if (max_open <= GetMaxOpenZones()) {
+      max_nr_open_io_zones_ = max_open - 1;
+      return true;
+    } else {
+      return false;
+    }
+  }
+
   void NotifyIOZoneFull();
   void NotifyIOZoneClosed();
+
+ private:
+  std::string ErrorToString(int err);
 };
 
 }  // namespace TERARKDB_NAMESPACE

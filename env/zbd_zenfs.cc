@@ -52,6 +52,15 @@ Zone::Zone(ZonedBlockDevice *zbd, struct zbd_zone *z)
   capacity_ = 0;
   if (!(zbd_zone_full(z) || zbd_zone_offline(z) || zbd_zone_rdonly(z)))
     capacity_ = zbd_zone_capacity(z) - (zbd_zone_wp(z) - zbd_zone_start(z));
+
+  memset(&wr_ctx.io_ctx, 0, sizeof(wr_ctx.io_ctx));
+  wr_ctx.fd = zbd_->GetWriteFD();
+  wr_ctx.iocbs[0] = &wr_ctx.iocb;
+  wr_ctx.inflight = 0; 
+
+  if (io_setup(1, &wr_ctx.io_ctx) < 0) {
+    fprintf(stderr, "Failed to allocate io context\n");
+  }
 }
 
 bool Zone::IsUsed() { return (used_capacity_ > 0) || open_for_write_; }
@@ -62,6 +71,7 @@ uint64_t Zone::GetZoneNr() { return start_ / zbd_->GetZoneSize(); }
 
 void Zone::CloseWR() {
   assert(open_for_write_);
+  Sync();
   open_for_write_ = false;
 
   if (Close().ok()) {
@@ -134,11 +144,17 @@ Status Zone::Append(char *data, uint32_t size) {
   uint32_t left = size;
   int fd = zbd_->GetWriteFD();
   int ret;
+  Status s;
 
   if (capacity_ < size)
     return Status::NoSpace("Not enough capacity for append");
 
   assert((size % zbd_->GetBlockSize()) == 0);
+
+  /* Make sure we don't have any outstanding writes */
+  s = Sync();
+  if (!s.ok())
+    return s;
 
   while (left) {
     ret = pwrite(fd, ptr, size, wp_);
@@ -149,6 +165,71 @@ Status Zone::Append(char *data, uint32_t size) {
     capacity_ -= ret;
     left -= ret;
   }
+
+  return Status::OK();
+}
+
+Status Zone::Sync() {
+  struct io_event events[1];
+  struct timespec timeout;
+  int ret;
+  timeout.tv_sec = 1;
+  timeout.tv_nsec = 0;
+  
+  if (wr_ctx.inflight == 0)
+    return Status::OK();
+
+  ret = io_getevents(wr_ctx.io_ctx, 1, 1, events, &timeout);
+  if (ret != 1) {
+    fprintf(stderr, "Failed to complete io - timeout ret: %d\n", ret);
+    return Status::IOError("Failed to complete io - timeout?");
+  }
+
+  ret = events[0].res;
+  if (ret != (int)(wr_ctx.iocb.u.c.nbytes)) {
+    if (ret >= 0) {
+        /* TODO: we need to handle this case and keep on submittin' until we're done*/
+        fprintf(stderr, "failed to complete io - short write\n");
+        return Status::IOError("Failed to complete io - short write");
+    } else {
+        return Status::IOError("Failed to complete io - io error");
+    }
+  }
+
+  wr_ctx.inflight = 0; 
+
+  return Status::OK();
+}
+
+Status Zone::Append_async(char *data, uint32_t size) {
+  char *ptr = data;
+  uint32_t left = size;
+  int ret;
+  Status s;
+
+  assert((size % zbd_->GetBlockSize()) == 0);
+  
+  /* Make sure we don't have any outstanding writes */
+  s = Sync();
+  if (!s.ok())
+    return s;
+
+  if (capacity_ < size)
+    return Status::NoSpace("Not enough capacity for append");
+
+  io_prep_pwrite(&wr_ctx.iocb, wr_ctx.fd, data, size, wp_);
+
+  ret = io_submit(wr_ctx.io_ctx, 1, wr_ctx.iocbs);
+  if (ret < 0) {
+    fprintf(stderr, "Failed to submit io\n");
+    return Status::IOError("Failed to submit io");
+  }
+
+  wr_ctx.inflight = size;  
+  ptr += size;
+  wp_ += size;
+  capacity_ -= size;
+  left -= size;
 
   return Status::OK();
 }
@@ -167,6 +248,13 @@ ZonedBlockDevice::ZonedBlockDevice(std::string bdevname,
     : filename_("/dev/" + bdevname), logger_(logger) {
   Info(logger_, "New Zoned Block Device: %s", filename_.c_str());
 };
+
+std::string ZonedBlockDevice::ErrorToString(int err) {
+  char *err_str = strerror(err);
+  if (err_str != nullptr)
+    return std::string(err_str);
+  return "";
+}
 
 Status ZonedBlockDevice::Open(bool readonly) {
   struct zbd_zone *zone_rep;
@@ -296,6 +384,23 @@ uint64_t ZonedBlockDevice::GetFreeSpace() {
   return free;
 }
 
+uint64_t ZonedBlockDevice::GetUsedSpace() {
+  uint64_t used = 0;
+  for (const auto z : io_zones) {
+    used += z->used_capacity_;
+  }
+  return used;
+}
+
+uint64_t ZonedBlockDevice::GetReclaimableSpace() {
+  uint64_t reclaimable= 0;
+  for (const auto z : io_zones) {
+    if (z->IsFull())
+      reclaimable += (z->max_capacity_ - z->used_capacity_);
+  }
+  return reclaimable;
+}
+
 void ZonedBlockDevice::LogZoneStats() {
   uint64_t used_capacity = 0;
   uint64_t reclaimable_capacity = 0;
@@ -337,7 +442,6 @@ void ZonedBlockDevice::LogZoneUsage() {
     }
   }
 }
-
 ZonedBlockDevice::~ZonedBlockDevice() {
   for (const auto z : meta_zones) {
     delete z;
@@ -353,6 +457,7 @@ ZonedBlockDevice::~ZonedBlockDevice() {
 }
 
 #define LIFETIME_DIFF_NOT_GOOD (100)
+#define LIFETIME_DIFF_MEH (2)
 
 unsigned int GetLifeTimeDiff(Env::WriteLifeTimeHint zone_lifetime,
                              Env::WriteLifeTimeHint file_lifetime) {
@@ -366,6 +471,9 @@ unsigned int GetLifeTimeDiff(Env::WriteLifeTimeHint zone_lifetime,
       return LIFETIME_DIFF_NOT_GOOD;
     }
   }
+
+  if (zone_lifetime == file_lifetime)
+    return LIFETIME_DIFF_MEH;
 
   if (zone_lifetime > file_lifetime) return zone_lifetime - file_lifetime;
 
