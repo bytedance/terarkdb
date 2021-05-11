@@ -245,7 +245,7 @@ Zone *ZonedBlockDevice::GetIOZone(uint64_t offset) {
 
 ZonedBlockDevice::ZonedBlockDevice(std::string bdevname,
                                    std::shared_ptr<Logger> logger)
-    : filename_("/dev/" + bdevname), logger_(logger) {
+    : filename_(bdevname), logger_(logger) {
   Info(logger_, "New Zoned Block Device: %s", filename_.c_str());
 };
 
