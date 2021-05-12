@@ -370,7 +370,7 @@ ZonedWritableFile::ZonedWritableFile(ZonedBlockDevice* zbd, bool _buffered,
 
   buffered = _buffered;
   block_sz = zbd->GetBlockSize();
-  buffer_sz = block_sz * 32;
+  buffer_sz = block_sz * 256;
   buffer_pos = 0;
 
   zoneFile_ = zoneFile;
