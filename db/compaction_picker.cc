@@ -1056,14 +1056,43 @@ Compaction* CompactionPicker::CompactRange(
   // two files overlap.
   if (input_level > 0) {
     const uint64_t limit = mutable_cf_options.max_compaction_bytes;
-    uint64_t total = 0;
-    for (size_t i = 0; i + 1 < inputs.size(); ++i) {
-      uint64_t s = inputs[i]->compensated_file_size;
-      total += s;
-      if (total >= limit) {
-        covering_the_whole_range = false;
-        inputs.files.resize(i + 1);
-        break;
+    if (input_level == output_level) {
+      uint64_t total = 0;
+      for (size_t i = 0; i + 1 < inputs.size(); ++i) {
+        uint64_t s = inputs[i]->fd.GetFileSize();
+        total += s;
+        if (total >= limit) {
+          covering_the_whole_range = false;
+          inputs.files.resize(i + 1);
+          break;
+        }
+      }
+    } else {
+      assert(output_level < vstorage->num_levels());
+      std::vector<FileMetaData*> parents;
+      vstorage->GetOverlappingInputs(output_level,
+                                     &inputs.files.front()->smallest,
+                                     &inputs.files.back()->largest, &parents);
+
+      size_t parent_index = 1;
+      const Comparator* ucmp = ioptions_.user_comparator;
+      uint64_t total = parents.empty() ? 0 : parents.front()->fd.GetFileSize();
+      for (size_t i = 0; i + 1 < inputs.size(); ++i) {
+        uint64_t s = inputs[i]->compensated_file_size;
+        total += s;
+
+        while (parent_index < parents.size() &&
+               ucmp->Compare(inputs[i]->largest.user_key(),
+                             parents[parent_index]->smallest.user_key()) >= 0) {
+          total += parents[parent_index]->fd.GetFileSize();
+          parent_index++;
+        }
+
+        if (total >= limit) {
+          covering_the_whole_range = false;
+          inputs.files.resize(i + 1);
+          break;
+        }
       }
     }
   }
