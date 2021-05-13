@@ -3015,10 +3015,20 @@ Status DBImpl::BackgroundGarbageCollection(bool* made_progress,
           // update statistics
           MeasureTime(stats_, NUM_FILES_IN_SINGLE_COMPACTION,
                       c->inputs(0)->size());
+          bool maybe_schedule = false;
           if (cfd->NeedsGarbageCollection()) {
             // Yes, we need more garbage collections!
             AddToGarbageCollectionQueue(cfd);
             ++unscheduled_garbage_collections_;
+            maybe_schedule = true;
+          }
+          if (!cfd->queued_for_compaction() && cfd->NeedsCompaction()) {
+            // Yes, we need more compactions!
+            AddToCompactionQueue(cfd);
+            ++unscheduled_compactions_;
+            maybe_schedule = true;
+          }
+          if (maybe_schedule) {
             MaybeScheduleFlushOrCompaction();
           }
         }
