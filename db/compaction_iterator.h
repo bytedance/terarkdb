@@ -36,6 +36,9 @@ class CompactionIterator {
     virtual SeparationType separation_type() const {
       return compaction_->separation_type();
     }
+    virtual bool need_rebuild(uint64_t fn) {
+      return compaction_->need_rebuild(fn);
+    }
     virtual int level(size_t /*compaction_input_level*/ = 0) const {
       return compaction_->level();
     }

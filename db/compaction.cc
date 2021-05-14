@@ -15,12 +15,14 @@
 
 #include <inttypes.h>
 
+#include <queue>
 #include <vector>
 
 #include "db/column_family.h"
 #include "db/version_set.h"
 #include "rocksdb/compaction_filter.h"
 #include "rocksdb/terark_namespace.h"
+#include "util/c_style_callback.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
 #include "utilities/util/factory.h"
@@ -283,6 +285,7 @@ Compaction::Compaction(CompactionParams&& params)
       num_antiquation_(params.num_antiquation),
       max_output_file_size_(params.target_file_size),
       max_compaction_bytes_(params.max_compaction_bytes),
+      total_sst_compaction_bytes_(0),
       max_subcompactions_(params.max_subcompactions),
       immutable_cf_options_(params.immutable_cf_options),
       mutable_cf_options_(params.mutable_cf_options),
@@ -307,6 +310,10 @@ Compaction::Compaction(CompactionParams&& params)
       is_trivial_move_(false),
       compaction_reason_(params.compaction_reason) {
   MarkFilesBeingCompacted(true);
+  if (input_vstorage_->blob_file_count() >=
+      mutable_cf_options_.max_blob_files) {
+    separation_type_ = kCompactionIngoreSeparate;
+  }
   if (is_manual_compaction_) {
     compaction_reason_ = CompactionReason::kManualCompaction;
   }
@@ -635,6 +642,127 @@ uint64_t Compaction::MaxInputFileCreationTime() const {
 
 int Compaction::GetInputBaseLevel() const {
   return input_vstorage_->base_level();
+}
+
+std::vector<FileMetaData*> Compaction::GetSortedInputBlobs() {
+  std::vector<FileMetaData*> blobs;
+  auto user_cmp = [this](const InternalKey& k1, const InternalKey& k2) {
+    return this->immutable_cf_options()->user_comparator->Compare(
+        k1.user_key(), k2.user_key());
+  };
+  auto blob_cmp = [&](const FileMetaData* b1, const FileMetaData* b2) {
+    int small_cmp = user_cmp(b1->smallest, b2->smallest);
+    if (small_cmp == 0) {
+      return user_cmp(b1->largest, b2->smallest) < 0;
+    } else {
+      return small_cmp < 0;
+    }
+  };
+
+  auto& dependence_map = input_vstorage_->dependence_map();
+  for (auto& level_files : inputs_) {
+    for (auto& file : level_files.files) {
+      total_sst_compaction_bytes_ += file->fd.GetFileSize();
+      for (auto& depend_file : file->prop.dependence) {
+        auto find = dependence_map.find(depend_file.file_number);
+        if (find == dependence_map.end()) {
+          // TODO log error
+          continue;
+        }
+        blobs.push_back(find->second);
+      }
+    }
+  }
+  std::sort(blobs.begin(), blobs.end(), blob_cmp);
+
+  return blobs;
+}
+
+void Compaction::GetRebuildNeededBlobs() {
+  std::vector<FileMetaData*> blobs;
+  auto user_cmp = [this](const InternalKey& k1, const InternalKey& k2) {
+    return this->immutable_cf_options()->user_comparator->Compare(
+        k1.user_key(), k2.user_key());
+  };
+
+  // get all blob of inputs, and sort it
+  blobs = GetSortedInputBlobs();
+  if (blobs.empty()) {
+    return;
+  }
+
+  // get all blobs in target overlaped ranges, store those files in a min-heap
+  // based on its overlap score, and summary all blobs compaction bytes
+  size_t target_overlap = mutable_cf_options_.max_dependence_blob_overlap;
+  auto blob_end_cmp = [blobs, user_cmp](const FileMetaData* b1,
+                                        const FileMetaData* b2) {
+    return user_cmp(b1->largest, b2->largest) > 0;
+  };
+  std::vector<FileMetaData*> end_queue;
+  auto blob_overlapscore_cmp = [this](const FileMetaData* b1,
+                                      const FileMetaData* b2) {
+    auto& score_map = input_vstorage_->blob_overlap_scores();
+    return score_map[b1->fd.GetNumber()] > score_map[b2->fd.GetNumber()];
+  };
+  std::priority_queue<FileMetaData*, std::vector<FileMetaData*>,
+                      decltype(blob_overlapscore_cmp)>
+      target_score_heap(blob_overlapscore_cmp);
+  auto start = blobs[0]->smallest;
+  end_queue.push_back(blobs[0]);
+  std::vector<InternalKey> prev_range;
+  size_t total_compaction_bytes = total_sst_compaction_bytes_;
+  for (size_t i = 0; i < blobs.size() && !end_queue.empty();) {
+    bool valid_range =
+        prev_range.empty() ||
+        !(user_cmp(prev_range[0], start) <= 0 &&
+          user_cmp(prev_range[1], end_queue.front()->largest) >= 0);
+    bool find_target_range = end_queue.size() >= target_overlap && valid_range;
+    if (find_target_range) {
+      if (prev_range.empty()) {
+        prev_range.push_back(start);
+        prev_range.push_back(end_queue.front()->largest);
+      } else {
+        prev_range[0] = start;
+        prev_range[1] = end_queue.front()->largest;
+      }
+
+      // collect blobs
+      for (auto& b : end_queue) {
+        if (need_rebuild_blobs_.find(b->fd.GetNumber()) ==
+            need_rebuild_blobs_.end()) {
+          need_rebuild_blobs_.insert(b->fd.GetNumber());
+          target_score_heap.push(b);
+          total_compaction_bytes += b->fd.GetFileSize();
+        }
+      }
+    }
+
+    if (i + 1 < blobs.size() &&
+        (user_cmp(blobs[i + 1]->smallest, end_queue.front()->largest) < 0 ||
+         end_queue.size() == 1)) {
+      if (user_cmp(blobs[i + 1]->smallest, end_queue.front()->largest) >= 0) {
+        std::pop_heap(end_queue.begin(), end_queue.end());
+        end_queue.pop_back();
+      }
+      i++;
+      start = blobs[i]->smallest;
+      end_queue.push_back(blobs[i]);
+      std::push_heap(end_queue.begin(), end_queue.end(), blob_end_cmp);
+    } else {
+      start = end_queue.front()->largest;
+      std::pop_heap(end_queue.begin(), end_queue.end(), blob_end_cmp);
+      end_queue.pop_back();
+    }
+  }
+
+  // pop smaller scores if total_compaction_bytes > max_compaction_bytes
+  while (total_compaction_bytes > max_compaction_bytes_ &&
+         !target_score_heap.empty()) {
+    total_compaction_bytes -= target_score_heap.top()->fd.GetFileSize();
+    need_rebuild_blobs_.erase(target_score_heap.top()->fd.GetNumber());
+    target_score_heap.pop();
+  }
+  TEST_SYNC_POINT_CALLBACK("Compaction::GetRebuildNeededBlobs::End", this);
 }
 
 }  // namespace TERARKDB_NAMESPACE

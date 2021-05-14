@@ -346,10 +346,10 @@ INSTANTIATE_TEST_CASE_P(
                       std::make_tuple(3, 0, true, 4, 1, false),
                       std::make_tuple(3, 0, true, 1, 1, false),
                       std::make_tuple(1, 1, false, 4, 0, false),
-                      std::make_tuple(4, 0, false, 1, 2, false),
-                      std::make_tuple(3, 0, true, 2, 2, false),
-                      std::make_tuple(3, 1, false, 3, 2, false),
-                      std::make_tuple(1, 1, false, 4, 2, false)));
+                      std::make_tuple(4, 0, false, 1, 0, false),
+                      std::make_tuple(3, 0, true, 2, 1, false),
+                      std::make_tuple(3, 1, false, 3, 0, false),
+                      std::make_tuple(1, 1, false, 4, 1, false)));
 
 class DBOptionChangeMigrationTest : public DBTestBase {
  public:

@@ -4181,6 +4181,146 @@ TEST_P(DBCompactionTestWithParam, FixFileIngestionCompactionDeadlock) {
   Close();
 }
 
+TEST_F(DBCompactionTest, BlobOverlapThredhold) {
+  std::string bigval =
+      "012345678901234567890123456789012345678901234567890123456789012345678901"
+      "23456789012345678901234567890123456789";
+  std::string normal_val = "0123456789";
+  Options opts = CurrentOptions();
+  opts.level0_file_num_compaction_trigger = 3;
+  opts.compression = kNoCompression;
+  opts.blob_size = 32;  // turn on kv separation
+  opts.max_blob_files = size_t(-1);
+
+  opts.max_dependence_blob_overlap = 3;
+
+  // gc job banned
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
+      "CompactionJob::ProcessGarbageCollection::Start",
+      [&](void* arg) { *(bool*)arg = true; });
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
+
+  auto verify_scores = [](const std::unordered_map<uint64_t, uint64_t>& scores,
+                          std::string expect_scores) {
+    std::multiset<uint64_t> score_set;
+    for (auto var : scores) {
+      score_set.insert(var.second);
+    }
+    std::string score_str;
+    for (auto var : score_set) {
+      score_str.append(std::to_string(var));
+      score_str.append(",");
+    }
+    SCOPED_TRACE("get: " + score_str + ", expect: " + expect_scores);
+    return score_str.compare(expect_scores) == 0;
+  };
+
+  DestroyAndReopen(opts);
+
+  int i;
+  for (i = 0; i < 2000; ++i) {
+    Put(Key(i), bigval);
+  }
+  Flush();
+  for (i = 1000; i < 3000; ++i) {
+    Put(Key(i), bigval);
+  }
+  Flush();
+  for (i = 2500; i < 3500; ++i) {
+    Put(Key(i), bigval);
+  }
+  Flush();
+
+  dbfull()->TEST_WaitForCompact();
+  ASSERT_EQ(NumTableFilesAtLevel(0), 0);
+  ASSERT_EQ(NumTableFilesAtLevel(1), 1);
+  ASSERT_EQ(NumTableFilesAtLevel(-1), 3);
+
+  auto blob_overlap_scores = dbfull()
+                                 ->TEST_GetVersionSet()
+                                 ->GetColumnFamilySet()
+                                 ->GetColumnFamily("default")
+                                 ->current()
+                                 ->storage_info()
+                                 ->blob_overlap_scores();
+  ASSERT_TRUE(verify_scores(blob_overlap_scores, "2,2,3,"));
+
+  for (i = 3400; i < 4500; ++i) {
+    Put(Key(i), bigval);
+  }
+  Flush();
+  for (i = 3200; i < 4000; ++i) {
+    Put(Key(i), bigval);
+  }
+  Flush();
+  for (i = 100; i < 999; ++i) {
+    Put(Key(i), bigval);
+  }
+  Flush();
+
+  dbfull()->TEST_WaitForCompact();
+
+  ASSERT_EQ(NumTableFilesAtLevel(0), 0);
+  ASSERT_EQ(NumTableFilesAtLevel(1), 1);
+  // old sst file in level-1 can be remove , only leave 6(3+3) blob file which
+  // is origin flush sst
+  ASSERT_EQ(NumTableFilesAtLevel(-1), 6);
+
+  auto blob_overlap_scores2 = dbfull()
+                                  ->TEST_GetVersionSet()
+                                  ->GetColumnFamilySet()
+                                  ->GetColumnFamily("default")
+                                  ->current()
+                                  ->storage_info()
+                                  ->blob_overlap_scores();
+  ASSERT_TRUE(verify_scores(blob_overlap_scores2, "2,3,3,3,3,4,"));
+
+  // now we have 6 blobs:
+  // 8: [0,              2000)
+  // 11:             [1000,         3000)
+  // 13:                        [2500,       3500)
+  // 16:                                     [3400,        4500)
+  // 18:                                   [3200,   4000)
+  // 20:  [100,999)
+  // overlap range is [3400, 3500) which contains 3 files (13,16,18)
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
+      "Compaction::GetRebuildNeededBlobs::End", [&](void* arg) {
+        Compaction* c = (Compaction*)arg;
+        auto rebuild_blob_set = c->TEST_need_rebuild_blobs();
+        std::set<uint64_t> expect{13, 16, 18};  // TODO filenumber is not stable
+        ASSERT_EQ(rebuild_blob_set.size(), expect.size());
+        auto it = expect.begin();
+        for (auto blob : rebuild_blob_set) {
+          ASSERT_EQ(blob, *it);
+          ++it;
+        }
+      });
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
+      "CompactionJob::FinishCompactionOutputBlob::Start", [&](void* arg) {
+        FileMetaData* meta = (FileMetaData*)arg;
+        ASSERT_EQ(meta->smallest.user_key().ToString(), Key(2500));
+        ASSERT_EQ(meta->largest.user_key().ToString(), Key(4499));
+      });
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
+
+  // flush 3 normal sst to triger compaction with level-1, so that rebuild
+  // overlap blob
+  for (i = 500; i < 600; ++i) {
+    Put(Key(i), normal_val);
+  }
+  Flush();
+  for (i = 600; i < 700; ++i) {
+    Put(Key(i), normal_val);
+  }
+  Flush();
+  for (i = 700; i < 800; ++i) {
+    Put(Key(i), normal_val);
+  }
+  Flush();
+
+  dbfull()->TEST_WaitForCompact();
+}
+
 #endif  // !defined(ROCKSDB_LITE)
 }  // namespace TERARKDB_NAMESPACE
 
