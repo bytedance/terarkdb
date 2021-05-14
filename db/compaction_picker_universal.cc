@@ -280,7 +280,8 @@ Compaction* UniversalCompactionPicker::PickCompaction(
 
   // Check for size amplification first.
   Compaction* c = nullptr;
-  if (vstorage->has_space_amplification() ||
+  if ((vstorage->has_space_amplification() &&
+       !vstorage->has_file_marked_for_compaction()) ||
       sorted_runs.size() >=
           static_cast<size_t>(
               mutable_cf_options.level0_file_num_compaction_trigger)) {
@@ -342,9 +343,9 @@ Compaction* UniversalCompactionPicker::PickCompaction(
         // compaction without looking at filesize ratios and try to reduce
         // the number of files to fewer than level0_file_num_compaction_trigger.
         // This is guaranteed by NeedsCompaction()
-        assert(sorted_runs.size() >=
-               static_cast<size_t>(
-                   mutable_cf_options.level0_file_num_compaction_trigger));
+        // assert(sorted_runs.size() >=
+        //       static_cast<size_t>(
+        //           mutable_cf_options.level0_file_num_compaction_trigger));
         // Get the total number of sorted runs that are not being compacted
         int num_sr_not_compacted = 0;
         for (size_t i = 0; i < sorted_runs.size(); i++) {
@@ -371,10 +372,6 @@ Compaction* UniversalCompactionPicker::PickCompaction(
       }
     }
   }
-  if (c == nullptr && table_cache_ != nullptr) {
-    c = PickCompositeCompaction(cf_name, mutable_cf_options, vstorage,
-                                snapshots, sorted_runs, log_buffer);
-  }
   if (c == nullptr && !ioptions_.enable_lazy_compaction) {
     if ((c = PickDeleteTriggeredCompaction(cf_name, mutable_cf_options,
                                            vstorage, score, sorted_runs,
@@ -384,7 +381,10 @@ Compaction* UniversalCompactionPicker::PickCompaction(
                        cf_name.c_str());
     }
   }
-
+  if (c == nullptr && table_cache_ != nullptr) {
+    c = PickCompositeCompaction(cf_name, mutable_cf_options, vstorage,
+                                snapshots, sorted_runs, log_buffer);
+  }
   if (c == nullptr) {
     TEST_SYNC_POINT_CALLBACK("UniversalCompactionPicker::PickCompaction:Return",
                              nullptr);

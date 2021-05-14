@@ -384,8 +384,9 @@ TEST_F(LRUCacheTest, TopSetAdd) {
   using DataIdx = LRUCacheDiagnosableMonitor::TopSet::DataIdx;
   auto new_lru_handle = [&](int id, size_t charge) {
     std::string keydata = "handle-" + std::to_string(id);
-    LRUHandle* e = reinterpret_cast<LRUHandle*>(
-        new char[sizeof(LRUHandle) - 1 + keydata.size()]);
+    size_t handle_size = sizeof(LRUHandle) - 1 + keydata.size();
+    LRUHandle* e = reinterpret_cast<LRUHandle*>(new char[handle_size]);
+    memset(e, 0, handle_size);
     e->key_length = 13;
     memcpy(e->key_data, keydata.c_str(), keydata.size());
 
@@ -454,8 +455,9 @@ TEST_F(LRUCacheTest, TopSetSub) {
   using DataIdx = LRUCacheDiagnosableMonitor::TopSet::DataIdx;
   auto new_lru_handle = [&](int id, size_t charge) {
     std::string keydata = "handle-" + std::to_string(id);
-    LRUHandle* e = reinterpret_cast<LRUHandle*>(
-        new char[sizeof(LRUHandle) - 1 + keydata.size()]);
+    size_t handle_size = sizeof(LRUHandle) - 1 + keydata.size();
+    LRUHandle* e = reinterpret_cast<LRUHandle*>(new char[handle_size]);
+    memset(e, 0, handle_size);
     e->key_length = 13;
     memcpy(e->key_data, keydata.c_str(), keydata.size());
 

@@ -1897,7 +1897,11 @@ void DBImpl::MaybeScheduleFlushOrCompaction() {
     return;
   }
 
-  while (bg_garbage_collection_scheduled_ <
+  bool gc_banned = false;
+  TEST_SYNC_POINT_CALLBACK("CompactionJob::ProcessGarbageCollection::Start",
+                           &gc_banned);
+  while (!gc_banned &&
+         bg_garbage_collection_scheduled_ <
              bg_job_limits.max_garbage_collections &&
          unscheduled_garbage_collections_ > 0) {
     CompactionArg* ca = new CompactionArg;

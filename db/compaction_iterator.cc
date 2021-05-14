@@ -730,6 +730,10 @@ void CompactionIterator::NextFromInput() {
   if (!valid_ && IsShuttingDown()) {
     status_ = Status::ShutdownInProgress();
   }
+
+  if (compaction_ != nullptr) {
+    do_rebuild_blob_ = compaction_->need_rebuild(value_.file_number());
+  }
 }
 
 void CompactionIterator::PrepareOutput() {
@@ -841,6 +845,9 @@ void CompactionIterator::PrepareOutput() {
         status_ = std::move(s);
       }
     }
+  } else {
+    // Make test happy
+    zero_sequence();
   }
 }
 

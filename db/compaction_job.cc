@@ -255,7 +255,7 @@ struct CompactionJob::SubcompactionState {
 
   SubcompactionState& operator=(const SubcompactionState&) = delete;
 
-  // Returns true iff we should stop building the current output
+  // Returns true if we should stop building the current output
   // before processing "internal_key".
   bool ShouldStopBefore(const Slice& internal_key, uint64_t curr_file_size) {
     const InternalKeyComparator* icmp =
@@ -460,6 +460,8 @@ int CompactionJob::Prepare(int sub_compaction_slots) {
       c->column_family_data()->CalculateSSTWriteHint(c->output_level());
   // Is this compaction producing files at the bottommost level?
   bottommost_level_ = c->bottommost_level();
+
+  c->GetRebuildNeededBlobs();
 
   if (c->compaction_type() != kMapCompaction && !c->input_range().empty()) {
     auto& input_range = c->input_range();

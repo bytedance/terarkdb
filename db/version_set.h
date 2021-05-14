@@ -273,6 +273,16 @@ class VersionStorageInfo {
   }
 
   bool has_space_amplification() const { return !space_amplification_.empty(); }
+  bool has_file_marked_for_compaction() const {
+    if (!BottommostFilesMarkedForCompaction().empty()) {
+      return true;
+    }
+    if (!FilesMarkedForCompaction().empty()) {
+      return true;
+    }
+
+    return false;
+  }
 
   bool has_space_amplification(int level) const {
     return space_amplification_.find(level) != space_amplification_.end();
@@ -332,7 +342,7 @@ class VersionStorageInfo {
   uint64_t NumLevelBytes(int level) const;
 
   // REQUIRES: This version has been saved (see VersionSet::SaveTo)
-  const std::vector<FileMetaData*>& LevelFiles(int level) const {
+  std::vector<FileMetaData*>& LevelFiles(int level) const {
     return files_[level];
   }
 
@@ -491,6 +501,13 @@ class VersionStorageInfo {
   void ResetVersionBuilderContext(VersionBuilder::Context* context) {
     return version_builder_context_.reset(context);
   }
+  uint64_t blob_file_count() { return blob_file_count_; }
+  void CalculateTopkGarbageBlobs();
+  void ComputeBlobOverlapScore();
+
+  std::unordered_map<uint64_t, uint64_t>& blob_overlap_scores() {
+    return blob_overlap_scores_;
+  }
 
  private:
   const InternalKeyComparator* internal_comparator_;
@@ -582,11 +599,14 @@ class VersionStorageInfo {
     kMarkedForCompaction = 1ULL << 2,
   };
   std::unordered_map<int, int> space_amplification_;
+  std::unordered_map<uint64_t, uint64_t> blob_overlap_scores_;
   std::vector<double> read_amplification_;
+  std::vector<std::vector<int>> topk_dirty_blob_groups;
 
   int l0_delay_trigger_count_ = 0;  // Count used to trigger slow down and stop
                                     // for number of L0 files.
 
+  uint64_t blob_file_count_;
   uint64_t blob_file_size_;
   uint64_t blob_num_entries_;
   uint64_t blob_num_deletions_;

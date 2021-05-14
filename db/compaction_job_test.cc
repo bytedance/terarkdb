@@ -152,9 +152,9 @@ class CompactionJobTest : public testing::Test {
   }
 
   // returns expected result after compaction
-  stl_wrappers::KVMap CreateTwoFiles(bool gen_corrupted_keys) {
+  stl_wrappers::KVMap CreateTwoFiles(bool gen_corrupted_keys,
+                                     const int kKeysPerFile = 10000) {
     auto expected_results = mock::MakeMockFile();
-    const int kKeysPerFile = 10000;
     const int kCorruptKeysPerFile = 200;
     const int kMatchingKeys = kKeysPerFile / 2;
     SequenceNumber sequence_number = 0;
@@ -254,6 +254,7 @@ class CompactionJobTest : public testing::Test {
     params.max_compaction_bytes = 10 * 1024 * 1024;
     params.compression_opts = cfd->ioptions()->compression_opts;
     params.manual_compaction = true;
+    params.separation_type = kCompactionIngoreSeparate;
 
     Compaction compaction(std::move(params));
     compaction.SetInputVersion(cfd->current());
@@ -328,9 +329,10 @@ TEST_F(CompactionJobTest, Simple) {
 TEST_F(CompactionJobTest, SimpleCorrupted) {
   NewDB();
 
-  auto expected_results = CreateTwoFiles(true);
+  auto expected_results = CreateTwoFiles(true, 1000);
   auto cfd = versions_->GetColumnFamilySet()->GetDefault();
   auto files = cfd->current()->storage_info()->LevelFiles(0);
+  ASSERT_EQ(files.size(), 2);
   RunCompaction({files}, expected_results);
   ASSERT_EQ(compaction_job_stats_.num_corrupt_keys, 400U);
 }
