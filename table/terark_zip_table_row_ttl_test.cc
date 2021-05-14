@@ -235,22 +235,9 @@ TEST_P(TerarkZipTableBuilderTest, BoundaryTest) {
   ASSERT_EQ(36ul * 26, props->raw_value_size);
   ASSERT_EQ(26ul, props->num_entries);
   ASSERT_EQ(26ul, props->num_data_blocks);
-  auto answer1 = props->user_collected_properties.find(
-      TablePropertiesNames::kEarliestTimeBeginCompact);
-  auto answer2 = props->user_collected_properties.find(
-      TablePropertiesNames::kLatestTimeEndCompact);
-  // auto answer3 = props->user_collected_properties.end();
-  auto get_varint64 = [](const std::string& v) {
-    Slice s(v);
-    uint64_t r;
-    auto assert_true = [](bool b) {
-      ASSERT_TRUE(b);
-    };
-    assert_true(GetVarint64(&s, &r));
-    return r;
-  };
-  uint64_t act_answer1 = get_varint64(answer1->second);
-  uint64_t act_answer2 = get_varint64(answer2->second);
+  uint64_t act_answer1, act_answer2;
+  GetCompactionTimePoint(props->user_collected_properties, &act_answer1,
+                         &act_answer2);
   if (n.ttl_ratio > 1.000) {
     // ASSERT_EQ(std::numeric_limits<uint64_t>::max(),
     // props->ratio_expire_time);

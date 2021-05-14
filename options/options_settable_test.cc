@@ -476,8 +476,7 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
       "optimize_range_deletion=false;"
       "report_bg_io_stats=true;"
       "ttl_gc_ratio=3.000;"
-      "ttl_max_scan_gap=1;"
-      "compaction=false;};",
+      "ttl_max_scan_gap=1;",
       new_options));
 
   ASSERT_EQ(unset_bytes_base,

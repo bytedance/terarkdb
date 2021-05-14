@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <list>
 #include <map>
+#include <queue>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -340,6 +341,13 @@ class FilePicker {
     return false;
   }
 };
+struct LevelAndFileNumberComp {
+  bool operator()(const std::pair<int, FileMetaData*>& l,
+                  const std::pair<int, FileMetaData*>& r) const noexcept {
+    return l.second->fd.GetNumber() < r.second->fd.GetNumber();
+  }
+};
+
 }  // anonymous namespace
 
 VersionStorageInfo::~VersionStorageInfo() { delete[](files_ - 1); }
@@ -1183,6 +1191,7 @@ VersionStorageInfo::VersionStorageInfo(
       compaction_score_(num_levels_),
       compaction_level_(num_levels_),
       l0_delay_trigger_count_(0),
+      blob_file_count_(0),
       blob_file_size_(0),
       blob_num_entries_(0),
       blob_num_deletions_(0),
@@ -1486,10 +1495,64 @@ void VersionStorageInfo::UpdateAccumulatedStats(FileMetaData* file_meta) {
     lsm_num_entries_ += file_meta->prop.num_entries;
     lsm_num_deletions_ += file_meta->prop.num_deletions;
   } else {
+    blob_file_count_++;
     blob_file_size_ += file_meta->fd.GetFileSize();
     blob_num_entries_ += file_meta->prop.num_entries;
     blob_num_deletions_ += file_meta->prop.num_deletions;
     blob_num_antiquation_ += file_meta->num_antiquation;
+  }
+}
+
+void VersionStorageInfo::CalculateTopkGarbageBlobs() {
+  // TODO
+}
+
+void VersionStorageInfo::ComputeBlobOverlapScore() {
+  auto& hiden_files = LevelFiles(-1);
+
+  auto user_cmp = [this](const InternalKey& k1, const InternalKey& k2) {
+    return user_comparator_->Compare(k1.user_key(), k2.user_key());
+  };
+
+  std::sort(hiden_files.begin(), hiden_files.end(),
+            [user_cmp](const FileMetaData* fm1, const FileMetaData* fm2) {
+              if (fm1->is_gc_forbidden()) {
+                // not-blob file bigger than any other files.
+                return false;
+              }
+              int smallest_cmp = user_cmp(fm1->smallest, fm2->smallest);
+              if (smallest_cmp == 0) {
+                return user_cmp(fm1->largest, fm2->largest) < 0;
+              }
+              return smallest_cmp < 0;
+            });
+
+  auto indirect_cmp = [user_cmp, hiden_files, this](size_t idx1, size_t idx2) {
+    return user_cmp(hiden_files[idx1]->largest, hiden_files[idx2]->largest) > 0;
+  };
+  std::priority_queue<int, std::vector<int>, decltype(indirect_cmp)> end_queue(
+      indirect_cmp);
+  size_t i = 0;
+  bool blob_end =
+      (i >= hiden_files.size() || hiden_files[i]->is_gc_forbidden());
+  while (!blob_end || !end_queue.empty()) {
+    bool next_point_from_blob =
+        end_queue.empty() ||
+        (!blob_end && user_cmp(hiden_files[i]->smallest,
+                               hiden_files[end_queue.top()]->largest) < 0);
+    if (!blob_end && next_point_from_blob) {
+      end_queue.push(i);
+      blob_overlap_scores_[hiden_files[i]->fd.GetNumber()] =
+          i - end_queue.size();
+      i++;
+      blob_end = (i >= hiden_files.size() || hiden_files[i]->is_gc_forbidden());
+    } else {
+      auto cur_idx = end_queue.top();
+      uint64_t cur_fileno = hiden_files[cur_idx]->fd.GetNumber();
+      blob_overlap_scores_[cur_fileno] =
+          i - blob_overlap_scores_[cur_fileno] - 1;
+      end_queue.pop();
+    }
   }
 }
 
@@ -1765,11 +1828,12 @@ void VersionStorageInfo::ComputeFilesMarkedForCompaction() {
     for (auto* f : files_[level]) {
       if (!f->being_compacted && f->marked_for_compaction) {
         files_marked_for_compaction_.emplace_back(level, f);
+        space_amplification_[level] |= kMarkedForCompaction;
       }
     }
   }
   std::sort(files_marked_for_compaction_.begin(),
-            files_marked_for_compaction_.end());
+            files_marked_for_compaction_.end(), LevelAndFileNumberComp());
 }
 
 namespace {
@@ -1831,9 +1895,6 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f,
   } else {
     if (f->prop.is_map_sst()) {
       space_amplification_[level] |= kHasMapSst;
-    }
-    if (f->marked_for_compaction) {
-      space_amplification_[level] |= kMarkedForCompaction;
     }
   }
   if (f->prop.has_range_deletions()) {
@@ -2113,6 +2174,7 @@ void VersionStorageInfo::ComputeBottommostFilesMarkedForCompaction() {
       // ensures the file really contains deleted or overwritten keys.
       if (meta->fd.largest_seqno < oldest_snapshot_seqnum_) {
         bottommost_files_marked_for_compaction_.push_back(level_and_file);
+        space_amplification_[level_and_file.first] |= kMarkedForCompaction;
       } else {
         bottommost_files_mark_threshold_ =
             std::min(bottommost_files_mark_threshold_, meta->fd.largest_seqno);
@@ -2120,7 +2182,8 @@ void VersionStorageInfo::ComputeBottommostFilesMarkedForCompaction() {
     }
   }
   std::sort(bottommost_files_marked_for_compaction_.begin(),
-            bottommost_files_marked_for_compaction_.end());
+            bottommost_files_marked_for_compaction_.end(),
+            LevelAndFileNumberComp());
 }
 
 void Version::Ref() { ++refs_; }

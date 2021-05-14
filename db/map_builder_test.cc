@@ -257,8 +257,8 @@ TEST_F(MapBuilderTest, KV) {
   std::vector<FileMetaData*> added_files;
   std::unique_ptr<FileMetaData> output_file(new FileMetaData);
   Status s = map_builder.Build(input_files_, deleted_range, added_files, 2, 0,
-                               cfd_, cfd_->current(), &edit, output_file.get(),
-                               nullptr, nullptr);
+                               cfd_, false, cfd_->current(), &edit,
+                               output_file.get(), nullptr, nullptr);
   CheckFile(output_file.get());
   ASSERT_OK(s);
 }
@@ -283,8 +283,8 @@ TEST_F(MapBuilderTest, RangeDel) {
   std::vector<FileMetaData*> added_files;
   std::unique_ptr<FileMetaData> output_file(new FileMetaData);
   Status s = map_builder.Build(input_files_, deleted_range, added_files, 1, 0,
-                               cfd_, cfd_->current(), &edit, output_file.get(),
-                               nullptr, nullptr);
+                               cfd_, false, cfd_->current(), &edit,
+                               output_file.get(), nullptr, nullptr);
   CheckFile(output_file.get());
   ASSERT_OK(s);
 }
@@ -309,8 +309,8 @@ TEST_F(MapBuilderTest, DeletedRange) {
   std::vector<FileMetaData*> added_files;
   std::unique_ptr<FileMetaData> output_file(new FileMetaData);
   Status s = map_builder.Build(input_files_, deleted_range, added_files, 1, 0,
-                               cfd_, cfd_->current(), &edit, output_file.get(),
-                               nullptr, nullptr);
+                               cfd_, false, cfd_->current(), &edit,
+                               output_file.get(), nullptr, nullptr);
   CheckFile(output_file.get());
   ASSERT_OK(s);
 }
@@ -336,8 +336,8 @@ TEST_F(MapBuilderTest, AddedFiles) {
   added_files.emplace_back(files_[1]);  // files_[1] has range deletion
   std::unique_ptr<FileMetaData> output_file(new FileMetaData);
   Status s = map_builder.Build(input_files_, deleted_range, added_files, 1, 0,
-                               cfd_, cfd_->current(), &edit, output_file.get(),
-                               nullptr, nullptr);
+                               cfd_, false, cfd_->current(), &edit,
+                               output_file.get(), nullptr, nullptr);
   CheckFile(output_file.get());
   ASSERT_OK(s);
 }
@@ -363,14 +363,14 @@ TEST_F(MapBuilderTest, MapSstInput) {
   added_files.emplace_back(files_[1]);  // files_[1] has range deletion
   std::unique_ptr<FileMetaData> output_file(new FileMetaData);
   Status s = map_builder.Build(input_files_, deleted_range, added_files, 1, 0,
-                               cfd_, cfd_->current(), &edit, output_file.get(),
-                               nullptr, nullptr);
+                               cfd_, false, cfd_->current(), &edit,
+                               output_file.get(), nullptr, nullptr);
   // kNoRangeDeletions=0 kHasSnapshots=0 kMapHandleRangeDeletions=0
   output_file.get()->prop.flags = 0;
   input_files_[0].files.emplace_back(output_file.get());
   s = map_builder.Build(input_files_, deleted_range, added_files, 1, 0, cfd_,
-                        cfd_->current(), &edit, output_file.get(), nullptr,
-                        nullptr);
+                        false, cfd_->current(), &edit, output_file.get(),
+                        nullptr, nullptr);
   CheckFile(output_file.get());
   ASSERT_OK(s);
 }
@@ -390,8 +390,8 @@ TEST_F(MapBuilderTest, NoNeedBuildMapSst) {
   std::vector<FileMetaData*> added_files;
   std::unique_ptr<FileMetaData> output_file(new FileMetaData);
   Status s = map_builder.Build(input_files_, deleted_range, added_files, 1, 0,
-                               cfd_, cfd_->current(), &edit, output_file.get(),
-                               nullptr, nullptr);
+                               cfd_, false, cfd_->current(), &edit,
+                               output_file.get(), nullptr, nullptr);
   ASSERT_LE(output_file->fd.GetNumber(), 0);
 }
 
