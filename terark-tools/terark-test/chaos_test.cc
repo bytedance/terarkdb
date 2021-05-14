@@ -179,7 +179,6 @@ class ChaosTest {
     options.inplace_update_support = false;
     options.blob_gc_ratio = 0.05;
     options.blob_size = blob_size;
-    options.ttl = 0;
     options.soft_pending_compaction_bytes_limit = 68719476736;
     options.enable_lazy_compaction = true;
     options.disable_auto_compactions = false;
