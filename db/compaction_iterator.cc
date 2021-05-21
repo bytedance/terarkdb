@@ -730,10 +730,6 @@ void CompactionIterator::NextFromInput() {
   if (!valid_ && IsShuttingDown()) {
     status_ = Status::ShutdownInProgress();
   }
-
-  if (compaction_ != nullptr) {
-    do_rebuild_blob_ = compaction_->need_rebuild(value_.file_number());
-  }
 }
 
 void CompactionIterator::PrepareOutput() {
@@ -763,6 +759,9 @@ void CompactionIterator::PrepareOutput() {
       current_key_.UpdateInternalKey(0, ikey_.type);
     }
   };
+  assert(!do_rebuild_blob_ || compaction_ != nullptr);
+  bool do_rebuild_blob =
+      do_rebuild_blob_ && compaction_->need_rebuild(value_.file_number());
 
   if (ikey_.type == kTypeValue || ikey_.type == kTypeMerge) {
     if (!do_separate_value_) {
@@ -783,7 +782,7 @@ void CompactionIterator::PrepareOutput() {
             value_.size() * blob_large_key_ratio_lsh16_) {
       // Keep value combined. value too small or key too large
       zero_sequence();
-    } else if (do_rebuild_blob_ || value_.file_number() == uint64_t(-1)) {
+    } else if (do_rebuild_blob || value_.file_number() == uint64_t(-1)) {
       // 1. We want rebuild blob, don't use input as blob ...
       // 2. Value is build from MergeOperator
       // 3. CompactionFilter change value
@@ -814,7 +813,7 @@ void CompactionIterator::PrepareOutput() {
     }
   } else if (ikey_.type == kTypeValueIndex || ikey_.type == kTypeMergeIndex) {
     assert(value_.file_number() != uint64_t(-1));
-    if (do_rebuild_blob_) {
+    if (do_rebuild_blob) {
       // Prepare key type for write blob
       ValueType backup_type = ikey_.type;
       ikey_.type = ikey_.type == kTypeValueIndex ? kTypeValue : kTypeMerge;

@@ -273,15 +273,12 @@ class VersionStorageInfo {
   }
 
   bool has_space_amplification() const { return !space_amplification_.empty(); }
-  bool has_file_marked_for_compaction() const {
-    if (!BottommostFilesMarkedForCompaction().empty()) {
-      return true;
-    }
-    if (!FilesMarkedForCompaction().empty()) {
-      return true;
-    }
-
-    return false;
+  bool has_map_sst() const {
+    return std::find_if(space_amplification_.begin(),
+                        space_amplification_.end(),
+                        [](std::pair<int, int> pair) {
+                          return (pair.second & kHasMapSst) != 0;
+                        }) != space_amplification_.end();
   }
 
   bool has_space_amplification(int level) const {

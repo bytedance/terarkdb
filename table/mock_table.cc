@@ -169,13 +169,21 @@ void MockTableFactory::AssertLatestFile(
       ParseInternalKey(Slice(key), &ikey);
       std::cout << ikey.DebugString(false) << " -> " << value << std::endl;
       std::cout << "--- vs ---" << std::endl;
-      ParsedInternalKey ikey2;
-      std::string key2, value2;
-      std::tie(key2, value2) = *it;
-      ParseInternalKey(Slice(key2), &ikey2);
-      std::cout << ikey2.DebugString(false) << " -> " << value2 << std::endl;
+      if (it != file_contents.end()) {
+        std::tie(key, value) = *it++;
+        ParseInternalKey(Slice(key), &ikey);
+        std::cout << ikey.DebugString(false) << " -> " << value << std::endl;
+      }
       std::cout << "--- ^^ ---" << std::endl;
-      it++;
+    }
+    while (it != file_contents.end()) {
+      ParsedInternalKey ikey;
+      std::string key, value;
+      std::cout << "--- vs ---" << std::endl;
+      std::tie(key, value) = *it;
+      ParseInternalKey(Slice(key), &ikey);
+      std::cout << ikey.DebugString(false) << " -> " << value << std::endl;
+      std::cout << "--- ^^ ---" << std::endl;
     }
     FAIL();
   }

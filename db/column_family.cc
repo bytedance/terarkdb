@@ -65,7 +65,7 @@ ColumnFamilyHandleImpl::~ColumnFamilyHandleImpl() {
     if (cfd_->Unref()) {
       delete cfd_;
     }
-    db_->FindObsoleteFiles(&job_context, false, false);
+    db_->FindObsoleteFiles(&job_context, false, true);
     mutex_->Unlock();
     if (job_context.HaveSomethingToDelete()) {
       bool background_purge =

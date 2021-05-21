@@ -341,10 +341,20 @@ class FilePicker {
     return false;
   }
 };
-struct LevelAndFileNumberComp {
+struct FileNumberComp {
   bool operator()(const std::pair<int, FileMetaData*>& l,
                   const std::pair<int, FileMetaData*>& r) const noexcept {
     return l.second->fd.GetNumber() < r.second->fd.GetNumber();
+  }
+};
+struct LevelAndFileNumberComp {
+  bool operator()(const std::pair<int, FileMetaData*>& l,
+                  const std::pair<int, FileMetaData*>& r) const noexcept {
+    if (l.first == r.first) {
+      return l.second->fd.GetNumber() < r.second->fd.GetNumber();
+    } else {
+      return l.first < r.first;
+    }
   }
 };
 
@@ -2182,8 +2192,7 @@ void VersionStorageInfo::ComputeBottommostFilesMarkedForCompaction() {
     }
   }
   std::sort(bottommost_files_marked_for_compaction_.begin(),
-            bottommost_files_marked_for_compaction_.end(),
-            LevelAndFileNumberComp());
+            bottommost_files_marked_for_compaction_.end(), FileNumberComp());
 }
 
 void Version::Ref() { ++refs_; }

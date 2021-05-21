@@ -806,8 +806,6 @@ Compaction* CompactionPicker::PickGarbageCollection(
   // 1. score more than garbage collection baseline.
   // 2. fragile files that can be reorganized
   // 3. marked for compaction for other reasons
-  bool force_merge_blob =
-      vstorage->blob_file_count() >= mutable_cf_options.max_blob_files;
   for (auto f : vstorage->LevelFiles(-1)) {
     if (!f->is_gc_permitted() || f->being_compacted) {
       continue;
