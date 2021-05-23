@@ -587,6 +587,7 @@ class VersionStorageInfo {
   int l0_delay_trigger_count_ = 0;  // Count used to trigger slow down and stop
                                     // for number of L0 files.
 
+  uint64_t blob_file_count_;
   uint64_t blob_file_size_;
   uint64_t blob_num_entries_;
   uint64_t blob_num_deletions_;

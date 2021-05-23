@@ -841,6 +841,9 @@ void CompactionIterator::PrepareOutput() {
         status_ = std::move(s);
       }
     }
+  } else {
+    // Make tests happy
+    zero_sequence();
   }
 }
 

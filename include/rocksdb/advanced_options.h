@@ -634,15 +634,6 @@ struct AdvancedColumnFamilyOptions {
   // Dynamically changeable through SetOptions() API
   bool report_bg_io_stats = false;
 
-  // Non-bottom-level files older than TTL will go through the compaction
-  // process. This needs max_open_files to be set to -1.
-  // Enabled only for level compaction for now.
-  //
-  // Default: 0 (disabled)
-  //
-  // Dynamically changeable through SetOptions() API
-  uint64_t ttl = 0;
-
   // Create ColumnFamilyOptions with default values for all fields
   AdvancedColumnFamilyOptions();
   // Create ColumnFamilyOptions from Options
