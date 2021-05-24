@@ -280,7 +280,6 @@ struct CompactionJob::SubcompactionState {
     if (overlapped_bytes + curr_file_size >
         compaction->max_compaction_bytes()) {
       // Too much overlap for current output; start new output
-      overlapped_bytes = 0;
       return true;
     }
 
@@ -1605,6 +1604,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
         }
         break;
       }
+      sub_compact->overlapped_bytes = 0;
       if (sub_compact->outputs.size() == 1) {
         // Use samples from first output file to create dictionary for
         // compression of subsequent files.

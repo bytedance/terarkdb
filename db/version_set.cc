@@ -340,6 +340,23 @@ class FilePicker {
     return false;
   }
 };
+struct FileNumberComp {
+  bool operator()(const std::pair<int, FileMetaData*>& l,
+                  const std::pair<int, FileMetaData*>& r) const noexcept {
+    return l.second->fd.GetNumber() < r.second->fd.GetNumber();
+  }
+};
+struct LevelAndFileNumberComp {
+  bool operator()(const std::pair<int, FileMetaData*>& l,
+                  const std::pair<int, FileMetaData*>& r) const noexcept {
+    if (l.first == r.first) {
+      return l.second->fd.GetNumber() < r.second->fd.GetNumber();
+    } else {
+      return l.first < r.first;
+    }
+  }
+};
+
 }  // anonymous namespace
 
 VersionStorageInfo::~VersionStorageInfo() { delete[](files_ - 1); }
@@ -350,6 +367,9 @@ Version::~Version() {
   // Remove from linked list
   prev_->next_ = next_;
   next_->prev_ = prev_;
+
+  // Release storage_info's context, make sure the last f->Unref is call here
+  storage_info_.ResetVersionBuilderContext(nullptr);
 
   // Drop references to files
   for (int level = -1; level < storage_info_.num_levels_; level++) {
@@ -1183,6 +1203,7 @@ VersionStorageInfo::VersionStorageInfo(
       compaction_score_(num_levels_),
       compaction_level_(num_levels_),
       l0_delay_trigger_count_(0),
+      blob_file_count_(0),
       blob_file_size_(0),
       blob_num_entries_(0),
       blob_num_deletions_(0),
@@ -1486,6 +1507,7 @@ void VersionStorageInfo::UpdateAccumulatedStats(FileMetaData* file_meta) {
     lsm_num_entries_ += file_meta->prop.num_entries;
     lsm_num_deletions_ += file_meta->prop.num_deletions;
   } else {
+    blob_file_count_++;
     blob_file_size_ += file_meta->fd.GetFileSize();
     blob_num_entries_ += file_meta->prop.num_entries;
     blob_num_deletions_ += file_meta->prop.num_deletions;
@@ -1765,11 +1787,12 @@ void VersionStorageInfo::ComputeFilesMarkedForCompaction() {
     for (auto* f : files_[level]) {
       if (!f->being_compacted && f->marked_for_compaction) {
         files_marked_for_compaction_.emplace_back(level, f);
+        space_amplification_[level] |= kMarkedForCompaction;
       }
     }
   }
   std::sort(files_marked_for_compaction_.begin(),
-            files_marked_for_compaction_.end());
+            files_marked_for_compaction_.end(), LevelAndFileNumberComp());
 }
 
 namespace {
@@ -1831,9 +1854,6 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f,
   } else {
     if (f->prop.is_map_sst()) {
       space_amplification_[level] |= kHasMapSst;
-    }
-    if (f->marked_for_compaction) {
-      space_amplification_[level] |= kMarkedForCompaction;
     }
   }
   if (f->prop.has_range_deletions()) {
@@ -2113,6 +2133,7 @@ void VersionStorageInfo::ComputeBottommostFilesMarkedForCompaction() {
       // ensures the file really contains deleted or overwritten keys.
       if (meta->fd.largest_seqno < oldest_snapshot_seqnum_) {
         bottommost_files_marked_for_compaction_.push_back(level_and_file);
+        space_amplification_[level_and_file.first] |= kMarkedForCompaction;
       } else {
         bottommost_files_mark_threshold_ =
             std::min(bottommost_files_mark_threshold_, meta->fd.largest_seqno);
@@ -2120,7 +2141,7 @@ void VersionStorageInfo::ComputeBottommostFilesMarkedForCompaction() {
     }
   }
   std::sort(bottommost_files_marked_for_compaction_.begin(),
-            bottommost_files_marked_for_compaction_.end());
+            bottommost_files_marked_for_compaction_.end(), FileNumberComp());
 }
 
 void Version::Ref() { ++refs_; }

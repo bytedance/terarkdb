@@ -161,12 +161,29 @@ void MockTableFactory::AssertLatestFile(
 
   if (file_contents != latest->second.table) {
     std::cout << "Wrong content! Content of latest file:" << std::endl;
+    auto it = file_contents.begin();
     for (const auto& kv : latest->second.table) {
       ParsedInternalKey ikey;
       std::string key, value;
       std::tie(key, value) = kv;
       ParseInternalKey(Slice(key), &ikey);
       std::cout << ikey.DebugString(false) << " -> " << value << std::endl;
+      std::cout << "--- vs ---" << std::endl;
+      if (it != file_contents.end()) {
+        std::tie(key, value) = *it++;
+        ParseInternalKey(Slice(key), &ikey);
+        std::cout << ikey.DebugString(false) << " -> " << value << std::endl;
+      }
+      std::cout << "--- ^^ ---" << std::endl;
+    }
+    while (it != file_contents.end()) {
+      ParsedInternalKey ikey;
+      std::string key, value;
+      std::cout << "--- vs ---" << std::endl;
+      std::tie(key, value) = *it;
+      ParseInternalKey(Slice(key), &ikey);
+      std::cout << ikey.DebugString(false) << " -> " << value << std::endl;
+      std::cout << "--- ^^ ---" << std::endl;
     }
     FAIL();
   }

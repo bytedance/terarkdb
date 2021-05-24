@@ -347,17 +347,6 @@ class LRUCacheDiagnosableMonitor {
 
     using DataIdx = size_t;
 
-    struct KeyHash {
-      std::size_t operator()(const Slice& k) const {
-        return Hash(k.data(), k.size(), 0);
-      }
-    };
-
-    struct KeyEqual {
-      bool operator()(const Slice& lhs, const Slice& rhs) const {
-        return lhs.compare(rhs) == 0;
-      }
-    };
     struct ChargeCmp {
       ChargeCmp(std::deque<DataElement>& d) : data_(d) {}
       bool operator()(const DataIdx& l, const DataIdx& r) {
@@ -502,7 +491,7 @@ class LRUCacheDiagnosableMonitor {
     const std::deque<DataElement>& TEST_get_elements_storage() {
       return data_storage_;
     }
-    const std::unordered_map<Slice, DataIdx, KeyHash, KeyEqual>&
+    const std::unordered_map<Slice, DataIdx, SliceHasher>&
     TEST_get_elements_map() {
       return key_map_;
     }
@@ -523,7 +512,7 @@ class LRUCacheDiagnosableMonitor {
 
    private:
     size_t k_;
-    std::unordered_map<Slice, DataIdx, KeyHash, KeyEqual> key_map_;
+    std::unordered_map<Slice, DataIdx, SliceHasher> key_map_;
     std::deque<DataElement> data_storage_;
     std::vector<DataIdx> data_heap_;
 
