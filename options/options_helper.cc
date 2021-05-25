@@ -173,7 +173,6 @@ ColumnFamilyOptions BuildColumnFamilyOptions(
   cf_opts.target_blob_file_size = mutable_cf_options.target_blob_file_size;
   cf_opts.blob_file_defragment_size =
       mutable_cf_options.blob_file_defragment_size;
-  cf_opts.max_blob_files = mutable_cf_options.max_blob_files;
   cf_opts.max_dependence_blob_overlap =
       mutable_cf_options.max_dependence_blob_overlap;
   cf_opts.optimize_filters_for_hits =
@@ -1934,10 +1933,6 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offset_of(&ColumnFamilyOptions::blob_file_defragment_size),
           OptionType::kUInt64T, OptionVerificationType::kNormal, true,
           offsetof(struct MutableCFOptions, blob_file_defragment_size)}},
-        {"max_blob_files",
-         {offset_of(&ColumnFamilyOptions::max_blob_files), OptionType::kSizeT,
-          OptionVerificationType::kNormal, true,
-          offsetof(struct MutableCFOptions, max_blob_files)}},
         {"max_dependence_blob_overlap",
          {offset_of(&ColumnFamilyOptions::max_dependence_blob_overlap),
           OptionType::kSizeT, OptionVerificationType::kNormal, true,

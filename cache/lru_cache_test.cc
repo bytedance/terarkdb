@@ -40,16 +40,17 @@ class LRUCacheTest : public testing::Test,
 
   void NewCache(size_t capacity, double high_pri_pool_ratio = 0.0) {
     DeleteCache();
+#ifdef WITH_DIAGNOSE_CACHE
     if (is_diagnose_) {
       cache_ = reinterpret_cast<LRUCacheDiagnosableShard*>(
           port::cacheline_aligned_alloc(sizeof(LRUCacheDiagnosableShard)));
       LRUCacheDiagnosableMonitor::Options mo;
-#ifdef WITH_DIAGNOSE_CACHE
       mo.top_k = 10;
-#endif
       new (cache_) LRUCacheDiagnosableShard(
           capacity, false /* strict_capcity_limit */, high_pri_pool_ratio, mo);
-    } else {
+    } else
+#endif
+    {
       cache_ = reinterpret_cast<LRUCacheShard*>(
           port::cacheline_aligned_alloc(sizeof(LRUCacheShard)));
       new (cache_) LRUCacheShard(capacity, false /* strict_capcity_limit */,
@@ -152,7 +153,7 @@ class LRUCacheTest : public testing::Test,
 
  private:
   CacheShard* cache_ = nullptr;
-  bool is_diagnose_;
+  bool is_diagnose_ = false;
 };
 
 #ifdef WITH_DIAGNOSE_CACHE

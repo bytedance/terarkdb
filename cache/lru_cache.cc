@@ -540,7 +540,7 @@ std::string LRUCacheBase<LRUCacheShardType>::DumpLRUCacheStatistics() {
   return res;
 }
 
-#ifdef WITH_TERARK_ZIP
+#ifdef WITH_DIAGNOSE_CACHE
 template <>
 const char* LRUCacheBase<LRUCacheDiagnosableShard>::Name() const {
   return "DiagnosableLRUCache";

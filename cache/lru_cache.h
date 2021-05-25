@@ -14,7 +14,7 @@
 #include <set>
 #include <sstream>
 #include <string>
-#ifdef WITH_TERARK_ZIP
+#ifdef WITH_DIAGNOSE_CACHE
 #include <terark/heap_ext.hpp>
 #endif  // !NDEBUG
 #include <unordered_map>
@@ -326,7 +326,7 @@ class LRUCacheNoMonitor {
   size_t lru_usage_;
 };
 
-#ifdef WITH_TERARK_ZIP
+#ifdef WITH_DIAGNOSE_CACHE
 class LRUCacheDiagnosableMonitor {
  public:
   struct Options {

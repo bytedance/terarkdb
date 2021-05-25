@@ -369,8 +369,7 @@ Version::~Version() {
   prev_->next_ = next_;
   next_->prev_ = prev_;
 
-  // FIXME release storage_info's context, make sure the last f->Unref is call
-  // here
+  // Release storage_info's context, make sure the last f->Unref is call here
   storage_info_.ResetVersionBuilderContext(nullptr);
 
   // Drop references to files
@@ -1522,7 +1521,7 @@ void VersionStorageInfo::CalculateTopkGarbageBlobs() {
 }
 
 void VersionStorageInfo::ComputeBlobOverlapScore() {
-  auto& hiden_files = LevelFiles(-1);
+  auto& hiden_files = files_[-1];
 
   auto user_cmp = [this](const InternalKey& k1, const InternalKey& k2) {
     return user_comparator_->Compare(k1.user_key(), k2.user_key());
@@ -1531,17 +1530,15 @@ void VersionStorageInfo::ComputeBlobOverlapScore() {
   std::sort(hiden_files.begin(), hiden_files.end(),
             [user_cmp](const FileMetaData* fm1, const FileMetaData* fm2) {
               // put non-blob hiden file to the end
-              if (!fm1->is_gc_permitted()) {
-                return false;
+              int c = int(fm1->is_gc_permitted()) - int(fm2->is_gc_permitted());
+              if (c != 0) {
+                return c < 0;
               }
-              if (!fm2->is_gc_permitted()) {
-                return true;
+              c = user_cmp(fm1->smallest, fm2->smallest);
+              if (c != 0) {
+                return c < 0;
               }
-              int smallest_cmp = user_cmp(fm1->smallest, fm2->smallest);
-              if (smallest_cmp == 0) {
-                return user_cmp(fm1->largest, fm2->largest) < 0;
-              }
-              return smallest_cmp < 0;
+              return user_cmp(fm1->largest, fm2->largest) < 0;
             });
 
   auto indirect_cmp = [user_cmp, hiden_files, this](size_t idx1, size_t idx2) {
@@ -2185,6 +2182,7 @@ void VersionStorageInfo::ComputeBottommostFilesMarkedForCompaction() {
     }
     if (meta->marked_for_compaction) {
       bottommost_files_marked_for_compaction_.push_back(level_and_file);
+      space_amplification_[level_and_file.first] |= kMarkedForCompaction;
     } else if (meta->prop.has_snapshots()) {
       // largest_seqno might be nonzero due to containing the final key in an
       // earlier compaction, whose seqnum we didn't zero out. Multiple deletions
