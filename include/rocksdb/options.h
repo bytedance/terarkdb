@@ -324,10 +324,6 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // Default : target_blob_file_size / 8
   uint64_t blob_file_defragment_size = 0;
 
-  // Num total blob file count limits
-  // 0 to unlimited
-  size_t max_blob_files = 0;
-
   // Max dependence blob overlap
   // 0 to unlimited
   size_t max_dependence_blob_overlap = 1024;

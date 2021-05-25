@@ -2481,10 +2481,6 @@ void rocksdb_options_blob_file_defragment_size(rocksdb_options_t* opt,
   opt->rep.blob_file_defragment_size = v;
 }
 
-void rocksdb_options_max_blob_files(rocksdb_options_t* opt, size_t v) {
-  opt->rep.max_blob_files = v;
-}
-
 void rocksdb_options_max_dependence_blob_overlap(rocksdb_options_t* opt,
                                                  size_t v) {
   opt->rep.max_dependence_blob_overlap = v;

@@ -2127,6 +2127,7 @@ void VersionStorageInfo::ComputeBottommostFilesMarkedForCompaction() {
     }
     if (meta->marked_for_compaction) {
       bottommost_files_marked_for_compaction_.push_back(level_and_file);
+      space_amplification_[level_and_file.first] |= kMarkedForCompaction;
     } else if (meta->prop.has_snapshots()) {
       // largest_seqno might be nonzero due to containing the final key in an
       // earlier compaction, whose seqnum we didn't zero out. Multiple deletions
