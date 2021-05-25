@@ -4285,15 +4285,15 @@ TEST_F(DBCompactionTest, BlobOverlapThredhold) {
   // overlap range is [3400, 3500) which contains 3 files (13,16,18)
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "Compaction::GetRebuildNeededBlobs::End", [&](void* arg) {
-        Compaction* c = (Compaction*)arg;
-        auto rebuild_blob_set = c->TEST_need_rebuild_blobs();
-        std::set<uint64_t> expect{13, 16, 18};  // TODO filenumber is not stable
-        ASSERT_EQ(rebuild_blob_set.size(), expect.size());
-        auto it = expect.begin();
-        for (auto blob : rebuild_blob_set) {
-          ASSERT_EQ(blob, *it);
-          ++it;
+        chash_set<uint64_t>* rebuild_blob_set = (chash_set<uint64_t>*)arg;
+        std::string expect =
+            "13,18,16,";  // TODO filenumber is not stable , future ut may fail
+                          // here when change flush logic
+        std::string we_get;
+        for (auto blob : *rebuild_blob_set) {
+          we_get.append(std::to_string(blob) + ",");
         }
+        ASSERT_EQ(expect, we_get);
       });
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "CompactionJob::FinishCompactionOutputBlob::Start", [&](void* arg) {

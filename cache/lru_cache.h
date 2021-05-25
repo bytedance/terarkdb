@@ -467,6 +467,8 @@ class LRUCacheDiagnosableMonitor {
         res.append("(" + Slice(e.key).ToString(true) + "," +
                    std::to_string(e.total_charge) + "," +
                    std::to_string(e.count) + ")" + ",");
+        // FIXME code fail here when do recovery, it seems order in my heap is
+        // wrong
         assert(i == 0 ||
                e.total_charge <=
                    data_storage_[data_heap_[last_idx + 1]].total_charge);

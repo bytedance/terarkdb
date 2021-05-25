@@ -1345,16 +1345,18 @@ extern Status CreateLoggerFromOptions(const std::string& dbname,
                                       std::shared_ptr<Logger>* logger);
 
 enum SeparationType {
-  // Keep key value stay separation state
-  kCompactionIngoreSeparate = 0,
   // Separate key value using blob_size & blob_large_key_ratio
-  kCompactionTransToSeparate = 1,
+  kCompactionTransToSeparate = 0,
+  // Keep key value stay separation state
+  kCompactionIngoreSeparate = 1,
+  // Separate key value & rebuild blob files in the right time
+  kCompactionAutoRebuildBlob = 2,
   // Separate key value & force rebuild blob files
   // WARNING: may be cost long time and issue double size
-  kCompactionRebuildBlob = 2,
+  kCompactionForceRebuildBlob = 3,
   // Disable key value separation, combine separated value
   // WARNING: may be cost long time and issue double size
-  kCompactionCombineValue = 3,
+  kCompactionCombineValue = 4,
 };
 
 // CompactionOptions are used in CompactFiles() call.

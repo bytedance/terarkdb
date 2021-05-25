@@ -116,7 +116,8 @@ CompactionIterator::CompactionIterator(
     CompactionRangeDelAggregator* range_del_agg, const Compaction* compaction,
     BlobConfig blob_config, const CompactionFilter* compaction_filter,
     const std::atomic<bool>* shutting_down,
-    const SequenceNumber preserve_deletes_seqnum)
+    const SequenceNumber preserve_deletes_seqnum,
+    const chash_set<uint64_t>* need_rebuild_blobs)
     : CompactionIterator(
           input, separate_helper, end, cmp, merge_helper, last_sequence,
           snapshots, earliest_write_conflict_snapshot, snapshot_checker, env,
@@ -124,7 +125,7 @@ CompactionIterator::CompactionIterator(
           std::unique_ptr<CompactionProxy>(
               compaction ? new CompactionProxy(compaction) : nullptr),
           blob_config, compaction_filter, shutting_down,
-          preserve_deletes_seqnum) {}
+          preserve_deletes_seqnum,  need_rebuild_blobs) {}
 
 CompactionIterator::CompactionIterator(
     InternalIterator* input, SeparateHelper* separate_helper, const Slice* end,
@@ -137,7 +138,8 @@ CompactionIterator::CompactionIterator(
     std::unique_ptr<CompactionProxy> compaction, BlobConfig blob_config,
     const CompactionFilter* compaction_filter,
     const std::atomic<bool>* shutting_down,
-    const SequenceNumber preserve_deletes_seqnum)
+    const SequenceNumber preserve_deletes_seqnum,
+    const chash_set<uint64_t>* need_rebuild_blobs)
     : input_(input, separate_helper),
       end_(end),
       cmp_(cmp),
@@ -159,7 +161,8 @@ CompactionIterator::CompactionIterator(
       current_user_key_sequence_(0),
       current_user_key_snapshot_(0),
       merge_out_iter_(merge_helper_),
-      current_key_committed_(false) {
+      current_key_committed_(false),
+      need_rebuild_blobs_(need_rebuild_blobs) {
   assert(compaction_filter_ == nullptr || compaction_ != nullptr);
   bottommost_level_ =
       compaction_ == nullptr ? false : compaction_->bottommost_level();
@@ -195,9 +198,11 @@ CompactionIterator::CompactionIterator(
                                        : compaction_->separation_type();
 
   do_separate_value_ = (separation_type == kCompactionTransToSeparate ||
-                        separation_type == kCompactionRebuildBlob) &&
+                        separation_type == kCompactionForceRebuildBlob ||
+                        separation_type == kCompactionAutoRebuildBlob) &&
                        blob_config_.blob_size != size_t(-1);
-  do_rebuild_blob_ = separation_type == kCompactionRebuildBlob;
+  do_rebuild_blob_ = separation_type == kCompactionForceRebuildBlob ||
+                     separation_type == kCompactionAutoRebuildBlob;
   do_combine_value_ = separation_type == kCompactionCombineValue;
 }
 
@@ -760,8 +765,12 @@ void CompactionIterator::PrepareOutput() {
     }
   };
   assert(!do_rebuild_blob_ || compaction_ != nullptr);
-  bool do_rebuild_blob =
-      do_rebuild_blob_ && compaction_->need_rebuild(value_.file_number());
+  auto is_blob_rebuild_needed = [this] {
+    assert(need_rebuild_blobs_ != nullptr);
+    return need_rebuild_blobs_->find(value_.file_number()) !=
+           need_rebuild_blobs_->end();
+  };
+  bool do_rebuild_blob = do_rebuild_blob_ && is_blob_rebuild_needed();
 
   if (ikey_.type == kTypeValue || ikey_.type == kTypeMerge) {
     if (!do_separate_value_) {
