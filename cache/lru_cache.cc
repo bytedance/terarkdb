@@ -642,7 +642,7 @@ std::shared_ptr<Cache> NewLRUCache(
       LRUCacheShard::MonitorOptions{}, std::move(memory_allocator));
 }
 
-#ifdef WITH_TERARK_ZIP
+#ifdef WITH_DIAGNOSE_CACHE
 std::shared_ptr<Cache> NewDiagnosableLRUCache(
     const LRUCacheOptions& cache_opts) {
   assert(cache_opts.is_diagnose);

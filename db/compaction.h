@@ -97,7 +97,7 @@ struct CompactionParams {
   double score = -1;
   bool partial_compaction = false;
   CompactionType compaction_type = kKeyValueCompaction;
-  SeparationType separation_type = kCompactionTransToSeparate;
+  SeparationType separation_type = kCompactionAutoRebuildBlob;
   std::vector<SelectedRange> input_range = {};
   CompactionReason compaction_reason = CompactionReason::kUnknown;
 
@@ -289,6 +289,7 @@ class Compaction {
 
   // SeparationType
   SeparationType separation_type() const { return separation_type_; }
+  void set_separation_type(SeparationType st) { separation_type_ = st; }
 
   // Range limit for inputs
   std::vector<SelectedRange>& input_range() { return input_range_; };
@@ -413,10 +414,6 @@ class Compaction {
   Slice GetLargestUserKey() const { return largest_user_key_; }
 
   int GetInputBaseLevel() const;
-  void GetRebuildNeededBlobs();
-  bool need_rebuild(uint64_t fn) const {
-    return need_rebuild_blobs_.find(fn) != need_rebuild_blobs_.end();
-  }
 
   CompactionReason compaction_reason() { return compaction_reason_; }
 
@@ -439,13 +436,9 @@ class Compaction {
     return transient_stat_;
   }
   std::vector<TableTransientStat>& transient_stat() { return transient_stat_; }
-
-  std::set<uint64_t> TEST_need_rebuild_blobs() { return need_rebuild_blobs_; }
+  std::unordered_map<uint64_t, uint64_t>& current_blob_overlap_scores() const;
 
  private:
-  // get all input blobs which is sorted
-  std::vector<FileMetaData*> GetSortedInputBlobs();
-
   // mark (or clear) all files that are being compacted
   void MarkFilesBeingCompacted(bool mark_as_compacted);
 
@@ -465,7 +458,6 @@ class Compaction {
   uint64_t num_antiquation_;
   uint64_t max_output_file_size_;
   uint64_t max_compaction_bytes_;
-  uint64_t total_sst_compaction_bytes_;
   uint32_t max_subcompactions_;
   const ImmutableCFOptions immutable_cf_options_;
   const MutableCFOptions mutable_cf_options_;
@@ -539,7 +531,6 @@ class Compaction {
 
   // per sub compact
   std::vector<TableTransientStat> transient_stat_;
-  std::set<uint64_t> need_rebuild_blobs_;
 };
 
 // Utility function

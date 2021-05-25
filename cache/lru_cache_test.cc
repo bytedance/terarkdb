@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#ifdef WITH_TERARK_ZIP
+#ifdef WITH_DIAGNOSE_CACHE
 #include <terark/heap_ext.hpp>
 #endif
 
@@ -32,7 +32,11 @@ class LRUCacheTest : public testing::Test,
     }
   }
 
+#ifdef WITH_DIAGNOSE_CACHE
   void SetDiagnose(bool d) { is_diagnose_ = d; }
+#else
+  void SetDiagnose(bool d) {}
+#endif
 
   void NewCache(size_t capacity, double high_pri_pool_ratio = 0.0) {
     DeleteCache();
@@ -40,7 +44,7 @@ class LRUCacheTest : public testing::Test,
       cache_ = reinterpret_cast<LRUCacheDiagnosableShard*>(
           port::cacheline_aligned_alloc(sizeof(LRUCacheDiagnosableShard)));
       LRUCacheDiagnosableMonitor::Options mo;
-#ifdef WITH_TERARK_ZIP
+#ifdef WITH_DIAGNOSE_CACHE
       mo.top_k = 10;
 #endif
       new (cache_) LRUCacheDiagnosableShard(
@@ -90,10 +94,13 @@ class LRUCacheTest : public testing::Test,
                        size_t num_high_pri_pool_keys = 0) {
     LRUHandle* lru;
     LRUHandle* lru_low_pri;
+#ifdef WITH_DIAGNOSE_CACHE
     if (is_diagnose_) {
       reinterpret_cast<LRUCacheDiagnosableShard*>(cache_)->TEST_GetLRUList(
           &lru, &lru_low_pri);
-    } else {
+    } else
+#endif
+    {
       reinterpret_cast<LRUCacheShard*>(cache_)->TEST_GetLRUList(&lru,
                                                                 &lru_low_pri);
     }
@@ -122,7 +129,7 @@ class LRUCacheTest : public testing::Test,
     ASSERT_EQ(num_high_pri_pool_keys, high_pri_pool_keys);
   }
 
-#ifdef WITH_TERARK_ZIP
+#ifdef WITH_DIAGNOSE_CACHE
   using DataElement = LRUCacheDiagnosableMonitor::TopSet::DataElement;
   void ValidatePinnedElements(const std::vector<DataElement>& elements) {
     LRUCacheDiagnosableShard* monitor_cache =
@@ -148,7 +155,7 @@ class LRUCacheTest : public testing::Test,
   bool is_diagnose_;
 };
 
-#ifdef WITH_TERARK_ZIP
+#ifdef WITH_DIAGNOSE_CACHE
 INSTANTIATE_TEST_CASE_P(LRUCacheTest, LRUCacheTest, ::testing::Bool());
 #else
 INSTANTIATE_TEST_CASE_P(LRUCacheTest, LRUCacheTest, ::testing::Values(false));
@@ -256,7 +263,7 @@ TEST_P(LRUCacheTest, EntriesWithPriority) {
   ValidateLRUList({"e", "f", "g", "Z", "d"}, 2);
 }
 
-#ifdef WITH_TERARK_ZIP
+#ifdef WITH_DIAGNOSE_CACHE
 
 TEST_F(LRUCacheTest, LRUCacheDiagnosableMonitor) {
   SetDiagnose(true);

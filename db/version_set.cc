@@ -369,6 +369,10 @@ Version::~Version() {
   prev_->next_ = next_;
   next_->prev_ = prev_;
 
+  // FIXME release storage_info's context, make sure the last f->Unref is call
+  // here
+  storage_info_.ResetVersionBuilderContext(nullptr);
+
   // Drop references to files
   for (int level = -1; level < storage_info_.num_levels_; level++) {
     for (size_t i = 0; i < storage_info_.files_[level].size(); i++) {
@@ -1526,9 +1530,12 @@ void VersionStorageInfo::ComputeBlobOverlapScore() {
 
   std::sort(hiden_files.begin(), hiden_files.end(),
             [user_cmp](const FileMetaData* fm1, const FileMetaData* fm2) {
-              if (fm1->is_gc_forbidden()) {
-                // not-blob file bigger than any other files.
+              // put non-blob hiden file to the end
+              if (!fm1->is_gc_permitted()) {
                 return false;
+              }
+              if (!fm2->is_gc_permitted()) {
+                return true;
               }
               int smallest_cmp = user_cmp(fm1->smallest, fm2->smallest);
               if (smallest_cmp == 0) {
@@ -1544,7 +1551,7 @@ void VersionStorageInfo::ComputeBlobOverlapScore() {
       indirect_cmp);
   size_t i = 0;
   bool blob_end =
-      (i >= hiden_files.size() || hiden_files[i]->is_gc_forbidden());
+      (i >= hiden_files.size() || !hiden_files[i]->is_gc_permitted());
   while (!blob_end || !end_queue.empty()) {
     bool next_point_from_blob =
         end_queue.empty() ||
