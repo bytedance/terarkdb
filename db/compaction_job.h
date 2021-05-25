@@ -99,6 +99,8 @@ class CompactionJob {
   // REQUIRED: mutex held
   Status Install(const MutableCFOptions& mutable_cf_options);
 
+  SeparationType separation_type() const;
+
   struct ProcessArg {
     CompactionJob* job;
     int task_id;

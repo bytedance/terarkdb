@@ -934,6 +934,7 @@ void CompactionPicker::InitFilesBeingCompact(
         }
       }
       auto& dependence_map = vstorage->dependence_map();
+      // FIXME
       for (auto& link : element.link) {
         files_being_compact->emplace(link.file_number);
         auto find = dependence_map.find(link.file_number);

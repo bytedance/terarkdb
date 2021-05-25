@@ -45,7 +45,7 @@ class ChaosTest {
 
   void DumpCacheStatistics() {
     auto dcache =
-#ifdef WITH_TERARK_ZIP
+#ifdef WITH_DIAGNOSE_CACHE
         dynamic_cast<DiagnosableLRUCache *>(bbto.block_cache.get());
 #else
         dynamic_cast<LRUCache *>(bbto.block_cache.get());
@@ -66,6 +66,7 @@ class ChaosTest {
     options.allow_mmap_reads = false;
     options.max_open_files = 8192;
     options.allow_fallocate = true;
+    options.max_dependence_blob_overlap = 3;
     options.writable_file_max_buffer_size = 1048576;
     options.allow_mmap_writes = false;
     options.allow_concurrent_memtable_write = true;
@@ -135,7 +136,7 @@ class ChaosTest {
     bbto.pin_top_level_index_and_filter = true;
     bbto.pin_l0_filter_and_index_blocks_in_cache = true;
     bbto.filter_policy.reset(NewBloomFilterPolicy(10, true));
-#ifdef WITH_TERARK_ZIP
+#ifdef WITH_DIAGNOSE_CACHE
     bbto.block_cache =
         NewDiagnosableLRUCache(4ULL << 30, 3, false, 0.2, nullptr, 10);
 #else
@@ -165,7 +166,7 @@ class ChaosTest {
     options.min_write_buffer_number_to_merge = 1;
     options.max_write_buffer_number_to_maintain = 16;
     options.max_write_buffer_number = 8;
-    options.max_compaction_bytes = file_size_base * 2;
+    options.max_compaction_bytes = file_size_base * 4;
     options.memtable_prefix_bloom_size_ratio = 0.000000;
     options.hard_pending_compaction_bytes_limit = 274877906944;
     options.prefix_extractor = nullptr;
