@@ -4190,7 +4190,6 @@ TEST_F(DBCompactionTest, BlobOverlapThredhold) {
   opts.level0_file_num_compaction_trigger = 3;
   opts.compression = kNoCompression;
   opts.blob_size = 32;  // turn on kv separation
-  opts.max_blob_files = size_t(-1);
 
   opts.max_dependence_blob_overlap = 3;
 

@@ -38,7 +38,6 @@
 #include <thread>
 #include <utility>
 #include <vector>
-#include "util/chash_set.h"
 
 #include "db/builder.h"
 #include "db/db_impl.h"
@@ -70,10 +69,12 @@
 #include "table/table_builder.h"
 #include "util/async_task.h"
 #include "util/c_style_callback.h"
+#include "util/chash_set.h"
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
 #include "util/file_util.h"
 #include "util/filename.h"
+#include "util/heap.h"
 #include "util/log_buffer.h"
 #include "util/logging.h"
 #include "util/random.h"
@@ -288,135 +289,157 @@ struct CompactionJob::SubcompactionState {
     return false;
   }
 
-  std::pair<chash_set<uint64_t>, uint64_t> GetRebuildNeededBlobs(
-      const CompactionJob* job) {
-    chash_set<uint64_t> need_rebuild_blobs;
+  struct RebuildBlobsInfo {
+    chash_set<uint64_t> blobs;
+    uint64_t pop_count;
+  };
+  struct BlobRefInfo {
+    uint64_t file_number;
+    FileMetaData* meta;
+    uint64_t ref_bytes;
+    operator uint64_t() const { return file_number; }
+  };
+
+  struct InputBlobInfo {
+    std::vector<BlobRefInfo> blobs;
+    uint64_t input_bytes;
+  };
+  Status GetRebuildNeededBlobs(const CompactionJob* job,
+                               RebuildBlobsInfo* output) {
+    assert(output != nullptr);
+    chash_set<uint64_t>& rebuild_blob_set = output->blobs;
+    output->pop_count = 0;
 
     auto mutable_cf_options = compaction->mutable_cf_options();
     auto& score_map = compaction->current_blob_overlap_scores();
+    auto ucmp = compaction->immutable_cf_options()->user_comparator;
     size_t target_overlap = mutable_cf_options->max_dependence_blob_overlap;
     uint64_t max_compaction_bytes =
         compaction->mutable_cf_options()->max_compaction_bytes;
-    auto user_cmp = [this](const InternalKey& k1, const InternalKey& k2) {
-      auto ucmp = compaction->immutable_cf_options()->user_comparator;
+
+    auto user_cmp = [ucmp](const InternalKey& k1, const InternalKey& k2) {
       return ucmp->Compare(k1.user_key(), k2.user_key());
     };
 
     // get all blob of inputs, and sort it
-    std::vector<FileMetaData*> blobs;
-    uint64_t total_sst_compaction_bytes = 0;
-    std::tie(blobs, total_sst_compaction_bytes) = GetSortedInputBlobs(job);
-    if (blobs.empty()) {
-      return {need_rebuild_blobs, 0};
+    InputBlobInfo input_blob_info;
+    auto s = GetSortedInputBlobs(job, &input_blob_info);
+    auto& blobs = input_blob_info.blobs;
+    if (!s.ok() || blobs.empty()) {
+      return s;
     }
     if (job->separation_type() == kCompactionForceRebuildBlob) {
       // when need_rebuild_blobs.empty() == true, means rebuild all blobs
-      for (auto& blob : blobs) {
-        need_rebuild_blobs.insert(blob->fd.GetNumber());
+      for (auto& info : blobs) {
+        rebuild_blob_set.insert(info.file_number);
       }
-      return {need_rebuild_blobs, 0};
+      return s;
     }
 
     // get all blobs in target overlaped ranges, store those files in a min-heap
     // based on its overlap score, and summary all blobs compaction bytes
-    auto blob_end_cmp = [blobs, user_cmp](const FileMetaData* b1,
-                                          const FileMetaData* b2) {
-      return user_cmp(b1->largest, b2->largest) > 0;
+    auto blob_end_cmp = [user_cmp](BlobRefInfo* b1, BlobRefInfo* b2) {
+      return user_cmp(b1->meta->largest, b2->meta->largest) > 0;
     };
-    std::vector<FileMetaData*> end_queue;
-    auto blob_overlapscore_cmp = [score_map, this](const FileMetaData* b1,
-                                                   const FileMetaData* b2) {
-      return score_map.at(b1->fd.GetNumber()) >
-             score_map.at(b2->fd.GetNumber());
+    auto end_queue = make_heap<BlobRefInfo*>(blob_end_cmp);
+
+    struct TargetRangeBlobItem {
+      uint64_t file_number;
+      uint64_t ref_bytes;
+      double score;
     };
-    std::priority_queue<FileMetaData*, std::vector<FileMetaData*>,
-                        decltype(blob_overlapscore_cmp)>
-        target_range_blob_heap(blob_overlapscore_cmp);
-    auto start = blobs[0]->smallest;
-    end_queue.push_back(blobs[0]);
+    auto blob_overlapscore_cmp = [score_map](const TargetRangeBlobItem& b1,
+                                             const TargetRangeBlobItem& b2) {
+      return b1.score > b2.score;
+    };
+    auto target_range_blob_heap =
+        make_heap<TargetRangeBlobItem>(blob_overlapscore_cmp);
+
+    uint64_t total_compaction_bytes = input_blob_info.input_bytes;
+    if (compaction->partial_compaction() &&
+        compaction->max_output_file_size() != 0) {
+      total_compaction_bytes =
+          std::min(total_compaction_bytes, compaction->max_output_file_size());
+    }
+
+    auto start = blobs[0].meta->smallest;
+    end_queue.push(&blobs[0]);
     std::vector<InternalKey> prev_range;
-    size_t total_compaction_bytes = total_sst_compaction_bytes;
     for (size_t i = 0; i < blobs.size() && !end_queue.empty();) {
       bool valid_range =
           prev_range.empty() ||
           !(user_cmp(prev_range[0], start) <= 0 &&
-            user_cmp(prev_range[1], end_queue.front()->largest) >= 0);
+            user_cmp(prev_range[1], end_queue.top()->meta->largest) >= 0);
       bool find_target_range =
           end_queue.size() >= target_overlap && valid_range;
       if (find_target_range) {
         if (prev_range.empty()) {
           prev_range.push_back(start);
-          prev_range.push_back(end_queue.front()->largest);
+          prev_range.push_back(end_queue.top()->meta->largest);
         } else {
           prev_range[0] = start;
-          prev_range[1] = end_queue.front()->largest;
+          prev_range[1] = end_queue.top()->meta->largest;
         }
 
         // collect blobs
-        for (auto& b : end_queue) {
-          if (need_rebuild_blobs.find(b->fd.GetNumber()) ==
-              need_rebuild_blobs.end()) {
-            need_rebuild_blobs.insert(b->fd.GetNumber());
-            target_range_blob_heap.push(b);
-            total_compaction_bytes += b->fd.GetFileSize();
+        for (auto& b : end_queue.data()) {
+          auto ib = rebuild_blob_set.emplace(b->file_number);
+          if (ib.second) {
+            total_compaction_bytes += b->ref_bytes;
+            auto find = score_map.find(b->file_number);
+            assert(find != score_map.end());
+            double global_score = 1;
+            if (find != score_map.end()) {
+              global_score = find->second;
+            }
+            target_range_blob_heap.push(TargetRangeBlobItem{
+                b->file_number, b->ref_bytes, global_score / b->ref_bytes});
           }
         }
       }
 
       if (i + 1 < blobs.size() &&
-          (user_cmp(blobs[i + 1]->smallest, end_queue.front()->largest) < 0 ||
+          (user_cmp(blobs[i + 1].meta->smallest,
+                    end_queue.top()->meta->largest) < 0 ||
            end_queue.size() == 1)) {
-        if (user_cmp(blobs[i + 1]->smallest, end_queue.front()->largest) >= 0) {
-          std::pop_heap(end_queue.begin(), end_queue.end());
-          end_queue.pop_back();
+        if (user_cmp(blobs[i + 1].meta->smallest,
+                     end_queue.top()->meta->largest) >= 0) {
+          end_queue.pop();
         }
         i++;
-        start = blobs[i]->smallest;
-        end_queue.push_back(blobs[i]);
-        std::push_heap(end_queue.begin(), end_queue.end(), blob_end_cmp);
+        start = blobs[i].meta->smallest;
+        end_queue.push(&blobs[i]);
       } else {
-        start = end_queue.front()->largest;
-        std::pop_heap(end_queue.begin(), end_queue.end(), blob_end_cmp);
-        end_queue.pop_back();
+        start = end_queue.top()->meta->largest;
+        end_queue.pop();
       }
     }
 
     // pop smaller scores if total_compaction_bytes > max_compaction_bytes
     // remain one blob al least.
-    uint64_t pop_out_blobs = 0;
     while (total_compaction_bytes > max_compaction_bytes &&
            target_range_blob_heap.size() > 1) {
-      total_compaction_bytes -= target_range_blob_heap.top()->fd.GetFileSize();
-      need_rebuild_blobs.erase(target_range_blob_heap.top()->fd.GetNumber());
+      total_compaction_bytes -= target_range_blob_heap.top().ref_bytes;
+      rebuild_blob_set.erase(target_range_blob_heap.top().file_number);
       target_range_blob_heap.pop();
-      pop_out_blobs++;
+      ++output->pop_count;
     }
     TEST_SYNC_POINT_CALLBACK("Compaction::GetRebuildNeededBlobs::End",
-                             &need_rebuild_blobs);
-    return {need_rebuild_blobs, pop_out_blobs};
+                             &rebuild_blob_set);
+    return Status::OK();
   }
 
  private:
-  std::pair<std::vector<FileMetaData*>, uint64_t> GetSortedInputBlobs(
-      const CompactionJob* job) {
-    std::vector<FileMetaData*> blobs;
-    uint64_t total_sst_compaction_bytes = 0;
+  Status GetSortedInputBlobs(const CompactionJob* job, InputBlobInfo* output) {
+    assert(output != nullptr);
+    output->blobs.clear();
+    output->input_bytes = 0;
+
     auto ucmp = compaction->immutable_cf_options()->user_comparator;
     auto& icmp = compaction->immutable_cf_options()->internal_comparator;
 
-    auto blob_cmp = [&](const FileMetaData* b1, const FileMetaData* b2) {
-      int small_cmp =
-          ucmp->Compare(b1->smallest.user_key(), b2->smallest.user_key());
-      if (small_cmp == 0) {
-        return ucmp->Compare(b1->largest.user_key(), b2->smallest.user_key()) <
-               0;
-      } else {
-        return small_cmp < 0;
-      }
-    };
-
     // get sst in input range
-    std::vector<FileMetaData*> input_sst;
+    chash_set<uint64_t> input_sst;
     auto& dependence_map =
         compaction->input_version()->storage_info()->dependence_map();
     auto table_cache = compaction->column_family_data()->table_cache();
@@ -428,6 +451,13 @@ struct CompactionJob::SubcompactionState {
           nullptr, compaction->mutable_cf_options()->prefix_extractor.get(),
           table_reader_ptr, nullptr, false, arena, true, -1);
     };
+    InternalKey internal_begin, internal_end;
+    if (start != nullptr) {
+      internal_begin.SetMinPossibleForUserKey(*start);
+    }
+    if (end != nullptr) {
+      internal_end.SetMaxPossibleForUserKey(*end);
+    }
     MapSstElement element;
     for (auto& level_files : *compaction->inputs()) {
       if (level_files.empty()) {
@@ -437,8 +467,9 @@ struct CompactionJob::SubcompactionState {
       ScopedArenaIterator iter(NewMapElementIterator(
           level_files.files.data(), level_files.files.size(), &icmp,
           &create_iter, c_style_callback(create_iter), &arena));
-      for (level_files.level == 0 || start == nullptr ? iter->SeekToFirst()
-                                                      : iter->Seek(*start);
+      for (level_files.level == 0 || start == nullptr
+               ? iter->SeekToFirst()
+               : iter->Seek(internal_begin.Encode());
            iter->Valid(); iter->Next()) {
         LazyBuffer value = iter->value();
         if (!value.fetch().ok() ||
@@ -446,14 +477,12 @@ struct CompactionJob::SubcompactionState {
           // TODO log error
           break;
         }
-        if (start != nullptr && icmp.Compare(element.largest_key, *start) < 0) {
-          if (level_files.level == 0) {
-            continue;
-          } else {
-            break;
-          }
+        if (level_files.level == 0 && start != nullptr &&
+            icmp.Compare(element.largest_key, internal_begin.Encode()) < 0) {
+          continue;
         }
-        if (end != nullptr && icmp.Compare(element.smallest_key, *end) > 0) {
+        if (end != nullptr &&
+            ucmp->Compare(ExtractUserKey(element.smallest_key), *end) > 0) {
           if (level_files.level == 0) {
             continue;
           } else {
@@ -462,28 +491,92 @@ struct CompactionJob::SubcompactionState {
         }
 
         for (auto& link : element.link) {
-          auto find = dependence_map.find(link.file_number);
-          if (find != dependence_map.end()) {
-            input_sst.push_back(find->second);
-          }
+          input_sst.emplace(link.file_number);
         }
       }
     }
-    // collect and sort blobs of sst
-    for (auto& file : input_sst) {
-      total_sst_compaction_bytes += file->fd.GetFileSize();
-      for (auto& depend_file : file->prop.dependence) {
-        auto find = dependence_map.find(depend_file.file_number);
-        if (find == dependence_map.end()) {
-          // TODO log error
+    InternalKey smallest, largest;
+    auto get_offset = [&](FileMetaData* meta, const InternalKey& ik,
+                          uint64_t* offset_ptr) {
+      TableReader* table_reader_ptr = meta->fd.table_reader;
+      if (icmp.Compare(ik, meta->smallest) <= 0) {
+        *offset_ptr = 0;
+      } else if (icmp.Compare(meta->largest, ik) <= 0) {
+        *offset_ptr = meta->fd.GetFileSize();
+      } else if (table_reader_ptr != nullptr) {
+        *offset_ptr = table_reader_ptr->ApproximateOffsetOf(ik.Encode());
+      } else {
+        TableCache* table_cache =
+            compaction->column_family_data()->table_cache();
+        Cache::Handle* handle = nullptr;
+        auto s = table_cache->FindTable(
+            job->env_options_, icmp, meta->fd, &handle,
+            compaction->mutable_cf_options()->prefix_extractor.get());
+        if (!s.ok()) {
+          return s;
+        }
+        table_reader_ptr = table_cache->GetTableReaderFromHandle(handle);
+        *offset_ptr = table_reader_ptr->ApproximateOffsetOf(ik.Encode());
+        table_cache->ReleaseHandle(handle);
+      }
+      return Status::OK();
+    };
+    chash_map<uint64_t, std::pair<FileMetaData*, uint64_t>> blob_map;
+    // collect and sort blob_map of sst
+    for (auto& fn : input_sst) {
+      auto find = dependence_map.find(fn);
+      if (find == dependence_map.end()) {
+        // TODO ???
+        continue;
+      }
+      auto file = find->second;
+      uint64_t start_offset = 0, end_offset = file->fd.GetFileSize();
+      if (start != nullptr) {
+        auto s = get_offset(file, internal_begin, &start_offset);
+        if (!s.ok()) {
+          return s;
+        }
+      }
+      if (end != nullptr) {
+        auto s = get_offset(file, internal_end, &end_offset);
+        if (!s.ok()) {
+          return s;
+        }
+      }
+      assert(start_offset < end_offset);
+      output->input_bytes += std::max(start_offset, end_offset) - start_offset;
+      for (auto& pair : file->prop.dependence) {
+        find = dependence_map.find(pair.file_number);
+        if (find == dependence_map.end() || find->second->is_gc_forbidden()) {
           continue;
         }
-        blobs.push_back(find->second);
+        auto ib =
+            blob_map.emplace(find->second->fd.GetNumber(),
+                             std::make_pair(find->second, pair.entry_count));
+        if (!ib.second) {
+          ib.first->second.second += pair.entry_count;
+        }
       }
     }
-    std::sort(blobs.begin(), blobs.end(), blob_cmp);
-
-    return {blobs, total_sst_compaction_bytes};
+    output->blobs.reserve(blob_map.size());
+    for (auto& pair : blob_map) {
+      auto meta = pair.second.first;
+      uint64_t total_bytes = meta->fd.GetFileSize();
+      uint64_t ref_bytes =
+          total_bytes * pair.second.second / meta->prop.num_entries;
+      output->blobs.emplace_back(BlobRefInfo{pair.first, meta, ref_bytes});
+    }
+    std::sort(output->blobs.begin(), output->blobs.end(),
+              [&](const BlobRefInfo& b1, const BlobRefInfo& b2) {
+                int c = ucmp->Compare(b1.meta->smallest.user_key(),
+                                      b2.meta->smallest.user_key());
+                if (c == 0) {
+                  c = ucmp->Compare(b1.meta->largest.user_key(),
+                                    b2.meta->largest.user_key());
+                }
+                return c < 0;
+              });
+    return Status::OK();
   }
 };
 
@@ -1401,16 +1494,6 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   ColumnFamilyData* cfd = sub_compact->compaction->column_family_data();
   CompactionRangeDelAggregator range_del_agg(&cfd->internal_comparator(),
                                              existing_snapshots_);
-  chash_set<uint64_t> need_rebuild_blobs;
-  uint64_t pop_out_blobs = 0;
-  try {
-    std::tie(need_rebuild_blobs, pop_out_blobs) =
-        sub_compact->GetRebuildNeededBlobs(this);
-  } catch (const std::exception& e) {
-    ROCKS_LOG_ERROR(db_options_.info_log, "[%s] [JOB %d] catch exception: %s ",
-                    compact_->compaction->column_family_data()->GetName(),
-                    job_id_, e.what());
-  }
 
   // Although the v2 aggregator is what the level iterator(s) know about,
   // the AddTombstones calls will be propagated down to the v1 aggregator.
@@ -1523,30 +1606,30 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   }
 
   auto trans_to_separate = [&](const Slice& key, LazyBuffer& value) {
-    Status status;
+    Status s;
     TableBuilder* blob_builder = sub_compact->blob_builder.get();
     FileMetaData* blob_meta = &sub_compact->current_blob_output()->meta;
     if (blob_builder != nullptr &&
         blob_builder->FileSize() > mutable_cf_options->target_file_size_base) {
-      status = FinishCompactionOutputBlob(status, sub_compact, {});
+      s = FinishCompactionOutputBlob(s, sub_compact, {});
       blob_builder = nullptr;
     }
-    if (status.ok() && blob_builder == nullptr) {
-      status = OpenCompactionOutputBlob(sub_compact);
+    if (s.ok() && blob_builder == nullptr) {
+      s = OpenCompactionOutputBlob(sub_compact);
       blob_builder = sub_compact->blob_builder.get();
       blob_meta = &sub_compact->current_blob_output()->meta;
     }
-    if (status.ok()) {
-      status = blob_builder->Add(key, value);
+    if (s.ok()) {
+      s = blob_builder->Add(key, value);
     }
-    if (status.ok()) {
+    if (s.ok()) {
       blob_meta->UpdateBoundaries(key, GetInternalKeySeqno(key));
-      status = SeparateHelper::TransToSeparate(
+      s = SeparateHelper::TransToSeparate(
           key, value, blob_meta->fd.GetNumber(), Slice(),
           GetInternalKeyType(key) == kTypeMerge, false,
           separate_helper.value_meta_extractor.get());
     }
-    return status;
+    return s;
   };
 
   separate_helper.separate_helper = sub_compact->compaction->input_version();
@@ -1570,7 +1653,20 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     input->SeekToFirst();
   }
 
-  Status status;
+  SubcompactionState::RebuildBlobsInfo rebuild_blobs_info;
+  Status status = sub_compact->GetRebuildNeededBlobs(this, &rebuild_blobs_info);
+  if (!status.ok()) {
+    ROCKS_LOG_ERROR(
+        db_options_.info_log,
+        "[%s] [JOB %d] GetRebuildNeededBlobs Fail, status = %s",
+        compact_->compaction->column_family_data()->GetName().c_str(), job_id_,
+        status.ToString().c_str());
+    // GetRebuildNeededBlobs fail, we can continue compaction
+    rebuild_blobs_info.blobs.clear();
+    rebuild_blobs_info.pop_count = 0;
+    status = Status::OK();
+  }
+
   sub_compact->c_iter.reset(new CompactionIterator(
       input.get(), &separate_helper, end, cfd->user_comparator(), &merge,
       versions_->LastSequence(), &existing_snapshots_,
@@ -1578,7 +1674,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       ShouldReportDetailedTime(env_, stats_), false, &range_del_agg,
       sub_compact->compaction, mutable_cf_options->get_blob_config(),
       compaction_filter, shutting_down_, preserve_deletes_seqnum_,
-      &need_rebuild_blobs));
+      &rebuild_blobs_info.blobs));
   auto c_iter = sub_compact->c_iter.get();
   c_iter->SeekToFirst();
 
@@ -1632,7 +1728,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
         snapshot_checker_, env_, false, false, range_del_agg_ptr,
         sub_compact->compaction, mutable_cf_options->get_blob_config(),
         second_pass_iter_storage.compaction_filter, shutting_down_,
-        preserve_deletes_seqnum_, &need_rebuild_blobs);
+        preserve_deletes_seqnum_, &rebuild_blobs_info.blobs);
   };
   std::unique_ptr<InternalIterator> second_pass_iter(
       NewCompactionIterator(c_style_callback(make_compaction_iterator),
@@ -1891,13 +1987,15 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     }
   }
 
-  ROCKS_LOG_INFO(db_options_.info_log,
-                 "[%s] [JOB %d] compaction auto  rebuild %d blobs(with %d "
-                 "blobs poped out by max_compaction_bytes) into %d new blobs "
-                 "in one subcompact",
-                 compact_->compaction->column_family_data()->GetName().c_str(),
-                 job_id_, need_rebuild_blobs.size(), pop_out_blobs,
-                 sub_compact->blob_outputs.size());
+  if (!rebuild_blobs_info.blobs.empty()) {
+    ROCKS_LOG_INFO(
+        db_options_.info_log,
+        "[%s] [JOB %d] Compaction auto rebuild %d(%d) blobs into %d new blobs",
+        compact_->compaction->column_family_data()->GetName().c_str(), job_id_,
+        rebuild_blobs_info.blobs.size(),
+        rebuild_blobs_info.blobs.size() + rebuild_blobs_info.pop_count,
+        sub_compact->blob_outputs.size());
+  }
 
   if (measure_io_stats_) {
     sub_compact->compaction_job_stats.file_write_nanos +=

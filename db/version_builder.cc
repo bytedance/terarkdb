@@ -112,7 +112,6 @@ struct VersionBuilderContextImpl : VersionBuilder::Context {
   ~VersionBuilderContextImpl() {
     for (auto& pair : dependence_map) {
       if (pair.second.f != nullptr) {
-        assert(pair.second.f->refs > 1);
         UnrefFile(pair.second.f);
       }
     }

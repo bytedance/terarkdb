@@ -19,7 +19,6 @@
 #include <algorithm>
 #include <list>
 #include <map>
-#include <queue>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -51,6 +50,7 @@
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
 #include "util/filename.h"
+#include "util/heap.h"
 #include "util/logging.h"
 #include "util/stop_watch.h"
 #include "util/string_util.h"
@@ -369,8 +369,7 @@ Version::~Version() {
   prev_->next_ = next_;
   next_->prev_ = prev_;
 
-  // FIXME release storage_info's context, make sure the last f->Unref is call
-  // here
+  // Release storage_info's context, make sure the last f->Unref is call here
   storage_info_.ResetVersionBuilderContext(nullptr);
 
   // Drop references to files
@@ -1522,36 +1521,48 @@ void VersionStorageInfo::CalculateTopkGarbageBlobs() {
 }
 
 void VersionStorageInfo::ComputeBlobOverlapScore() {
-  auto& hiden_files = LevelFiles(-1);
+  auto& hiden_files = files_[-1];
 
   auto user_cmp = [this](const InternalKey& k1, const InternalKey& k2) {
     return user_comparator_->Compare(k1.user_key(), k2.user_key());
   };
-
-  std::sort(hiden_files.begin(), hiden_files.end(),
-            [user_cmp](const FileMetaData* fm1, const FileMetaData* fm2) {
-              // put non-blob hiden file to the end
-              if (!fm1->is_gc_permitted()) {
-                return false;
-              }
-              if (!fm2->is_gc_permitted()) {
-                return true;
-              }
-              int smallest_cmp = user_cmp(fm1->smallest, fm2->smallest);
-              if (smallest_cmp == 0) {
-                return user_cmp(fm1->largest, fm2->largest) < 0;
-              }
-              return smallest_cmp < 0;
-            });
-
-  auto indirect_cmp = [user_cmp, hiden_files, this](size_t idx1, size_t idx2) {
+  auto blob_cmp = [user_cmp](const FileMetaData* fm1, const FileMetaData* fm2) {
+    // put non-blob hiden file to the end
+    int c = int(fm1->is_gc_forbidden()) - int(fm2->is_gc_forbidden());
+    if (c != 0) {
+      return c < 0;
+    }
+    c = user_cmp(fm1->smallest, fm2->smallest);
+    if (c != 0) {
+      return c < 0;
+    }
+    return user_cmp(fm1->largest, fm2->largest) < 0;
+  };
+  auto indirect_cmp = [user_cmp, &hiden_files, this](size_t idx1, size_t idx2) {
     return user_cmp(hiden_files[idx1]->largest, hiden_files[idx2]->largest) > 0;
   };
-  std::priority_queue<int, std::vector<int>, decltype(indirect_cmp)> end_queue(
-      indirect_cmp);
+  auto hiden_file_sort_valid = [&hiden_files, this] {
+    uint64_t idx = 0;
+    while (idx < hiden_files.size() && !hiden_files[idx]->is_gc_forbidden()) {
+      idx++;
+    }
+    assert(idx == blob_file_count_);
+    while (idx < hiden_files.size()) {
+      if (!hiden_files[idx]->is_gc_forbidden()) {
+        return false;
+      }
+      idx++;
+    }
+    return true;
+  };
+
+  std::sort(hiden_files.begin(), hiden_files.end(), blob_cmp);
+  assert(hiden_file_sort_valid());
+
+  auto end_queue = make_heap<int>(indirect_cmp);
   size_t i = 0;
   bool blob_end =
-      (i >= hiden_files.size() || !hiden_files[i]->is_gc_permitted());
+      (i >= hiden_files.size() || hiden_files[i]->is_gc_forbidden());
   while (!blob_end || !end_queue.empty()) {
     bool next_point_from_blob =
         end_queue.empty() ||
@@ -1571,6 +1582,7 @@ void VersionStorageInfo::ComputeBlobOverlapScore() {
       end_queue.pop();
     }
   }
+  assert(blob_file_count_ == blob_overlap_scores_.size());
 }
 
 void VersionStorageInfo::ComputeCompensatedSizes() {
@@ -2185,6 +2197,7 @@ void VersionStorageInfo::ComputeBottommostFilesMarkedForCompaction() {
     }
     if (meta->marked_for_compaction) {
       bottommost_files_marked_for_compaction_.push_back(level_and_file);
+      space_amplification_[level_and_file.first] |= kMarkedForCompaction;
     } else if (meta->prop.has_snapshots()) {
       // largest_seqno might be nonzero due to containing the final key in an
       // earlier compaction, whose seqnum we didn't zero out. Multiple deletions
