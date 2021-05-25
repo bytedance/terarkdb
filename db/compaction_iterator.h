@@ -227,7 +227,7 @@ class CompactionIterator {
 
   size_t filter_sample_interval_ = 64;
   size_t filter_hit_count_ = 0;
-  const chash_set<uint64_t>* need_rebuild_blobs_;
+  const chash_set<uint64_t>* rebuild_blob_set_;
 
  public:
   bool IsShuttingDown() {

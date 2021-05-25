@@ -125,7 +125,7 @@ CompactionIterator::CompactionIterator(
           std::unique_ptr<CompactionProxy>(
               compaction ? new CompactionProxy(compaction) : nullptr),
           blob_config, compaction_filter, shutting_down,
-          preserve_deletes_seqnum,  need_rebuild_blobs) {}
+          preserve_deletes_seqnum, need_rebuild_blobs) {}
 
 CompactionIterator::CompactionIterator(
     InternalIterator* input, SeparateHelper* separate_helper, const Slice* end,
@@ -162,7 +162,7 @@ CompactionIterator::CompactionIterator(
       current_user_key_snapshot_(0),
       merge_out_iter_(merge_helper_),
       current_key_committed_(false),
-      need_rebuild_blobs_(need_rebuild_blobs) {
+      rebuild_blob_set_(need_rebuild_blobs) {
   assert(compaction_filter_ == nullptr || compaction_ != nullptr);
   bottommost_level_ =
       compaction_ == nullptr ? false : compaction_->bottommost_level();
@@ -765,12 +765,8 @@ void CompactionIterator::PrepareOutput() {
     }
   };
   assert(!do_rebuild_blob_ || compaction_ != nullptr);
-  auto is_blob_rebuild_needed = [this] {
-    assert(need_rebuild_blobs_ != nullptr);
-    return need_rebuild_blobs_->find(value_.file_number()) !=
-           need_rebuild_blobs_->end();
-  };
-  bool do_rebuild_blob = do_rebuild_blob_ && is_blob_rebuild_needed();
+  bool do_rebuild_blob =
+      do_rebuild_blob_ && rebuild_blob_set_->count(value_.file_number()) > 0;
 
   if (ikey_.type == kTypeValue || ikey_.type == kTypeMerge) {
     if (!do_separate_value_) {
@@ -854,7 +850,7 @@ void CompactionIterator::PrepareOutput() {
       }
     }
   } else {
-    // Make test happy
+    // Make tests happy
     zero_sequence();
   }
 }

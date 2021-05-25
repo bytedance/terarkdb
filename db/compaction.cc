@@ -312,6 +312,7 @@ Compaction::Compaction(CompactionParams&& params)
   if (is_manual_compaction_) {
     compaction_reason_ = CompactionReason::kManualCompaction;
   }
+  TEST_SYNC_POINT_CALLBACK("Compaction::Compaction::Start", this);
   if (max_subcompactions_ == 0) {
     max_subcompactions_ = mutable_cf_options_.max_subcompactions;
   }

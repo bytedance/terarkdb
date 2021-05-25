@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <functional>
+#include <queue>
 
 #include "port/port.h"
 #include "rocksdb/terark_namespace.h"
@@ -102,6 +103,7 @@ class BinaryHeap {
   void reset_root_cmp_cache() { root_cmp_cache_ = port::kMaxSizet; }
 
   const Compare& comparator() const { return cmp_; }
+  const VectorType data() { return data_; }
 
  private:
   static inline size_t get_root() { return 0; }
@@ -167,5 +169,10 @@ class BinaryHeap {
   // Used to reduce number of cmp_ calls in downheap()
   size_t root_cmp_cache_ = port::kMaxSizet;
 };
+
+template <class T, class Cmp>
+BinaryHeap<T, Cmp, std::vector<T>> make_heap(Cmp cmp) {
+  return BinaryHeap<T, Cmp, std::vector<T>>(cmp);
+}
 
 }  // namespace TERARKDB_NAMESPACE

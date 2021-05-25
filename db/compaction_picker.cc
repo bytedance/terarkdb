@@ -919,11 +919,8 @@ void CompactionPicker::InitFilesBeingCompact(
       }
       if (begin != nullptr &&
           icmp_->Compare(element.largest_key, begin->Encode()) < 0) {
-        if (level == 0) {
-          continue;
-        } else {
-          break;
-        }
+        assert(level == 0);
+        continue;
       }
       if (end != nullptr &&
           icmp_->Compare(element.smallest_key, end->Encode()) > 0) {
@@ -934,16 +931,19 @@ void CompactionPicker::InitFilesBeingCompact(
         }
       }
       auto& dependence_map = vstorage->dependence_map();
-      // FIXME
       for (auto& link : element.link) {
         files_being_compact->emplace(link.file_number);
         auto find = dependence_map.find(link.file_number);
         if (find == dependence_map.end()) {
-          files_being_compact->emplace(link.file_number);
-        } else {
-          for (auto& dependence : find->second->prop.dependence) {
-            files_being_compact->emplace(dependence.file_number);
-          };
+          // TODO: log error
+          continue;
+        }
+        auto f = find->second;
+        if (!f->prop.is_map_sst()) {
+          continue;
+        }
+        for (auto& dependence : f->prop.dependence) {
+          files_being_compact->emplace(dependence.file_number);
         }
       }
     }
@@ -1256,10 +1256,6 @@ Compaction* CompactionPicker::PickRangeCompaction(
         if (c < 0) return false;
       }
     }
-    if (end != nullptr &&
-        uc->Compare(ExtractUserKey(e.smallest_key), end->user_key()) >= 0) {
-      return false;
-    }
     auto& dependence_map = vstorage->dependence_map();
     for (auto& link : e.link) {
       if (files_being_compact->count(link.file_number) > 0) {
@@ -1285,12 +1281,16 @@ Compaction* CompactionPicker::PickRangeCompaction(
   bool has_start = false;
   size_t max_compaction_bytes = mutable_cf_options.max_compaction_bytes;
   size_t subcompact_size = 0;
-  for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
+  for (begin == nullptr ? iter->SeekToFirst() : iter->Seek(begin->Encode());
+       iter->Valid(); iter->Next()) {
+    bool need_break =
+        end != nullptr && uc->Compare(ExtractUserKey(map_element.smallest_key),
+                                      end->user_key()) >= 0;
     if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
       return nullptr;
     }
     if (has_start) {
-      if (need_compact(map_element)) {
+      if (!need_break && need_compact(map_element)) {
         if (subcompact_size < max_compaction_bytes) {
           subcompact_size += map_element.EstimateSize();
           AssignUserKey(range.limit, map_element.largest_key);
@@ -1313,11 +1313,13 @@ Compaction* CompactionPicker::PickRangeCompaction(
         range.include_start = true;
         range.include_limit = false;
         input_range.emplace_back(std::move(range));
-        if (input_range.size() >= max_subcompactions) {
+        if (need_break || input_range.size() >= max_subcompactions) {
           break;
         }
         subcompact_size = 0;
       }
+    } else if (need_break) {
+      break;
     } else if (need_compact(map_element)) {
       subcompact_size += map_element.EstimateSize();
       has_start = true;
@@ -2101,7 +2103,6 @@ class LevelCompactionBuilder {
   int parent_index_ = -1;
   int base_index_ = -1;
   double start_level_score_ = 0;
-  bool is_manual_ = false;
   CompactionInputFiles start_level_inputs_;
   std::vector<CompactionInputFiles> compaction_inputs_;
   CompactionInputFiles output_level_inputs_;
@@ -2174,7 +2175,6 @@ void LevelCompactionBuilder::SetupInitialFiles() {
         cf_name_, vstorage_, &start_level_, &output_level_,
         &start_level_inputs_);
     if (!start_level_inputs_.empty()) {
-      is_manual_ = true;
       compaction_reason_ = CompactionReason::kFilesMarkedForCompaction;
       return;
     }
@@ -2732,7 +2732,6 @@ Compaction* LevelCompactionBuilder::GetCompaction() {
   params.compression_opts =
       GetCompressionOptions(ioptions_, vstorage_, output_level_);
   params.grandparents = std::move(grandparents_);
-  params.manual_compaction = is_manual_;
   params.score = start_level_score_;
   params.compaction_type = compaction_type_;
   params.input_range = std::move(input_range_);

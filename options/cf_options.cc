@@ -194,9 +194,7 @@ void MutableCFOptions::Dump(Logger* log) const {
                  target_blob_file_size);
   ROCKS_LOG_INFO(log, "                blob_file_defragment_size: %" PRIu64,
                  blob_file_defragment_size);
-  ROCKS_LOG_INFO(log, "                           max_blob_files: %zu",
-                 max_blob_files);
-  ROCKS_LOG_INFO(log, "                            blob_gc_ratio: %zu",
+  ROCKS_LOG_INFO(log, "              max_dependence_blob_overlap: %zu",
                  max_dependence_blob_overlap);
   ROCKS_LOG_INFO(log, "      soft_pending_compaction_bytes_limit: %" PRIu64,
                  soft_pending_compaction_bytes_limit);
@@ -242,6 +240,10 @@ void MutableCFOptions::Dump(Logger* log) const {
                  paranoid_file_checks);
   ROCKS_LOG_INFO(log, "                       report_bg_io_stats: %d",
                  report_bg_io_stats);
+  ROCKS_LOG_INFO(log, "                optimize_filters_for_hits: %d",
+                 optimize_filters_for_hits);
+  ROCKS_LOG_INFO(log, "                  optimize_range_deletion: %d",
+                 optimize_range_deletion);
   ROCKS_LOG_INFO(log, "                              compression: %d",
                  static_cast<int>(compression));
 
@@ -283,7 +285,6 @@ MutableCFOptions::MutableCFOptions(const ColumnFamilyOptions& options, Env* env)
       blob_gc_ratio(options.blob_gc_ratio),
       target_blob_file_size(options.target_blob_file_size),
       blob_file_defragment_size(options.blob_file_defragment_size),
-      max_blob_files(options.max_blob_files),
       max_dependence_blob_overlap(options.max_dependence_blob_overlap),
       soft_pending_compaction_bytes_limit(
           options.soft_pending_compaction_bytes_limit),
