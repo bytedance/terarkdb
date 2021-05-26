@@ -883,8 +883,11 @@ class VersionSet {
     autovector<VersionEdit*> edit_list;
     edit_list.emplace_back(edit);
     edit_lists.emplace_back(edit_list);
+    autovector<const ColumnFamilyOptions*> column_family_options_list;
+    column_family_options_list.emplace_back(column_family_options);
     return LogAndApply(cfds, mutable_cf_options_list, edit_lists, mu,
-                       db_directory, new_descriptor_log, column_family_options);
+                       db_directory, new_descriptor_log,
+                       column_family_options_list);
   }
   // The batch version. If edit_list.size() > 1, caller must ensure that
   // no edit in the list column family add or drop
@@ -900,8 +903,11 @@ class VersionSet {
     mutable_cf_options_list.emplace_back(&mutable_cf_options);
     autovector<autovector<VersionEdit*>> edit_lists;
     edit_lists.emplace_back(edit_list);
+    autovector<const ColumnFamilyOptions*> column_family_options_list;
+    column_family_options_list.emplace_back(column_family_options);
     return LogAndApply(cfds, mutable_cf_options_list, edit_lists, mu,
-                       db_directory, new_descriptor_log, column_family_options);
+                       db_directory, new_descriptor_log,
+                       column_family_options_list);
   }
 
   // The across-multi-cf batch version. If edit_lists contain more than
@@ -913,7 +919,7 @@ class VersionSet {
       const autovector<autovector<VersionEdit*>>& edit_lists,
       InstrumentedMutex* mu, Directory* db_directory = nullptr,
       bool new_descriptor_log = false,
-      const ColumnFamilyOptions* new_cf_options = nullptr);
+      const autovector<const ColumnFamilyOptions*>& new_cf_options_list = {});
 
   // Recover the last saved descriptor from persistent storage.
   // If read_only == true, Recover() will not complain if some column families
@@ -1140,8 +1146,7 @@ class VersionSet {
 
   Status ProcessManifestWrites(std::deque<ManifestWriter>& writers,
                                InstrumentedMutex* mu, Directory* db_directory,
-                               bool new_descriptor_log,
-                               const ColumnFamilyOptions* new_cf_options);
+                               bool new_descriptor_log);
 
   std::unique_ptr<ColumnFamilySet> column_family_set_;
 

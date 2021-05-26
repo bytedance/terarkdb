@@ -1007,9 +1007,10 @@ class DBImpl : public DB {
 
   const Status CreateArchivalDirectory();
 
-  Status CreateColumnFamilyImpl(const ColumnFamilyOptions& cf_options,
-                                const std::string& cf_name,
-                                ColumnFamilyHandle** handle);
+  autovector<Status> CreateColumnFamilyImpl(
+      autovector<const ColumnFamilyOptions*> cf_options,
+      autovector<const std::string*> cf_name,
+      autovector<ColumnFamilyHandle**> handle);
 
   Status DropColumnFamilyImpl(ColumnFamilyHandle* column_family);
 
