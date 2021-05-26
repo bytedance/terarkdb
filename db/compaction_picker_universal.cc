@@ -1109,7 +1109,7 @@ Compaction* UniversalCompactionPicker::PickDeleteTriggeredCompaction(
     start_level_inputs.files.clear();
     output_level = 0;
     for (FileMetaData* f : vstorage->LevelFiles(0)) {
-      if (f->marked_for_compaction) {
+      if (f->marked_for_compaction && !f->being_compacted) {
         compact = true;
       }
       if (compact) {
