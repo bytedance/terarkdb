@@ -2886,15 +2886,18 @@ struct VersionSet::ManifestWriter {
   ColumnFamilyData* cfd;
   const MutableCFOptions mutable_cf_options;
   const autovector<VersionEdit*>& edit_list;
+  const ColumnFamilyOptions* new_cf_options;
 
   explicit ManifestWriter(InstrumentedMutex* mu, ColumnFamilyData* _cfd,
                           const MutableCFOptions& cf_options,
-                          const autovector<VersionEdit*>& e)
+                          const autovector<VersionEdit*>& e,
+                          const ColumnFamilyOptions* _new_cf_options)
       : done(false),
         cv(mu),
         cfd(_cfd),
         mutable_cf_options(cf_options),
-        edit_list(e) {}
+        edit_list(e),
+        new_cf_options(_new_cf_options) {}
 };
 
 VersionSet::VersionSet(const std::string& dbname,
@@ -2972,10 +2975,10 @@ void VersionSet::AppendVersion(ColumnFamilyData* column_family_data,
   v->next_->prev_ = v;
 }
 
-Status VersionSet::ProcessManifestWrites(
-    std::deque<ManifestWriter>& writers, InstrumentedMutex* mu,
-    Directory* db_directory, bool new_descriptor_log,
-    const ColumnFamilyOptions* new_cf_options) {
+Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
+                                         InstrumentedMutex* mu,
+                                         Directory* db_directory,
+                                         bool new_descriptor_log) {
   assert(!writers.empty());
   ManifestWriter& first_writer = writers.front();
   ManifestWriter* last_writer = &first_writer;
@@ -2989,9 +2992,22 @@ Status VersionSet::ProcessManifestWrites(
   std::vector<std::unique_ptr<BaseReferencedVersionBuilder>> builder_guards;
 
   if (first_writer.edit_list.front()->IsColumnFamilyManipulation()) {
-    // No group commits for column family add or drop
+    // Group commits for column family add or drop
     LogAndApplyCFHelper(first_writer.edit_list.front());
     batch_edits.push_back(first_writer.edit_list.front());
+    for (auto it = std::next(manifest_writers_.cbegin());
+         it != manifest_writers_.end(); ++it) {
+      if ((*it)->edit_list.front()->is_column_family_add_ !=
+              first_writer.edit_list.front()->is_column_family_add_ ||
+          (*it)->edit_list.front()->is_column_family_drop_ !=
+              first_writer.edit_list.front()->is_column_family_drop_) {
+        // break group
+        break;
+      }
+      last_writer = *it;
+      LogAndApplyCFHelper(last_writer->edit_list.front());
+      batch_edits.push_back(last_writer->edit_list.front());
+    }
   } else {
     auto it = manifest_writers_.cbegin();
     size_t group_start = port::kMaxUint64;
@@ -3254,15 +3270,23 @@ Status VersionSet::ProcessManifestWrites(
   // Install the new versions
   if (s.ok()) {
     if (first_writer.edit_list.front()->is_column_family_add_) {
-      assert(batch_edits.size() == 1);
-      assert(new_cf_options != nullptr);
-      CreateColumnFamily(*new_cf_options, first_writer.edit_list.front());
+      auto it = manifest_writers_.begin();
+      ManifestWriter* writer;
+      do {
+        writer = *it++;
+        assert(writer->new_cf_options != nullptr);
+        CreateColumnFamily(*writer->new_cf_options, writer->edit_list.front());
+      } while (writer != last_writer);
     } else if (first_writer.edit_list.front()->is_column_family_drop_) {
-      assert(batch_edits.size() == 1);
-      first_writer.cfd->SetDropped();
-      if (first_writer.cfd->Unref()) {
-        delete first_writer.cfd;
-      }
+      auto it = manifest_writers_.begin();
+      ManifestWriter* writer;
+      do {
+        writer = *it++;
+        writer->cfd->SetDropped();
+        if (writer->cfd->Unref()) {
+          delete writer->cfd;
+        }
+      } while (writer != last_writer);
     } else {
       // Each version in versions corresponds to a column family.
       // For each column family, update its log number indicating that logs
@@ -3368,8 +3392,9 @@ Status VersionSet::LogAndApply(
     const autovector<const MutableCFOptions*>& mutable_cf_options_list,
     const autovector<autovector<VersionEdit*>>& edit_lists,
     InstrumentedMutex* mu, Directory* db_directory, bool new_descriptor_log,
-    const ColumnFamilyOptions* new_cf_options) {
+    const autovector<const ColumnFamilyOptions*>& new_cf_options_list) {
   mu->AssertHeld();
+  int num_cfds = static_cast<int>(column_family_datas.size());
   int num_edits = 0;
   for (const auto& elist : edit_lists) {
     num_edits += static_cast<int>(elist.size());
@@ -3378,28 +3403,33 @@ Status VersionSet::LogAndApply(
     return Status::OK();
   } else if (num_edits > 1) {
 #ifndef NDEBUG
-    for (const auto& edit_list : edit_lists) {
-      for (const auto& edit : edit_list) {
-        assert(!edit->IsColumnFamilyManipulation());
+    if (column_family_datas[0] == nullptr) {
+      assert(column_family_datas.size() == edit_lists.size());
+      assert(column_family_datas.size() == new_cf_options_list.size());
+      for (int i = 0; i < num_cfds; ++i) {
+        assert(edit_lists[i].size() == 1);
+        assert(edit_lists[i][0]->is_column_family_add_);
+        assert(new_cf_options_list[i] != nullptr);
+      }
+    } else {
+      for (const auto& edit_list : edit_lists) {
+        for (const auto& edit : edit_list) {
+          assert(!edit->IsColumnFamilyManipulation());
+        }
       }
     }
 #endif /* ! NDEBUG */
   }
 
-  int num_cfds = static_cast<int>(column_family_datas.size());
-  if (num_cfds == 1 && column_family_datas[0] == nullptr) {
-    assert(edit_lists.size() == 1 && edit_lists[0].size() == 1);
-    assert(edit_lists[0][0]->is_column_family_add_);
-    assert(new_cf_options != nullptr);
-  }
   std::deque<ManifestWriter> writers;
   if (num_cfds > 0) {
     assert(static_cast<size_t>(num_cfds) == mutable_cf_options_list.size());
     assert(static_cast<size_t>(num_cfds) == edit_lists.size());
   }
   for (int i = 0; i < num_cfds; ++i) {
-    writers.emplace_back(mu, column_family_datas[i],
-                         *mutable_cf_options_list[i], edit_lists[i]);
+    writers.emplace_back(
+        mu, column_family_datas[i], *mutable_cf_options_list[i], edit_lists[i],
+        column_family_datas[i] != nullptr ? nullptr : new_cf_options_list[i]);
     manifest_writers_.push_back(&writers[i]);
   }
   assert(!writers.empty());
@@ -3439,8 +3469,7 @@ Status VersionSet::LogAndApply(
     return Status::ShutdownInProgress();
   }
 
-  return ProcessManifestWrites(writers, mu, db_directory, new_descriptor_log,
-                               new_cf_options);
+  return ProcessManifestWrites(writers, mu, db_directory, new_descriptor_log);
 }
 
 void VersionSet::LogAndApplyCFHelper(VersionEdit* edit) {
