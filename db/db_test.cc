@@ -4864,14 +4864,32 @@ TEST_F(DBTest, SuggestCompactRangeTest) {
 
   start = Slice("j");
   end = Slice("m");
+  // SuggestCompactRange just mark file for compaction, compaction reason is
+  // kFilesMarkedForCompaction which is not same to kManualCompaction, so that
+  // is_manual can not be true
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
+      "Compaction::Compaction::Start", [&](void* arg) {
+        Compaction* c = (Compaction*)arg;
+        ASSERT_EQ(c->compaction_reason(),
+                  CompactionReason::kFilesMarkedForCompaction);
+        ASSERT_FALSE(c->is_manual_compaction());
+      });
+  // disable trival move make current test happy
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
+      "DBImpl::BackgroundCompaction:SetTrivialMove", [&](void* arg) {
+        bool* diable_trival = (bool*)arg;
+        *diable_trival = true;
+      });
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
   ASSERT_OK(experimental::SuggestCompactRange(db_, &start, &end));
   dbfull()->TEST_WaitForCompact();
-  ASSERT_TRUE(CompactionFilterFactoryGetContext::IsManual(
-      options.compaction_filter_factory.get()));
 
   // now it should compact the level 0 file
+  // since kFilesMarkedForCompaction is not kManualCompaction, we do not diable
+  // trival move in backgroundcompaction
   ASSERT_EQ(0, NumTableFilesAtLevel(0));
-  ASSERT_EQ(1, NumTableFilesAtLevel(1));
+  ASSERT_EQ(0, NumTableFilesAtLevel(1));
+  ASSERT_GT(NumTableFilesAtLevel(2), 1);
 }
 
 TEST_F(DBTest, PromoteL0) {
