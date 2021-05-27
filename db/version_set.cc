@@ -1521,7 +1521,7 @@ void VersionStorageInfo::CalculateTopkGarbageBlobs() {
 }
 
 void VersionStorageInfo::ComputeBlobOverlapScore() {
-  auto& hiden_files = files_[-1];
+  auto& hidden_files = files_[-1];
 
   auto user_cmp = [this](const InternalKey& k1, const InternalKey& k2) {
     return user_comparator_->Compare(k1.user_key(), k2.user_key());
@@ -1538,45 +1538,49 @@ void VersionStorageInfo::ComputeBlobOverlapScore() {
     }
     return user_cmp(fm1->largest, fm2->largest) < 0;
   };
-  auto indirect_cmp = [user_cmp, &hiden_files, this](size_t idx1, size_t idx2) {
-    return user_cmp(hiden_files[idx1]->largest, hiden_files[idx2]->largest) > 0;
+  auto indirect_cmp = [user_cmp, &hidden_files, this](size_t idx1,
+                                                      size_t idx2) {
+    return user_cmp(hidden_files[idx1]->largest, hidden_files[idx2]->largest) >
+           0;
   };
-  auto hiden_file_sort_valid = [&hiden_files, this] {
+  std::sort(hidden_files.begin(), hidden_files.end(), blob_cmp);
+#ifndef NDEBUG
+  auto hiden_file_sort_valid = [&hidden_files, this] {
     uint64_t idx = 0;
-    while (idx < hiden_files.size() && !hiden_files[idx]->is_gc_forbidden()) {
+    while (idx < hidden_files.size() && !hidden_files[idx]->is_gc_forbidden()) {
       idx++;
     }
     assert(idx == blob_file_count_);
-    while (idx < hiden_files.size()) {
-      if (!hiden_files[idx]->is_gc_forbidden()) {
+    while (idx < hidden_files.size()) {
+      if (!hidden_files[idx]->is_gc_forbidden()) {
         return false;
       }
       idx++;
     }
     return true;
   };
-
-  std::sort(hiden_files.begin(), hiden_files.end(), blob_cmp);
   assert(hiden_file_sort_valid());
+#endif
 
   auto end_queue = make_heap<int>(indirect_cmp);
   size_t i = 0;
   bool blob_end =
-      (i >= hiden_files.size() || hiden_files[i]->is_gc_forbidden());
+      (i >= hidden_files.size() || hidden_files[i]->is_gc_forbidden());
   while (!blob_end || !end_queue.empty()) {
     bool next_point_from_blob =
         end_queue.empty() ||
-        (!blob_end && user_cmp(hiden_files[i]->smallest,
-                               hiden_files[end_queue.top()]->largest) < 0);
+        (!blob_end && user_cmp(hidden_files[i]->smallest,
+                               hidden_files[end_queue.top()]->largest) < 0);
     if (!blob_end && next_point_from_blob) {
       end_queue.push(i);
-      blob_overlap_scores_[hiden_files[i]->fd.GetNumber()] =
+      blob_overlap_scores_[hidden_files[i]->fd.GetNumber()] =
           i - end_queue.size();
       i++;
-      blob_end = (i >= hiden_files.size() || hiden_files[i]->is_gc_forbidden());
+      blob_end =
+          (i >= hidden_files.size() || hidden_files[i]->is_gc_forbidden());
     } else {
       auto cur_idx = end_queue.top();
-      uint64_t cur_fileno = hiden_files[cur_idx]->fd.GetNumber();
+      uint64_t cur_fileno = hidden_files[cur_idx]->fd.GetNumber();
       blob_overlap_scores_[cur_fileno] =
           i - blob_overlap_scores_[cur_fileno] - 1;
       end_queue.pop();

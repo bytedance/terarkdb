@@ -414,10 +414,19 @@ struct CompactionJob::SubcompactionState {
         end_queue.pop();
       }
     }
-
     // pop smaller scores if total_compaction_bytes > max_compaction_bytes
     // remain one blob al least.
-    while (total_compaction_bytes > max_compaction_bytes &&
+
+    size_t max_file_size = mutable_cf_options->target_blob_file_size;
+    if (max_file_size == 0) {
+      max_file_size = MaxFileSizeForLevel(
+          *mutable_cf_options,
+          compaction->immutable_cf_options()->num_levels - 1,
+          compaction->immutable_cf_options()->compaction_style);
+    }
+    uint64_t target_compaction_bytes = std::max(
+        max_compaction_bytes, input_blob_info.input_bytes + max_file_size);
+    while (total_compaction_bytes > target_compaction_bytes &&
            target_range_blob_heap.size() > 1) {
       total_compaction_bytes -= target_range_blob_heap.top().ref_bytes;
       rebuild_blob_set.erase(target_range_blob_heap.top().file_number);
