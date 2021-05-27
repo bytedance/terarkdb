@@ -543,7 +543,7 @@ struct CompactionJob::SubcompactionState {
           return s;
         }
       }
-      assert(start_offset < end_offset);
+      assert(start_offset <= end_offset);
       output->input_bytes += std::max(start_offset, end_offset) - start_offset;
       for (auto& pair : file->prop.dependence) {
         find = dependence_map.find(pair.file_number);

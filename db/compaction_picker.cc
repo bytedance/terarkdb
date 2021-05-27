@@ -75,6 +75,12 @@ struct GarbageFileInfo {
   FileMetaData* f;
   double score;
   uint64_t estimate_size;
+  GarbageFileInfo(FileMetaData* _f) : f(_f), score(0.0), estimate_size(0) {
+    if (f == nullptr) return;
+    score = std::min(
+        1.0, f->num_antiquation / std::max<double>(1, f->prop.num_entries));
+    estimate_size = static_cast<uint64_t>(f->fd.file_size * (1 - score));
+  }
 };
 struct FileUseInfo {
   uint64_t size;
@@ -782,6 +788,10 @@ void CompactionPicker::GetGrandparents(
 
 // Try to perform garbage collection from certain column family.
 // Resulting as a pointer of compaction, nullptr as nothing to do.
+// GC picker's principle:
+// 1. pick the largest score blob, which must more than gc ratio
+// 2. fragment should be take away by the way
+// 3. it marked for compaction
 Compaction* CompactionPicker::PickGarbageCollection(
     const std::string& /*cf_name*/, const MutableCFOptions& mutable_cf_options,
     VersionStorageInfo* vstorage, LogBuffer* /*log_buffer*/) {
@@ -802,84 +812,103 @@ Compaction* CompactionPicker::PickGarbageCollection(
     fragment_size = max_file_size / 8;
   }
 
-  // Traverse level -1 to filter out all blob sstables needs GC.
-  // 1. score more than garbage collection baseline.
-  // 2. fragile files that can be reorganized
-  // 3. marked for compaction for other reasons
-  for (auto f : vstorage->LevelFiles(-1)) {
+  auto& hiden_files = vstorage->LevelFiles(-1);
+  uint64_t idx = 0;
+  // Find largest score blob
+  GarbageFileInfo dirtiest_blob{nullptr};
+  for (; idx < hiden_files.size() && !hiden_files[idx]->is_gc_forbidden();
+       ++idx) {
+    FileMetaData* f = hiden_files[idx];
     if (!f->is_gc_permitted() || f->being_compacted) {
       continue;
     }
-    GarbageFileInfo info = {f};
-    info.score = std::min(
-        1.0, f->num_antiquation / std::max<double>(1, f->prop.num_entries));
-    info.estimate_size =
-        static_cast<uint64_t>(f->fd.file_size * (1 - info.score));
-    if (info.score >= mutable_cf_options.blob_gc_ratio ||
-        info.estimate_size <= fragment_size) {
-      gc_files.push_back(info);
-    } else if (f->marked_for_compaction) {
-      info.score = mutable_cf_options.blob_gc_ratio;
-      gc_files.push_back(info);
+    GarbageFileInfo info{f};
+    if (info.score > dirtiest_blob.score) {
+      dirtiest_blob = info;
     }
   }
 
-  // Sorting by ratio decreasing.
-  std::sort(gc_files.begin(), gc_files.end(), TERARK_CMP(score, >));
+  bool has_target_blob =
+      dirtiest_blob.f != nullptr &&
+      dirtiest_blob.score >= mutable_cf_options.blob_gc_ratio;
+  Compaction* c = nullptr;
+  if (has_target_blob) {
+    // Set up inputs for garbage collection.
+    std::vector<CompactionInputFiles> inputs(1);
+    auto& input = inputs.front();
+    input.level = -1;
+    input.files.push_back(dirtiest_blob.f);
+    dirtiest_blob.f->set_gc_candidate();
+    uint64_t total_estimate_size = dirtiest_blob.estimate_size;
+    uint64_t num_antiquation = dirtiest_blob.f->num_antiquation;
 
-  // Return nullptr if
-  //   1. Got empty section.
-  //   2. Score lower than setting ratio.
-  //   3. Only one small file were selected.
-  if (gc_files.empty() ||
-      gc_files.front().score < mutable_cf_options.blob_gc_ratio ||
-      (gc_files.size() == 1 && gc_files[0].f->fd.file_size <= fragment_size)) {
-    return nullptr;
+    // expand with neighber blob
+    std::vector<GarbageFileInfo> candidate_blob_vec;
+    auto is_overlap_or_adjoining = [this,
+                                    target = dirtiest_blob.f](FileMetaData* f) {
+      return icmp_->Compare(target->largest, f->smallest) <= 0 ||
+             icmp_->Compare(target->smallest, f->largest) >= 0;
+    };
+    auto blob_valid = [&](const GarbageFileInfo& blob) {
+      // valid blob is blob that can be picked and worth to be picked
+      bool pick_forbidden =
+          !blob.f->is_gc_permitted() || blob.f->being_compacted;
+      return !pick_forbidden &&
+             (blob.estimate_size <= fragment_size ||
+              blob.score >= mutable_cf_options.blob_gc_ratio);
+    };
+    uint64_t blob_end_idx = idx;
+    for (idx = 0; idx < blob_end_idx; ++idx) {
+      if (is_overlap_or_adjoining(hiden_files[idx])) {
+        GarbageFileInfo gc_blob{hiden_files[idx]};
+        if (blob_valid(gc_blob)) {
+          candidate_blob_vec.emplace_back(hiden_files[idx]);
+        }
+      }
+    }
+
+    // Pick Top 8(<=) score blob
+    auto candidate_cmp = [fragment_size](const GarbageFileInfo& l,
+                                         const GarbageFileInfo& r) {
+      int fragment_cmp = (int)(l.estimate_size <= fragment_size) -
+                         (int)(r.estimate_size <= fragment_size);
+      if (fragment_cmp != 0) {
+        // put all fragment in the back, pick fragment iff input.size() < 8
+        return fragment_cmp < 0;
+      }
+      return l.score > r.score;
+    };
+    std::make_heap(candidate_blob_vec.begin(), candidate_blob_vec.end(),
+                   candidate_cmp);
+    while (!candidate_blob_vec.empty() && input.files.size() < 8) {
+      input.files.push_back(candidate_blob_vec.front().f);
+
+      std::pop_heap(candidate_blob_vec.begin(), candidate_blob_vec.end(),
+                    candidate_cmp);
+      candidate_blob_vec.pop_back();
+    }
+
+    int bottommost_level = vstorage->num_levels() - 1;
+    // Set compaction params.
+    CompactionParams params(vstorage, ioptions_, mutable_cf_options);
+    params.inputs = std::move(inputs);
+    params.output_level = -1;
+    params.num_antiquation = num_antiquation;
+    params.max_compaction_bytes = LLONG_MAX;
+    params.output_path_id = GetPathId(ioptions_, mutable_cf_options, 1);
+    params.compression = GetCompressionType(
+        ioptions_, vstorage, mutable_cf_options, bottommost_level, 1, true);
+    params.compression_opts =
+        GetCompressionOptions(ioptions_, vstorage, bottommost_level, true);
+    params.max_subcompactions = 1;
+    params.score = 0;
+    params.compaction_type = kGarbageCollection;
+    params.compaction_reason = CompactionReason::kGarbageCollection;
+
+    c = RegisterCompaction(new Compaction(std::move(params)));
+    vstorage->ComputeCompactionScore(ioptions_, mutable_cf_options);
   }
 
-  // Set up inputs for garbage collection.
-  std::vector<CompactionInputFiles> inputs(1);
-  auto& input = inputs.front();
-  input.level = -1;
-  input.files.push_back(gc_files.front().f);
-  gc_files.front().f->set_gc_candidate();
-
-  uint64_t total_estimate_size = gc_files.front().estimate_size;
-  uint64_t num_antiquation = gc_files.front().f->num_antiquation;
-  for (auto it = std::next(gc_files.begin()); it != gc_files.end(); ++it) {
-    auto& info = *it;
-    if (total_estimate_size + info.estimate_size > max_file_size) {
-      continue;
-    }
-    total_estimate_size += info.estimate_size;
-    num_antiquation += info.f->num_antiquation;
-    input.files.push_back(info.f);
-    info.f->set_gc_candidate();
-    if (input.size() >= 8) {
-      break;
-    }
-  }
-
-  int bottommost_level = vstorage->num_levels() - 1;
-
-  // Set compaction params.
-  CompactionParams params(vstorage, ioptions_, mutable_cf_options);
-  params.inputs = std::move(inputs);
-  params.output_level = -1;
-  params.num_antiquation = num_antiquation;
-  params.max_compaction_bytes = LLONG_MAX;
-  params.output_path_id = GetPathId(ioptions_, mutable_cf_options, 1);
-  params.compression = GetCompressionType(
-      ioptions_, vstorage, mutable_cf_options, bottommost_level, 1, true);
-  params.compression_opts =
-      GetCompressionOptions(ioptions_, vstorage, bottommost_level, true);
-  params.max_subcompactions = 1;
-  params.score = 0;
-  params.compaction_type = kGarbageCollection;
-  params.compaction_reason = CompactionReason::kGarbageCollection;
-
-  auto c = RegisterCompaction(new Compaction(std::move(params)));
-  vstorage->ComputeCompactionScore(ioptions_, mutable_cf_options);
   return c;
 }
 
