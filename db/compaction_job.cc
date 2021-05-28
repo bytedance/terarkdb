@@ -2099,13 +2099,37 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
     uint64_t get_not_found = 0;
     uint64_t file_number_mismatch = 0;
   } counter;
+  std::vector<std::pair<uint64_t, FileMetaData*>> blob_meta_cache;
+  assert(!sub_compact->compaction->inputs()->empty());
+  blob_meta_cache.reserve(sub_compact->compaction->inputs()->front().size());
   while (status.ok() && !cfd->IsDropped() && input->Valid()) {
     ++counter.input;
     Slice curr_key = input->key();
     uint64_t curr_file_number = uint64_t(-1);
     if (!ParseInternalKey(curr_key, &ikey)) {
-      status = Status::Corruption("Invalid InternalKey");
+      status =
+          Status::Corruption("ProcessGarbageCollection invalid InternalKey");
       break;
+    }
+    uint64_t blob_file_number = input->value().file_number();
+    FileMetaData* blob_meta;
+    auto find_cache = std::find_if(
+        blob_meta_cache.begin(), blob_meta_cache.end(),
+        [blob_file_number](const std::pair<uint64_t, FileMetaData*>& pair) {
+          return pair.first == blob_file_number;
+        });
+    if (find_cache != blob_meta_cache.end()) {
+      blob_meta = find_cache->second;
+    } else {
+      auto find_dependence_map = dependence_map.find(blob_file_number);
+      if (find_dependence_map == dependence_map.end()) {
+        status =
+            Status::Corruption("ProcessGarbageCollection internal error !");
+        break;
+      }
+      blob_meta = find_dependence_map->second;
+      blob_meta_cache.emplace_back(blob_file_number, blob_meta);
+      assert(blob_meta->fd.GetNumber() == blob_file_number);
     }
     do {
       if (ikey.type != kTypeValue && ikey.type != kTypeMerge) {
@@ -2118,7 +2142,7 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
       SequenceNumber seq = kMaxSequenceNumber;
       LazyBuffer value;
       input_version->GetKey(ikey.user_key, iter_key.GetInternalKey(), &s, &type,
-                            &seq, &value);
+                            &seq, &value, *blob_meta);
       if (s.IsNotFound()) {
         ++counter.get_not_found;
         break;
