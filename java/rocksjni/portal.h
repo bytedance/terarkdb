@@ -3468,8 +3468,16 @@ class TickerTypeJni {
         return 0x5F;
       case TERARKDB_NAMESPACE::Tickers::NO_ITERATOR_DELETED:
         return 0x60;
-      case TERARKDB_NAMESPACE::Tickers::TICKER_ENUM_MAX:
+      case TERARKDB_NAMESPACE::Tickers::GC_GET_KEYS:
         return 0x61;
+      case TERARKDB_NAMESPACE::Tickers::GC_SKIP_GET_BY_FILE:
+        return 0x62;
+      case TERARKDB_NAMESPACE::Tickers::GC_SKIP_GET_BY_SEQ:
+        return 0x63;
+      case TERARKDB_NAMESPACE::Tickers::GC_TOUCH_FILES:
+        return 0x64;
+      case TERARKDB_NAMESPACE::Tickers::TICKER_ENUM_MAX:
+        return 0x65;
 
       default:
         // undefined/default
@@ -3676,6 +3684,14 @@ class TickerTypeJni {
       case 0x60:
         return TERARKDB_NAMESPACE::Tickers::NO_ITERATOR_DELETED;
       case 0x61:
+        return TERARKDB_NAMESPACE::Tickers::GC_GET_KEYS;
+      case 0x62:
+        return TERARKDB_NAMESPACE::Tickers::GC_SKIP_GET_BY_FILE:;
+      case 0x63:
+        return TERARKDB_NAMESPACE::Tickers::GC_SKIP_GET_BY_SEQ;
+      case 0x64:
+        return TERARKDB_NAMESPACE::Tickers::GC_TOUCH_FILES;
+      case 0x65:
         return TERARKDB_NAMESPACE::Tickers::TICKER_ENUM_MAX;
 
       default:

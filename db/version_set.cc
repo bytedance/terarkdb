@@ -1427,6 +1427,7 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
 void Version::GetKey(const Slice& user_key, const Slice& ikey, Status* status,
                      ValueType* type, SequenceNumber* seq, LazyBuffer* value,
                      const FileMetaData& blob) {
+  RecordTick(db_statistics_, GC_GET_KEYS);
   bool value_found;
   GetContext get_context(cfd_->internal_comparator().user_comparator(), nullptr,
                          cfd_->ioptions()->info_log, db_statistics_,
@@ -1442,8 +1443,10 @@ void Version::GetKey(const Slice& user_key, const Slice& ikey, Status* status,
   FdWithKeyRange* f = fp.GetNextFile();
 
   while (f != nullptr) {
+    RecordTick(db_statistics_, GC_TOUCH_FILES);
     if (f->fd.smallest_seqno > ikey_seq || f->fd.largest_seqno < ikey_seq) {
       // fast path
+      RecordTick(db_statistics_, GC_SKIP_GET_BY_SEQ);
       f = fp.GetNextFile();
       continue;
     }

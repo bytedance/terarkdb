@@ -462,6 +462,7 @@ Status TableCache::Get(const ReadOptions& options,
   // fast path for GC
   if (inheritance != nullptr && !file_meta.prop.is_map_sst() &&
       InheritanceMismatch(file_meta, *inheritance)) {
+    RecordTick(ioptions_.statistics, GC_SKIP_GET_BY_FILE);
     return Status::OK();
   }
   auto& fd = file_meta.fd;

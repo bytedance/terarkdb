@@ -484,7 +484,15 @@ public enum TickerType {
      */
     NO_ITERATOR_DELETED((byte) 0x60),
 
-    TICKER_ENUM_MAX((byte) 0x61);
+    GC_GETKEYS((byte) 0x61),
+
+    SKIP_GC_GET_BY_FILE((byte) 0x62),
+
+    SKIP_GC_GET_BY_SEQ((byte) 0x63),
+
+    GC_TOUCH_FILES((byte) 0x64),
+
+    TICKER_ENUM_MAX((byte) 0x65);
 
 
     private final byte value;
