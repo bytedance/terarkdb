@@ -459,10 +459,20 @@ Status TableCache::Get(const ReadOptions& options,
                        const SliceTransform* prefix_extractor,
                        HistogramImpl* file_read_hist, bool skip_filters,
                        int level, const FileMetaData* inheritance) {
-  // fast path for GC
-  if (inheritance != nullptr && !file_meta.prop.is_map_sst() &&
-      InheritanceMismatch(file_meta, *inheritance)) {
-    return Status::OK();
+  if (inheritance != nullptr) {
+    // fast path for GC
+    RecordTick(ioptions_.statistics, GC_TOUCH_FILES);
+    SequenceNumber ikey_seq = GetInternalKeySeqno(k);
+    if (ikey_seq < file_meta.fd.smallest_seqno ||
+        ikey_seq > file_meta.fd.largest_seqno) {
+      RecordTick(ioptions_.statistics, GC_SKIP_GET_BY_SEQ);
+      return Status::OK();
+    }
+    if (!file_meta.prop.is_map_sst() &&
+        InheritanceMismatch(file_meta, *inheritance)) {
+      RecordTick(ioptions_.statistics, GC_SKIP_GET_BY_FILE);
+      return Status::OK();
+    }
   }
   auto& fd = file_meta.fd;
   IterKey key_buffer;

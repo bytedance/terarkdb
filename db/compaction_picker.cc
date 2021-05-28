@@ -844,45 +844,72 @@ Compaction* CompactionPicker::PickGarbageCollection(
   std::vector<GarbageFileInfo> candidate_blob_vec;
   auto target = dirtiest_blob.f;
   auto ucmp = ioptions_.user_comparator;
-  auto is_overlap_or_adjoining = [target, ucmp](FileMetaData* f) {
-    // TODO
-    (void)target;
-    (void)ucmp;
-    return true;
-  };
+  std::vector<FileMetaData*> smallest_adjoining, largest_adjoining, overlapping;
   uint64_t blob_end_idx = idx;
   for (idx = 0; idx < blob_end_idx; ++idx) {
     auto f = hidden_files[idx];
-    if (!f->is_gc_permitted() || f->being_compacted ||
-        !is_overlap_or_adjoining(f)) {
+    if (f == target) {
       continue;
     }
-    GarbageFileInfo gc_blob(f);
-    if (gc_blob.estimate_size <= fragment_size ||
-        gc_blob.score >= mutable_cf_options.blob_gc_ratio ||
-        gc_blob.f->marked_for_compaction) {
-      candidate_blob_vec.emplace_back(gc_blob);
+    if (ucmp->Compare(f->largest.user_key(), target->smallest.user_key()) < 0) {
+      int c = 0;
+      if (!smallest_adjoining.empty()) {
+        c = ucmp->Compare(f->largest.user_key(),
+                          smallest_adjoining.front()->largest.user_key());
+        if (c > 0) {
+          smallest_adjoining.clear();
+        }
+      }
+      if (c >= 0) {
+        smallest_adjoining.emplace_back(f);
+      }
+    } else if (ucmp->Compare(f->smallest.user_key(),
+                             target->largest.user_key()) > 0) {
+      int c = 0;
+      if (!largest_adjoining.empty()) {
+        c = ucmp->Compare(f->smallest.user_key(),
+                          largest_adjoining.front()->smallest.user_key());
+        if (c < 0) {
+          largest_adjoining.clear();
+        }
+      }
+      if (c <= 0) {
+        largest_adjoining.emplace_back(f);
+      }
+    } else {
+      overlapping.emplace_back(f);
     }
   }
+  auto push_candidate = [&](FileMetaData* f) {
+    if (f->is_gc_permitted() && !f->being_compacted) {
+      GarbageFileInfo gc_blob(f);
+      if (gc_blob.estimate_size <= fragment_size ||
+          gc_blob.score >= mutable_cf_options.blob_gc_ratio ||
+          gc_blob.f->marked_for_compaction) {
+        candidate_blob_vec.emplace_back(gc_blob);
+      }
+    }
+  };
+  std::for_each(smallest_adjoining.begin(), smallest_adjoining.end(),
+                push_candidate);
+  std::for_each(largest_adjoining.begin(), largest_adjoining.end(),
+                push_candidate);
+  std::for_each(overlapping.begin(), overlapping.end(), push_candidate);
 
   // Pick Top 8(<=) score blob
-  auto candidate_cmp = [fragment_size](const GarbageFileInfo& l,
-                                       const GarbageFileInfo& r) {
-    int fragment_cmp = int(l.estimate_size <= fragment_size) -
-                       int(r.estimate_size <= fragment_size);
-    if (fragment_cmp != 0) {
-      // put all fragment in the back, pick fragment iff input.size() < 8
-      return fragment_cmp < 0;
-    }
-    return l.score > r.score;
+  auto candidate_cmp = [](const GarbageFileInfo& l, const GarbageFileInfo& r) {
+    return l.score < r.score;
   };
   std::make_heap(candidate_blob_vec.begin(), candidate_blob_vec.end(),
                  candidate_cmp);
   while (!candidate_blob_vec.empty() && input.files.size() < 8) {
     auto f = candidate_blob_vec.front().f;
-    num_antiquation += f->num_antiquation;
-    f->set_gc_candidate();
-    input.files.push_back(f);
+    if (total_estimate_size + candidate_blob_vec.front().estimate_size <
+        max_file_size) {
+      num_antiquation += f->num_antiquation;
+      f->set_gc_candidate();
+      input.files.push_back(f);
+    }
 
     std::pop_heap(candidate_blob_vec.begin(), candidate_blob_vec.end(),
                   candidate_cmp);
@@ -902,7 +929,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
   params.compression_opts =
       GetCompressionOptions(ioptions_, vstorage, bottommost_level, true);
   params.max_subcompactions = 1;
-  params.score = 0;
+  params.score = vstorage->total_garbage_ratio();
   params.compaction_type = kGarbageCollection;
   params.compaction_reason = CompactionReason::kGarbageCollection;
 
