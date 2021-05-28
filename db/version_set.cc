@@ -1425,7 +1425,8 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
 }
 
 void Version::GetKey(const Slice& user_key, const Slice& ikey, Status* status,
-                     ValueType* type, SequenceNumber* seq, LazyBuffer* value) {
+                     ValueType* type, SequenceNumber* seq, LazyBuffer* value,
+                     const FileMetaData& blob) {
   bool value_found;
   GetContext get_context(cfd_->internal_comparator().user_comparator(), nullptr,
                          cfd_->ioptions()->info_log, db_statistics_,
@@ -1450,7 +1451,7 @@ void Version::GetKey(const Slice& user_key, const Slice& ikey, Status* status,
         table_cache_->Get(options, *internal_comparator(), *f->file_metadata,
                           storage_info_.dependence_map(), ikey, &get_context,
                           mutable_cf_options_.prefix_extractor.get(), nullptr,
-                          true, fp.GetCurrentLevel());
+                          true, fp.GetCurrentLevel(), &blob);
     if (!status->ok()) {
       return;
     }
@@ -1538,8 +1539,7 @@ void VersionStorageInfo::ComputeBlobOverlapScore() {
     }
     return user_cmp(fm1->largest, fm2->largest) < 0;
   };
-  auto indirect_cmp = [user_cmp, &hidden_files, this](size_t idx1,
-                                                      size_t idx2) {
+  auto indirect_cmp = [user_cmp, &hidden_files](size_t idx1, size_t idx2) {
     return user_cmp(hidden_files[idx1]->largest, hidden_files[idx2]->largest) >
            0;
   };
