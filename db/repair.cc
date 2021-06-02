@@ -96,873 +96,920 @@ namespace rocksdb {
 namespace {
 
 class Repairer {
- public:
-  Repairer(const std::string& dbname, const DBOptions& db_options,
-           const std::vector<ColumnFamilyDescriptor>& column_families,
-           const ColumnFamilyOptions& default_cf_opts,
-           const ColumnFamilyOptions& unknown_cf_opts, bool create_unknown_cfs)
-      : dbname_(dbname),
-        env_(db_options.env),
-        env_options_(db_options),
-        db_options_(SanitizeOptions(dbname_, db_options)),
-        immutable_db_options_(ImmutableDBOptions(db_options_)),
-        icmp_(default_cf_opts.comparator),
-        default_cf_opts_(
-            SanitizeOptions(immutable_db_options_, default_cf_opts)),
-        default_cf_iopts_(
-            ImmutableCFOptions(immutable_db_options_, default_cf_opts_)),
-        unknown_cf_opts_(
-            SanitizeOptions(immutable_db_options_, unknown_cf_opts)),
-        create_unknown_cfs_(create_unknown_cfs),
-        raw_table_cache_(
-            // TableCache can be small since we expect each table to be opened
-            // once.
-            NewLRUCache(10, db_options_.table_cache_numshardbits)),
-        table_cache_(new TableCache(default_cf_iopts_, env_options_,
-                                    raw_table_cache_.get())),
-        wb_(db_options_.db_write_buffer_size),
-        wc_(db_options_.delayed_write_rate),
-        vset_(dbname_, &immutable_db_options_, env_options_,
-              /* seq_per_batch */ false, raw_table_cache_.get(), &wb_, &wc_),
-        next_file_number_(1),
-        db_lock_(nullptr),
-        stat_(nullptr),
-        column_families_(column_families)
-  /* bg_compaction_scheduled_(0),
-   shutting_down_(false) */
-  {
-    for (const auto& cfd : column_families) {
-      cf_name_to_opts_[cfd.name] = cfd.options;
-    }
-    if (column_families_.size() == 0) {
-      column_families_.emplace_back(
-          ColumnFamilyDescriptor(kDefaultColumnFamilyName, default_cf_opts_));
-    }
-  }
-
-  const ColumnFamilyOptions* GetColumnFamilyOptions(
-      const std::string& cf_name) {
-    if (cf_name_to_opts_.find(cf_name) == cf_name_to_opts_.end()) {
-      if (create_unknown_cfs_) {
-        return &unknown_cf_opts_;
-      }
-      return nullptr;
-    }
-    return &cf_name_to_opts_[cf_name];
-  }
-
-  // Adds a column family to the VersionSet with cf_options_ and updates
-  // manifest.
-  Status AddColumnFamily(const std::string& cf_name, uint32_t cf_id) {
-    const auto* cf_opts = GetColumnFamilyOptions(cf_name);
-    if (cf_opts == nullptr) {
-      return Status::Corruption("Encountered unknown column family with name=" +
-                                cf_name + ", id=" + ToString(cf_id));
-    }
-    Options opts(db_options_, *cf_opts);
-    MutableCFOptions mut_cf_opts(opts);
-
-    VersionEdit edit;
-    edit.SetComparatorName(opts.comparator->Name());
-    edit.SetLogNumber(0);
-    edit.SetColumnFamily(cf_id);
-    edit.AddColumnFamily(cf_name);
-    // mutex_.Lock();
-    ColumnFamilyData* cfd = nullptr;
-    Status status = vset_.LogAndApply(cfd, mut_cf_opts, &edit, &mutex_,
-                                      nullptr /* db_directory */,
-                                      false /* new_descriptor_log */, cf_opts);
-    // if (cfd && !cfd->initialized()) {
-    //   cfd->set_initialized();
-    // }
-    // mutex_.Unlock();
-    assert(!cfd);
-    return status;
-  }
-
-  ~Repairer() {
-    if (db_lock_ != nullptr) {
-      env_->UnlockFile(db_lock_);
-    }
-    delete table_cache_;
-  }
-
-  Status Run() {
-    Status status = env_->LockFile(LockFileName(dbname_), &db_lock_);
-    if (!status.ok()) {
-      return status;
-    }
-    status = FindFiles();
-    if (status.ok()) {
-      // Discard older manifests and start a fresh one
-      for (size_t i = 0; i < manifests_.size(); i++) {
-        ArchiveFile(dbname_ + "/" + manifests_[i]);
-      }
-      // Just create a DBImpl temporarily so we can reuse NewDB()
-      DBImpl* db_impl = new DBImpl(db_options_, dbname_);
-      status = db_impl->NewDB();
-      delete db_impl;
+   public:
+    Repairer(const std::string& dbname,
+             const DBOptions& db_options,
+             const std::vector<ColumnFamilyDescriptor>& column_families,
+             const ColumnFamilyOptions& default_cf_opts,
+             const ColumnFamilyOptions& unknown_cf_opts,
+             bool create_unknown_cfs)
+        : dbname_(dbname),
+          env_(db_options.env),
+          env_options_(db_options),
+          db_options_(SanitizeOptions(dbname_, db_options)),
+          immutable_db_options_(ImmutableDBOptions(db_options_)),
+          icmp_(default_cf_opts.comparator),
+          default_cf_opts_(
+              SanitizeOptions(immutable_db_options_, default_cf_opts)),
+          default_cf_iopts_(
+              ImmutableCFOptions(immutable_db_options_, default_cf_opts_)),
+          unknown_cf_opts_(
+              SanitizeOptions(immutable_db_options_, unknown_cf_opts)),
+          create_unknown_cfs_(create_unknown_cfs),
+          raw_table_cache_(
+              // TableCache can be small since we expect each table to be opened
+              // once.
+              NewLRUCache(10, db_options_.table_cache_numshardbits)),
+          table_cache_(new TableCache(default_cf_iopts_,
+                                      env_options_,
+                                      raw_table_cache_.get())),
+          wb_(db_options_.db_write_buffer_size),
+          wc_(db_options_.delayed_write_rate),
+          vset_(dbname_,
+                &immutable_db_options_,
+                env_options_,
+                /* seq_per_batch */ false,
+                raw_table_cache_.get(),
+                &wb_,
+                &wc_),
+          next_file_number_(1),
+          db_lock_(nullptr),
+          stat_(nullptr),
+          column_families_(column_families)
+    /* bg_compaction_scheduled_(0),
+     shutting_down_(false) */
+    {
+        for (const auto& cfd : column_families) {
+            cf_name_to_opts_[cfd.name] = cfd.options;
+        }
+        if (column_families_.size() == 0) {
+            column_families_.emplace_back(ColumnFamilyDescriptor(
+                kDefaultColumnFamilyName, default_cf_opts_));
+        }
     }
 
-    if (status.ok()) {
-      // Recover using the fresh manifest created by NewDB()
-      status =
-          // vset_.Recover({{kDefaultColumnFamilyName, default_cf_opts_}},
-          // false);
-          vset_.Recover(column_families_, false);
-      // ROCKS_LOG_WARN(db_options_.info_log,
-      //                "%" PRIu64 " counts of file number manifest has used",
-      //                vset_.current_next_file_number());
+    const ColumnFamilyOptions* GetColumnFamilyOptions(
+        const std::string& cf_name) {
+        if (cf_name_to_opts_.find(cf_name) == cf_name_to_opts_.end()) {
+            if (create_unknown_cfs_) {
+                return &unknown_cf_opts_;
+            }
+            return nullptr;
+        }
+        return &cf_name_to_opts_[cf_name];
     }
-    if (status.ok()) {
-      // Need to scan existing SST files first so the column families are
-      // created before we process WAL files
-      ExtractMetaData();
 
-      // ExtractMetaData() uses table_fds_ to know which SST files' metadata to
-      // extract -- we need to clear it here since metadata for existing SST
-      // files has been extracted already
-      table_fds_.clear();
-      ConvertLogFilesToTables();
-      ExtractMetaData();
-      status = AddTables();
-    }
-    if (status.ok()) {
-      status = GenerateMapSstable();
-    }
-    if (status.ok()) {
-      uint64_t bytes = 0;
-      for (size_t i = 0; i < tables_.size(); i++) {
-        bytes += tables_[i].meta.fd.GetFileSize();
-      }
-      ROCKS_LOG_WARN(db_options_.info_log,
-                     "**** Repaired rocksdb %s; "
-                     "recovered %" ROCKSDB_PRIszt " files; %" PRIu64
-                     " bytes. "
-                     "Some data may have been lost. "
-                     "****",
-                     dbname_.c_str(), tables_.size(), bytes);
-    } else {
-      Header(db_options_.info_log, "%s", status.ToString().c_str());
-    }
-    return status;
-  }
+    // Adds a column family to the VersionSet with cf_options_ and updates
+    // manifest.
+    Status AddColumnFamily(const std::string& cf_name, uint32_t cf_id) {
+        const auto* cf_opts = GetColumnFamilyOptions(cf_name);
+        if (cf_opts == nullptr) {
+            return Status::Corruption(
+                "Encountered unknown column family with name=" + cf_name +
+                ", id=" + ToString(cf_id));
+        }
+        Options opts(db_options_, *cf_opts);
+        MutableCFOptions mut_cf_opts(opts);
 
- private:
-  struct TableInfo {
-    FileMetaData meta;
-    uint32_t column_family_id;
-    std::string column_family_name;
-    SequenceNumber min_sequence;
-    SequenceNumber max_sequence;
-  };
-
-  std::string const dbname_;
-  Env* const env_;
-  const EnvOptions env_options_;
-  const DBOptions db_options_;
-  const ImmutableDBOptions immutable_db_options_;
-  const InternalKeyComparator icmp_;
-  const ColumnFamilyOptions default_cf_opts_;
-  const ImmutableCFOptions default_cf_iopts_;  // table_cache_ holds reference
-  const ColumnFamilyOptions unknown_cf_opts_;
-  const bool create_unknown_cfs_;
-  std::shared_ptr<Cache> raw_table_cache_;
-  TableCache* table_cache_;
-  WriteBufferManager wb_;
-  WriteController wc_;
-  VersionSet vset_;
-  std::unordered_map<std::string, ColumnFamilyOptions> cf_name_to_opts_;
-  InstrumentedMutex mutex_;
-
-  std::vector<std::string> manifests_;
-  std::vector<FileDescriptor> table_fds_;
-  std::vector<uint64_t> logs_;
-  std::vector<TableInfo> tables_;
-  uint64_t next_file_number_;
-  // Lock over the persistent DB state. Non-nullptr iff successfully
-  // acquired.
-  FileLock* db_lock_;
-  // for global map
-  std::vector<std::string> sstable_name_;
-  // int bg_compaction_scheduled_;
-  // std::atomic<bool> shutting_down_;
-  // SnapshotList snapshots_;
-  // std::unique_ptr<SnapshotChecker> snapshot_checker_;
-  // ErrorHandler error_handler_;
-  Statistics* stat_;
-  std::vector<ColumnFamilyDescriptor> column_families_;
-  // another way
-  Status GenerateMapSstable() {
-    SstPurpose sst_purpose = kRepairSst;
-    for (auto* cfd : *vset_.GetColumnFamilySet()) {
-      if (!cfd->initialized()) {
-        continue;
-      }
-      VersionStorageInfo* vstorage = cfd->current()->storage_info();
-      {
-        MapBuilder map_builder(0, immutable_db_options_, env_options_, &vset_,
-                               stat_, dbname_);
-
-        std::vector<Range> deleted_range;
-        std::vector<FileMetaData*> added_files;
-        std::unique_ptr<FileMetaData> output_file(new FileMetaData);
         VersionEdit edit;
-        edit.SetColumnFamily(cfd->GetID());
-        edit.SetComparatorName(cfd->user_comparator()->Name());
+        edit.SetComparatorName(opts.comparator->Name());
         edit.SetLogNumber(0);
-        edit.SetNextFile(next_file_number_);
-        // std::string debugstring = cfd->current()->DebugString(true, false);
-        //  Header(immutable_db_options_.info_log, "%s", debugstring.c_str());
-        Status status = map_builder.Build(
-            {CompactionInputFiles{0, vstorage->LevelFiles(0)}}, deleted_range,
-            added_files, 1, 0, cfd, cfd->current(), &edit, output_file.get(),
-            nullptr, nullptr, sst_purpose);
+        edit.SetColumnFamily(cf_id);
+        edit.AddColumnFamily(cf_name);
+        // mutex_.Lock();
+        ColumnFamilyData* cfd = nullptr;
+        Status status = vset_.LogAndApply(
+            cfd, mut_cf_opts, &edit, &mutex_, nullptr /* db_directory */,
+            false /* new_descriptor_log */, cf_opts);
+        // if (cfd && !cfd->initialized()) {
+        //   cfd->set_initialized();
+        // }
+        // mutex_.Unlock();
+        assert(!cfd);
+        return status;
+    }
+
+    ~Repairer() {
+        if (db_lock_ != nullptr) {
+            env_->UnlockFile(db_lock_);
+        }
+        delete table_cache_;
+    }
+
+    Status Run() {
+        Status status = env_->LockFile(LockFileName(dbname_), &db_lock_);
+        if (!status.ok()) {
+            return status;
+        }
+        status = FindFiles();
         if (status.ok()) {
-          mutex_.Lock();
-          status =
-              vset_.LogAndApply(cfd, *cfd->GetLatestMutableCFOptions(), &edit,
-                                &mutex_, nullptr, false, nullptr, false);
-          mutex_.Unlock();
-        }
-        if (!status.ok()) {
-          return status;
-        }
-      }
-    }
-    return Status::OK();
-  }
-
-  Status FindFiles() {
-    std::vector<std::string> filenames;
-    bool found_file = false;
-    std::vector<std::string> to_search_paths;
-
-    for (size_t path_id = 0; path_id < db_options_.db_paths.size(); path_id++) {
-      to_search_paths.push_back(db_options_.db_paths[path_id].path);
-    }
-
-    // search wal_dir if user uses a customize wal_dir
-    bool same = false;
-    Status status = env_->AreFilesSame(db_options_.wal_dir, dbname_, &same);
-    if (status.IsNotSupported()) {
-      same = db_options_.wal_dir == dbname_;
-      status = Status::OK();
-    } else if (!status.ok()) {
-      return status;
-    }
-
-    if (!same) {
-      to_search_paths.push_back(db_options_.wal_dir);
-    }
-
-    for (size_t path_id = 0; path_id < to_search_paths.size(); path_id++) {
-      status = env_->GetChildren(to_search_paths[path_id], &filenames);
-      if (!status.ok()) {
-        return status;
-      }
-      if (!filenames.empty()) {
-        found_file = true;
-      }
-
-      uint64_t number;
-      FileType type;
-      for (size_t i = 0; i < filenames.size(); i++) {
-        if (ParseFileName(filenames[i], &number, &type)) {
-          if (type == kDescriptorFile) {
-            manifests_.push_back(filenames[i]);
-          } else {
-            if (number + 1 > next_file_number_) {
-              next_file_number_ = number + 1;
+            // Discard older manifests and start a fresh one
+            for (size_t i = 0; i < manifests_.size(); i++) {
+                ArchiveFile(dbname_ + "/" + manifests_[i]);
             }
-            if (type == kLogFile) {
-              logs_.push_back(number);
-            } else if (type == kTableFile) {
-              table_fds_.emplace_back(number, static_cast<uint32_t>(path_id),
-                                      0);
+            // Just create a DBImpl temporarily so we can reuse NewDB()
+            DBImpl* db_impl = new DBImpl(db_options_, dbname_);
+            status = db_impl->NewDB();
+            delete db_impl;
+        }
+
+        if (status.ok()) {
+            // Recover using the fresh manifest created by NewDB()
+            status =
+                // vset_.Recover({{kDefaultColumnFamilyName, default_cf_opts_}},
+                // false);
+                vset_.Recover(column_families_, false);
+            // ROCKS_LOG_WARN(db_options_.info_log,
+            //                "%" PRIu64 " counts of file number manifest has
+            //                used", vset_.current_next_file_number());
+        }
+        if (status.ok()) {
+            // Need to scan existing SST files first so the column families are
+            // created before we process WAL files
+            ExtractMetaData();
+
+            // ExtractMetaData() uses table_fds_ to know which SST files'
+            // metadata to extract -- we need to clear it here since metadata
+            // for existing SST files has been extracted already
+            table_fds_.clear();
+            ConvertLogFilesToTables();
+            ExtractMetaData();
+            status = AddTables();
+        }
+        if (status.ok()) {
+            status = GenerateMapSstable();
+        }
+        if (status.ok()) {
+            uint64_t bytes = 0;
+            for (size_t i = 0; i < tables_.size(); i++) {
+                bytes += tables_[i].meta.fd.GetFileSize();
+            }
+            ROCKS_LOG_WARN(db_options_.info_log,
+                           "**** Repaired rocksdb %s; "
+                           "recovered %" ROCKSDB_PRIszt " files; %" PRIu64
+                           " bytes. "
+                           "Some data may have been lost. "
+                           "****",
+                           dbname_.c_str(), tables_.size(), bytes);
+        } else {
+            Header(db_options_.info_log, "%s", status.ToString().c_str());
+        }
+        return status;
+    }
+
+   private:
+    struct TableInfo {
+        FileMetaData meta;
+        uint32_t column_family_id;
+        std::string column_family_name;
+        SequenceNumber min_sequence;
+        SequenceNumber max_sequence;
+    };
+
+    std::string const dbname_;
+    Env* const env_;
+    const EnvOptions env_options_;
+    const DBOptions db_options_;
+    const ImmutableDBOptions immutable_db_options_;
+    const InternalKeyComparator icmp_;
+    const ColumnFamilyOptions default_cf_opts_;
+    const ImmutableCFOptions default_cf_iopts_;  // table_cache_ holds reference
+    const ColumnFamilyOptions unknown_cf_opts_;
+    const bool create_unknown_cfs_;
+    std::shared_ptr<Cache> raw_table_cache_;
+    TableCache* table_cache_;
+    WriteBufferManager wb_;
+    WriteController wc_;
+    VersionSet vset_;
+    std::unordered_map<std::string, ColumnFamilyOptions> cf_name_to_opts_;
+    InstrumentedMutex mutex_;
+
+    std::vector<std::string> manifests_;
+    std::vector<FileDescriptor> table_fds_;
+    std::vector<uint64_t> logs_;
+    std::vector<TableInfo> tables_;
+    uint64_t next_file_number_;
+    // Lock over the persistent DB state. Non-nullptr iff successfully
+    // acquired.
+    FileLock* db_lock_;
+    // for global map
+    std::vector<std::string> sstable_name_;
+    // int bg_compaction_scheduled_;
+    // std::atomic<bool> shutting_down_;
+    // SnapshotList snapshots_;
+    // std::unique_ptr<SnapshotChecker> snapshot_checker_;
+    // ErrorHandler error_handler_;
+    Statistics* stat_;
+    std::vector<ColumnFamilyDescriptor> column_families_;
+    // another way
+    Status GenerateMapSstable() {
+        SstPurpose sst_purpose = kRepairSst;
+        for (auto* cfd : *vset_.GetColumnFamilySet()) {
+            if (!cfd->initialized()) {
+                continue;
+            }
+            VersionStorageInfo* vstorage = cfd->current()->storage_info();
+            {
+                MapBuilder map_builder(0, immutable_db_options_, env_options_,
+                                       &vset_, stat_, dbname_);
+
+                std::vector<Range> deleted_range;
+                std::vector<FileMetaData*> added_files;
+                std::unique_ptr<FileMetaData> output_file(new FileMetaData);
+                VersionEdit edit;
+                edit.SetColumnFamily(cfd->GetID());
+                edit.SetComparatorName(cfd->user_comparator()->Name());
+                edit.SetLogNumber(0);
+                edit.SetNextFile(next_file_number_);
+                // std::string debugstring = cfd->current()->DebugString(true,
+                // false);
+                //  Header(immutable_db_options_.info_log, "%s",
+                //  debugstring.c_str());
+                Status status = map_builder.Build(
+                    {CompactionInputFiles{0, vstorage->LevelFiles(0)}},
+                    deleted_range, added_files, 1, 0, cfd, cfd->current(),
+                    &edit, output_file.get(), nullptr, nullptr, sst_purpose);
+                if (status.ok()) {
+                    mutex_.Lock();
+                    status = vset_.LogAndApply(
+                        cfd, *cfd->GetLatestMutableCFOptions(), &edit, &mutex_,
+                        nullptr, false, nullptr, false);
+                    mutex_.Unlock();
+                }
+                if (!status.ok()) {
+                    return status;
+                }
+            }
+        }
+        return Status::OK();
+    }
+
+    Status FindFiles() {
+        std::vector<std::string> filenames;
+        bool found_file = false;
+        std::vector<std::string> to_search_paths;
+
+        for (size_t path_id = 0; path_id < db_options_.db_paths.size();
+             path_id++) {
+            to_search_paths.push_back(db_options_.db_paths[path_id].path);
+        }
+
+        // search wal_dir if user uses a customize wal_dir
+        bool same = false;
+        Status status = env_->AreFilesSame(db_options_.wal_dir, dbname_, &same);
+        if (status.IsNotSupported()) {
+            same = db_options_.wal_dir == dbname_;
+            status = Status::OK();
+        } else if (!status.ok()) {
+            return status;
+        }
+
+        if (!same) {
+            to_search_paths.push_back(db_options_.wal_dir);
+        }
+
+        for (size_t path_id = 0; path_id < to_search_paths.size(); path_id++) {
+            status = env_->GetChildren(to_search_paths[path_id], &filenames);
+            if (!status.ok()) {
+                return status;
+            }
+            if (!filenames.empty()) {
+                found_file = true;
+            }
+
+            uint64_t number;
+            FileType type;
+            for (size_t i = 0; i < filenames.size(); i++) {
+                if (ParseFileName(filenames[i], &number, &type)) {
+                    if (type == kDescriptorFile) {
+                        manifests_.push_back(filenames[i]);
+                    } else {
+                        if (number + 1 > next_file_number_) {
+                            next_file_number_ = number + 1;
+                        }
+                        if (type == kLogFile) {
+                            logs_.push_back(number);
+                        } else if (type == kTableFile) {
+                            table_fds_.emplace_back(
+                                number, static_cast<uint32_t>(path_id), 0);
+                        } else {
+                            // Ignore other files
+                        }
+                    }
+                }
+            }
+        }
+        if (!found_file) {
+            return Status::Corruption(dbname_, "repair found no files");
+        }
+        Header(immutable_db_options_.info_log,
+               "Find %d sst, %d log, %d manifest", table_fds_.size(),
+               logs_.size(), manifests_.size());
+        return Status::OK();
+    }
+
+    void ConvertLogFilesToTables() {
+        for (size_t i = 0; i < logs_.size(); i++) {
+            // we should use LogFileName(wal_dir, logs_[i]) here. user might
+            // uses wal_dir option.
+            std::string logname = LogFileName(db_options_.wal_dir, logs_[i]);
+            Status status = ConvertLogToTable(logs_[i]);
+            if (!status.ok()) {
+                ROCKS_LOG_WARN(db_options_.info_log,
+                               "Log #%" PRIu64
+                               ": ignoring conversion error: %s",
+                               logs_[i], status.ToString().c_str());
+            }
+            ArchiveFile(logname);
+        }
+    }
+
+    Status ConvertLogToTable(uint64_t log) {
+        struct LogReporter : public log::Reader::Reporter {
+            Env* env;
+            std::shared_ptr<Logger> info_log;
+            uint64_t lognum;
+            virtual void Corruption(size_t bytes, const Status& s) override {
+                // We print error messages for corruption, but continue
+                // repairing.
+                ROCKS_LOG_ERROR(
+                    info_log, "Log #%" PRIu64 ": dropping %d bytes; %s", lognum,
+                    static_cast<int>(bytes), s.ToString().c_str());
+            }
+        };
+
+        // Open the log file
+        std::string logname = LogFileName(db_options_.wal_dir, log);
+        std::unique_ptr<SequentialFile> lfile;
+        Status status = env_->NewSequentialFile(
+            logname, &lfile, env_->OptimizeForLogRead(env_options_));
+        if (!status.ok()) {
+            return status;
+        }
+        std::unique_ptr<SequentialFileReader> lfile_reader(
+            new SequentialFileReader(std::move(lfile), logname));
+
+        // Create the log reader.
+        LogReporter reporter;
+        reporter.env = env_;
+        reporter.info_log = db_options_.info_log;
+        reporter.lognum = log;
+        // We intentionally make log::Reader do checksumming so that
+        // corruptions cause entire commits to be skipped instead of
+        // propagating bad information (like overly large sequence
+        // numbers).
+        log::Reader reader(db_options_.info_log, std::move(lfile_reader),
+                           &reporter, true /*enable checksum*/, log,
+                           false /* retry_after_eof */);
+
+        // Initialize per-column family memtables
+        for (auto* cfd : *vset_.GetColumnFamilySet()) {
+            cfd->CreateNewMemtable(*cfd->GetLatestMutableCFOptions(),
+                                   /* needs_dup_key_check */ false,
+                                   kMaxSequenceNumber);
+        }
+        auto cf_mems =
+            new ColumnFamilyMemTablesImpl(vset_.GetColumnFamilySet());
+
+        // Read all the records and add to a memtable
+        std::string scratch;
+        Slice record;
+        WriteBatch batch;
+        int counter = 0;
+        while (reader.ReadRecord(&record, &scratch)) {
+            if (record.size() < WriteBatchInternal::kHeader) {
+                reporter.Corruption(record.size(),
+                                    Status::Corruption("log record too small"));
+                continue;
+            }
+            WriteBatchInternal::SetContents(&batch, record);
+            status = WriteBatchInternal::InsertInto(&batch, cf_mems, nullptr);
+            if (status.ok()) {
+                counter += WriteBatchInternal::Count(&batch);
             } else {
-              // Ignore other files
+                ROCKS_LOG_WARN(db_options_.info_log,
+                               "Log #%" PRIu64 ": ignoring %s", log,
+                               status.ToString().c_str());
+                status = Status::OK();  // Keep going with rest of file
             }
-          }
-        }
-      }
-    }
-    if (!found_file) {
-      return Status::Corruption(dbname_, "repair found no files");
-    }
-    Header(immutable_db_options_.info_log, "Find %d sst, %d log, %d manifest",
-           table_fds_.size(), logs_.size(), manifests_.size());
-    return Status::OK();
-  }
-
-  void ConvertLogFilesToTables() {
-    for (size_t i = 0; i < logs_.size(); i++) {
-      // we should use LogFileName(wal_dir, logs_[i]) here. user might uses
-      // wal_dir option.
-      std::string logname = LogFileName(db_options_.wal_dir, logs_[i]);
-      Status status = ConvertLogToTable(logs_[i]);
-      if (!status.ok()) {
-        ROCKS_LOG_WARN(db_options_.info_log,
-                       "Log #%" PRIu64 ": ignoring conversion error: %s",
-                       logs_[i], status.ToString().c_str());
-      }
-      ArchiveFile(logname);
-    }
-  }
-
-  Status ConvertLogToTable(uint64_t log) {
-    struct LogReporter : public log::Reader::Reporter {
-      Env* env;
-      std::shared_ptr<Logger> info_log;
-      uint64_t lognum;
-      virtual void Corruption(size_t bytes, const Status& s) override {
-        // We print error messages for corruption, but continue repairing.
-        ROCKS_LOG_ERROR(info_log, "Log #%" PRIu64 ": dropping %d bytes; %s",
-                        lognum, static_cast<int>(bytes), s.ToString().c_str());
-      }
-    };
-
-    // Open the log file
-    std::string logname = LogFileName(db_options_.wal_dir, log);
-    std::unique_ptr<SequentialFile> lfile;
-    Status status = env_->NewSequentialFile(
-        logname, &lfile, env_->OptimizeForLogRead(env_options_));
-    if (!status.ok()) {
-      return status;
-    }
-    std::unique_ptr<SequentialFileReader> lfile_reader(
-        new SequentialFileReader(std::move(lfile), logname));
-
-    // Create the log reader.
-    LogReporter reporter;
-    reporter.env = env_;
-    reporter.info_log = db_options_.info_log;
-    reporter.lognum = log;
-    // We intentionally make log::Reader do checksumming so that
-    // corruptions cause entire commits to be skipped instead of
-    // propagating bad information (like overly large sequence
-    // numbers).
-    log::Reader reader(db_options_.info_log, std::move(lfile_reader), &reporter,
-                       true /*enable checksum*/, log,
-                       false /* retry_after_eof */);
-
-    // Initialize per-column family memtables
-    for (auto* cfd : *vset_.GetColumnFamilySet()) {
-      cfd->CreateNewMemtable(*cfd->GetLatestMutableCFOptions(),
-                             /* needs_dup_key_check */ false,
-                             kMaxSequenceNumber);
-    }
-    auto cf_mems = new ColumnFamilyMemTablesImpl(vset_.GetColumnFamilySet());
-
-    // Read all the records and add to a memtable
-    std::string scratch;
-    Slice record;
-    WriteBatch batch;
-    int counter = 0;
-    while (reader.ReadRecord(&record, &scratch)) {
-      if (record.size() < WriteBatchInternal::kHeader) {
-        reporter.Corruption(record.size(),
-                            Status::Corruption("log record too small"));
-        continue;
-      }
-      WriteBatchInternal::SetContents(&batch, record);
-      status = WriteBatchInternal::InsertInto(&batch, cf_mems, nullptr);
-      if (status.ok()) {
-        counter += WriteBatchInternal::Count(&batch);
-      } else {
-        ROCKS_LOG_WARN(db_options_.info_log, "Log #%" PRIu64 ": ignoring %s",
-                       log, status.ToString().c_str());
-        status = Status::OK();  // Keep going with rest of file
-      }
-    }
-
-    // Dump a table for each column family with entries in this log file.
-    for (auto* cfd : *vset_.GetColumnFamilySet()) {
-      // Do not record a version edit for this conversion to a Table
-      // since ExtractMetaData() will also generate edits.
-      MemTable* mem = cfd->mem();
-      if (mem->IsEmpty()) {
-        continue;
-      }
-
-      std::vector<FileMetaData> meta(1);
-      meta[0].fd = FileDescriptor(next_file_number_++, 0, 0);
-      ReadOptions ro;
-      ro.total_order_seek = true;
-      int64_t _current_time = 0;
-      status = env_->GetCurrentTime(&_current_time);  // ignore error
-      const uint64_t current_time = static_cast<uint64_t>(_current_time);
-      SnapshotChecker* snapshot_checker = DisableGCSnapshotChecker::Instance();
-
-      auto write_hint = cfd->CalculateSSTWriteHint(0);
-      auto get_arena_input_iter = [&](Arena& arena) {
-        return mem->NewIterator(ro, &arena);
-      };
-      auto get_range_del_iters = [&] {
-        std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>>
-            range_del_iters;
-        auto range_del_iter =
-            mem->NewRangeTombstoneIterator(ro, kMaxSequenceNumber);
-        if (range_del_iter != nullptr) {
-          range_del_iters.emplace_back(range_del_iter);
-        }
-        return range_del_iters;
-      };
-      status = BuildTable(
-          dbname_, &vset_, env_, *cfd->ioptions(),
-          *cfd->GetLatestMutableCFOptions(), env_options_, table_cache_,
-          c_style_callback(get_arena_input_iter), &get_arena_input_iter,
-          c_style_callback(get_range_del_iters), &get_range_del_iters, &meta,
-          cfd->internal_comparator(), cfd->int_tbl_prop_collector_factories(),
-          cfd->GetID(), cfd->GetName(), {}, kMaxSequenceNumber,
-          snapshot_checker, kNoCompression, CompressionOptions(), false,
-          nullptr /* internal_stats */, TableFileCreationReason::kRecovery,
-          nullptr /* event_logger */, 0 /* job_id */, Env::IO_HIGH,
-          nullptr /* table_properties */, -1 /* level */, current_time,
-          write_hint);
-
-      ROCKS_LOG_WARN(db_options_.info_log,
-                     "Log #%" PRIu64 ": %d ops saved to Table #%" PRIu64 " %s",
-                     log, counter, meta[0].fd.GetNumber(),
-                     status.ToString().c_str());
-      if (status.ok()) {
-        if (meta[0].fd.GetFileSize() > 0) {
-          for (auto& f : meta) {
-            table_fds_.push_back(f.fd);
-          }
-        }
-      } else {
-        break;
-      }
-    }
-    delete cf_mems;
-    return status;
-  }
-
-  void ExtractMetaData() {
-    DependenceMap dependence_map;
-    std::map<uint64_t, TableInfo*> mediate_sst;  // map or link sst
-    // make sure tables_ enouth, so we can hold ptr of elements
-    size_t table_counts = table_fds_.size();
-    tables_.reserve(table_counts);
-    if (table_counts < 10) {
-      ScanTables(&dependence_map, &mediate_sst);
-    } else {
-      ParallelScanTables(&dependence_map, &mediate_sst);
-    }
-    // recover map/link sst meta data
-    while (!mediate_sst.empty()) {
-      size_t mediate_sst_count = mediate_sst.size();
-      for (auto it = mediate_sst.begin(); it != mediate_sst.end();) {
-        auto& t = *it->second;
-        auto cfd =
-            vset_.GetColumnFamilySet()->GetColumnFamily(t.column_family_id);
-        InternalKey smallest, largest;
-        SequenceNumber min_sequence = kMaxSequenceNumber, max_sequence = 0;
-        enum {
-          kOK,
-          kError,
-          kRetry,
-        } result = kOK;
-        for (auto& dependence : t.meta.prop.dependence) {
-          auto find = dependence_map.find(dependence.file_number);
-          if (find == dependence_map.end()) {
-            result = kError;
-            break;
-          }
-          if (mediate_sst.count(dependence.file_number) > 0) {
-            // depend file is mediate sst, retry next loop
-            assert(dependence.file_number != t.meta.fd.GetNumber());
-            result = kRetry;
-            break;
-          }
-          auto f = find->second;
-          if (smallest.size() == 0 ||
-              cfd->internal_comparator().Compare(f->smallest, smallest) < 0) {
-            smallest = f->smallest;
-          }
-          if (largest.size() == 0 ||
-              cfd->internal_comparator().Compare(f->largest, largest) > 0) {
-            largest = f->largest;
-          }
-          min_sequence = std::min(min_sequence, f->fd.smallest_seqno);
-          max_sequence = std::max(max_sequence, f->fd.largest_seqno);
-        }
-        if (result == kOK) {
-          t.meta.smallest = smallest;
-          t.meta.largest = largest;
-          t.min_sequence = min_sequence;
-          t.max_sequence = max_sequence;
-        }
-        if (result == kError) {
-          char file_num_buf[kFormatFileNumberBufSize];
-          FormatFileNumber(t.meta.fd.GetNumber(), t.meta.fd.GetPathId(),
-                           file_num_buf, sizeof(file_num_buf));
-          ROCKS_LOG_WARN(db_options_.info_log, "Table #%s: ignoring %s",
-                         file_num_buf, "missing depend files");
-          t.column_family_id = uint32_t(-1);  // mark to delete
-        }
-        if (result == kRetry) {
-          ++it;
-        } else {
-          mediate_sst.erase(it++);
-        }
-      }
-      if (mediate_sst_count == mediate_sst.size()) {
-        // cyclic depend files ???
-        char file_num_buf[kFormatFileNumberBufSize];
-        for (auto& pair : mediate_sst) {
-          auto& t = *pair.second;
-          FormatFileNumber(t.meta.fd.GetNumber(), t.meta.fd.GetPathId(),
-                           file_num_buf, sizeof(file_num_buf));
-          ROCKS_LOG_WARN(db_options_.info_log, "Table #%s: ignoring %s",
-                         file_num_buf, "cyclic depend files");
-          t.column_family_id = uint32_t(-1);  // mark to delete
-        }
-        break;
-      }
-    }
-    auto new_end =
-        std::remove_if(tables_.begin(), tables_.end(),
-                       TERARK_GET(.column_family_id) == uint32_t(-1));
-    tables_.erase(new_end, tables_.end());
-  }
-
-  void ScanTables(DependenceMap* dependence_map,
-                  std::map<uint64_t, TableInfo*>* mediate_sst) {
-    for (size_t i = 0; i < table_fds_.size(); i++) {
-      TableInfo t;
-      t.meta.fd = table_fds_[i];
-      Status status = ScanTable(&t);
-      std::string fname = TableFileName(
-          db_options_.db_paths, t.meta.fd.GetNumber(), t.meta.fd.GetPathId());
-      if (!status.ok()) {
-        char file_num_buf[kFormatFileNumberBufSize];
-        FormatFileNumber(t.meta.fd.GetNumber(), t.meta.fd.GetPathId(),
-                         file_num_buf, sizeof(file_num_buf));
-        ROCKS_LOG_WARN(db_options_.info_log, "Table #%s: ignoring %s",
-                       file_num_buf, status.ToString().c_str());
-        ArchiveFile(fname);
-      } else {
-        sstable_name_.push_back(fname);
-        tables_.push_back(t);
-        dependence_map->emplace(t.meta.fd.GetNumber(), &tables_.back().meta);
-        if (t.meta.prop.is_map_sst()) {
-          mediate_sst->emplace(t.meta.fd.GetNumber(), &tables_.back());
-        }
-      }
-    }
-  }
-  void ParallelScanTables(DependenceMap* dependence_map,
-                          std::map<uint64_t, TableInfo*>* mediate_sst) {
-    size_t threads = 10;
-    size_t table_counts = table_fds_.size();
-    std::vector<std::thread> thread_vec;
-    auto scantable_inline = [this, table_counts, threads, &dependence_map,
-                             &mediate_sst](int number) {
-      for (size_t i = number; i < table_counts; i += threads) {
-        TableInfo t;
-        t.meta.fd = table_fds_[i];
-        Status status = ScanTable(&t);
-        std::string fname = TableFileName(
-            db_options_.db_paths, t.meta.fd.GetNumber(), t.meta.fd.GetPathId());
-        if (!status.ok()) {
-          char file_num_buf[kFormatFileNumberBufSize];
-          FormatFileNumber(t.meta.fd.GetNumber(), t.meta.fd.GetPathId(),
-                           file_num_buf, sizeof(file_num_buf));
-          ROCKS_LOG_WARN(db_options_.info_log, "Table #%s: ignoring %s",
-                         file_num_buf, status.ToString().c_str());
-          ArchiveFile(fname);
-        } else {
-          mutex_.Lock();
-          sstable_name_.push_back(fname);
-          tables_.push_back(t);
-          dependence_map->emplace(t.meta.fd.GetNumber(), &tables_.back().meta);
-          if (t.meta.prop.is_map_sst()) {
-            assert(false);
-            mediate_sst->emplace(t.meta.fd.GetNumber(), &tables_.back());
-          }
-          mutex_.Unlock();
-        }
-      }
-    };
-    for (size_t i = 0; i < threads; i++) {
-      thread_vec.emplace_back(std::thread(scantable_inline, i));
-    }
-    for (auto& thread : thread_vec) {
-      thread.join();
-    }
-  }
-
-  Status ScanTable(TableInfo* t) {
-    std::string fname = TableFileName(
-        db_options_.db_paths, t->meta.fd.GetNumber(), t->meta.fd.GetPathId());
-    int counter = 0;
-    uint64_t file_size;
-    Status status = env_->GetFileSize(fname, &file_size);
-    t->meta.fd = FileDescriptor(t->meta.fd.GetNumber(), t->meta.fd.GetPathId(),
-                                file_size);
-    std::shared_ptr<const TableProperties> props;
-    if (status.ok()) {
-      status = table_cache_->GetTableProperties(env_options_, icmp_, t->meta,
-                                                &props);
-    }
-    if (status.ok()) {
-      t->meta.prop.purpose = props->purpose;
-      if (t->meta.prop.is_map_sst()) {
-        char* output = new char[100];
-        sprintf(output,
-                "ignore map sstables because they are not "
-                "independent:%d",
-                t->meta.prop.purpose);
-        status = rocksdb::Status::NotSupported(output);
-        delete[] output;
-      }
-    }
-    if (status.ok()) {
-      t->column_family_id = static_cast<uint32_t>(props->column_family_id);
-      if (t->column_family_id ==
-          TablePropertiesCollectorFactory::Context::kUnknownColumnFamily) {
-        ROCKS_LOG_WARN(
-            db_options_.info_log,
-            "Table #%" PRIu64
-            ": column family unknown (probably due to legacy format); "
-            "adding to default column family id 0.",
-            t->meta.fd.GetNumber());
-        t->column_family_id = 0;
-      }
-      if (vset_.GetColumnFamilySet()->GetColumnFamily(t->column_family_id) ==
-          nullptr) {
-        mutex_.Lock();
-        if (vset_.GetColumnFamilySet()->GetColumnFamily(t->column_family_id) ==
-            nullptr) {
-          status =
-              AddColumnFamily(props->column_family_name, t->column_family_id);
-        }
-        mutex_.Unlock();
-      }
-    }
-    ColumnFamilyData* cfd = nullptr;
-    if (status.ok()) {
-      cfd = vset_.GetColumnFamilySet()->GetColumnFamily(t->column_family_id);
-      if (!cfd->initialized()) {
-        mutex_.Lock();
-        if (!cfd->initialized()) {
-          cfd->set_initialized();
-        }
-        mutex_.Unlock();
-      }
-      if (cfd->GetName() != props->column_family_name) {
-        ROCKS_LOG_ERROR(
-            db_options_.info_log,
-            "Table #%" PRIu64
-            ": inconsistent column family name '%s'; expected '%s' for column "
-            "family id %" PRIu32 ".",
-            t->meta.fd.GetNumber(), props->column_family_name.c_str(),
-            cfd->GetName().c_str(), t->column_family_id);
-        status = Status::Corruption(dbname_, "inconsistent column family name");
-      }
-    }
-
-    if (status.ok()) {
-      // Use empty depend files to disable map or link sst forward calls.
-      // P.S. depend files in VersionStorage has not build yet ...
-      DependenceMap empty_dependence_map;
-      InternalIterator* iter = table_cache_->NewIterator(
-          ReadOptions(), env_options_, cfd->internal_comparator(), t->meta,
-          empty_dependence_map, nullptr /* range_del_agg */,
-          cfd->GetLatestMutableCFOptions()->prefix_extractor.get());
-      bool empty = true;
-      ParsedInternalKey parsed;
-      t->min_sequence = 0;
-      t->max_sequence = 0;
-      for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
-        Slice key = iter->key();
-        if (!ParseInternalKey(key, &parsed)) {
-          ROCKS_LOG_ERROR(db_options_.info_log,
-                          "Table #%" PRIu64 ": unparsable key %s",
-                          t->meta.fd.GetNumber(), EscapeString(key).c_str());
-          continue;
         }
 
-        counter++;
-        if (empty) {
-          empty = false;
-          t->meta.smallest.DecodeFrom(key);
-          t->min_sequence = parsed.sequence;
-        }
-        t->meta.largest.DecodeFrom(key);
-        if (parsed.sequence < t->min_sequence) {
-          t->min_sequence = parsed.sequence;
-        }
-        if (parsed.sequence > t->max_sequence) {
-          t->max_sequence = parsed.sequence;
-        }
-      }
-      if (!iter->status().ok()) {
-        status = iter->status();
-      }
-      delete iter;
+        // Dump a table for each column family with entries in this log file.
+        for (auto* cfd : *vset_.GetColumnFamilySet()) {
+            // Do not record a version edit for this conversion to a Table
+            // since ExtractMetaData() will also generate edits.
+            MemTable* mem = cfd->mem();
+            if (mem->IsEmpty()) {
+                continue;
+            }
 
-      // Header(db_options_.info_log, "Table #%" PRIu64 ": %d entries %s",
-      //        t->meta.fd.GetNumber(), counter, status.ToString().c_str());
-      ROCKS_LOG_INFO(db_options_.info_log, "Table #%" PRIu64 ": %d entries %s",
-                     t->meta.fd.GetNumber(), counter,
-                     status.ToString().c_str());
+            std::vector<FileMetaData> meta(1);
+            meta[0].fd = FileDescriptor(next_file_number_++, 0, 0);
+            ReadOptions ro;
+            ro.total_order_seek = true;
+            int64_t _current_time = 0;
+            status = env_->GetCurrentTime(&_current_time);  // ignore error
+            const uint64_t current_time = static_cast<uint64_t>(_current_time);
+            SnapshotChecker* snapshot_checker =
+                DisableGCSnapshotChecker::Instance();
 
-      t->meta.prop.num_entries = props->num_entries;
-      t->meta.prop.num_deletions = props->num_deletions;
-      t->meta.prop.raw_key_size = props->raw_key_size;
-      t->meta.prop.raw_value_size = props->raw_value_size;
-      t->meta.prop.flags |= props->num_range_deletions > 0
-                                ? 0
-                                : TablePropertyCache::kNoRangeDeletions;
-      t->meta.prop.flags |=
-          props->snapshots.empty() ? 0 : TablePropertyCache::kHasSnapshots;
-      // t->meta.prop.purpose = props->purpose;
-      t->meta.prop.max_read_amp = props->max_read_amp;
-      t->meta.prop.read_amp = props->read_amp;
-      t->meta.prop.dependence = props->dependence;
-      t->meta.prop.inheritance_chain = props->inheritance_chain;
-    }
-    return status;
-  }
+            auto write_hint = cfd->CalculateSSTWriteHint(0);
+            auto get_arena_input_iter = [&](Arena& arena) {
+                return mem->NewIterator(ro, &arena);
+            };
+            auto get_range_del_iters = [&] {
+                std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>>
+                    range_del_iters;
+                auto range_del_iter =
+                    mem->NewRangeTombstoneIterator(ro, kMaxSequenceNumber);
+                if (range_del_iter != nullptr) {
+                    range_del_iters.emplace_back(range_del_iter);
+                }
+                return range_del_iters;
+            };
+            status = BuildTable(
+                dbname_, &vset_, env_, *cfd->ioptions(),
+                *cfd->GetLatestMutableCFOptions(), env_options_, table_cache_,
+                c_style_callback(get_arena_input_iter), &get_arena_input_iter,
+                c_style_callback(get_range_del_iters), &get_range_del_iters,
+                &meta, cfd->internal_comparator(),
+                cfd->int_tbl_prop_collector_factories(), cfd->GetID(),
+                cfd->GetName(), {}, kMaxSequenceNumber, snapshot_checker,
+                kNoCompression, CompressionOptions(), false,
+                nullptr /* internal_stats */,
+                TableFileCreationReason::kRecovery, nullptr /* event_logger */,
+                0 /* job_id */, Env::IO_HIGH, nullptr /* table_properties */,
+                -1 /* level */, current_time, write_hint);
 
-  Status AddTables() {
-    std::unordered_map<uint32_t, std::vector<const TableInfo*>> cf_id_to_tables;
-    SequenceNumber max_sequence = 0;
-    for (size_t i = 0; i < tables_.size(); i++) {
-      cf_id_to_tables[tables_[i].column_family_id].push_back(&tables_[i]);
-      if (max_sequence < tables_[i].max_sequence) {
-        max_sequence = tables_[i].max_sequence;
-      }
-    }
-    vset_.SetLastAllocatedSequence(max_sequence);
-    vset_.SetLastPublishedSequence(max_sequence);
-    vset_.SetLastSequence(max_sequence);
-
-    for (const auto& cf_id_and_tables : cf_id_to_tables) {
-      auto* cfd =
-          vset_.GetColumnFamilySet()->GetColumnFamily(cf_id_and_tables.first);
-      VersionEdit edit;
-      edit.SetComparatorName(cfd->user_comparator()->Name());
-      edit.SetLogNumber(0);
-      edit.SetNextFile(next_file_number_);
-      edit.SetColumnFamily(cfd->GetID());
-
-      std::unordered_set<uint64_t> dependence_set;
-      for (const auto* table : cf_id_and_tables.second) {
-        if (table->meta.prop.is_map_sst()) {
-          for (auto& dependence : table->meta.prop.dependence) {
-            dependence_set.emplace(dependence.file_number);
-          }
+            ROCKS_LOG_WARN(
+                db_options_.info_log,
+                "Log #%" PRIu64 ": %d ops saved to Table #%" PRIu64 " %s", log,
+                counter, meta[0].fd.GetNumber(), status.ToString().c_str());
+            if (status.ok()) {
+                if (meta[0].fd.GetFileSize() > 0) {
+                    for (auto& f : meta) {
+                        table_fds_.push_back(f.fd);
+                    }
+                }
+            } else {
+                break;
+            }
         }
-      }
-      // TODO(opt): separate out into multiple levels
-      for (const auto* table : cf_id_and_tables.second) {
-        int level = 0;
-        if (dependence_set.count(table->meta.fd.GetNumber()) > 0) {
-          // This sst should insert into depend level
-          // Now we have droped map sst.
-          assert(false);
-          level = -1;
-        }
-        if (table->max_sequence == 0) {
-          level = cfd->NumberLevels() - 1;
-        }
-        edit.AddFile(level, table->meta.fd.GetNumber(),
-                     table->meta.fd.GetPathId(), table->meta.fd.GetFileSize(),
-                     table->meta.smallest, table->meta.largest,
-                     table->min_sequence, table->max_sequence,
-                     table->meta.marked_for_compaction, table->meta.prop);
-      }
-      assert(next_file_number_ > 0);
-      vset_.MarkFileNumberUsed(next_file_number_ - 1);
-      mutex_.Lock();
-      Status status = vset_.LogAndApply(
-          cfd, *cfd->GetLatestMutableCFOptions(), &edit, &mutex_,
-          nullptr /* db_directory */, false /* new_descriptor_log */,
-          nullptr /* ColumnFamilyOptions */, false /* strict_sequence */);
-      mutex_.Unlock();
-      if (!status.ok()) {
+        delete cf_mems;
         return status;
-      }
     }
-    return Status::OK();
-  }
 
-  void ArchiveFile(const std::string& fname) {
-    // Move into another directory.  E.g., for
-    //    dir/foo
-    // rename to
-    //    dir/lost/foo
-    const char* slash = strrchr(fname.c_str(), '/');
-    std::string new_dir;
-    if (slash != nullptr) {
-      new_dir.assign(fname.data(), slash - fname.data());
+    void ExtractMetaData() {
+        DependenceMap dependence_map;
+        std::map<uint64_t, TableInfo*> mediate_sst;  // map or link sst
+        // make sure tables_ enouth, so we can hold ptr of elements
+        size_t table_counts = table_fds_.size();
+        tables_.reserve(table_counts);
+        if (table_counts < 100) {
+            ScanTables(&dependence_map, &mediate_sst);
+        } else {
+            ParallelScanTables(&dependence_map, &mediate_sst);
+        }
+        // recover map/link sst meta data
+        while (!mediate_sst.empty()) {
+            size_t mediate_sst_count = mediate_sst.size();
+            for (auto it = mediate_sst.begin(); it != mediate_sst.end();) {
+                auto& t = *it->second;
+                auto cfd = vset_.GetColumnFamilySet()->GetColumnFamily(
+                    t.column_family_id);
+                InternalKey smallest, largest;
+                SequenceNumber min_sequence = kMaxSequenceNumber,
+                               max_sequence = 0;
+                enum {
+                    kOK,
+                    kError,
+                    kRetry,
+                } result = kOK;
+                for (auto& dependence : t.meta.prop.dependence) {
+                    auto find = dependence_map.find(dependence.file_number);
+                    if (find == dependence_map.end()) {
+                        result = kError;
+                        break;
+                    }
+                    if (mediate_sst.count(dependence.file_number) > 0) {
+                        // depend file is mediate sst, retry next loop
+                        assert(dependence.file_number != t.meta.fd.GetNumber());
+                        result = kRetry;
+                        break;
+                    }
+                    auto f = find->second;
+                    if (smallest.size() == 0 ||
+                        cfd->internal_comparator().Compare(f->smallest,
+                                                           smallest) < 0) {
+                        smallest = f->smallest;
+                    }
+                    if (largest.size() == 0 ||
+                        cfd->internal_comparator().Compare(f->largest,
+                                                           largest) > 0) {
+                        largest = f->largest;
+                    }
+                    min_sequence = std::min(min_sequence, f->fd.smallest_seqno);
+                    max_sequence = std::max(max_sequence, f->fd.largest_seqno);
+                }
+                if (result == kOK) {
+                    t.meta.smallest = smallest;
+                    t.meta.largest = largest;
+                    t.min_sequence = min_sequence;
+                    t.max_sequence = max_sequence;
+                }
+                if (result == kError) {
+                    char file_num_buf[kFormatFileNumberBufSize];
+                    FormatFileNumber(t.meta.fd.GetNumber(),
+                                     t.meta.fd.GetPathId(), file_num_buf,
+                                     sizeof(file_num_buf));
+                    ROCKS_LOG_WARN(db_options_.info_log,
+                                   "Table #%s: ignoring %s", file_num_buf,
+                                   "missing depend files");
+                    t.column_family_id = uint32_t(-1);  // mark to delete
+                }
+                if (result == kRetry) {
+                    ++it;
+                } else {
+                    mediate_sst.erase(it++);
+                }
+            }
+            if (mediate_sst_count == mediate_sst.size()) {
+                // cyclic depend files ???
+                char file_num_buf[kFormatFileNumberBufSize];
+                for (auto& pair : mediate_sst) {
+                    auto& t = *pair.second;
+                    FormatFileNumber(t.meta.fd.GetNumber(),
+                                     t.meta.fd.GetPathId(), file_num_buf,
+                                     sizeof(file_num_buf));
+                    ROCKS_LOG_WARN(db_options_.info_log,
+                                   "Table #%s: ignoring %s", file_num_buf,
+                                   "cyclic depend files");
+                    t.column_family_id = uint32_t(-1);  // mark to delete
+                }
+                break;
+            }
+        }
+        auto new_end =
+            std::remove_if(tables_.begin(), tables_.end(),
+                           TERARK_GET(.column_family_id) == uint32_t(-1));
+        tables_.erase(new_end, tables_.end());
     }
-    new_dir.append("/lost");
-    env_->CreateDir(new_dir);  // Ignore error
-    std::string new_file = new_dir;
-    new_file.append("/");
-    new_file.append((slash == nullptr) ? fname.c_str() : slash + 1);
-    Status s = env_->RenameFile(fname, new_file);
-    Header(db_options_.info_log, "Archiving %s to %s: %s\n", fname.c_str(),
-           new_file.c_str(), s.ToString().c_str());
-    ROCKS_LOG_INFO(db_options_.info_log, "Archiving %s to %s: %s\n",
-                   fname.c_str(), new_file.c_str(), s.ToString().c_str());
-  }
+
+    void ScanTables(DependenceMap* dependence_map,
+                    std::map<uint64_t, TableInfo*>* mediate_sst) {
+        for (size_t i = 0; i < table_fds_.size(); i++) {
+            TableInfo t;
+            t.meta.fd = table_fds_[i];
+            Status status = ScanTable(&t);
+            std::string fname =
+                TableFileName(db_options_.db_paths, t.meta.fd.GetNumber(),
+                              t.meta.fd.GetPathId());
+            if (!status.ok()) {
+                char file_num_buf[kFormatFileNumberBufSize];
+                FormatFileNumber(t.meta.fd.GetNumber(), t.meta.fd.GetPathId(),
+                                 file_num_buf, sizeof(file_num_buf));
+                ROCKS_LOG_WARN(db_options_.info_log, "Table #%s: ignoring %s",
+                               file_num_buf, status.ToString().c_str());
+                ArchiveFile(fname);
+            } else {
+                sstable_name_.push_back(fname);
+                tables_.push_back(t);
+                dependence_map->emplace(t.meta.fd.GetNumber(),
+                                        &tables_.back().meta);
+                if (t.meta.prop.is_map_sst()) {
+                    mediate_sst->emplace(t.meta.fd.GetNumber(),
+                                         &tables_.back());
+                }
+            }
+        }
+    }
+    void ParallelScanTables(DependenceMap* dependence_map,
+                            std::map<uint64_t, TableInfo*>* mediate_sst) {
+        size_t threads = 10;
+        size_t table_counts = table_fds_.size();
+        std::vector<std::thread> thread_vec;
+        auto scantable_inline = [this, table_counts, threads, &dependence_map,
+                                 &mediate_sst](int number) {
+            for (size_t i = number; i < table_counts; i += threads) {
+                TableInfo t;
+                t.meta.fd = table_fds_[i];
+                Status status = ScanTable(&t);
+                std::string fname =
+                    TableFileName(db_options_.db_paths, t.meta.fd.GetNumber(),
+                                  t.meta.fd.GetPathId());
+                if (!status.ok()) {
+                    char file_num_buf[kFormatFileNumberBufSize];
+                    FormatFileNumber(t.meta.fd.GetNumber(),
+                                     t.meta.fd.GetPathId(), file_num_buf,
+                                     sizeof(file_num_buf));
+                    ROCKS_LOG_WARN(db_options_.info_log,
+                                   "Table #%s: ignoring %s", file_num_buf,
+                                   status.ToString().c_str());
+                    ArchiveFile(fname);
+                } else {
+                    mutex_.Lock();
+                    sstable_name_.push_back(fname);
+                    tables_.push_back(t);
+                    dependence_map->emplace(t.meta.fd.GetNumber(),
+                                            &tables_.back().meta);
+                    if (t.meta.prop.is_map_sst()) {
+                        assert(false);
+                        mediate_sst->emplace(t.meta.fd.GetNumber(),
+                                             &tables_.back());
+                    }
+                    mutex_.Unlock();
+                }
+            }
+        };
+        for (size_t i = 0; i < threads; i++) {
+            thread_vec.emplace_back(std::thread(scantable_inline, i));
+        }
+        for (auto& thread : thread_vec) {
+            thread.join();
+        }
+    }
+
+    Status ScanTable(TableInfo* t) {
+        std::string fname =
+            TableFileName(db_options_.db_paths, t->meta.fd.GetNumber(),
+                          t->meta.fd.GetPathId());
+        int counter = 0;
+        uint64_t file_size;
+        Status status = env_->GetFileSize(fname, &file_size);
+        t->meta.fd = FileDescriptor(t->meta.fd.GetNumber(),
+                                    t->meta.fd.GetPathId(), file_size);
+        std::shared_ptr<const TableProperties> props;
+        if (status.ok()) {
+            status = table_cache_->GetTableProperties(env_options_, icmp_,
+                                                      t->meta, &props);
+        }
+        if (status.ok()) {
+            t->meta.prop.purpose = props->purpose;
+            if (t->meta.prop.is_map_sst()) {
+                char* output = new char[100];
+                sprintf(output,
+                        "ignore map sstables because they are not "
+                        "independent:%d",
+                        t->meta.prop.purpose);
+                status = rocksdb::Status::NotSupported(output);
+                delete[] output;
+            }
+        }
+        if (status.ok()) {
+            t->column_family_id =
+                static_cast<uint32_t>(props->column_family_id);
+            if (t->column_family_id == TablePropertiesCollectorFactory::
+                                           Context::kUnknownColumnFamily) {
+                ROCKS_LOG_WARN(
+                    db_options_.info_log,
+                    "Table #%" PRIu64
+                    ": column family unknown (probably due to legacy format); "
+                    "adding to default column family id 0.",
+                    t->meta.fd.GetNumber());
+                t->column_family_id = 0;
+            }
+            if (vset_.GetColumnFamilySet()->GetColumnFamily(
+                    t->column_family_id) == nullptr) {
+                mutex_.Lock();
+                if (vset_.GetColumnFamilySet()->GetColumnFamily(
+                        t->column_family_id) == nullptr) {
+                    status = AddColumnFamily(props->column_family_name,
+                                             t->column_family_id);
+                }
+                mutex_.Unlock();
+            }
+        }
+        ColumnFamilyData* cfd = nullptr;
+        if (status.ok()) {
+            cfd = vset_.GetColumnFamilySet()->GetColumnFamily(
+                t->column_family_id);
+            if (!cfd->initialized()) {
+                mutex_.Lock();
+                if (!cfd->initialized()) {
+                    cfd->set_initialized();
+                }
+                mutex_.Unlock();
+            }
+            if (cfd->GetName() != props->column_family_name) {
+                ROCKS_LOG_ERROR(db_options_.info_log,
+                                "Table #%" PRIu64
+                                ": inconsistent column family name '%s'; "
+                                "expected '%s' for column "
+                                "family id %" PRIu32 ".",
+                                t->meta.fd.GetNumber(),
+                                props->column_family_name.c_str(),
+                                cfd->GetName().c_str(), t->column_family_id);
+                status = Status::Corruption(dbname_,
+                                            "inconsistent column family name");
+            }
+        }
+
+        if (status.ok()) {
+            // Use empty depend files to disable map or link sst forward calls.
+            // P.S. depend files in VersionStorage has not build yet ...
+            DependenceMap empty_dependence_map;
+            InternalIterator* iter = table_cache_->NewIterator(
+                ReadOptions(), env_options_, cfd->internal_comparator(),
+                t->meta, empty_dependence_map, nullptr /* range_del_agg */,
+                cfd->GetLatestMutableCFOptions()->prefix_extractor.get());
+            bool empty = true;
+            ParsedInternalKey parsed;
+            t->min_sequence = 0;
+            t->max_sequence = 0;
+            for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
+                Slice key = iter->key();
+                if (!ParseInternalKey(key, &parsed)) {
+                    ROCKS_LOG_ERROR(db_options_.info_log,
+                                    "Table #%" PRIu64 ": unparsable key %s",
+                                    t->meta.fd.GetNumber(),
+                                    EscapeString(key).c_str());
+                    continue;
+                }
+
+                counter++;
+                if (empty) {
+                    empty = false;
+                    t->meta.smallest.DecodeFrom(key);
+                    t->min_sequence = parsed.sequence;
+                }
+                t->meta.largest.DecodeFrom(key);
+                if (parsed.sequence < t->min_sequence) {
+                    t->min_sequence = parsed.sequence;
+                }
+                if (parsed.sequence > t->max_sequence) {
+                    t->max_sequence = parsed.sequence;
+                }
+            }
+            if (!iter->status().ok()) {
+                status = iter->status();
+            }
+            delete iter;
+
+            // Header(db_options_.info_log, "Table #%" PRIu64 ": %d entries %s",
+            //        t->meta.fd.GetNumber(), counter,
+            //        status.ToString().c_str());
+            ROCKS_LOG_INFO(
+                db_options_.info_log, "Table #%" PRIu64 ": %d entries %s",
+                t->meta.fd.GetNumber(), counter, status.ToString().c_str());
+
+            t->meta.prop.num_entries = props->num_entries;
+            t->meta.prop.num_deletions = props->num_deletions;
+            t->meta.prop.raw_key_size = props->raw_key_size;
+            t->meta.prop.raw_value_size = props->raw_value_size;
+            t->meta.prop.flags |= props->num_range_deletions > 0
+                                      ? 0
+                                      : TablePropertyCache::kNoRangeDeletions;
+            t->meta.prop.flags |= props->snapshots.empty()
+                                      ? 0
+                                      : TablePropertyCache::kHasSnapshots;
+            // t->meta.prop.purpose = props->purpose;
+            t->meta.prop.max_read_amp = props->max_read_amp;
+            t->meta.prop.read_amp = props->read_amp;
+            t->meta.prop.dependence = props->dependence;
+            t->meta.prop.inheritance_chain = props->inheritance_chain;
+        }
+        return status;
+    }
+
+    Status AddTables() {
+        std::unordered_map<uint32_t, std::vector<const TableInfo*>>
+            cf_id_to_tables;
+        SequenceNumber max_sequence = 0;
+        for (size_t i = 0; i < tables_.size(); i++) {
+            cf_id_to_tables[tables_[i].column_family_id].push_back(&tables_[i]);
+            if (max_sequence < tables_[i].max_sequence) {
+                max_sequence = tables_[i].max_sequence;
+            }
+        }
+        vset_.SetLastAllocatedSequence(max_sequence);
+        vset_.SetLastPublishedSequence(max_sequence);
+        vset_.SetLastSequence(max_sequence);
+
+        for (const auto& cf_id_and_tables : cf_id_to_tables) {
+            auto* cfd = vset_.GetColumnFamilySet()->GetColumnFamily(
+                cf_id_and_tables.first);
+            VersionEdit edit;
+            edit.SetComparatorName(cfd->user_comparator()->Name());
+            edit.SetLogNumber(0);
+            edit.SetNextFile(next_file_number_);
+            edit.SetColumnFamily(cfd->GetID());
+
+            std::unordered_set<uint64_t> dependence_set;
+            for (const auto* table : cf_id_and_tables.second) {
+                if (table->meta.prop.is_map_sst()) {
+                    for (auto& dependence : table->meta.prop.dependence) {
+                        dependence_set.emplace(dependence.file_number);
+                    }
+                }
+            }
+            // TODO(opt): separate out into multiple levels
+            for (const auto* table : cf_id_and_tables.second) {
+                int level = 0;
+                if (dependence_set.count(table->meta.fd.GetNumber()) > 0) {
+                    // This sst should insert into depend level
+                    // Now we have droped map sst.
+                    assert(false);
+                    level = -1;
+                }
+                if (table->max_sequence == 0) {
+                    level = cfd->NumberLevels() - 1;
+                }
+                edit.AddFile(
+                    level, table->meta.fd.GetNumber(),
+                    table->meta.fd.GetPathId(), table->meta.fd.GetFileSize(),
+                    table->meta.smallest, table->meta.largest,
+                    table->min_sequence, table->max_sequence,
+                    table->meta.marked_for_compaction, table->meta.prop);
+            }
+            assert(next_file_number_ > 0);
+            vset_.MarkFileNumberUsed(next_file_number_ - 1);
+            mutex_.Lock();
+            Status status = vset_.LogAndApply(
+                cfd, *cfd->GetLatestMutableCFOptions(), &edit, &mutex_,
+                nullptr /* db_directory */, false /* new_descriptor_log */,
+                nullptr /* ColumnFamilyOptions */, false /* strict_sequence */);
+            mutex_.Unlock();
+            if (!status.ok()) {
+                return status;
+            }
+        }
+        return Status::OK();
+    }
+
+    void ArchiveFile(const std::string& fname) {
+        // Move into another directory.  E.g., for
+        //    dir/foo
+        // rename to
+        //    dir/lost/foo
+        const char* slash = strrchr(fname.c_str(), '/');
+        std::string new_dir;
+        if (slash != nullptr) {
+            new_dir.assign(fname.data(), slash - fname.data());
+        }
+        new_dir.append("/lost");
+        env_->CreateDir(new_dir);  // Ignore error
+        std::string new_file = new_dir;
+        new_file.append("/");
+        new_file.append((slash == nullptr) ? fname.c_str() : slash + 1);
+        Status s = env_->RenameFile(fname, new_file);
+        Header(db_options_.info_log, "Archiving %s to %s: %s\n", fname.c_str(),
+               new_file.c_str(), s.ToString().c_str());
+        ROCKS_LOG_INFO(db_options_.info_log, "Archiving %s to %s: %s\n",
+                       fname.c_str(), new_file.c_str(), s.ToString().c_str());
+    }
 };  // namespace
 
 Status GetDefaultCFOptions(
     const std::vector<ColumnFamilyDescriptor>& column_families,
     ColumnFamilyOptions* res) {
-  assert(res != nullptr);
-  auto iter =
-      std::find_if(column_families.begin(), column_families.end(),
-                   TERARK_GET(.name) == std::cref(kDefaultColumnFamilyName));
-  if (iter == column_families.end()) {
-    return Status::InvalidArgument(
-        "column_families", "Must contain entry for default column family");
-  }
-  *res = iter->options;
-  return Status::OK();
+    assert(res != nullptr);
+    auto iter =
+        std::find_if(column_families.begin(), column_families.end(),
+                     TERARK_GET(.name) == std::cref(kDefaultColumnFamilyName));
+    if (iter == column_families.end()) {
+        return Status::InvalidArgument(
+            "column_families", "Must contain entry for default column family");
+    }
+    *res = iter->options;
+    return Status::OK();
 }
 }  // namespace
 
-Status RepairDB(const std::string& dbname, const DBOptions& db_options,
+Status RepairDB(const std::string& dbname,
+                const DBOptions& db_options,
                 const std::vector<ColumnFamilyDescriptor>& column_families) {
-  ColumnFamilyOptions default_cf_opts;
-  Status status = GetDefaultCFOptions(column_families, &default_cf_opts);
-  if (status.ok()) {
-    Repairer repairer(dbname, db_options, column_families, default_cf_opts,
-                      ColumnFamilyOptions() /* unknown_cf_opts */,
-                      false /* create_unknown_cfs */);
-    status = repairer.Run();
-  }
-  return status;
+    ColumnFamilyOptions default_cf_opts;
+    Status status = GetDefaultCFOptions(column_families, &default_cf_opts);
+    if (status.ok()) {
+        Repairer repairer(dbname, db_options, column_families, default_cf_opts,
+                          ColumnFamilyOptions() /* unknown_cf_opts */,
+                          false /* create_unknown_cfs */);
+        status = repairer.Run();
+    }
+    return status;
 }
 
-Status RepairDB(const std::string& dbname, const DBOptions& db_options,
+Status RepairDB(const std::string& dbname,
+                const DBOptions& db_options,
                 const std::vector<ColumnFamilyDescriptor>& column_families,
                 const ColumnFamilyOptions& unknown_cf_opts) {
-  ColumnFamilyOptions default_cf_opts;
-  Status status = GetDefaultCFOptions(column_families, &default_cf_opts);
-  if (status.ok()) {
-    Repairer repairer(dbname, db_options, column_families, default_cf_opts,
-                      unknown_cf_opts, true /* create_unknown_cfs */);
-    status = repairer.Run();
-  }
-  return status;
+    ColumnFamilyOptions default_cf_opts;
+    Status status = GetDefaultCFOptions(column_families, &default_cf_opts);
+    if (status.ok()) {
+        Repairer repairer(dbname, db_options, column_families, default_cf_opts,
+                          unknown_cf_opts, true /* create_unknown_cfs */);
+        status = repairer.Run();
+    }
+    return status;
 }
 
 Status RepairDB(const std::string& dbname, const Options& options) {
-  DBOptions db_options(options);
-  ColumnFamilyOptions cf_options(options);
-  Repairer repairer(dbname, db_options, {}, cf_options /* default_cf_opts */,
-                    cf_options /* unknown_cf_opts */,
-                    true /* create_unknown_cfs */);
-  return repairer.Run();
+    DBOptions db_options(options);
+    ColumnFamilyOptions cf_options(options);
+    Repairer repairer(dbname, db_options, {}, cf_options /* default_cf_opts */,
+                      cf_options /* unknown_cf_opts */,
+                      true /* create_unknown_cfs */);
+    return repairer.Run();
 }
 
 }  // namespace rocksdb

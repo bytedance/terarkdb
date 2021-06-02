@@ -916,7 +916,8 @@ ENDIF()
 if(WITH_TESTS)
   set(TESTS
         db/repair_test.cc
-        db/repair_test2.cc)
+        db/repair_test2.cc
+        db/repair_test3.cc)
 
 if(WITH_ALL_TESTS)
   set(TESTS
