@@ -904,8 +904,9 @@ Compaction* CompactionPicker::PickGarbageCollection(
                  candidate_cmp);
   while (!candidate_blob_vec.empty() && input.files.size() < 8) {
     auto f = candidate_blob_vec.front().f;
-    if (total_estimate_size + candidate_blob_vec.front().estimate_size <
-        max_file_size) {
+    uint64_t estimate_size = candidate_blob_vec.front().estimate_size;
+    if (total_estimate_size + estimate_size < max_file_size) {
+      total_estimate_size += estimate_size;
       num_antiquation += f->num_antiquation;
       f->set_gc_candidate();
       input.files.push_back(f);
