@@ -29,7 +29,7 @@ DEFINE_string(db_path, "", "data dir");
 DEFINE_uint64(gb_per_thread, 1, "data size in GB");
 DEFINE_uint64(threads, 1, "thread count");
 DEFINE_uint64(batch_size, 64, "batch size");
-DEFINE_uint64(value_size, 16384, "batch size");
+DEFINE_uint64(value_size, 16384, "value size");
 DEFINE_int32(perf_level, TERARKDB_NAMESPACE::PerfLevel::kDisable,
              "Level of perf collection");
 

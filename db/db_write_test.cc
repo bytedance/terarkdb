@@ -95,6 +95,91 @@ TEST_P(DBWriteTest, IOErrorOnWALWritePropagateToWriteThreadFollower) {
   Close();
 }
 
+TEST_P(DBWriteTest, IOErrorOnWALWrite) {
+  constexpr int kNumThreads = 5;
+  std::unique_ptr<FaultInjectionTestEnv> mock_env(
+      new FaultInjectionTestEnv(Env::Default()));
+  Options options = GetOptions();
+  options.enable_pipelined_write = true;
+  options.two_write_queues = false;
+  options.env = mock_env.get();
+  Reopen(options);
+  std::atomic<int> ready_count{0};
+  std::atomic<int> leader_count_1{0};
+  std::atomic<int> leader_count_2{0};
+  std::vector<port::Thread> threads;
+  mock_env->SetFilesystemActive(false);
+
+  // Wait until all threads linked to write threads, to make sure
+  // all threads join the same batch group.
+  SyncPoint::GetInstance()->SetCallBack(
+      "WriteThread::JoinBatchGroup:Wait", [&](void* arg) {
+        ready_count++;
+        auto* w = reinterpret_cast<WriteThread::Writer*>(arg);
+        if (w->state == WriteThread::STATE_GROUP_LEADER) {
+          leader_count_1++;
+          if (leader_count_1 == 2) {
+            abort();
+          }
+          while (ready_count < kNumThreads) {
+            // busy waiting
+          }
+        }
+        if (ready_count == kNumThreads + 1) {
+          TEST_SYNC_POINT("DBwritetest::IOErrorTest::NextWrite2");
+        }
+      });
+
+  SyncPoint::GetInstance()->SetCallBack(
+      "WriteThread::JoinBatchGroup:DoneWaiting", [&](void* arg) {
+        auto* w = reinterpret_cast<WriteThread::Writer*>(arg);
+        if (w->state == WriteThread::STATE_GROUP_LEADER) {
+          leader_count_2++;
+        }
+      });
+  SyncPoint::GetInstance()->SetCallBack(
+      "DBImpl::WriteToWAL:Start", [&](void* arg) {
+        auto* status = reinterpret_cast<Status*>(arg);
+        *status = Status::IOError();
+      });
+  SyncPoint::GetInstance()->SetCallBack(
+      "DBImpl::PreprocessWrite::End", [&](void* arg) {
+        auto* status = reinterpret_cast<Status*>(arg);
+        *status = Status::IOError();
+      });
+  SyncPoint::GetInstance()->SetCallBack(
+      "WriteThread::EnterAsBatchGroupLeader:End2", [&](void* arg) {
+        auto* wg = reinterpret_cast<WriteThread::WriteGroup*>(arg);
+        ASSERT_TRUE(wg->size == 5 || wg->size == 1);
+      });
+  SyncPoint::GetInstance()->LoadDependency(
+      {{"WriteThread::EnterAsBatchGroupLeader:End2",
+        "DBwritetest::IOErrorTest::NextWrite1"},
+       {"DBwritetest::IOErrorTest::NextWrite2",
+        "WriteThread::EnterAsBatchGroupLeader:End"}});
+  SyncPoint::GetInstance()->EnableProcessing();
+
+  for (int i = 0; i < kNumThreads; i++) {
+    threads.push_back(port::Thread(
+        [&](int index) {
+          // All threads should fail.
+          auto res = Put("key" + ToString(index), "value");
+          ASSERT_FALSE(res.ok());
+        },
+        i));
+  }
+  TEST_SYNC_POINT("DBwritetest::IOErrorTest::NextWrite1");
+  auto res = Put("key" + ToString(kNumThreads), "value");
+  ASSERT_FALSE(res.ok());
+  for (int i = 0; i < kNumThreads; i++) {
+    threads[i].join();
+  }
+  ASSERT_EQ("1-1", ToString(leader_count_1.load()) + "-" +
+                       ToString(leader_count_2.load()));
+  // Close before mock_env destruct.
+  Close();
+}
+
 TEST_P(DBWriteTest, ManualWalFlushInEffect) {
   Options options = GetOptions();
   Reopen(options);

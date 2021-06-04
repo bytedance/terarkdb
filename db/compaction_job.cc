@@ -2448,6 +2448,7 @@ Status CompactionJob::FinishCompactionOutputFile(
   // Finish and check for file errors
   if (s.ok()) {
     StopWatch sw(env_, stats_, COMPACTION_OUTFILE_SYNC_MICROS);
+#warning "test"
     s = sub_compact->outfile->Sync(db_options_.use_fsync);
   }
   if (s.ok()) {
@@ -2591,6 +2592,7 @@ Status CompactionJob::FinishCompactionOutputBlob(
   // Finish and check for file errors
   if (s.ok()) {
     StopWatch sw(env_, stats_, COMPACTION_OUTFILE_SYNC_MICROS);
+#warning "test"
     s = sub_compact->blob_outfile->Sync(db_options_.use_fsync);
   }
   if (s.ok()) {

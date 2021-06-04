@@ -786,6 +786,7 @@ Status DBImpl::PreprocessWrite(const WriteOptions& write_options,
     *need_log_sync = false;
   }
 
+  TEST_SYNC_POINT_CALLBACK("DBImpl::PreprocessWrite::End", &status);
   return status;
 }
 
@@ -860,6 +861,7 @@ Status DBImpl::WriteToWAL(const WriteBatch& merged_batch,
   // since alive_log_files_ might be modified concurrently
   alive_log_files_.back().AddSize(log_entry.size());
   log_empty_ = false;
+  TEST_SYNC_POINT_CALLBACK("DBImpl::WriteToWAL:Start", &status);
   return status;
 }
 
