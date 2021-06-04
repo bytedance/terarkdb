@@ -260,4 +260,8 @@ uint64_t MaxFileSizeForLevel(const MutableCFOptions& cf_options, int level,
                              CompactionStyle compaction_style,
                              int base_level = 1,
                              bool level_compaction_dynamic_level_bytes = false);
+
+uint64_t MaxBlobSize(const MutableCFOptions& cf_options, int num_levels,
+                     CompactionStyle compaction_style);
+
 }  // namespace TERARKDB_NAMESPACE

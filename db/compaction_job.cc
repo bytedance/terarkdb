@@ -417,15 +417,13 @@ struct CompactionJob::SubcompactionState {
     // pop smaller scores if total_compaction_bytes > max_compaction_bytes
     // remain one blob al least.
 
-    size_t max_file_size = mutable_cf_options->target_blob_file_size;
-    if (max_file_size == 0) {
-      max_file_size = MaxFileSizeForLevel(
-          *mutable_cf_options,
-          compaction->immutable_cf_options()->num_levels - 1,
-          compaction->immutable_cf_options()->compaction_style);
-    }
-    uint64_t target_compaction_bytes = std::max(
-        max_compaction_bytes, input_blob_info.input_bytes + max_file_size);
+    size_t target_blob_file_size = MaxBlobSize(
+        *mutable_cf_options, compaction->immutable_cf_options()->num_levels,
+        compaction->immutable_cf_options()->compaction_style);
+
+    uint64_t target_compaction_bytes =
+        std::max(max_compaction_bytes,
+                 input_blob_info.input_bytes + target_blob_file_size);
     while (total_compaction_bytes > target_compaction_bytes &&
            target_range_blob_heap.size() > 1) {
       total_compaction_bytes -= target_range_blob_heap.top().ref_bytes;
@@ -1614,12 +1612,16 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
             ->value_meta_extractor_factory->CreateValueExtractor(context);
   }
 
+  size_t target_blob_file_size =
+      MaxBlobSize(*mutable_cf_options, cfd->ioptions()->num_levels,
+                  cfd->ioptions()->compaction_style);
+
   auto trans_to_separate = [&](const Slice& key, LazyBuffer& value) {
     Status s;
     TableBuilder* blob_builder = sub_compact->blob_builder.get();
     FileMetaData* blob_meta = &sub_compact->current_blob_output()->meta;
     if (blob_builder != nullptr &&
-        blob_builder->FileSize() > mutable_cf_options->target_file_size_base) {
+        blob_builder->FileSize() > target_blob_file_size) {
       s = FinishCompactionOutputBlob(s, sub_compact, {});
       blob_builder = nullptr;
     }

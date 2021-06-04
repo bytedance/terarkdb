@@ -232,13 +232,16 @@ Status BuildTable(
       return s;
     };
 
+    size_t target_blob_file_size = MaxBlobSize(
+        mutable_cf_options, ioptions.num_levels, ioptions.compaction_style);
+
     auto trans_to_separate = [&](const Slice& key, LazyBuffer& value) {
       assert(value.file_number() == uint64_t(-1));
       Status status;
       TableBuilder* blob_builder = separate_helper.builder.get();
       FileMetaData* blob_meta = separate_helper.current_output;
       if (blob_builder != nullptr &&
-          blob_builder->FileSize() > mutable_cf_options.target_file_size_base) {
+          blob_builder->FileSize() > target_blob_file_size) {
         status = finish_output_blob_sst();
         blob_builder = nullptr;
       }

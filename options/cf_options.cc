@@ -126,6 +126,16 @@ uint64_t MaxFileSizeForLevel(const MutableCFOptions& cf_options, int level,
   }
 }
 
+uint64_t MaxBlobSize(const MutableCFOptions& cf_options, int num_levels,
+                     CompactionStyle compaction_style) {
+  size_t target_blob_file_size = cf_options.target_blob_file_size;
+  if (target_blob_file_size == 0) {
+    target_blob_file_size =
+        MaxFileSizeForLevel(cf_options, num_levels - 1, compaction_style);
+  }
+  return target_blob_file_size;
+}
+
 void MutableCFOptions::RefreshDerivedOptions(int num_levels) {
   max_file_size.resize(num_levels);
   max_file_size[0] = 0;  // unlimited

@@ -795,19 +795,16 @@ void CompactionPicker::GetGrandparents(
 Compaction* CompactionPicker::PickGarbageCollection(
     const std::string& /*cf_name*/, const MutableCFOptions& mutable_cf_options,
     VersionStorageInfo* vstorage, LogBuffer* /*log_buffer*/) {
-  // Setting fragment_size as one eighth max_file_size prevents selecting
-  // massive files to single compaction which would pin down the maximum
-  // deletable file number for a long time resulting possible storage leakage.
-  size_t max_file_size = mutable_cf_options.target_blob_file_size;
-  if (max_file_size == 0) {
-    max_file_size =
-        MaxFileSizeForLevel(mutable_cf_options, ioptions_.num_levels - 1,
-                            ioptions_.compaction_style);
-  }
+  // Setting fragment_size as one eighth target_blob_file_size prevents
+  // selecting massive files to single compaction which would pin down the
+  // maximum deletable file number for a long time resulting possible storage
+  // leakage.
+  size_t target_blob_file_size = MaxBlobSize(
+      mutable_cf_options, ioptions_.num_levels, ioptions_.compaction_style);
 
   size_t fragment_size = mutable_cf_options.blob_file_defragment_size;
   if (fragment_size == 0) {
-    fragment_size = max_file_size / 8;
+    fragment_size = target_blob_file_size / 8;
   }
 
   auto& hidden_files = vstorage->LevelFiles(-1);
@@ -905,7 +902,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
   while (!candidate_blob_vec.empty() && input.files.size() < 8) {
     auto f = candidate_blob_vec.front().f;
     uint64_t estimate_size = candidate_blob_vec.front().estimate_size;
-    if (total_estimate_size + estimate_size < max_file_size) {
+    if (total_estimate_size + estimate_size < target_blob_file_size) {
       total_estimate_size += estimate_size;
       num_antiquation += f->num_antiquation;
       f->set_gc_candidate();
