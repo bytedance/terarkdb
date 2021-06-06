@@ -254,7 +254,7 @@ class CompactionJobTest : public testing::Test {
     params.max_compaction_bytes = 10 * 1024 * 1024;
     params.compression_opts = cfd->ioptions()->compression_opts;
     params.manual_compaction = true;
-    params.separation_type = kCompactionIngoreSeparate;
+    params.separation_type = kCompactionIgnoreSeparate;
 
     Compaction compaction(std::move(params));
     compaction.SetInputVersion(cfd->current());

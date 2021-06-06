@@ -413,7 +413,7 @@ class DBImpl : public DB {
   Status TEST_CompactRange(int level, const Slice* begin, const Slice* end,
                            ColumnFamilyHandle* column_family = nullptr,
                            SeparationType separation_type =
-                               SeparationType::kCompactionTransToSeparate,
+                               kCompactionTransToSeparate,
                            bool disallow_trivial_move = false);
 
   void TEST_SwitchWAL();

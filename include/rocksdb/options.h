@@ -1344,7 +1344,7 @@ enum SeparationType {
   // Separate key value using blob_size & blob_large_key_ratio
   kCompactionTransToSeparate = 0,
   // Keep key value stay separation state
-  kCompactionIngoreSeparate = 1,
+  kCompactionIgnoreSeparate = 1,
   // Separate key value & rebuild blob files in the right time
   kCompactionAutoRebuildBlob = 2,
   // Separate key value & force rebuild blob files
