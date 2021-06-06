@@ -246,6 +246,45 @@ TEST_P(DBWriteTest, LockWalInEffect) {
   ASSERT_OK(dbfull()->UnlockWAL());
 }
 
+TEST_P(DBWriteTest, IOExceptionOnWALWrite) {
+  constexpr int kNumThreads = 5;
+  std::unique_ptr<FaultInjectionTestEnv> mock_env(
+      new FaultInjectionTestEnv(Env::Default()));
+  Options options = GetOptions();
+  options.enable_pipelined_write = true;
+  options.two_write_queues = false;
+  options.env = mock_env.get();
+  Reopen(options);
+  std::atomic<int> ready_count{0};
+  std::atomic<int> leader_count_1{0};
+  std::atomic<int> leader_count_2{0};
+  std::vector<port::Thread> threads;
+  mock_env->SetFilesystemActive(false);
+
+  SyncPoint::GetInstance()->SetCallBack(
+      "DBImpl::PipelinedWriteImpl::BeforeWalGroupLeaderExit", [&](void* arg) {
+        auto* w = reinterpret_cast<WriteThread::Writer*>(arg);
+        throw(4);
+      });
+
+  SyncPoint::GetInstance()->EnableProcessing();
+
+  try {
+    auto res = Put("key" + ToString(kNumThreads), "value");
+    ASSERT_TRUE(res.ok());
+  } catch (int a) {
+    std::cout << "get throw e: " << a << std::endl;
+  }
+
+  SyncPoint::GetInstance()->DisableProcessing();
+
+  auto res = Put("key" + ToString(kNumThreads), "value");
+  ASSERT_TRUE(res.ok());
+
+  // Close before mock_env destruct.
+  Close();
+}
+
 INSTANTIATE_TEST_CASE_P(DBWriteTestInstance, DBWriteTest,
                         testing::Values(DBTestBase::kDefault,
                                         DBTestBase::kConcurrentWALWrites,

@@ -506,7 +506,8 @@ Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
       MarkLogsSynced(logfile_number_, need_log_dir_sync, w.status);
       mutex_.Unlock();
     }
-
+    TEST_SYNC_POINT_CALLBACK(
+        "DBImpl::PipelinedWriteImpl::BeforeWalGroupLeaderExit", &w);
     write_thread_.ExitAsBatchGroupLeader(wal_write_group, w.status);
   }
 
