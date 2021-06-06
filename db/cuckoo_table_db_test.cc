@@ -246,7 +246,7 @@ TEST_F(CuckooTableDBTest, CompactionIntoMultipleFiles) {
   ASSERT_EQ("1", FilesPerLevel());
 
   dbfull()->TEST_CompactRange(0, nullptr, nullptr, nullptr,
-                              SeparationType::kCompactionTransToSeparate,
+                              kCompactionTransToSeparate,
                               true /* disallow trivial move */);
   ASSERT_EQ("0,2", FilesPerLevel());
   for (int idx = 0; idx < 28; ++idx) {

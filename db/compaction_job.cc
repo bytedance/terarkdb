@@ -1552,7 +1552,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
         cfd->ioptions()->level_compaction_dynamic_level_bytes));
     if (kOutFileLen != port::kMaxSizet) {
       const size_t kOutFileNumSamples = kOutFileLen >> kSampleLenShift;
-      Random64 generator{versions_->NewFileNumber()};
+      Random64 generator{Random::GetTLSInstance()->Next()};
       for (size_t i = 0; i < kMaxSamples; ++i) {
         sample_begin_offsets.insert(
             static_cast<size_t>(generator.Uniform(kOutFileNumSamples))

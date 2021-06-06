@@ -2782,7 +2782,7 @@ TEST_F(DBTest2, LazyBufferAndMmapReads) {
 
   dbfull()->TEST_CompactRange(0 /* level */, nullptr /* begin */,
                               nullptr /* end */, nullptr /* column_family */,
-                              SeparationType::kCompactionTransToSeparate,
+                              kCompactionTransToSeparate,
                               true /* disallow_trivial_move */);
 
   // Ensure lazy_value doesn't rely on memory munmap'd by the above

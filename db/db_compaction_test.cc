@@ -868,7 +868,7 @@ TEST_P(DBCompactionTestWithParam, CompactionsGenerateMultipleFiles) {
   // Reopening moves updates to level-0
   ReopenWithColumnFamilies({"default", "pikachu"}, options);
   dbfull()->TEST_CompactRange(0, nullptr, nullptr, handles_[1],
-                              SeparationType::kCompactionTransToSeparate,
+                              kCompactionTransToSeparate,
                               true /* disallow trivial move */);
 
   ASSERT_EQ(NumTableFilesAtLevel(0, 1), 0);
@@ -1376,19 +1376,19 @@ TEST_P(DBCompactionTestWithParam, ManualCompactionPartial) {
   // 1 files in L0
   ASSERT_EQ("1,0,0,0,0,0,2", FilesPerLevel(0));
   ASSERT_OK(dbfull()->TEST_CompactRange(
-      0, nullptr, nullptr, nullptr, SeparationType::kCompactionTransToSeparate,
+      0, nullptr, nullptr, nullptr, kCompactionTransToSeparate,
       false));
   ASSERT_OK(dbfull()->TEST_CompactRange(
-      1, nullptr, nullptr, nullptr, SeparationType::kCompactionTransToSeparate,
+      1, nullptr, nullptr, nullptr, kCompactionTransToSeparate,
       false));
   ASSERT_OK(dbfull()->TEST_CompactRange(
-      2, nullptr, nullptr, nullptr, SeparationType::kCompactionTransToSeparate,
+      2, nullptr, nullptr, nullptr, kCompactionTransToSeparate,
       false));
   ASSERT_OK(dbfull()->TEST_CompactRange(
-      3, nullptr, nullptr, nullptr, SeparationType::kCompactionTransToSeparate,
+      3, nullptr, nullptr, nullptr, kCompactionTransToSeparate,
       false));
   ASSERT_OK(dbfull()->TEST_CompactRange(
-      4, nullptr, nullptr, nullptr, SeparationType::kCompactionTransToSeparate,
+      4, nullptr, nullptr, nullptr, kCompactionTransToSeparate,
       false));
   // 2 files in L6, 1 file in L5
   ASSERT_EQ("0,0,0,0,0,1,2", FilesPerLevel(0));
@@ -1526,7 +1526,7 @@ TEST_F(DBCompactionTest, DISABLED_ManualPartialFill) {
   // 2 files in L2, 1 in L0
   ASSERT_EQ("1,0,2", FilesPerLevel(0));
   ASSERT_OK(dbfull()->TEST_CompactRange(
-      0, nullptr, nullptr, nullptr, SeparationType::kCompactionTransToSeparate,
+      0, nullptr, nullptr, nullptr, kCompactionTransToSeparate,
       false));
   // 2 files in L2, 1 in L1
   ASSERT_EQ("0,1,2", FilesPerLevel(0));
