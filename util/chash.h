@@ -10,6 +10,11 @@
 #include <cmath>
 #include <type_traits>
 
+#if defined(__GNUC__)
+  #pragma GCC diagnostic push
+  #pragma GCC diagnostic ignored "-Wpragmas"
+  #pragma GCC diagnostic ignored "-Wclass-memaccess"
+#endif
 
 namespace contiguous_hash_detail
 {
@@ -1468,3 +1473,7 @@ protected:
     }
 
 };
+
+#if defined(__GNUC__)
+  #pragma GCC diagnostic pop
+#endif
