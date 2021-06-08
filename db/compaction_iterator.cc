@@ -194,7 +194,7 @@ CompactionIterator::CompactionIterator(
     ignore_snapshots_ = false;
   }
   SeparationType separation_type = compaction_ == nullptr
-                                       ? kCompactionIngoreSeparate
+                                       ? kCompactionTransToSeparate
                                        : compaction_->separation_type();
 
   do_separate_value_ = (separation_type == kCompactionTransToSeparate ||
