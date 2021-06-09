@@ -277,24 +277,13 @@ Status WalManager::RetainProbableWalFiles(VectorLogPtr& all_logs,
   if (all_logs.empty()) {
     return Status::OK();
   }
-  int64_t start = 0;  // signed to avoid overflow when target is < first file.
-  int64_t end = static_cast<int64_t>(all_logs.size()) - 1;
-  // Binary Search. avoid opening all files.
-  while (end >= start) {
-    int64_t mid = start + (end - start) / 2;  // Avoid overflow.
-    SequenceNumber current_seq_num =
-        all_logs.at(static_cast<size_t>(mid))->StartSequence();
-    if (current_seq_num == target) {
-      end = mid;
-      break;
-    } else if (current_seq_num < target) {
-      start = mid + 1;
-    } else {
-      end = mid - 1;
-    }
-  }
   size_t start_index =
-      static_cast<size_t>(std::max(static_cast<int64_t>(0), end));
+      std::upper_bound(
+          all_logs.begin(), all_logs.end(), target,
+          [](SequenceNumber target, const std::unique_ptr<LogFile>& a) {
+            return target < a->StartSequence();
+          }) -
+      all_logs.begin();
   if (start_index == 0) {
     char buf[200];
     snprintf(buf, sizeof(buf),

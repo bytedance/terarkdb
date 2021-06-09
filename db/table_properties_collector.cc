@@ -136,7 +136,8 @@ class TtlIntTblPropCollector : public IntTblPropCollector {
     if (!histogram_.Empty() && ttl_entries_ >= ttl_gc_ratio_ * total_entries_) {
       uint64_t earliest_time_begin_compact =
           now_time_seconds +
-          static_cast<uint64_t>(histogram_.Percentile(ttl_gc_ratio_ * 100.0));
+          static_cast<uint64_t>(histogram_.Percentile(
+              ttl_gc_ratio_ * total_entries_ / ttl_entries_ * 100.0));
       PushItem(properties, TablePropertiesNames::kEarliestTimeBeginCompact,
                earliest_time_begin_compact);
     }
