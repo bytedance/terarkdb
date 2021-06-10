@@ -1286,18 +1286,6 @@ ROCKS_TESTS = [
         [],
     ],
     [
-        "stats_history_test",
-        "monitoring/stats_history_test.cc",
-        "serial",
-        [],
-        [],
-    ],
-    [
-        "stats_history_test",
-        "monitoring/stats_history_test.cc",
-        "serial",
-    ],
-    [
         "stringappend_test",
         "utilities/merge_operators/string_append/stringappend_test.cc",
         "serial",

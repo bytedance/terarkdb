@@ -57,7 +57,7 @@ class ChaosTest {
       auto info = dcache->DumpLRUCacheStatistics();
       std::cout << info << std::endl;
       using namespace std::chrono;
-      std::this_thread::sleep_for(60s);
+      std::this_thread::sleep_for(seconds(60));
     }
   }
 
@@ -820,8 +820,9 @@ class ChaosTest {
       options.compaction_style = TERARKDB_NAMESPACE::kCompactionStyleLevel;
       options.write_buffer_size = size_t(file_size_base / 1.1);
       options.enable_lazy_compaction = true;
-      //bbto.block_cache = NewLRUCache(4ULL << 30, 6, false);
-      options.table_factory.reset(TERARKDB_NAMESPACE::NewBlockBasedTableFactory(bbto));
+      // bbto.block_cache = NewLRUCache(4ULL << 30, 6, false);
+      options.table_factory.reset(
+          TERARKDB_NAMESPACE::NewBlockBasedTableFactory(bbto));
       cfDescriptors.emplace_back("level" + std::to_string(i), options);
     }
     if (flags_ & TestWorker) {

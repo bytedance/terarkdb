@@ -376,7 +376,6 @@ MAIN_SOURCES =                                                          \
   monitoring/histogram_test.cc                                          \
   monitoring/iostats_context_test.cc                                    \
   monitoring/statistics_test.cc                                         \
-  monitoring/stats_history_test.cc                                      \
   options/options_settable_test.cc                                      \
   options/options_test.cc                                               \
   table/block_based_filter_block_test.cc                                \

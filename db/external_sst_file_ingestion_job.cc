@@ -320,7 +320,7 @@ Status ExternalSstFileIngestionJob::GetIngestedFileInfo(
       std::move(sst_file_reader), file_to_ingest->file_size, &table_reader);
   if (status.IsInvalidArgument() && status.subcode() == Status::kRequireMmap) {
     // this table requires mmap open, make it happy
-    assert(!env_options.use_mmap_reads);
+    assert(!env_options_.use_mmap_reads);
     EnvOptions mmap_env_options = env_options_;
     mmap_env_options.use_mmap_reads = true;
     mmap_env_options.use_direct_reads = false;
