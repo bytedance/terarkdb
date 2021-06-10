@@ -97,7 +97,7 @@ class ChaosTest {
     options.advise_random_on_open = true;
     options.base_background_compactions = 4;
     options.max_background_flushes = 32;
-    options.two_write_queues = true;
+    options.two_write_queues = false;
     options.table_cache_numshardbits = 6;
     options.keep_log_file_num = 1000;
     options.write_thread_slow_yield_usec = 3;
@@ -111,7 +111,7 @@ class ChaosTest {
     options.allow_2pc = true;
     options.max_subcompactions = 16;
     options.create_if_missing = true;
-    options.enable_pipelined_write = false;
+    options.enable_pipelined_write = true;
     options.bytes_per_sync = 4194304;
     options.max_manifest_edit_count = 4096;
     options.fail_if_options_file_error = false;
