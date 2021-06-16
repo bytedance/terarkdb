@@ -53,11 +53,6 @@ class RateLimiter;
 class ThreadStatusUpdater;
 struct ThreadStatus;
 
-// ********* RD6 *********
-class FileSystem;
-class SystemClock;
-// ********* RD6 *********
-
 using std::shared_ptr;
 using std::unique_ptr;
 
@@ -130,22 +125,8 @@ class Env {
     uint64_t size_bytes;
   };
 
-  //Env() : thread_status_updater_(nullptr) {}
+  Env() : thread_status_updater_(nullptr) {}
 
-
-  // ********* RD6 *********
-  Env();
-  // Construct an Env with a separate FileSystem and/or SystemClock
-  // implementation
-  explicit Env(const std::shared_ptr<FileSystem>& fs);
-  Env(const std::shared_ptr<FileSystem>& fs,
-      const std::shared_ptr<SystemClock>& clock);
-  // No copying allowed
-  Env(const Env&) = delete;
-  void operator=(const Env&) = delete;
-  // ********* RD6 *********
-
-  //
   virtual ~Env();
 
   // Return a default environment suitable for the current operating
@@ -503,47 +484,15 @@ class Env {
     return Status::NotSupported();
   }
 
-  //RD
- // Check whether the specified path is a directory
-  virtual Status IsDirectory(const std::string& /*path*/, bool* /*is_dir*/) {
-    return Status::NotSupported("Env::IsDirectory() not supported.");
-  }
-
-  virtual void SanitizeEnvOptions(EnvOptions* /*env_opts*/) const {}
-
-  // Get the FileSystem implementation this Env was constructed with. It
-  // could be a fully implemented one, or a wrapper class around the Env
-  const std::shared_ptr<FileSystem>& GetFileSystem() const;
-
-  // Get the SystemClock implementation this Env was constructed with. It
-  // could be a fully implemented one, or a wrapper class around the Env
-  const std::shared_ptr<SystemClock>& GetSystemClock() const;
-
-  // If you're adding methods here, remember to add them to EnvWrapper too
-  //
-
-
  protected:
   // The pointer to an internal structure that will update the
   // status of each thread.
   ThreadStatusUpdater* thread_status_updater_;
 
-  // ********* RD6 *********
-  // Pointer to the underlying FileSystem implementation
-  std::shared_ptr<FileSystem> file_system_;
-
-  // Pointer to the underlying SystemClock implementation
-  std::shared_ptr<SystemClock> system_clock_;
-  // ********* RD6 *********
-
  private:
   // No copying allowed
   Env(const Env&);
   void operator=(const Env&);
-
-  // ********* RD6 *********
-  static const size_t kMaxHostNameLen = 256;
-  // ********* RD6 *********
 };
 
 // The factory function to construct a ThreadStatusUpdater.  Any Env
@@ -1473,17 +1422,5 @@ Env* NewTimedEnv(Env* base_env);
 // Returns a new environment for IO profiling
 // This is a env forwarding method defined in env/env_io_prof.cc
 Env* NewIOProfEnv(Env* base_env);
-
-// ********* RD6 *********
-
-// Returns an instance of logger that can be used for storing informational
-// messages.
-// This is a factory method for EnvLogger declared in logging/env_logging.h
-Status NewEnvLogger(const std::string& fname, Env* env,
-                    std::shared_ptr<Logger>* result);
-
-std::unique_ptr<Env> NewCompositeEnv(const std::shared_ptr<FileSystem>& fs);
-
-// ********* RD6 *********
 
 }  // namespace TERARKDB_NAMESPACE
