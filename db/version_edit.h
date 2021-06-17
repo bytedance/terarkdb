@@ -43,6 +43,7 @@ struct FileDescriptor {
   SequenceNumber largest_seqno;   // The largest seqno in this file
 
   FileDescriptor() : FileDescriptor(0, 0, 0) {}
+  FileDescriptor(const FileDescriptor&) = default;
 
   FileDescriptor(uint64_t number, uint32_t path_id, uint64_t _file_size)
       : FileDescriptor(number, path_id, _file_size, kMaxSequenceNumber, 0) {}
@@ -55,14 +56,7 @@ struct FileDescriptor {
         smallest_seqno(_smallest_seqno),
         largest_seqno(_largest_seqno) {}
 
-  FileDescriptor& operator=(const FileDescriptor& fd) {
-    table_reader = fd.table_reader;
-    packed_number_and_path_id = fd.packed_number_and_path_id;
-    file_size = fd.file_size;
-    smallest_seqno = fd.smallest_seqno;
-    largest_seqno = fd.largest_seqno;
-    return *this;
-  }
+  FileDescriptor& operator=(const FileDescriptor&) = default;
 
   uint64_t GetNumber() const {
     return packed_number_and_path_id & kFileNumberMask;

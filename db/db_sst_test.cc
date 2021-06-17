@@ -237,9 +237,9 @@ TEST_F(DBSSTTest, DeleteObsoleteFilesPendingOutputs) {
   auto file_on_L2 = metadata[0].name;
   listener->SetExpectedFileName(dbname_ + file_on_L2);
 
-  ASSERT_OK(dbfull()->TEST_CompactRange(
-      3, nullptr, nullptr, nullptr, kCompactionTransToSeparate,
-      true /* disallow trivial move */));
+  ASSERT_OK(dbfull()->TEST_CompactRange(3, nullptr, nullptr, nullptr,
+                                        kCompactionTransToSeparate,
+                                        true /* disallow trivial move */));
   ASSERT_EQ("0,0,0,0,1", FilesPerLevel(0));
 
   // finish the flush!

@@ -194,7 +194,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
   // job.  It may also pick up some of the remaining writers in the "writers_"
   // when it finds suitable, and finish them in the same write batch.
   // This is how a write job could be done by the other writer.
-  WriteContext write_context;
+  WriteContext write_context(immutable_db_options_.info_log.get());
   WriteThread::WriteGroup write_group;
   bool in_parallel_group = false;
   uint64_t last_sequence = kMaxSequenceNumber;
@@ -426,9 +426,7 @@ Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
                                   bool disable_memtable, uint64_t* seq_used) {
   PERF_TIMER_GUARD(write_pre_and_post_process_time);
   StopWatch write_sw(env_, immutable_db_options_.statistics.get(), DB_WRITE);
-
-  WriteContext write_context;
-
+  WriteContext write_context(immutable_db_options_.info_log.get());
   WriteThread::Writer w(write_options, my_batch, callback, log_ref,
                         disable_memtable);
   write_thread_.JoinBatchGroup(&w);
@@ -1077,8 +1075,8 @@ Status DBImpl::SwitchWAL(WriteContext* write_context) {
         // transactions so there is still nothing that we can do.
         return status;
       } else {
-        ROCKS_LOG_WARN(
-            immutable_db_options_.info_log,
+        ROCKS_LOG_BUFFER(
+            &write_context->warn_buffer,
             "Unable to release oldest log due to uncommited transaction");
         unable_to_release_oldest_log_ = true;
         flush_wont_release_oldest_log = true;
@@ -1094,11 +1092,6 @@ Status DBImpl::SwitchWAL(WriteContext* write_context) {
     alive_log_files_.begin()->getting_flushed = true;
   }
 
-  ROCKS_LOG_INFO(
-      immutable_db_options_.info_log,
-      "Flushing all column families with data in WAL number %" PRIu64
-      ". Total log size is %" PRIu64 " while max_total_wal_size is %" PRIu64,
-      oldest_alive_log, total_log_size_.load(), GetMaxTotalWalSize());
   // no need to refcount because drop is happening in write thread, so can't
   // happen while we're in the write thread
   autovector<ColumnFamilyData*> cfds;
@@ -1114,7 +1107,16 @@ Status DBImpl::SwitchWAL(WriteContext* write_context) {
       }
     }
   }
+  uint64_t total_log_size = total_log_size_.load();
+  uint64_t max_total_wal_size = GetMaxTotalWalSize();
   for (const auto cfd : cfds) {
+    ROCKS_LOG_BUFFER(
+        &write_context->info_buffer,
+        "Flushing column family [%s] with data in WAL number %" PRIu64
+        ". Total log size is %" PRIu64 " while max_total_wal_size is %" PRIu64,
+        cfd->GetName().c_str(), oldest_alive_log, total_log_size,
+        max_total_wal_size);
+
     cfd->Ref();
     status = SwitchMemtable(cfd, write_context);
     cfd->Unref();
@@ -1149,22 +1151,13 @@ Status DBImpl::HandleWriteBufferFull(WriteContext* write_context) {
   // suboptimal but still correct.
   WriteBufferFlushPri flush_pri = immutable_db_options_.write_buffer_flush_pri;
   FlushReason flush_reason;
-  if (alive_log_files_.back().size > GetMaxWalSize()) {
+  uint64_t alive_log_files_back_size = alive_log_files_.back().size;
+  uint64_t max_wal_size = GetMaxWalSize();
+  if (alive_log_files_back_size > max_wal_size) {
     flush_pri = kFlushOldest;
     flush_reason = FlushReason::kWriteBufferManager;
-    ROCKS_LOG_INFO(immutable_db_options_.info_log,
-                   "Flushing column family with oldest sequence number. Latest "
-                   "log size is %" PRIu64 " while max_wal_size is %" PRIu64,
-                   alive_log_files_.back().size, GetMaxWalSize());
   } else {
     flush_reason = FlushReason::kWriteBufferFull;
-    ROCKS_LOG_INFO(immutable_db_options_.info_log,
-                   "Flushing column family with %s. Write buffer is "
-                   "using %" PRIu64 " bytes out of a total of %" PRIu64 ".",
-                   flush_pri == kFlushLargest ? "largest mem table size"
-                                              : "oldest sequence number",
-                   write_buffer_manager_->memory_usage(),
-                   write_buffer_manager_->buffer_size());
   }
   // no need to refcount because drop is happening in write thread, so can't
   // happen while we're in the write thread
@@ -1201,6 +1194,28 @@ Status DBImpl::HandleWriteBufferFull(WriteContext* write_context) {
     }
     if (cfd_picked != nullptr) {
       cfds.push_back(cfd_picked);
+    }
+  }
+  if (flush_reason == FlushReason::kWriteBufferManager) {
+    for (auto cfd : cfds) {
+      ROCKS_LOG_BUFFER(
+          &write_context->info_buffer,
+          "Flushing column family [%s] with oldest sequence number. Latest log "
+          "size is %" PRIu64 " while max_wal_size is %" PRIu64,
+          cfd->GetName().c_str(), alive_log_files_back_size, max_wal_size);
+    }
+  } else {
+    uint64_t memory_usage = write_buffer_manager_->memory_usage();
+    uint64_t buffer_size = write_buffer_manager_->buffer_size();
+    for (auto cfd : cfds) {
+      ROCKS_LOG_BUFFER(
+          &write_context->info_buffer,
+          "Flushing column family [%s] with %s. Write buffer is using %" PRIu64
+          " bytes out of a total of %" PRIu64 ".",
+          cfd->GetName().c_str(),
+          flush_pri == kFlushLargest ? "largest mem table size"
+                                     : "oldest sequence number",
+          memory_usage, buffer_size);
     }
   }
 
@@ -1565,8 +1580,8 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
       assert(new_log_number > logfile_number_);
       log_writer_pool_state_ = kLogWriterPoolIdle;
     }
-    ROCKS_LOG_WARN(
-        immutable_db_options_.info_log,
+    ROCKS_LOG_BUFFER(
+        &context->warn_buffer,
         "Wait create log writer: %" PRIu64 ", time elapse: %" PRIu64 "us.",
         log_writer_pool_state_ == kLogWriterPoolIdle ? new_log_number : 0,
         timer.ElapsedNanos() / 1000);
@@ -1593,13 +1608,13 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
       new_log = unique_new_log.release();
       new_log_number = new_log->get_log_number();
 
-      ROCKS_LOG_WARN(immutable_db_options_.info_log,
-                     "Synchronous create log writer: %" PRIu64
-                     ", time elapse: %" PRIu64 "us%s",
-                     new_log_number, timer.ElapsedNanos() / 1000,
-                     immutable_db_options_.prepare_log_writer_num == 0
-                         ? "."
-                         : ", prepare_log_writer_num should be increased.");
+      ROCKS_LOG_BUFFER(&context->warn_buffer,
+                       "Synchronous create log writer: %" PRIu64
+                       ", time elapse: %" PRIu64 "us%s",
+                       new_log_number, timer.ElapsedNanos() / 1000,
+                       immutable_db_options_.prepare_log_writer_num == 0
+                           ? "."
+                           : ", prepare_log_writer_num should be increased.");
     }
     mutex_.Lock();
     assert(log_writer_pool_state_ == kLogWriterPoolWorking);
@@ -1610,10 +1625,10 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
   // client about mem table becoming immutable.
   cfd->Ref();
   memtable_info_queue_.emplace_back(cfd, std::move(memtable_info));
-  ROCKS_LOG_INFO(immutable_db_options_.info_log,
-                 "[%s] New memtable created with log file: #%" PRIu64
-                 ". Immutable memtables: %d.\n",
-                 cfd->GetName().c_str(), new_log_number, num_imm_unflushed);
+  ROCKS_LOG_BUFFER(&context->info_buffer,
+                   "[%s] New memtable created with log file: #%" PRIu64
+                   ". Immutable memtables: %d.\n",
+                   cfd->GetName().c_str(), new_log_number, num_imm_unflushed);
   if (s.ok() && creating_new_log) {
 #ifndef ROCKSDB_LITE
     wal_manager_.AddLogNumber(new_log_number);
@@ -1639,11 +1654,11 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
       log::Writer* cur_log_writer = logs_.back().writer;
       s = cur_log_writer->WriteBuffer();
       if (!s.ok()) {
-        ROCKS_LOG_WARN(immutable_db_options_.info_log,
-                       "[%s] Failed to switch from #%" PRIu64 " to #%" PRIu64
-                       "  WAL file -- %s\n",
-                       cfd->GetName().c_str(), cur_log_writer->get_log_number(),
-                       new_log_number);
+        ROCKS_LOG_BUFFER(&context->warn_buffer,
+                         "[%s] Failed to switch from #%" PRIu64 " to #%" PRIu64
+                         "  WAL file -- %s\n",
+                         cfd->GetName().c_str(),
+                         cur_log_writer->get_log_number(), new_log_number);
       }
     }
     logs_.emplace_back(logfile_number_, new_log);
@@ -1681,7 +1696,7 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
   context->superversion_context.NewSuperVersion();
 
   cfd->mem()->SetNextLogNumber(logfile_number_);
-  cfd->imm()->Add(cfd->mem(), &context->memtables_to_free_);
+  cfd->imm()->Add(cfd->mem(), &context->memtables_to_free);
   new_mem->Ref();
   cfd->SetMemtable(new_mem);
   InstallSuperVersionAndScheduleWork(cfd, &context->superversion_context,

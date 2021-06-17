@@ -23,7 +23,7 @@ uint64_t DBImpl::TEST_GetLevel0TotalSize() {
 }
 
 void DBImpl::TEST_SwitchWAL() {
-  WriteContext write_context;
+  WriteContext write_context(immutable_db_options_.info_log.get());
   InstrumentedMutexLock l(&mutex_);
   SwitchWAL(&write_context);
 }
@@ -100,7 +100,7 @@ Status DBImpl::TEST_CompactRange(int level, const Slice* begin,
 }
 
 Status DBImpl::TEST_SwitchMemtable(ColumnFamilyData* cfd) {
-  WriteContext write_context;
+  WriteContext write_context(immutable_db_options_.info_log.get());
   InstrumentedMutexLock l(&mutex_);
   if (cfd == nullptr) {
     cfd = default_cf_handle_->cfd();

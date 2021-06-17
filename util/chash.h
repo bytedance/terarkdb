@@ -11,9 +11,11 @@
 #include <type_traits>
 
 #if defined(__GNUC__)
-  #pragma GCC diagnostic push
-  #pragma GCC diagnostic ignored "-Wpragmas"
-  #pragma GCC diagnostic ignored "-Wclass-memaccess"
+#   pragma GCC diagnostic push
+#   pragma GCC diagnostic ignored "-Wpragmas"
+#   if defined(__GNUC__) && __GNUC__ * 1000 + __GNUC_MINOR__ >= 8000
+#       pragma GCC diagnostic ignored "-Wclass-memaccess"
+#   endif
 #endif
 
 namespace contiguous_hash_detail
@@ -93,15 +95,13 @@ protected:
         hash_t()
         {
         }
+        hash_t(hash_t const &) = default;
         hash_t(hash_value_type value)
         {
             hash = value & ~(hash_value_type(1) << (sizeof(hash_value_type) * 8 - 1));
         }
-        hash_t &operator = (hash_t const &other)
-        {
-            hash = other.hash;
-            return *this;
-        }
+        hash_t &operator = (hash_t const &) = default;
+
         template<class any_type> any_type operator % (any_type const &value) const
         {
             return hash % value;
@@ -1475,5 +1475,5 @@ protected:
 };
 
 #if defined(__GNUC__)
-  #pragma GCC diagnostic pop
+#   pragma GCC diagnostic pop
 #endif

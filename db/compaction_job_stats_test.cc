@@ -299,10 +299,9 @@ class CompactionJobStatsTest : public testing::Test,
   }
 
   void TEST_Compact(int level, int cf, const Slice& start, const Slice& limit) {
-    ASSERT_OK(
-        dbfull()->TEST_CompactRange(level, &start, &limit, handles_[cf],
-                                    kCompactionTransToSeparate,
-                                    true /* disallow trivial move */));
+    ASSERT_OK(dbfull()->TEST_CompactRange(level, &start, &limit, handles_[cf],
+                                          kCompactionTransToSeparate,
+                                          true /* disallow trivial move */));
   }
 
   // Do n memtable compactions, each of which produces an sstable

@@ -1176,8 +1176,8 @@ Status DBImpl::SetDBOptions(
   Status s;
   Status persist_options_status;
   bool wal_changed = false;
-  WriteContext write_context;
   {
+    WriteContext write_context(immutable_db_options_.info_log.get());
     InstrumentedMutexLock l(&mutex_);
     s = GetMutableDBOptionsFromStrings(mutable_db_options_, options_map,
                                        &new_options);

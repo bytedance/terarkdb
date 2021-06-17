@@ -410,11 +410,11 @@ class DBImpl : public DB {
   // Implemented in db_impl_debug.cc
 
   // Compact any files in the named level that overlap [*begin, *end]
-  Status TEST_CompactRange(int level, const Slice* begin, const Slice* end,
-                           ColumnFamilyHandle* column_family = nullptr,
-                           SeparationType separation_type =
-                               kCompactionTransToSeparate,
-                           bool disallow_trivial_move = false);
+  Status TEST_CompactRange(
+      int level, const Slice* begin, const Slice* end,
+      ColumnFamilyHandle* column_family = nullptr,
+      SeparationType separation_type = kCompactionTransToSeparate,
+      bool disallow_trivial_move = false);
 
   void TEST_SwitchWAL();
 
@@ -970,16 +970,26 @@ class DBImpl : public DB {
 
   struct WriteContext {
     SuperVersionContext superversion_context;
-    autovector<MemTable*> memtables_to_free_;
+    autovector<MemTable*> memtables_to_free;
+    LogBuffer info_buffer;
+    LogBuffer warn_buffer;
 
-    explicit WriteContext(bool create_superversion = false)
-        : superversion_context(create_superversion) {}
+    explicit WriteContext(Logger* logger, bool create_superversion = false)
+        : superversion_context(create_superversion),
+          info_buffer(InfoLogLevel::INFO_LEVEL, logger),
+          warn_buffer(InfoLogLevel::WARN_LEVEL, logger) {}
+
+    void FlushBufferToLog() {
+      info_buffer.FlushBufferToLog();
+      warn_buffer.FlushBufferToLog();
+    }
 
     ~WriteContext() {
       superversion_context.Clean();
-      for (auto& m : memtables_to_free_) {
+      for (auto& m : memtables_to_free) {
         delete m;
       }
+      FlushBufferToLog();
     }
   };
 
