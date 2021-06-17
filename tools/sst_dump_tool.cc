@@ -452,7 +452,7 @@ void print_help() {
 }  // namespace
 
 int SSTDumpTool::Run(int argc, char** argv) {
-  const char* dir_or_file = nullptr;
+  std::vector<const char*> dir_or_file_vec;
   uint64_t read_num = std::numeric_limits<uint64_t>::max();
   std::string command;
 
@@ -479,7 +479,7 @@ int SSTDumpTool::Run(int argc, char** argv) {
   uint64_t total_filter_block_size = 0;
   for (int i = 1; i < argc; i++) {
     if (strncmp(argv[i], "--file=", 7) == 0) {
-      dir_or_file = argv[i] + 7;
+      dir_or_file_vec.push_back(argv[i] + 7);
     } else if (strcmp(argv[i], "--output_hex") == 0) {
       output_hex = true;
     } else if (strcmp(argv[i], "--input_key_hex") == 0) {
@@ -574,7 +574,7 @@ int SSTDumpTool::Run(int argc, char** argv) {
     }
   }
 
-  if (dir_or_file == nullptr) {
+  if (dir_or_file_vec.empty()) {
     fprintf(stderr, "file or directory must be specified.\n\n");
     print_help();
     exit(1);
@@ -582,12 +582,25 @@ int SSTDumpTool::Run(int argc, char** argv) {
 
   std::vector<std::string> filenames;
   TERARKDB_NAMESPACE::Env* env = TERARKDB_NAMESPACE::Env::Default();
-  TERARKDB_NAMESPACE::Status st = env->GetChildren(dir_or_file, &filenames);
-  bool dir = true;
-  if (!st.ok()) {
-    filenames.clear();
-    filenames.push_back(dir_or_file);
-    dir = false;
+  TERARKDB_NAMESPACE::Status st;
+  auto is_sst = [](const std::string& filename) {
+    return filename.length() > 4 &&
+           filename.rfind(".sst") == filename.length() - 4;
+  };
+  for (auto dir_or_file : dir_or_file_vec) {
+    std::vector<std::string> filenames_tmp;
+    st = env->GetChildren(dir_or_file, &filenames_tmp);
+    if (!st.ok()) {
+      if (is_sst(dir_or_file)) {
+        filenames.push_back(dir_or_file);
+      }
+    } else {
+      for (auto filename : filenames_tmp) {
+        if (is_sst(filename)) {
+          filenames.push_back(std::string(dir_or_file) + "/" + filename);
+        }
+      }
+    }
   }
 
   fprintf(stdout, "from [%s] to [%s]\n",
@@ -595,17 +608,7 @@ int SSTDumpTool::Run(int argc, char** argv) {
           TERARKDB_NAMESPACE::Slice(to_key).ToString(true).c_str());
 
   uint64_t total_read = 0;
-  for (size_t i = 0; i < filenames.size(); i++) {
-    std::string filename = filenames.at(i);
-    if (filename.length() <= 4 ||
-        filename.rfind(".sst") != filename.length() - 4) {
-      // ignore
-      continue;
-    }
-    if (dir) {
-      filename = std::string(dir_or_file) + "/" + filename;
-    }
-
+  for (auto filename : filenames) {
     TERARKDB_NAMESPACE::SstFileDumper dumper(filename, verify_checksum,
                                              output_hex);
     if (!dumper.getStatus().ok()) {

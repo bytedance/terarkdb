@@ -1572,7 +1572,7 @@ Status DBImpl::FlushMemTable(ColumnFamilyData* cfd,
   }
   FlushRequest flush_req;
   {
-    WriteContext context;
+    WriteContext context(immutable_db_options_.info_log.get());
     InstrumentedMutexLock guard_lock(&mutex_);
 
     WriteThread::Writer w;
@@ -1645,7 +1645,7 @@ Status DBImpl::AtomicFlushMemTables(
   FlushRequest flush_req;
   autovector<ColumnFamilyData*> cfds;
   {
-    WriteContext context;
+    WriteContext context(immutable_db_options_.info_log.get());
     InstrumentedMutexLock guard_lock(&mutex_);
 
     WriteThread::Writer w;

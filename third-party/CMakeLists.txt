@@ -70,7 +70,7 @@ IF(WITH_ZLIB)
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/zlib
         CONFIGURE_COMMAND rm -rf build && mkdir -p build
         BUILD_IN_SOURCE 1
-        BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} -DCMAKE_BUILD_TYPE=Release && make
+        BUILD_COMMAND cd build && ../configure --prefix=${CMAKE_BINARY_DIR} --static && make "CFLAGS=-fPIC -O2" -j $(nproc)
         # zlib compile will produce some dirty files, we need to clean them.
         INSTALL_COMMAND cd build && make install && cd ../ && rm -rf build zconf.h.included && git checkout . )
     ADD_LIBRARY(zlib STATIC IMPORTED GLOBAL)
