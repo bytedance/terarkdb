@@ -23,7 +23,7 @@
 #include "rocksdb/write_batch.h"
 #include "util/fault_injection_test_env.h"
 #include "util/filename.h"
-#include "util/logging.h"
+#include "logging/logging.h"
 #include "util/mutexlock.h"
 #include "util/sync_point.h"
 #include "util/testharness.h"

@@ -22,7 +22,7 @@
 
 #include "rocksdb/env.h"
 #include "rocksdb/terark_namespace.h"
-#include "util/logging.h"
+#include "logging/logging.h"
 #include "util/sync_point.h"
 
 namespace TERARKDB_NAMESPACE {

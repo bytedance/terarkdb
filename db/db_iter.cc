@@ -25,7 +25,7 @@
 #include "rocksdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 #include "util/arena.h"
-#include "util/logging.h"
+#include "logging/logging.h"
 #include "util/string_util.h"
 #include "util/util.h"
 

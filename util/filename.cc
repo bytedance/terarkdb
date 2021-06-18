@@ -21,7 +21,7 @@
 #include "rocksdb/env.h"
 #include "rocksdb/terark_namespace.h"
 #include "util/file_reader_writer.h"
-#include "util/logging.h"
+#include "logging/logging.h"
 #include "util/stop_watch.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"

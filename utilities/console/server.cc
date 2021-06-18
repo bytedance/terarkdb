@@ -7,7 +7,7 @@
 #include "db/db_impl.h"
 #include "executor.h"
 #include "rocksdb/env.h"
-#include "util/logging.h"
+#include "logging/logging.h"
 
 #if __clang__
 #pragma clang diagnostic ignored "-Wunused-const-variable"

@@ -16,7 +16,7 @@
 #include <string>
 
 #include "rocksdb/terark_namespace.h"
-#include "util/logging.h"
+#include "logging/logging.h"
 #include "util/string_util.h"
 
 namespace TERARKDB_NAMESPACE {

@@ -25,7 +25,7 @@
 #include "rocksdb/types.h"
 #include "util/arena.h"
 #include "util/coding.h"
-#include "util/logging.h"
+#include "logging/logging.h"
 
 namespace TERARKDB_NAMESPACE {
 

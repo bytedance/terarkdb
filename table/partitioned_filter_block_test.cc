@@ -13,7 +13,7 @@
 #include "table/index_builder.h"
 #include "util/coding.h"
 #include "util/hash.h"
-#include "util/logging.h"
+#include "logging/logging.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 

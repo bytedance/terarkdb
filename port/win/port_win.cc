@@ -34,7 +34,7 @@
 #endif
 
 #include "rocksdb/terark_namespace.h"
-#include "util/logging.h"
+#include "logging/logging.h"
 
 namespace TERARKDB_NAMESPACE {
 namespace port {

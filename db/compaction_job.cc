@@ -76,7 +76,7 @@
 #include "util/filename.h"
 #include "util/heap.h"
 #include "util/log_buffer.h"
-#include "util/logging.h"
+#include "logging/logging.h"
 #include "util/random.h"
 #include "util/sst_file_manager_impl.h"
 #include "util/stop_watch.h"

@@ -25,7 +25,7 @@
 #include "table/data_block_footer.h"
 #include "table/format.h"
 #include "util/coding.h"
-#include "util/logging.h"
+#include "logging/logging.h"
 
 namespace TERARKDB_NAMESPACE {
 

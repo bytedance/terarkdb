@@ -53,7 +53,7 @@
 #include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/compression_context_cache.h"
-#include "util/logging.h"
+#include "logging/logging.h"
 #include "util/random.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"

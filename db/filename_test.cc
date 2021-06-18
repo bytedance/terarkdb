@@ -12,7 +12,7 @@
 #include "db/dbformat.h"
 #include "port/port.h"
 #include "rocksdb/terark_namespace.h"
-#include "util/logging.h"
+#include "logging/logging.h"
 #include "util/testharness.h"
 
 namespace TERARKDB_NAMESPACE {

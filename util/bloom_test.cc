@@ -22,7 +22,7 @@ int main() {
 #include "table/full_filter_bits_builder.h"
 #include "util/arena.h"
 #include "util/gflags_compat.h"
-#include "util/logging.h"
+#include "logging/logging.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 

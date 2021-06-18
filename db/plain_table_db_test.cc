@@ -31,7 +31,7 @@
 #include "table/table_builder.h"
 #include "util/filename.h"
 #include "util/hash.h"
-#include "util/logging.h"
+#include "logging/logging.h"
 #include "util/mutexlock.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
