@@ -27,9 +27,9 @@
 #include "env/io_posix.h"
 #include "monitoring/iostats_context_imp.h"
 #include "rocksdb/env.h"
-#include "test_util/sync_point.h"
+#include "util/sync_point.h"
 
-namespace TERARKDB_NAMEPSACE {
+namespace TERARKDB_NAMESPACE {
 
 class PosixLogger : public Logger {
  private:
@@ -182,4 +182,4 @@ class PosixLogger : public Logger {
   size_t GetLogFileSize() const override { return log_size_; }
 };
 
-}  // namespace TERARKDB_NAMEPSACE
+}  // namespace TERARKDB_NAMESPACE

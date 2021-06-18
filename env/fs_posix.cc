@@ -55,7 +55,7 @@
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/utilities/object_registry.h"
-#include "test_util/sync_point.h"
+#include "util/sync_point.h"
 #include "util/coding.h"
 #include "util/compression_context_cache.h"
 #include "util/random.h"
@@ -73,7 +73,7 @@
 #define EXT4_SUPER_MAGIC 0xEF53
 #endif
 
-namespace TERARKDB_NAMEPSACE {
+namespace TERARKDB_NAMESPACE {
 
 namespace {
 
@@ -1096,6 +1096,6 @@ static FactoryFunc<FileSystem> posix_filesystem_reg =
         });
 #endif
 
-}  // namespace TERARKDB_NAMEPSACE
+}  // namespace TERARKDB_NAMESPACE
 
 #endif

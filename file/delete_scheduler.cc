@@ -17,10 +17,10 @@
 #include "rocksdb/env.h"
 #include "rocksdb/file_system.h"
 #include "rocksdb/system_clock.h"
-#include "test_util/sync_point.h"
+#include "util/sync_point.h"
 #include "util/mutexlock.h"
 
-namespace TERARKDB_NAMEPSACE {
+namespace TERARKDB_NAMESPACE {
 
 DeleteScheduler::DeleteScheduler(SystemClock* clock, FileSystem* fs,
                                  int64_t rate_bytes_per_sec, Logger* info_log,
@@ -399,6 +399,6 @@ void DeleteScheduler::MaybeCreateBackgroundThread() {
   }
 }
 
-}  // namespace TERARKDB_NAMEPSACE
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

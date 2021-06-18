@@ -19,10 +19,10 @@
 #include "rocksdb/io_status.h"
 #include "rocksdb/listener.h"
 #include "rocksdb/rate_limiter.h"
-#include "test_util/sync_point.h"
+#include "util/sync_point.h"
 #include "util/aligned_buffer.h"
 
-namespace TERARKDB_NAMEPSACE {
+namespace TERARKDB_NAMESPACE {
 class Statistics;
 class SystemClock;
 
@@ -257,4 +257,4 @@ class WritableFileWriter {
   IOStatus RangeSync(uint64_t offset, uint64_t nbytes);
   IOStatus SyncInternal(bool use_fsync);
 };
-}  // namespace TERARKDB_NAMEPSACE
+}  // namespace TERARKDB_NAMESPACE

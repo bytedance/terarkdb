@@ -17,7 +17,7 @@
 #include "util/aligned_buffer.h"
 #include "util/rate_limiter.h"
 
-namespace TERARKDB_NAMEPSACE {
+namespace TERARKDB_NAMESPACE {
 namespace {
 class ReadaheadRandomAccessFile : public FSRandomAccessFile {
  public:
@@ -166,4 +166,4 @@ std::unique_ptr<FSRandomAccessFile> NewReadaheadRandomAccessFile(
       new ReadaheadRandomAccessFile(std::move(file), readahead_size));
   return result;
 }
-}  // namespace TERARKDB_NAMEPSACE
+}  // namespace TERARKDB_NAMESPACE

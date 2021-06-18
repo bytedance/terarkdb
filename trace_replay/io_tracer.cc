@@ -18,7 +18,7 @@
 #include "util/hash.h"
 #include "util/string_util.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMESPACE {
 IOTraceWriter::IOTraceWriter(SystemClock* clock,
                              const TraceOptions& trace_options,
                              std::unique_ptr<TraceWriter>&& trace_writer)
@@ -300,4 +300,4 @@ void IOTracer::WriteIOOp(const IOTraceRecord& record, IODebugContext* dbg) {
   }
   writer_.load()->WriteIOOp(record, dbg).PermitUncheckedError();
 }
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE

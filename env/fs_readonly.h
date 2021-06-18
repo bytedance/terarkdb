@@ -9,7 +9,7 @@
 
 #include "rocksdb/file_system.h"
 
-namespace TERARKDB_NAMEPSACE {
+namespace TERARKDB_NAMESPACE {
 
 // A FileSystem wrapper that only allows read-only operation.
 //
@@ -99,6 +99,6 @@ class ReadOnlyFileSystem : public FileSystemWrapper {
   }
 };
 
-}  // namespace TERARKDB_NAMEPSACE
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE

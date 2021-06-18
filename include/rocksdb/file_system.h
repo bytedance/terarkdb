@@ -33,7 +33,7 @@
 #include "rocksdb/table.h"
 #include "rocksdb/thread_status.h"
 
-namespace TERARKDB_NAMEPSACE {
+namespace TERARKDB_NAMESPACE {
 
 class FileLock;
 class FSDirectory;
@@ -1087,14 +1087,14 @@ class FSDirectory {
 // Typical usage is to inherit your wrapper from *Wrapper, e.g.:
 //
 // class MySequentialFileWrapper : public
-// TERARKDB_NAMEPSACE::FSSequentialFileWrapper {
+// TERARKDB_NAMESPACE::FSSequentialFileWrapper {
 //  public:
-//   MySequentialFileWrapper(TERARKDB_NAMEPSACE::FSSequentialFile* target):
-//     TERARKDB_NAMEPSACE::FSSequentialFileWrapper(target) {}
+//   MySequentialFileWrapper(TERARKDB_NAMESPACE::FSSequentialFile* target):
+//     TERARKDB_NAMESPACE::FSSequentialFileWrapper(target) {}
 //   Status Read(size_t n, FileSystem::IOOptions& options, Slice* result,
 //               char* scratch, FileSystem::IODebugContext* dbg) override {
 //     cout << "Doing a read of size " << n << "!" << endl;
-//     return TERARKDB_NAMEPSACE::FSSequentialFileWrapper::Read(n, options,
+//     return TERARKDB_NAMESPACE::FSSequentialFileWrapper::Read(n, options,
 //     result,
 //                                                 scratch, dbg);
 //   }
@@ -1536,4 +1536,4 @@ extern IOStatus WriteStringToFile(FileSystem* fs, const Slice& data,
 extern IOStatus ReadFileToString(FileSystem* fs, const std::string& fname,
                                  std::string* data);
 
-}  // namespace TERARKDB_NAMEPSACE
+}  // namespace TERARKDB_NAMESPACE

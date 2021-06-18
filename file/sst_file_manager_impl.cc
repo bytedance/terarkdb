@@ -8,14 +8,14 @@
 #include <cinttypes>
 #include <vector>
 
-#include "db/db_impl/db_impl.h"
+#include "db/db_impl.h"
 #include "port/port.h"
 #include "rocksdb/env.h"
 #include "rocksdb/sst_file_manager.h"
-#include "test_util/sync_point.h"
+#include "util/sync_point.h"
 #include "util/mutexlock.h"
 
-namespace TERARKDB_NAMEPSACE {
+namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE
 SstFileManagerImpl::SstFileManagerImpl(
@@ -522,4 +522,4 @@ SstFileManager* NewSstFileManager(Env* /*env*/,
 
 #endif  // ROCKSDB_LITE
 
-}  // namespace TERARKDB_NAMEPSACE
+}  // namespace TERARKDB_NAMESPACE

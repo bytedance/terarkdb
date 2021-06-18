@@ -7,7 +7,7 @@
 
 #include <cstring>
 
-namespace TERARKDB_NAMEPSACE {
+namespace TERARKDB_NAMESPACE {
 
 Status LineFileReader::Create(const std::shared_ptr<FileSystem>& fs,
                               const std::string& fname,
@@ -62,4 +62,4 @@ bool LineFileReader::ReadLine(std::string* out) {
   }
 }
 
-}  // namespace TERARKDB_NAMEPSACE
+}  // namespace TERARKDB_NAMESPACE

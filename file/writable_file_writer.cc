@@ -17,12 +17,12 @@
 #include "monitoring/iostats_context_imp.h"
 #include "port/port.h"
 #include "rocksdb/system_clock.h"
-#include "test_util/sync_point.h"
+#include "util/sync_point.h"
 #include "util/crc32c.h"
 #include "util/random.h"
 #include "util/rate_limiter.h"
 
-namespace TERARKDB_NAMEPSACE {
+namespace TERARKDB_NAMESPACE {
 Status WritableFileWriter::Create(const std::shared_ptr<FileSystem>& fs,
                                   const std::string& fname,
                                   const FileOptions& file_opts,
@@ -568,4 +568,4 @@ IOStatus WritableFileWriter::WriteDirect() {
   return s;
 }
 #endif  // !ROCKSDB_LITE
-}  // namespace TERARKDB_NAMEPSACE
+}  // namespace TERARKDB_NAMESPACE

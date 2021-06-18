@@ -14,10 +14,10 @@
 #include "file/filename.h"
 #include "port/port.h"
 #include "port/util_logger.h"
-#include "test_util/sync_point.h"
+#include "util/sync_point.h"
 #include "util/mutexlock.h"
 
-namespace TERARKDB_NAMEPSACE {
+namespace TERARKDB_NAMESPACE {
 class FileSystem;
 class SystemClock;
 
@@ -169,4 +169,4 @@ Status CreateLoggerFromOptions(const std::string& dbname,
                                const DBOptions& options,
                                std::shared_ptr<Logger>* logger);
 
-}  // namespace TERARKDB_NAMEPSACE
+}  // namespace TERARKDB_NAMESPACE

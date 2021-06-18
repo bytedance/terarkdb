@@ -11,11 +11,11 @@
 
 #include "port/port.h"
 
-#include "db/compaction/compaction.h"
+#include "db/compaction.h"
 #include "file/delete_scheduler.h"
 #include "rocksdb/sst_file_manager.h"
 
-namespace TERARKDB_NAMEPSACE {
+namespace TERARKDB_NAMESPACE {
 class ErrorHandler;
 class FileSystem;
 class SystemClock;
@@ -191,6 +191,6 @@ class SstFileManagerImpl : public SstFileManager {
   std::shared_ptr<Statistics> stats_;
 };
 
-}  // namespace TERARKDB_NAMEPSACE
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // ROCKSDB_LITE
