@@ -8,7 +8,7 @@
 
 #include "file/sequence_file_reader.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMEPSACE {
 
 // A wrapper on top of Env::SequentialFile for reading text lines from a file.
 // Lines are delimited by '\n'. The last line may or may not include a
@@ -56,4 +56,4 @@ class LineFileReader {
   const Status& GetStatus() const { return status_; }
 };
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMEPSACE

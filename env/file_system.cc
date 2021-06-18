@@ -8,7 +8,7 @@
 #include "options/db_options.h"
 #include "rocksdb/utilities/object_registry.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMEPSACE {
 
 FileSystem::FileSystem() {}
 
@@ -137,4 +137,4 @@ IOStatus ReadFileToString(FileSystem* fs, const std::string& fname,
   return s;
 }
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMEPSACE

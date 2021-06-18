@@ -73,7 +73,7 @@
 #define EXT4_SUPER_MAGIC 0xEF53
 #endif
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMEPSACE {
 
 namespace {
 
@@ -1096,6 +1096,6 @@ static FactoryFunc<FileSystem> posix_filesystem_reg =
         });
 #endif
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMEPSACE
 
 #endif

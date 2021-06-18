@@ -16,7 +16,7 @@
 #undef LoadLibrary
 #endif
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMEPSACE {
 
 class CompositeEnv : public Env {
  public:
@@ -339,4 +339,4 @@ class CompositeEnvWrapper : public CompositeEnv {
  private:
   Env* env_target_;
 };
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMEPSACE

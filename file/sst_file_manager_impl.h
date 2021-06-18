@@ -15,7 +15,7 @@
 #include "file/delete_scheduler.h"
 #include "rocksdb/sst_file_manager.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMEPSACE {
 class ErrorHandler;
 class FileSystem;
 class SystemClock;
@@ -191,6 +191,6 @@ class SstFileManagerImpl : public SstFileManager {
   std::shared_ptr<Statistics> stats_;
 };
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMEPSACE
 
 #endif  // ROCKSDB_LITE

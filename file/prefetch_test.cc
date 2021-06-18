@@ -6,7 +6,7 @@
 #include "db/db_test_util.h"
 #include "test_util/sync_point.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMEPSACE {
 
 class MockFS;
 
@@ -324,7 +324,7 @@ class PrefetchTest1 : public DBTestBase,
   PrefetchTest1() : DBTestBase("/prefetch_test1", true) {}
 };
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMEPSACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

@@ -20,7 +20,7 @@
 #include "rocksdb/rate_limiter.h"
 #include "util/aligned_buffer.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMEPSACE {
 class Statistics;
 class HistogramImpl;
 class SystemClock;
@@ -144,4 +144,4 @@ class RandomAccessFileReader {
 
   IOStatus PrepareIOOptions(const ReadOptions& ro, IOOptions& opts);
 };
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMEPSACE

@@ -13,7 +13,7 @@
 #include "logging/log_buffer.h"
 #include "rocksdb/env.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMEPSACE {
 
 class JSONWriter {
  public:
@@ -200,4 +200,4 @@ class EventLogger {
   Logger* logger_;
 };
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMEPSACE
