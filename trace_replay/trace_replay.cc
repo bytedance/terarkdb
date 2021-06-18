@@ -20,7 +20,7 @@
 #include "util/string_util.h"
 #include "util/threadpool_imp.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMESPACE {
 
 const std::string kTraceMagic = "feedcafedeadbeef";
 
@@ -749,4 +749,4 @@ void Replayer::BGWorkIterSeekForPrev(void* arg) {
   return;
 }
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE

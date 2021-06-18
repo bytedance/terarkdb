@@ -10,10 +10,10 @@
 #include <utility>
 
 #include "rocksdb/options.h"
-#include "rocksdb/rocksdb_namespace.h"
+#include "rocksdb/terark_namespace.h"
 #include "rocksdb/status.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMESPACE {
 
 // This file contains Tracer and Replayer classes that enable capturing and
 // replaying RocksDB traces.
@@ -263,4 +263,4 @@ struct ReplayerWorkerArg {
   int trace_file_version;
 };
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE

@@ -4,9 +4,9 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include "db/db_test_util.h"
-#include "test_util/sync_point.h"
+#include "util/sync_point.h"
 
-namespace TERARKDB_NAMEPSACE {
+namespace TERARKDB_NAMESPACE {
 
 class MockFS;
 
@@ -324,7 +324,7 @@ class PrefetchTest1 : public DBTestBase,
   PrefetchTest1() : DBTestBase("/prefetch_test1", true) {}
 };
 
-}  // namespace TERARKDB_NAMEPSACE
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

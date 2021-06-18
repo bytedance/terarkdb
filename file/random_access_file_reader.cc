@@ -17,11 +17,11 @@
 #include "monitoring/iostats_context_imp.h"
 #include "port/port.h"
 #include "table/format.h"
-#include "test_util/sync_point.h"
+#include "util/sync_point.h"
 #include "util/random.h"
 #include "util/rate_limiter.h"
 
-namespace TERARKDB_NAMEPSACE {
+namespace TERARKDB_NAMESPACE {
 IOStatus RandomAccessFileReader::Create(
     const std::shared_ptr<FileSystem>& fs, const std::string& fname,
     const FileOptions& file_opts,
@@ -332,4 +332,4 @@ IOStatus RandomAccessFileReader::PrepareIOOptions(const ReadOptions& ro,
     return PrepareIOFromReadOptions(ro, SystemClock::Default().get(), opts);
   }
 }
-}  // namespace TERARKDB_NAMEPSACE
+}  // namespace TERARKDB_NAMESPACE

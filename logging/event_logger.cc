@@ -12,7 +12,7 @@
 
 #include "util/string_util.h"
 
-namespace TERARKDB_NAMEPSACE {
+namespace TERARKDB_NAMESPACE {
 
 EventLoggerStream::EventLoggerStream(Logger* logger)
     : logger_(logger),
@@ -52,7 +52,7 @@ void EventLogger::Log(Logger* logger, const JSONWriter& jwriter) {
 #ifdef ROCKSDB_PRINT_EVENTS_TO_STDOUT
   printf("%s\n", jwriter.Get().c_str());
 #else
-  TERARKDB_NAMEPSACE::Log(logger, "%s %s", Prefix(), jwriter.Get().c_str());
+  TERARKDB_NAMESPACE::Log(logger, "%s %s", Prefix(), jwriter.Get().c_str());
 #endif
 }
 
@@ -62,9 +62,9 @@ void EventLogger::LogToBuffer(LogBuffer* log_buffer, const JSONWriter& jwriter,
   printf("%s\n", jwriter.Get().c_str());
 #else
   assert(log_buffer);
-  TERARKDB_NAMEPSACE::LogToBuffer(log_buffer, max_log_size, "%s %s", Prefix(),
+  TERARKDB_NAMESPACE::LogToBuffer(log_buffer, max_log_size, "%s %s", Prefix(),
                                  jwriter.Get().c_str());
 #endif
 }
 
-}  // namespace TERARKDB_NAMEPSACE
+}  // namespace TERARKDB_NAMESPACE

@@ -44,7 +44,7 @@
 #include <vector>
 
 #include "env/io_posix.h"
-#include "env/posix_logger.h"
+#include "logging/posix_logger.h"
 #include "monitoring/iostats_context_imp.h"
 #include "monitoring/thread_status_updater.h"
 #include "port/port.h"

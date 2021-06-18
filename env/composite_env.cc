@@ -5,7 +5,7 @@
 //
 #include "env/composite_env_wrapper.h"
 
-namespace TERARKDB_NAMEPSACE {
+namespace TERARKDB_NAMESPACE {
 namespace {
 // The CompositeEnvWrapper class provides an interface that is compatible
 // with the old monolithic Env API, and an implementation that wraps around
@@ -380,4 +380,4 @@ Status CompositeEnv::NewDirectory(const std::string& name,
   return status;
 }
 
-}  // namespace TERARKDB_NAMEPSACE
+}  // namespace TERARKDB_NAMESPACE

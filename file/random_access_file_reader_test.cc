@@ -11,12 +11,12 @@
 #include "port/port.h"
 #include "port/stack_trace.h"
 #include "rocksdb/file_system.h"
-#include "test_util/sync_point.h"
+#include "util/sync_point.h"
 #include "test_util/testharness.h"
 #include "test_util/testutil.h"
 #include "util/random.h"
 
-namespace TERARKDB_NAMEPSACE {
+namespace TERARKDB_NAMESPACE {
 
 class RandomAccessFileReaderTest : public testing::Test {
  public:
@@ -94,13 +94,13 @@ TEST_F(RandomAccessFileReaderTest, ReadDirectIO) {
 
 TEST_F(RandomAccessFileReaderTest, MultiReadDirectIO) {
   std::vector<FSReadRequest> aligned_reqs;
-  TERARKDB_NAMEPSACE::SyncPoint::GetInstance()->SetCallBack(
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "RandomAccessFileReader::MultiRead:AlignedReqs", [&](void* reqs) {
         // Copy reqs, since it's allocated on stack inside MultiRead, which will
         // be deallocated after MultiRead returns.
         aligned_reqs = *reinterpret_cast<std::vector<FSReadRequest>*>(reqs);
       });
-  TERARKDB_NAMEPSACE::SyncPoint::GetInstance()->EnableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
 
   // Creates a file with 3 pages.
   std::string fname = "multi-read-direct-io";
@@ -282,8 +282,8 @@ TEST_F(RandomAccessFileReaderTest, MultiReadDirectIO) {
     ASSERT_EQ(aligned_r1.len, page_size);
   }
 
-  TERARKDB_NAMEPSACE::SyncPoint::GetInstance()->DisableProcessing();
-  TERARKDB_NAMEPSACE::SyncPoint::GetInstance()->ClearAllCallBacks();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->ClearAllCallBacks();
 }
 
 #endif  // ROCKSDB_LITE
@@ -474,10 +474,10 @@ TEST(FSReadRequest, TryMerge) {
   }
 }
 
-}  // namespace TERARKDB_NAMEPSACE
+}  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {
-  TERARKDB_NAMEPSACE::port::InstallStackTraceHandler();
+  TERARKDB_NAMESPACE::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

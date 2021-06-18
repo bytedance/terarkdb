@@ -14,7 +14,7 @@
 #include "rocksdb/system_clock.h"
 #include "util/mutexlock.h"
 
-namespace TERARKDB_NAMEPSACE {
+namespace TERARKDB_NAMESPACE {
 
 #ifndef ROCKSDB_LITE
 // -- AutoRollLogger
@@ -307,4 +307,4 @@ Status CreateLoggerFromOptions(const std::string& dbname,
   return s;
 }
 
-}  // namespace TERARKDB_NAMEPSACE
+}  // namespace TERARKDB_NAMESPACE

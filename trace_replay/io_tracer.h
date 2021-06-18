@@ -13,7 +13,7 @@
 #include "rocksdb/options.h"
 #include "trace_replay/trace_replay.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMESPACE {
 class SystemClock;
 class TraceReader;
 class TraceWriter;
@@ -194,4 +194,4 @@ class IOTracer {
   bool tracing_enabled;
 };
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE

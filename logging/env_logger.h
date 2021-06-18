@@ -20,10 +20,10 @@
 #include "monitoring/iostats_context_imp.h"
 #include "rocksdb/env.h"
 #include "rocksdb/slice.h"
-#include "test_util/sync_point.h"
+#include "util/sync_point.h"
 #include "util/mutexlock.h"
 
-namespace TERARKDB_NAMEPSACE {
+namespace TERARKDB_NAMESPACE {
 
 class EnvLogger : public Logger {
  public:
@@ -164,4 +164,4 @@ class EnvLogger : public Logger {
   std::atomic<bool> flush_pending_;
 };
 
-}  // namespace TERARKDB_NAMEPSACE
+}  // namespace TERARKDB_NAMESPACE

@@ -7,7 +7,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #pragma once
-#include <rocksdb/rocksdb_namespace.h>
+#include <rocksdb/terark_namespace.h>
 #include <rocksdb/status.h>
 #include <stdint.h>
 
@@ -18,7 +18,7 @@
 #undef GetCurrentTime
 #endif
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMESPACE {
 struct ConfigOptions;
 
 // A SystemClock is an interface used by the rocksdb implementation to access
@@ -99,4 +99,4 @@ class SystemClockWrapper : public SystemClock {
   std::shared_ptr<SystemClock> target_;
 };
 
-}  // end namespace ROCKSDB_NAMESPACE
+}  // end namespace TERARKDB_NAMESPACE

@@ -12,7 +12,7 @@
 
 #include "rocksdb/terark_namespace.h"
 
-namespace TERARKDB_NAMEPSACE {
+namespace TERARKDB_NAMESPACE {
 class FSRandomAccessFile;
 // This file provides the following main abstractions:
 // SequentialFileReader : wrapper over Env::SequentialFile
@@ -26,4 +26,4 @@ class FSRandomAccessFile;
 // Compaction Table Readers.
 std::unique_ptr<FSRandomAccessFile> NewReadaheadRandomAccessFile(
     std::unique_ptr<FSRandomAccessFile>&& file, size_t readahead_size);
-}  // namespace TERARKDB_NAMEPSACE
+}  // namespace TERARKDB_NAMESPACE

@@ -16,11 +16,11 @@
 #include "monitoring/histogram.h"
 #include "monitoring/iostats_context_imp.h"
 #include "port/port.h"
-#include "test_util/sync_point.h"
+#include "util/sync_point.h"
 #include "util/random.h"
 #include "util/rate_limiter.h"
 
-namespace TERARKDB_NAMEPSACE {
+namespace TERARKDB_NAMESPACE {
 Status FilePrefetchBuffer::Prefetch(const IOOptions& opts,
                                     RandomAccessFileReader* reader,
                                     uint64_t offset, size_t n,
@@ -153,4 +153,4 @@ bool FilePrefetchBuffer::TryReadFromCache(const IOOptions& opts,
   *result = Slice(buffer_.BufferStart() + offset_in_buffer, n);
   return true;
 }
-}  // namespace TERARKDB_NAMEPSACE
+}  // namespace TERARKDB_NAMESPACE

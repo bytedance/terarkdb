@@ -34,7 +34,7 @@
 #include <terark/thread/fiber_aio.hpp>
 #endif
 
-#include "env/posix_logger.h"
+#include "logging/posix_logger.h"
 #include "monitoring/iostats_context_imp.h"
 #include "port/port.h"
 #include "rocksdb/slice.h"

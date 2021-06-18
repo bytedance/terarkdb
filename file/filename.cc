@@ -14,11 +14,11 @@
 #include <vector>
 #include "file/writable_file_writer.h"
 #include "rocksdb/env.h"
-#include "test_util/sync_point.h"
+#include "util/sync_point.h"
 #include "util/stop_watch.h"
 #include "util/string_util.h"
 
-namespace TERARKDB_NAMEPSACE {
+namespace TERARKDB_NAMESPACE {
 
 static const std::string kRocksDbTFileExt = "sst";
 static const std::string kLevelDbTFileExt = "ldb";
@@ -474,4 +474,4 @@ std::string NormalizePath(const std::string& path) {
   return dst;
 }
 
-}  // namespace TERARKDB_NAMEPSACE
+}  // namespace TERARKDB_NAMESPACE
