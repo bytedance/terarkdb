@@ -17,7 +17,7 @@
 
 #include "rocksdb/status.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMEPSACE {
 
 class Env;
 class FileSystem;
@@ -147,6 +147,6 @@ class DeleteScheduler {
   std::shared_ptr<Statistics> stats_;
 };
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMEPSACE
 
 #endif  // ROCKSDB_LITE

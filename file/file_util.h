@@ -16,7 +16,7 @@
 #include "rocksdb/types.h"
 #include "trace_replay/io_tracer.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMEPSACE {
 // use_fsync maps to options.use_fsync, which determines the way that
 // the file is synced after copying.
 extern IOStatus CopyFile(FileSystem* fs, const std::string& source,
@@ -91,4 +91,4 @@ inline IOStatus PrepareIOFromReadOptions(const ReadOptions& ro,
 // Test method to delete the input directory and all of its contents.
 // This method is destructive and is meant for use only in tests!!!
 Status DestroyDir(Env* env, const std::string& dir);
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMEPSACE

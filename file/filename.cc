@@ -18,7 +18,7 @@
 #include "util/stop_watch.h"
 #include "util/string_util.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMEPSACE {
 
 static const std::string kRocksDbTFileExt = "sst";
 static const std::string kLevelDbTFileExt = "ldb";
@@ -474,4 +474,4 @@ std::string NormalizePath(const std::string& path) {
   return dst;
 }
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMEPSACE

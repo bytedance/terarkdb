@@ -21,7 +21,7 @@
 #include <cstring>
 #include "status.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMEPSACE {
 
 class IOStatus : public Status {
  public:
@@ -266,4 +266,4 @@ inline IOStatus status_to_io_status(Status&& status) {
   }
 }
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMEPSACE

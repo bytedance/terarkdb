@@ -8,7 +8,7 @@
 #include "port/sys_time.h"
 #include "port/port.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMEPSACE {
 
 LogBuffer::LogBuffer(const InfoLogLevel log_level,
                      Logger*info_log)
@@ -89,4 +89,4 @@ void LogToBuffer(LogBuffer* log_buffer, const char* format, ...) {
   }
 }
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMEPSACE

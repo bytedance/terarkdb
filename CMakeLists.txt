@@ -597,12 +597,20 @@ set(SOURCES
         db/write_batch_base.cc
         db/write_controller.cc
         db/write_thread.cc
+        env/composite_env.cc
         env/env.cc
         env/env_chroot.cc
         env/env_encryption.cc
         env/env_hdfs.cc
         env/env_io_prof.cc
+        env/file_system_tracer.cc
+        env/file_system.cc
+        env/fs_posix.cc
+        env/fs_remap.cc
         env/mock_env.cc
+        file/delete_scheduler.cc
+        file/file_util.cc
+        file/filename.cc
         memtable/alloc_tracker.cc
         memtable/concurrent_hashduallist_rep.cc
         memtable/hash_cuckoo_rep.cc
@@ -680,12 +688,9 @@ set(SOURCES
         util/compression_context_cache.cc
         util/concurrent_arena.cc
         util/crc32c.cc
-        util/delete_scheduler.cc
         util/dynamic_bloom.cc
         util/event_logger.cc
         util/file_reader_writer.cc
-        util/file_util.cc
-        util/filename.cc
         util/filter_policy.cc
         util/hash.cc
         util/iterator_cache.cc

@@ -13,7 +13,7 @@
 #include "rocksdb/env.h"
 #include "rocksdb/file_system.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMEPSACE {
 // Returns a WritableFile.
 //
 // env     : the Env.
@@ -27,4 +27,4 @@ extern IOStatus NewWritableFile(FileSystem* fs, const std::string& fname,
 #ifndef NDEBUG
 bool IsFileSectorAligned(const size_t off, size_t sector_size);
 #endif  // NDEBUG
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMEPSACE

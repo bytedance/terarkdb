@@ -15,7 +15,7 @@
 #include "test_util/sync_point.h"
 #include "util/mutexlock.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMEPSACE {
 
 #ifndef ROCKSDB_LITE
 SstFileManagerImpl::SstFileManagerImpl(
@@ -522,4 +522,4 @@ SstFileManager* NewSstFileManager(Env* /*env*/,
 
 #endif  // ROCKSDB_LITE
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMEPSACE

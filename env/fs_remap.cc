@@ -7,7 +7,7 @@
 
 #include "env/fs_remap.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMEPSACE {
 
 RemapFileSystem::RemapFileSystem(const std::shared_ptr<FileSystem>& base)
     : FileSystemWrapper(base) {}
@@ -301,6 +301,6 @@ IOStatus RemapFileSystem::GetAbsolutePath(const std::string& db_path,
                                             output_path, dbg);
 }
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMEPSACE
 
 #endif  // ROCKSDB_LITE

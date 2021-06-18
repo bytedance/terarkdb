@@ -8,7 +8,7 @@
 #include "rocksdb/file_system.h"
 #include "rocksdb/system_clock.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMEPSACE {
 
 IOStatus FileSystemTracingWrapper::NewSequentialFile(
     const std::string& fname, const FileOptions& file_opts,
@@ -515,4 +515,4 @@ IOStatus FSRandomRWFileTracingWrapper::Fsync(const IOOptions& options,
   io_tracer_->WriteIOOp(io_record, dbg);
   return s;
 }
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMEPSACE

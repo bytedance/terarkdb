@@ -21,7 +21,7 @@
 #include "util/random.h"
 #include "util/rate_limiter.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMEPSACE {
 IOStatus RandomAccessFileReader::Create(
     const std::shared_ptr<FileSystem>& fs, const std::string& fname,
     const FileOptions& file_opts,
@@ -332,4 +332,4 @@ IOStatus RandomAccessFileReader::PrepareIOOptions(const ReadOptions& ro,
     return PrepareIOFromReadOptions(ro, SystemClock::Default().get(), opts);
   }
 }
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMEPSACE

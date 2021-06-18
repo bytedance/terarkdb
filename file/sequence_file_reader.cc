@@ -21,7 +21,7 @@
 #include "util/random.h"
 #include "util/rate_limiter.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMEPSACE {
 Status SequentialFileReader::Create(
     const std::shared_ptr<FileSystem>& fs, const std::string& fname,
     const FileOptions& file_opts, std::unique_ptr<SequentialFileReader>* reader,
@@ -246,4 +246,4 @@ SequentialFileReader::NewReadaheadSequentialFile(
       new ReadaheadSequentialFile(std::move(file), readahead_size));
   return result;
 }
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMEPSACE
