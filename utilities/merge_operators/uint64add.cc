@@ -10,7 +10,7 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
-#include "util/logging.h"
+#include "logging/logging.h"
 #include "utilities/merge_operators.h"
 
 using namespace TERARKDB_NAMESPACE;

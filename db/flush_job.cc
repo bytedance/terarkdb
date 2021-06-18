@@ -50,7 +50,7 @@
 #include "util/file_util.h"
 #include "util/filename.h"
 #include "util/log_buffer.h"
-#include "util/logging.h"
+#include "logging/logging.h"
 #include "util/mutexlock.h"
 #include "util/stop_watch.h"
 #include "util/sync_point.h"

@@ -19,7 +19,7 @@
 #include "util/crc32c.h"
 #include "util/file_reader_writer.h"
 #include "util/filename.h"
-#include "util/logging.h"
+#include "logging/logging.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
 #include "utilities/checkpoint/checkpoint_impl.h"

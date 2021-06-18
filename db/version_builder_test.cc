@@ -10,7 +10,7 @@
 #include "db/version_edit.h"
 #include "db/version_set.h"
 #include "rocksdb/terark_namespace.h"
-#include "util/logging.h"
+#include "logging/logging.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
 #include "util/testutil.h"

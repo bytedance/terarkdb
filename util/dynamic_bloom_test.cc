@@ -29,7 +29,7 @@ int main() {
 #include "rocksdb/terark_namespace.h"
 #include "util/arena.h"
 #include "util/gflags_compat.h"
-#include "util/logging.h"
+#include "logging/logging.h"
 #include "util/stop_watch.h"
 #include "util/testharness.h"
 #include "util/testutil.h"

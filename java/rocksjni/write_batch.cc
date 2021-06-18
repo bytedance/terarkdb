@@ -20,7 +20,7 @@
 #include "rocksjni/portal.h"
 #include "rocksjni/writebatchhandlerjnicallback.h"
 #include "table/scoped_arena_iterator.h"
-#include "util/logging.h"
+#include "logging/logging.h"
 
 /*
  * Class:     org_rocksdb_WriteBatch
