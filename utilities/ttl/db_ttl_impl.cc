@@ -12,7 +12,7 @@
 #include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/db_ttl.h"
 #include "util/coding.h"
-#include "util/filename.h"
+#include "file/filename.h"
 
 namespace TERARKDB_NAMESPACE {
 

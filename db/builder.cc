@@ -34,7 +34,7 @@
 #include "table/internal_iterator.h"
 #include "util/c_style_callback.h"
 #include "util/file_reader_writer.h"
-#include "util/filename.h"
+#include "file/filename.h"
 #include "util/stop_watch.h"
 #include "util/sync_point.h"
 

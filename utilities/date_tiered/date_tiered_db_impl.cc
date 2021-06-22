@@ -19,7 +19,7 @@
 #include "rocksdb/utilities/date_tiered_db.h"
 #include "table/merging_iterator.h"
 #include "util/coding.h"
-#include "util/filename.h"
+#include "file/filename.h"
 #include "util/string_util.h"
 
 namespace TERARKDB_NAMESPACE {

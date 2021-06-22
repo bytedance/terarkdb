@@ -44,7 +44,7 @@
 #include "table/table_reader.h"
 #include "table/two_level_iterator.h"
 #include "util/c_style_callback.h"
-#include "util/filename.h"
+#include "file/filename.h"
 
 #ifndef WITH_TERARK_ZIP
 #define USE_AJSON 1

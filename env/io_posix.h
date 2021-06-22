@@ -294,7 +294,7 @@ class PosixMmapReadableFile : public FSRandomAccessFile {
   PosixMmapReadableFile(const int fd, const std::string& fname, void* base,
                         size_t length, const EnvOptions& options);
   virtual ~PosixMmapReadableFile();
-  bool is_mmap_open() const final { return true; }
+
   virtual IOStatus Read(uint64_t offset, size_t n, const IOOptions& opts,
                         Slice* result, char* scratch,
                         IODebugContext* dbg) const override;

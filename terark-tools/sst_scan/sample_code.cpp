@@ -23,7 +23,7 @@
 #include <table/table_reader.h>
 #include <terark/zbs/sufarr_inducedsort.h>
 #include <util/coding.h>
-#include <util/filename.h>
+#include <file/filename.h>
 #include <utilities/merge_operators/string_append/stringappend.h>
 #include <utilities/merge_operators/string_append/stringappend2.h>
 

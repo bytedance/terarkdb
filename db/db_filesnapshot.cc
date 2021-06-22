@@ -24,7 +24,7 @@
 #include "rocksdb/env.h"
 #include "rocksdb/terark_namespace.h"
 #include "util/file_util.h"
-#include "util/filename.h"
+#include "file/filename.h"
 #include "util/mutexlock.h"
 #include "util/sync_point.h"
 

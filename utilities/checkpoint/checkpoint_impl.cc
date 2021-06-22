@@ -29,7 +29,7 @@
 #include "rocksdb/transaction_log.h"
 #include "rocksdb/utilities/checkpoint.h"
 #include "util/file_util.h"
-#include "util/filename.h"
+#include "file/filename.h"
 #include "util/sync_point.h"
 
 namespace TERARKDB_NAMESPACE {
@@ -305,13 +305,13 @@ Status CheckpointImpl::CreateCustomCheckpoint(
          live_wal_files[i]->LogNumber() >= min_log_num)) {
       if (i + 1 == wal_size) {
         s = copy_file_cb(db_options.wal_dir, live_wal_files[i]->PathName(),
-                         live_wal_files[i]->SizeFileBytes(), kLogFile);
+                         live_wal_files[i]->SizeFileBytes(), kWalFile);
         break;
       }
       if (same_fs) {
         // we only care about live log files
         s = link_file_cb(db_options.wal_dir, live_wal_files[i]->PathName(),
-                         kLogFile);
+                         kWalFile);
         if (s.IsNotSupported()) {
           same_fs = false;
           s = Status::OK();
@@ -319,7 +319,7 @@ Status CheckpointImpl::CreateCustomCheckpoint(
       }
       if (!same_fs) {
         s = copy_file_cb(db_options.wal_dir, live_wal_files[i]->PathName(), 0,
-                         kLogFile);
+                         kWalFile);
       }
     }
   }

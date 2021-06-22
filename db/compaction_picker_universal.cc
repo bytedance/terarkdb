@@ -25,7 +25,7 @@
 #include "db/map_builder.h"
 #include "monitoring/statistics.h"
 #include "rocksdb/terark_namespace.h"
-#include "util/filename.h"
+#include "file/filename.h"
 #include "util/log_buffer.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"

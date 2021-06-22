@@ -448,7 +448,7 @@ Status DBImpl::Recover(
     for (size_t i = 0; i < filenames.size(); i++) {
       uint64_t number;
       FileType type;
-      if (ParseFileName(filenames[i], &number, &type) && type == kLogFile) {
+      if (ParseFileName(filenames[i], &number, &type) && type == kWalFile) {
         if (is_new_db) {
           return Status::Corruption(
               "While creating a new Db, wal_dir contains "

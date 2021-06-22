@@ -74,7 +74,7 @@ int main() {
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/terark_namespace.h"
-#include "util/filename.h"
+#include "file/filename.h"
 #include "util/gflags_compat.h"
 
 using GFLAGS_NAMESPACE::ParseCommandLineFlags;

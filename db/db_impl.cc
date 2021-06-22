@@ -76,7 +76,7 @@
 #include "util/crc32c.h"
 #include "util/file_reader_writer.h"
 #include "util/file_util.h"
-#include "util/filename.h"
+#include "file/filename.h"
 #include "util/log_buffer.h"
 #include "logging/logging.h"
 #include "util/sst_file_manager_impl.h"
@@ -2986,14 +2986,14 @@ Status DBImpl::DeleteFile(std::string name) {
   FileType type;
   WalFileType log_type;
   if (!ParseFileName(name, &number, &type, &log_type) ||
-      (type != kTableFile && type != kLogFile)) {
+      (type != kTableFile && type != kWalFile)) {
     ROCKS_LOG_ERROR(immutable_db_options_.info_log, "DeleteFile %s failed.\n",
                     name.c_str());
     return Status::InvalidArgument("Invalid file name");
   }
 
   Status status;
-  if (type == kLogFile) {
+  if (type == kWalFile) {
     // Only allow deleting archived log files
     if (log_type != kArchivedLogFile) {
       ROCKS_LOG_ERROR(immutable_db_options_.info_log,
@@ -3798,7 +3798,7 @@ Status DestroyDB(const std::string& dbname, const Options& options,
     if (env->GetChildren(archivedir, &archiveFiles).ok()) {
       // Delete archival files.
       for (const auto& file : archiveFiles) {
-        if (ParseFileName(file, &number, &type) && type == kLogFile) {
+        if (ParseFileName(file, &number, &type) && type == kWalFile) {
           Status del = env->DeleteFile(archivedir + "/" + file);
           if (result.ok() && !del.ok()) {
             result = del;
@@ -3811,7 +3811,7 @@ Status DestroyDB(const std::string& dbname, const Options& options,
     // Delete log files in the WAL dir
     if (wal_dir_exists) {
       for (const auto& file : walDirFiles) {
-        if (ParseFileName(file, &number, &type) && type == kLogFile) {
+        if (ParseFileName(file, &number, &type) && type == kWalFile) {
           Status del = env->DeleteFile(LogFileName(soptions.wal_dir, number));
           if (result.ok() && !del.ok()) {
             result = del;

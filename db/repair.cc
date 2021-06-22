@@ -85,7 +85,7 @@
 #include "table/scoped_arena_iterator.h"
 #include "util/c_style_callback.h"
 #include "util/file_reader_writer.h"
-#include "util/filename.h"
+#include "file/filename.h"
 #include "util/string_util.h"
 #include "utilities/util/function.hpp"
 
@@ -303,7 +303,7 @@ class Repairer {
             if (number + 1 > next_file_number_) {
               next_file_number_ = number + 1;
             }
-            if (type == kLogFile) {
+            if (type == kWalFile) {
               logs_.push_back(number);
             } else if (type == kTableFile) {
               table_fds_.emplace_back(number, static_cast<uint32_t>(path_id),

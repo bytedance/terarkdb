@@ -15,8 +15,8 @@
 #include <vector>
 
 #include "rocksdb/status.h"
-
-namespace ROCKSDB_NAMESPACE {
+#include "rocksdb/terark_namespace.h"
+namespace TERARKDB_NAMESPACE {
 
 // The unknown file checksum.
 constexpr char kUnknownFileChecksum[] = "";
@@ -126,4 +126,4 @@ extern FileChecksumList* NewFileChecksumList();
 extern std::shared_ptr<FileChecksumGenFactory>
 GetFileChecksumGenCrc32cFactory();
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE
