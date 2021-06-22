@@ -779,6 +779,10 @@ class RandomAccessFile {
         "RandomAccessFile::InvalidateCache not supported.");
   }
 
+  virtual intptr_t FileDescriptor() const {
+    assert(false);
+    return -1;
+  }
   // If you're adding methods here, remember to add them to
   // RandomAccessFileWrapper too.
 };
@@ -1570,6 +1574,10 @@ class RandomAccessFileWrapper : public RandomAccessFile {
   }
   Status InvalidateCache(size_t offset, size_t length) override {
     return target_->InvalidateCache(offset, length);
+  }
+
+  virtual intptr_t FileDescriptor() const override {
+    return target_->FileDescriptor();
   }
 
  private:

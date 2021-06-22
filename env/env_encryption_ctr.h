@@ -8,8 +8,9 @@
 #if !defined(ROCKSDB_LITE)
 
 #include "rocksdb/env_encryption.h"
+#include "rocksdb/terark_namespace.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMESPACE {
 
 // Implements a BlockCipher using ROT13.
 //
@@ -132,6 +133,6 @@ class CTREncryptionProvider : public EncryptionProvider {
       uint64_t initialCounter, const Slice& iv, const Slice& prefix,
       std::unique_ptr<BlockAccessCipherStream>* result);
 };
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE
 
 #endif  // !defined(ROCKSDB_LITE)
