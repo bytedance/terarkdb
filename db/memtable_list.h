@@ -23,7 +23,7 @@
 #include "rocksdb/terark_namespace.h"
 #include "rocksdb/types.h"
 #include "util/autovector.h"
-#include "util/filename.h"
+#include "file/filename.h"
 #include "util/log_buffer.h"
 
 namespace TERARKDB_NAMESPACE {

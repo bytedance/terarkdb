@@ -18,7 +18,7 @@
 
 #include "rocksdb/env.h"
 #include "rocksdb/terark_namespace.h"
-#include "util/filename.h"
+#include "file/filename.h"
 
 namespace TERARKDB_NAMESPACE {
 
@@ -62,7 +62,7 @@ void DumpDBFileSummary(const ImmutableDBOptions& options,
         Header(options.info_log, "MANIFEST file:  %s size: %" PRIu64 " Bytes\n",
                file.c_str(), file_size);
         break;
-      case kLogFile:
+      case kWalFile:
         env->GetFileSize(dbname + "/" + file, &file_size);
         char str[16];
         snprintf(str, sizeof(str), "%" PRIu64, file_size);
@@ -112,7 +112,7 @@ void DumpDBFileSummary(const ImmutableDBOptions& options,
     wal_info.clear();
     for (const std::string& file : files) {
       if (ParseFileName(file, &number, &type)) {
-        if (type == kLogFile) {
+        if (type == kWalFile) {
           env->GetFileSize(options.wal_dir + "/" + file, &file_size);
           char str[16];
           snprintf(str, sizeof(str), "%" PRIu64, file_size);

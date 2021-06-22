@@ -36,7 +36,7 @@ typedef struct epoll_event Event;
 #include <table/table_builder.h>
 #include <table/table_reader.h>
 #include <util/coding.h>
-#include <util/filename.h>
+#include <file/filename.h>
 #include <util/gflags_compat.h>
 #include <utilities/merge_operators.h>
 

@@ -18,7 +18,7 @@
 #include "util/coding.h"
 #include "util/crc32c.h"
 #include "util/file_reader_writer.h"
-#include "util/filename.h"
+#include "file/filename.h"
 #include "logging/logging.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
@@ -796,7 +796,7 @@ Status BackupEngineImpl::CreateNewBackupWithMetadata(
         } /* link_file_cb */,
         [&](const std::string& src_dirname, const std::string& fname,
             uint64_t size_limit_bytes, FileType type) {
-          if (type == kLogFile && !options_.backup_log_files) {
+          if (type == kWalFile && !options_.backup_log_files) {
             return Status::OK();
           }
           Log(options_.info_log, "add file for backup %s", fname.c_str());
@@ -807,7 +807,7 @@ Status BackupEngineImpl::CreateNewBackupWithMetadata(
           }
           EnvOptions src_env_options;
           switch (type) {
-            case kLogFile:
+            case kWalFile:
               src_env_options =
                   db_env_->OptimizeForLogRead(src_raw_env_options);
               break;
@@ -1058,7 +1058,7 @@ Status BackupEngineImpl::RestoreDBFromBackup(
 
   if (restore_options.keep_log_files) {
     // delete files in db_dir, but keep all the log files
-    DeleteChildren(db_dir, 1 << kLogFile);
+    DeleteChildren(db_dir, 1 << kWalFile);
     // move all the files from archive dir to wal_dir
     std::string archive_dir = ArchivalDirectory(wal_dir);
     std::vector<std::string> archive_files;
@@ -1067,7 +1067,7 @@ Status BackupEngineImpl::RestoreDBFromBackup(
       uint64_t number;
       FileType type;
       bool ok = ParseFileName(f, &number, &type);
-      if (ok && type == kLogFile) {
+      if (ok && type == kWalFile) {
         ROCKS_LOG_INFO(options_.info_log,
                        "Moving log file from archive/ to wal_dir: %s",
                        f.c_str());
@@ -1117,8 +1117,8 @@ Status BackupEngineImpl::RestoreDBFromBackup(
       return Status::Corruption("Backup corrupted");
     }
     // 3. Construct the final path
-    // kLogFile lives in wal_dir and all the rest live in db_dir
-    dst = ((type == kLogFile) ? wal_dir : db_dir) + "/" + dst;
+    // kWalFile lives in wal_dir and all the rest live in db_dir
+    dst = ((type == kWalFile) ? wal_dir : db_dir) + "/" + dst;
 
     ROCKS_LOG_INFO(options_.info_log, "Restoring %s to %s\n", file.c_str(),
                    dst.c_str());

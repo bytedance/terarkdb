@@ -17,7 +17,7 @@
 #include "rocksdb/terark_namespace.h"
 #include "rocksdb/transaction_log.h"
 #include "rocksdb/types.h"
-#include "util/filename.h"
+#include "file/filename.h"
 
 namespace TERARKDB_NAMESPACE {
 

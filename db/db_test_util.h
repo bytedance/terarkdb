@@ -46,7 +46,7 @@
 #include "table/plain_table_factory.h"
 #include "table/scoped_arena_iterator.h"
 #include "util/compression.h"
-#include "util/filename.h"
+#include "file/filename.h"
 #include "util/mock_time_env.h"
 #include "util/mutexlock.h"
 #include "util/string_util.h"

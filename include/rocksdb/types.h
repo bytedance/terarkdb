@@ -6,13 +6,14 @@
 #pragma once
 
 #include <stdint.h>
-
 #include "rocksdb/slice.h"
 #include "rocksdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 
 // Define all public custom types here.
+
+using ColumnFamilyId = uint32_t;
 
 // Represents a sequence number in a WAL file.
 typedef uint64_t SequenceNumber;
@@ -23,7 +24,27 @@ struct Dependence {
   uint64_t entry_count;
 };
 
+const SequenceNumber kMinUnCommittedSeq = 1;  // 0 is always committed
+
+// The types of files RocksDB uses in a DB directory. (Available for
+// advanced options.)
+enum FileType {
+  kWalFile,
+  kDBLockFile,
+  kSocketFile,
+  kTableFile,
+  kDescriptorFile,
+  kCurrentFile,
+  kTempFile,
+  kInfoLogFile,  // Either the current one, or an old one
+  kMetaDatabase,
+  kIdentityFile,
+  kOptionsFile,
+  kBlobFile
+};
+
 // User-oriented representation of internal key types.
+// Ordering of this enum entries should not change.
 enum EntryType {
   kEntryPut,
   kEntryDelete,
@@ -32,6 +53,8 @@ enum EntryType {
   kEntryRangeDeletion,
   kEntryValueIndex,
   kEntryMergeIndex,
+  kEntryBlobIndex,
+  kEntryDeleteWithTimestamp,
   kEntryOther,
 };
 

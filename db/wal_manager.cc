@@ -32,7 +32,7 @@
 #include "util/cast_util.h"
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
-#include "util/filename.h"
+#include "file/filename.h"
 #include "logging/logging.h"
 #include "util/mutexlock.h"
 #include "util/string_util.h"
@@ -224,7 +224,7 @@ Status WalManager::GetWalsOfType(const std::string& path,
   for (const auto& f : all_files) {
     uint64_t number;
     FileType type;
-    if (ParseFileName(f, &number, &type) && type == kLogFile) {
+    if (ParseFileName(f, &number, &type) && type == kWalFile) {
       SequenceNumber sequence;
       Status s = ReadFirstRecord(log_type, number, &sequence);
       if (!s.ok()) {

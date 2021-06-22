@@ -45,7 +45,7 @@
 #include "tools/sst_dump_tool_imp.h"
 #include "util/cast_util.h"
 #include "util/coding.h"
-#include "util/filename.h"
+#include "file/filename.h"
 #include "util/stderr_logger.h"
 #include "util/string_util.h"
 #include "utilities/ttl/db_ttl_impl.h"
@@ -1429,7 +1429,7 @@ void DBDumperCommand::DoCommand() {
     }
 
     switch (type) {
-      case kLogFile:
+      case kWalFile:
         // TODO(myabandeh): allow configuring is_write_commited
         DumpWalFile(path_, /* print_header_ */ true, /* print_values_ */ true,
                     true /* is_write_commited */, &exec_state_);

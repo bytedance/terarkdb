@@ -22,7 +22,7 @@
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/terark_namespace.h"
-#include "util/filename.h"
+#include "file/filename.h"
 #include "util/mutexlock.h"
 #include "util/random.h"
 

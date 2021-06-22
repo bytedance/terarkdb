@@ -25,7 +25,7 @@
 #include "rocksdb/terark_namespace.h"
 #include "util/c_style_callback.h"
 #include "util/chash_set.h"
-#include "util/filename.h"
+#include "file/filename.h"
 #include "util/log_buffer.h"
 #include "util/random.h"
 #include "util/string_util.h"
