@@ -182,7 +182,6 @@ Status TableCache::GetTableReader(
     EnvOptions mmap_env_options = env_options;
     mmap_env_options.use_mmap_reads = true;
     mmap_env_options.use_direct_reads = false;
-    mmap_env_options.use_aio_reads = false;
     s = GetTableReaderImpl(
         mmap_env_options, internal_comparator, fd, sequential_mode, readahead,
         record_read_stats, file_read_hist, table_reader, prefix_extractor,

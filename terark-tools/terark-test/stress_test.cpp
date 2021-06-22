@@ -319,7 +319,6 @@ void get_options(int argc, const char *argv[], TERARKDB_NAMESPACE::Options &opti
   options.max_background_garbage_collections = 32;
   options.db_write_buffer_size = 0;
   options.WAL_size_limit_MB = 0;
-  options.use_aio_reads = false;
   options.max_background_jobs = 32;
   options.WAL_ttl_seconds = 0;
   options.enable_thread_tracking = true;
@@ -975,9 +974,6 @@ int main(int argc, const char *argv[], const char *env[]) {
 
   TERARKDB_NAMESPACE::DBOptions dbo = options;
   dbo.create_missing_column_families = true;
-#if ASYNC_TEST
-  dbo.use_aio_reads = true;
-#endif
   // dbo.max_log_file_size = 2ull << 20;
   TERARKDB_NAMESPACE::Status s;
   std::vector<TERARKDB_NAMESPACE::ColumnFamilyHandle *> hs;

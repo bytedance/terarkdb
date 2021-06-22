@@ -241,7 +241,7 @@ Status TerarkZipTableFactory::NewTableReader(
         size_t initial_file_num = 2048;
         cache_.reset(LruReadonlyCache::create(
             table_options_.cacheCapacityBytes, table_options_.cacheShards,
-            initial_file_num, table_reader_options.env_options.use_aio_reads));
+            initial_file_num, false));
       }
     }
   }

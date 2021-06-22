@@ -1957,7 +1957,7 @@ std::vector<Status> DBImpl::MultiGet(
     counting--;
   };
 #ifdef BOOSTLIB
-  if (read_options.aio_concurrency && immutable_db_options_.use_aio_reads) {
+  if (read_options.aio_concurrency) {
 #if 0
     static thread_local terark::RunOnceFiberPool fiber_pool(16);
     // current calling fiber's list head, can be treated as a handle

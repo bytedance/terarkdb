@@ -991,9 +991,6 @@ DEFINE_bool(
     TERARKDB_NAMESPACE::Options().use_direct_io_for_flush_and_compaction,
     "Use O_DIRECT for background flush and compaction writes");
 
-DEFINE_bool(use_aio_reads, TERARKDB_NAMESPACE::Options().use_aio_reads,
-            "Use aio_read+fiber for reading data");
-
 DEFINE_bool(advise_random_on_open,
             TERARKDB_NAMESPACE::Options().advise_random_on_open,
             "Advise random access on table file open");
@@ -3233,7 +3230,6 @@ class Benchmark {
     options.use_direct_reads = FLAGS_use_direct_reads;
     options.use_direct_io_for_flush_and_compaction =
         FLAGS_use_direct_io_for_flush_and_compaction;
-    options.use_aio_reads = FLAGS_use_aio_reads;
     if (FLAGS_prefix_size != 0) {
       options.prefix_extractor.reset(
           NewFixedPrefixTransform(FLAGS_prefix_size));
