@@ -285,7 +285,6 @@ void get_options(int argc, const char* argv[],
   //options.compaction_options_universal.allow_trivial_move = false;
   options.compaction_options_universal.stop_style = TERARKDB_NAMESPACE::kCompactionStopStyleSimilarSize;
 
-  options.use_aio_reads = true;
   options.base_background_compactions = 3;
   options.max_background_compactions = 3;
   options.max_background_garbage_collections = 6;

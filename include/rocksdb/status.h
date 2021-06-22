@@ -45,6 +45,14 @@ class Status {
   bool operator==(const Status& rhs) const;
   bool operator!=(const Status& rhs) const;
 
+  inline void PermitUncheckedError() const { MarkChecked(); }
+
+  inline void MustCheck() const {
+#ifdef ROCKSDB_ASSERT_STATUS_CHECKED
+   
+    checked_ = false;
+#endif  // ROCKSDB_ASSERT_STATUS_CHECKED
+  }
   enum Code : unsigned char {
     kOk = 0,
     kNotFound = 1,
@@ -364,6 +372,13 @@ class Status {
       : Status(_code, kNone, msg, msg2) {}
 
   static const char* CopyState(const char* s);
+
+  inline void MarkChecked() const {
+#ifdef ROCKSDB_ASSERT_STATUS_CHECKED
+    checked_ = true;
+#endif  // ROCKSDB_ASSERT_STATUS_CHECKED
+  }
+
 };
 
 inline Status::Status(const Status& s)

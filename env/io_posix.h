@@ -84,14 +84,12 @@ class PosixRandomAccessFile : public RandomAccessFile {
   std::string filename_;
   int fd_;
   bool use_direct_io_;
-  bool use_aio_reads_;
   size_t logical_sector_size_;
 
  public:
   PosixRandomAccessFile(const std::string& fname, int fd,
                         const EnvOptions& options);
   virtual ~PosixRandomAccessFile();
-  virtual bool use_aio_reads() const final;
   virtual Status Read(uint64_t offset, size_t n, Slice* result,
                       char* scratch) const final;
 
@@ -158,7 +156,6 @@ class PosixWritableFile : public WritableFile {
 class PosixMmapReadableFile : public RandomAccessFile {
  private:
   int fd_;
-  bool use_aio_reads_;
   std::string filename_;
   void* mmapped_region_;
   size_t length_;
@@ -167,7 +164,6 @@ class PosixMmapReadableFile : public RandomAccessFile {
   PosixMmapReadableFile(const int fd, const std::string& fname, void* base,
                         size_t length, const EnvOptions& options);
   ~PosixMmapReadableFile();
-  bool use_aio_reads() const final { return use_aio_reads_; }
   bool is_mmap_open() const final { return true; }
   Status Read(uint64_t offset, size_t n, Slice* result,
               char* scratch) const final;
