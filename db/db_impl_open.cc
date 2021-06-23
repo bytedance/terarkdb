@@ -256,12 +256,18 @@ Status DBImpl::NewDB() {
     new_db.EncodeTo(&record);
     s = log.AddRecord(record);
     if (s.ok()) {
-      s = SyncManifest(env_, &immutable_db_options_, log.file());
+      // ********* RD 6 *********
+      //s = SyncManifest(env_, &immutable_db_options_, log.file());
+      s = SyncManifest(&immutable_db_options_, log.file());
+      // ********* RD 6 *********
     }
   }
   if (s.ok()) {
     // Make "CURRENT" file that points to the new manifest file.
-    s = SetCurrentFile(env_, dbname_, 1, directories_.GetDbDir());
+    // ********* RD 6 *********
+    //s = SetCurrentFile(env_, dbname_, 1, directories_.GetDbDir());
+    s = SetCurrentFile(fs_.get(), dbname_, 1, directories_.GetDbDir());
+    // ********* RD 6 *********
   } else {
     env_->DeleteFile(manifest);
   }
