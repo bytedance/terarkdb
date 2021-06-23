@@ -11,6 +11,7 @@
 
 #include <inttypes.h>
 
+#include "logging/logging.h"
 #include "options/options_helper.h"
 #include "port/port.h"
 #include "rocksdb/cache.h"
@@ -18,7 +19,6 @@
 #include "rocksdb/sst_file_manager.h"
 #include "rocksdb/terark_namespace.h"
 #include "rocksdb/wal_filter.h"
-#include "logging/logging.h"
 
 namespace TERARKDB_NAMESPACE {
 

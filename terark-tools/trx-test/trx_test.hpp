@@ -18,6 +18,7 @@ namespace gujia {
 typedef struct epoll_event Event;
 }
 
+#include <file/filename.h>
 #include <rocksdb/compaction_filter.h>
 #include <rocksdb/convenience.h>
 #include <rocksdb/db.h>
@@ -36,8 +37,7 @@ typedef struct epoll_event Event;
 #include <table/table_builder.h>
 #include <table/table_reader.h>
 #include <util/coding.h>
-#include <file/filename.h>
 #include <util/gflags_compat.h>
 #include <utilities/merge_operators.h>
 
-DEFINE_bool(open_and_seek,false,"open and seek");
+DEFINE_bool(open_and_seek, false, "open and seek");

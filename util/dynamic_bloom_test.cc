@@ -25,11 +25,11 @@ int main() {
 #include <vector>
 
 #include "dynamic_bloom.h"
+#include "logging/logging.h"
 #include "port/port.h"
 #include "rocksdb/terark_namespace.h"
 #include "util/arena.h"
 #include "util/gflags_compat.h"
-#include "logging/logging.h"
 #include "util/stop_watch.h"
 #include "util/testharness.h"
 #include "util/testutil.h"

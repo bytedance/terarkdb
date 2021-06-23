@@ -2,12 +2,12 @@
 // Created by leipeng on 2019-08-09.
 //
 
+#include <getopt.h>
 #include <rocksdb/db.h>
 #include <stdio.h>
-#include <getopt.h>
+
 #include <terark/util/linebuf.hpp>
 #include <terark/util/profiling.hpp>
-
 
 static void usage(const char* prog) {
   fprintf(stderr, R"EOS(usage: %s
@@ -27,8 +27,8 @@ static void usage(const char* prog) {
   -q
      be quite
 
-)EOS"
-, prog);
+)EOS",
+          prog);
 }
 
 inline void chomp(std::string& s) {
@@ -52,7 +52,7 @@ int main(int argc, char* argv[]) {
   dopt.use_direct_reads = true;
   ropt.aio_concurrency = 16;
   bool quite = false;
-  for (int opt=0; -1 != opt && '?' != opt;) {
+  for (int opt = 0; - 1 != opt && '?' != opt;) {
     opt = getopt(argc, argv, "a:b:d:f:m:o:q");
     switch (opt) {
       default:
@@ -87,9 +87,11 @@ GetoptDone:
   }
   TERARKDB_NAMESPACE::DB* db = nullptr;
   std::string path = argv[optind];
-  TERARKDB_NAMESPACE::Status s = TERARKDB_NAMESPACE::DB::OpenForReadOnly(dopt, path, &db);
+  TERARKDB_NAMESPACE::Status s =
+      TERARKDB_NAMESPACE::DB::OpenForReadOnly(dopt, path, &db);
   if (!s.ok()) {
-    fprintf(stderr, "ERROR: Open(%s) = %s\n", path.c_str(), s.ToString().c_str());
+    fprintf(stderr, "ERROR: Open(%s) = %s\n", path.c_str(),
+            s.ToString().c_str());
     return 1;
   }
   using namespace terark;
@@ -117,11 +119,9 @@ GetoptDone:
       cnt1 += mget_num;
       if (cnt1 >= bench_report) {
         auto t1 = pf.now();
-        fprintf(stderr,
-                "mget(fibers=%d,direct_io=%d,aio=%d) qps = %f M/sec\n",
-                ropt.aio_concurrency,
-                dopt.use_direct_reads,
-                cnt1/pf.uf(t0,t1));
+        fprintf(stderr, "mget(fibers=%d,direct_io=%d) qps = %f M/sec\n",
+                ropt.aio_concurrency, dopt.use_direct_reads,
+                cnt1 / pf.uf(t0, t1));
         t0 = t1;
         cnt1 = 0;
       }
@@ -129,10 +129,10 @@ GetoptDone:
     if (!quite) {
       for (size_t i = 0; i < keys.size(); ++i) {
         if (sv[i].ok()) {
-            chomp(values[i]);
-            printf("OK\t%s\n", values[i].c_str());
+          chomp(values[i]);
+          printf("OK\t%s\n", values[i].c_str());
         } else {
-            printf("%s\t%s\n", sv[i].ToString().c_str(), values[i].c_str());
+          printf("%s\t%s\n", sv[i].ToString().c_str(), values[i].c_str());
         }
       }
     }

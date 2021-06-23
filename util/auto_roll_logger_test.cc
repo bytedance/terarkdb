@@ -19,10 +19,10 @@
 #include <string>
 #include <vector>
 
+#include "logging/logging.h"
 #include "port/port.h"
 #include "rocksdb/db.h"
 #include "rocksdb/terark_namespace.h"
-#include "logging/logging.h"
 #include "util/sync_point.h"
 #include "util/testharness.h"
 

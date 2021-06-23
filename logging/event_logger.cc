@@ -44,9 +44,7 @@ EventLoggerStream::~EventLoggerStream() {
   }
 }
 
-void EventLogger::Log(const JSONWriter& jwriter) {
-  Log(logger_, jwriter);
-}
+void EventLogger::Log(const JSONWriter& jwriter) { Log(logger_, jwriter); }
 
 void EventLogger::Log(Logger* logger, const JSONWriter& jwriter) {
 #ifdef ROCKSDB_PRINT_EVENTS_TO_STDOUT
@@ -63,7 +61,7 @@ void EventLogger::LogToBuffer(LogBuffer* log_buffer, const JSONWriter& jwriter,
 #else
   assert(log_buffer);
   TERARKDB_NAMESPACE::LogToBuffer(log_buffer, max_log_size, "%s %s", Prefix(),
-                                 jwriter.Get().c_str());
+                                  jwriter.Get().c_str());
 #endif
 }
 

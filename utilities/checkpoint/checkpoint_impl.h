@@ -8,10 +8,10 @@
 
 #include <string>
 
+#include "file/filename.h"
 #include "rocksdb/db.h"
 #include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/checkpoint.h"
-#include "file/filename.h"
 
 namespace TERARKDB_NAMESPACE {
 

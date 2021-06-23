@@ -7,13 +7,13 @@
 
 #include <map>
 
+#include "logging/logging.h"
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/terark_namespace.h"
 #include "table/full_filter_bits_builder.h"
 #include "table/index_builder.h"
 #include "util/coding.h"
 #include "util/hash.h"
-#include "logging/logging.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 

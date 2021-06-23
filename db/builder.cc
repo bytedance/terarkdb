@@ -21,6 +21,7 @@
 #include "db/range_del_aggregator.h"
 #include "db/table_cache.h"
 #include "db/version_edit.h"
+#include "file/filename.h"
 #include "monitoring/iostats_context_imp.h"
 #include "monitoring/thread_status_util.h"
 #include "rocksdb/env.h"
@@ -34,7 +35,6 @@
 #include "table/internal_iterator.h"
 #include "util/c_style_callback.h"
 #include "util/file_reader_writer.h"
-#include "file/filename.h"
 #include "util/stop_watch.h"
 #include "util/sync_point.h"
 

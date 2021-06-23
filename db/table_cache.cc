@@ -12,6 +12,7 @@
 #include "db/dbformat.h"
 #include "db/range_tombstone_fragmenter.h"
 #include "db/version_edit.h"
+#include "file/filename.h"
 #include "monitoring/perf_context_imp.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/terark_namespace.h"
@@ -24,7 +25,6 @@
 #include "util/c_style_callback.h"
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
-#include "file/filename.h"
 #include "util/stop_watch.h"
 #include "util/sync_point.h"
 

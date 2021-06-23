@@ -30,6 +30,7 @@
 #include "db/map_builder.h"
 #include "db/merge_helper.h"
 #include "db/range_del_aggregator.h"
+#include "file/filename.h"
 #include "rocksdb/advanced_options.h"
 #include "rocksdb/compaction_filter.h"
 #include "rocksdb/comparator.h"
@@ -44,7 +45,6 @@
 #include "table/table_reader.h"
 #include "table/two_level_iterator.h"
 #include "util/c_style_callback.h"
-#include "file/filename.h"
 
 #ifndef WITH_TERARK_ZIP
 #define USE_AJSON 1

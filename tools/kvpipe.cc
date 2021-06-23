@@ -1,8 +1,10 @@
+
+#include <getopt.h>
 #include <rocksdb/db.h>
 #include <stdio.h>
-#include <getopt.h>
-#include <terark/thread/pipeline.hpp>
+
 #include <terark/fstring.hpp>
+#include <terark/thread/pipeline.hpp>
 #include <terark/util/linebuf.hpp>
 #include <terark/util/profiling.hpp>
 
@@ -27,15 +29,15 @@ static void usage(const char* prog) {
 
   -o max_file_opening_threads(default is 16)
 
-)EOS"
-, prog);
+)EOS",
+          prog);
 }
 
 struct KVTask : terark::PipelineTask {
-    std::string key;
-    std::string value;
-    TERARKDB_NAMESPACE::Status status;
-    KVTask(const char* k, size_t n) : key(k, n) {}
+  std::string key;
+  std::string value;
+  TERARKDB_NAMESPACE::Status status;
+  KVTask(const char* k, size_t n) : key(k, n) {}
 };
 
 inline void chomp(std::string& s) {
@@ -59,7 +61,7 @@ int main(int argc, char* argv[]) {
   TERARKDB_NAMESPACE::Options opt;
   opt.use_direct_reads = true;
   bool quite = false;
-  for (int gopt=0; -1 != gopt && '?' != gopt;) {
+  for (int gopt = 0; - 1 != gopt && '?' != gopt;) {
     gopt = getopt(argc, argv, "a:b:c:C:d:p:D:l:o:q");
     switch (gopt) {
       default:
@@ -73,20 +75,19 @@ int main(int argc, char* argv[]) {
       case 'c':
         if (':' == optarg[0]) {
           nthr = 0;
-          nfib = atoi(optarg+1);
-        }
-        else {
+          nfib = atoi(optarg + 1);
+        } else {
           char* endp = NULL;
           nthr = (int)strtol(optarg, &endp, 10);
           if (':' == endp[0]) {
-            nfib = atoi(endp+1);
+            nfib = atoi(endp + 1);
           } else {
-            nfib = 0; // thread mode
+            nfib = 0;  // thread mode
           }
         }
         break;
       case 'C':
-	opt.OptimizeForPointLookup(terark::ParseSizeXiB(optarg)>>20);
+        opt.OptimizeForPointLookup(terark::ParseSizeXiB(optarg) >> 20);
         break;
       case 'd':
         opt.use_direct_reads = atoi(optarg) != 0;
@@ -112,9 +113,11 @@ GetoptDone:
   }
   TERARKDB_NAMESPACE::DB* db = nullptr;
   std::string path = argv[optind];
-  TERARKDB_NAMESPACE::Status s = TERARKDB_NAMESPACE::DB::OpenForReadOnly(opt, path, &db);
+  TERARKDB_NAMESPACE::Status s =
+      TERARKDB_NAMESPACE::DB::OpenForReadOnly(opt, path, &db);
   if (!s.ok()) {
-    fprintf(stderr, "ERROR: Open(%s) = %s\n", path.c_str(), s.ToString().c_str());
+    fprintf(stderr, "ERROR: Open(%s) = %s\n", path.c_str(),
+            s.ToString().c_str());
     return 1;
   }
   using namespace terark;
@@ -148,26 +151,26 @@ GetoptDone:
     chomp(task->value);
   });
   long long start, t0;
-  pipeline | std::make_pair(0, [&,quite,bench_report](PipelineTask* ptask) {
+  pipeline | std::make_pair(0, [&, quite, bench_report](PipelineTask* ptask) {
     if (bench_report) {
       if (++cnt1 == bench_report) {
         cnt2 += cnt1;
         auto t1 = pf.now();
-        fprintf(stderr, "%s(%d:%d) qps.recent = %f M/sec, qps.long = %f M/sec\n",
-                pipeline.euTypeName(), nthr, nfib, cnt1/pf.uf(t0,t1),
-                cnt2/pf.uf(start,t1));
+        fprintf(stderr,
+                "%s(%d:%d) qps.recent = %f M/sec, qps.long = %f M/sec\n",
+                pipeline.euTypeName(), nthr, nfib, cnt1 / pf.uf(t0, t1),
+                cnt2 / pf.uf(start, t1));
         t0 = t1;
         cnt1 = 0;
       }
     }
     if (quite) {
-      return; // do nothing
+      return;  // do nothing
     }
     KVTask* task = static_cast<KVTask*>(ptask);
     if (task->status.ok()) {
       printf("OK\t%s\n", task->value.c_str());
-    }
-    else {
+    } else {
       printf("%s\t%s\n", task->status.ToString().c_str(), task->value.c_str());
     }
   });

@@ -306,10 +306,9 @@ bool Tracer::ShouldSkipTrace(const TraceType& trace_type) {
   if (IsTraceFileOverMax()) {
     return true;
   }
-  if ((trace_options_.filter & kTraceFilterGet
-    && trace_type == kTraceGet)
-   || (trace_options_.filter & kTraceFilterWrite
-    && trace_type == kTraceWrite)) {
+  if ((trace_options_.filter & kTraceFilterGet && trace_type == kTraceGet) ||
+      (trace_options_.filter & kTraceFilterWrite &&
+       trace_type == kTraceWrite)) {
     return true;
   }
   ++trace_request_count_;

@@ -68,13 +68,13 @@ int main() {
 #include <string>
 #include <thread>
 
+#include "file/filename.h"
 #include "port/port.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/terark_namespace.h"
-#include "file/filename.h"
 #include "util/gflags_compat.h"
 
 using GFLAGS_NAMESPACE::ParseCommandLineFlags;

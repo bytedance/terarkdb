@@ -49,7 +49,7 @@ class Status {
 
   inline void MustCheck() const {
 #ifdef ROCKSDB_ASSERT_STATUS_CHECKED
-   
+
     checked_ = false;
 #endif  // ROCKSDB_ASSERT_STATUS_CHECKED
   }
@@ -321,7 +321,7 @@ class Status {
   bool IsMemoryLimit() const {
     return (code() == kAborted) && (subcode() == kMemoryLimit);
   }
-  
+
   // Returns true iff the status indicates a PathNotFound error
   // This is caused by an I/O error returning the specific "no such file or
   // directory" error condition. A PathNotFound error is an I/O error with
@@ -378,7 +378,6 @@ class Status {
     checked_ = true;
 #endif  // ROCKSDB_ASSERT_STATUS_CHECKED
   }
-
 };
 
 inline Status::Status(const Status& s)

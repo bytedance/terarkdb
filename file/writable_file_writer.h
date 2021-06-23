@@ -19,8 +19,8 @@
 #include "rocksdb/io_status.h"
 #include "rocksdb/listener.h"
 #include "rocksdb/rate_limiter.h"
-#include "util/sync_point.h"
 #include "util/aligned_buffer.h"
+#include "util/sync_point.h"
 
 namespace TERARKDB_NAMESPACE {
 class Statistics;

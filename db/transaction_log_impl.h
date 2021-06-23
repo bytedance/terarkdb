@@ -10,6 +10,7 @@
 #include "db/log_reader.h"
 #include "db/version_set.h"
 #include "db/wal_manager.h"
+#include "file/filename.h"
 #include "options/db_options.h"
 #include "port/port.h"
 #include "rocksdb/env.h"
@@ -17,7 +18,6 @@
 #include "rocksdb/terark_namespace.h"
 #include "rocksdb/transaction_log.h"
 #include "rocksdb/types.h"
-#include "file/filename.h"
 
 namespace TERARKDB_NAMESPACE {
 

@@ -20,9 +20,9 @@
 #endif
 #include <algorithm>
 
+#include "logging/logging.h"
 #include "rocksdb/env.h"
 #include "rocksdb/terark_namespace.h"
-#include "logging/logging.h"
 #include "util/sync_point.h"
 
 namespace TERARKDB_NAMESPACE {

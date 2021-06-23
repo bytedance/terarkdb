@@ -3,6 +3,7 @@
 #pragma warning(disable : 4996)
 
 #include <db/memtable.h>
+#include <file/filename.h>
 #include <rocksdb/compaction_filter.h>
 #include <rocksdb/convenience.h>
 #include <rocksdb/db.h>
@@ -23,7 +24,6 @@
 #include <table/table_reader.h>
 #include <terark/zbs/sufarr_inducedsort.h>
 #include <util/coding.h>
-#include <file/filename.h>
 #include <utilities/merge_operators/string_append/stringappend.h>
 #include <utilities/merge_operators/string_append/stringappend2.h>
 

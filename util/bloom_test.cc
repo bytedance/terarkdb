@@ -17,12 +17,12 @@ int main() {
 
 #include <vector>
 
+#include "logging/logging.h"
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/terark_namespace.h"
 #include "table/full_filter_bits_builder.h"
 #include "util/arena.h"
 #include "util/gflags_compat.h"
-#include "logging/logging.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 

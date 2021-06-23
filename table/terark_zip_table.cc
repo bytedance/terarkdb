@@ -239,9 +239,9 @@ Status TerarkZipTableFactory::NewTableReader(
       std::lock_guard<std::mutex> lock(cache_create_mutex_);
       if (!cache_) {
         size_t initial_file_num = 2048;
-        cache_.reset(LruReadonlyCache::create(
-            table_options_.cacheCapacityBytes, table_options_.cacheShards,
-            initial_file_num, false));
+        cache_.reset(LruReadonlyCache::create(table_options_.cacheCapacityBytes,
+                                              table_options_.cacheShards,
+                                              initial_file_num, false));
       }
     }
   }

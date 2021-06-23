@@ -16,6 +16,7 @@
 #include "db/logs_with_prep_tracker.h"
 #include "db/memtable.h"
 #include "db/range_del_aggregator.h"
+#include "file/filename.h"
 #include "monitoring/instrumented_mutex.h"
 #include "rocksdb/db.h"
 #include "rocksdb/iterator.h"
@@ -23,7 +24,6 @@
 #include "rocksdb/terark_namespace.h"
 #include "rocksdb/types.h"
 #include "util/autovector.h"
-#include "file/filename.h"
 #include "util/log_buffer.h"
 
 namespace TERARKDB_NAMESPACE {

@@ -14,6 +14,7 @@
 #include <string>
 #include <utility>
 
+#include "logging/logging.h"
 #include "monitoring/perf_context_imp.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/db.h"
@@ -25,7 +26,6 @@
 #include "rocksdb/types.h"
 #include "util/arena.h"
 #include "util/coding.h"
-#include "logging/logging.h"
 
 namespace TERARKDB_NAMESPACE {
 

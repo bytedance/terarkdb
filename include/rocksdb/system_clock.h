@@ -7,8 +7,8 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #pragma once
-#include <rocksdb/terark_namespace.h>
 #include <rocksdb/status.h>
+#include <rocksdb/terark_namespace.h>
 #include <stdint.h>
 
 #include <memory>

@@ -10,9 +10,9 @@
 #include "db/version_set.h"
 
 #include "db/log_writer.h"
+#include "logging/logging.h"
 #include "rocksdb/terark_namespace.h"
 #include "table/mock_table.h"
-#include "logging/logging.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
 #include "util/testutil.h"

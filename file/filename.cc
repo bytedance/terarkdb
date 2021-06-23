@@ -7,16 +7,18 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #include "file/filename.h"
-#include <cinttypes>
 
 #include <ctype.h>
 #include <stdio.h>
+
+#include <cinttypes>
 #include <vector>
+
 #include "file/writable_file_writer.h"
 #include "rocksdb/env.h"
-#include "util/sync_point.h"
 #include "util/stop_watch.h"
 #include "util/string_util.h"
+#include "util/sync_point.h"
 
 namespace TERARKDB_NAMESPACE {
 
@@ -37,10 +39,8 @@ static size_t GetInfoLogPrefix(const std::string& path, char* dest, int len) {
   while (i < src_len && write_idx < len - sizeof(suffix)) {
     if ((path[i] >= 'a' && path[i] <= 'z') ||
         (path[i] >= '0' && path[i] <= '9') ||
-        (path[i] >= 'A' && path[i] <= 'Z') ||
-        path[i] == '-' ||
-        path[i] == '.' ||
-        path[i] == '_'){
+        (path[i] >= 'A' && path[i] <= 'Z') || path[i] == '-' ||
+        path[i] == '.' || path[i] == '_') {
       dest[write_idx++] = path[i];
     } else {
       if (i > 0) {
@@ -148,9 +148,10 @@ void FormatFileNumber(uint64_t number, uint32_t path_id, char* out_buf,
   if (path_id == 0) {
     snprintf(out_buf, out_buf_size, "%" PRIu64, number);
   } else {
-    snprintf(out_buf, out_buf_size, "%" PRIu64
-                                    "(path "
-                                    "%" PRIu32 ")",
+    snprintf(out_buf, out_buf_size,
+             "%" PRIu64
+             "(path "
+             "%" PRIu32 ")",
              number, path_id);
   }
 }
@@ -167,9 +168,7 @@ std::string CurrentFileName(const std::string& dbname) {
   return dbname + "/CURRENT";
 }
 
-std::string LockFileName(const std::string& dbname) {
-  return dbname + "/LOCK";
-}
+std::string LockFileName(const std::string& dbname) { return dbname + "/LOCK"; }
 
 std::string TempFileName(const std::string& dbname, uint64_t number) {
   return MakeFileName(dbname, number, kTempFileNameSuffix.c_str());
@@ -190,7 +189,8 @@ InfoLogPrefix::InfoLogPrefix(bool has_log_dir,
 }
 
 std::string InfoLogFileName(const std::string& dbname,
-    const std::string& db_path, const std::string& log_dir) {
+                            const std::string& db_path,
+                            const std::string& log_dir) {
   if (log_dir.empty()) {
     return dbname + "/LOG";
   }
@@ -201,7 +201,8 @@ std::string InfoLogFileName(const std::string& dbname,
 
 // Return the name of the old info log file for "dbname".
 std::string OldInfoLogFileName(const std::string& dbname, uint64_t ts,
-    const std::string& db_path, const std::string& log_dir) {
+                               const std::string& db_path,
+                               const std::string& log_dir) {
   char buf[50];
   snprintf(buf, sizeof(buf), "%llu", static_cast<unsigned long long>(ts));
 
@@ -251,9 +252,7 @@ std::string IdentityFileName(const std::string& dbname) {
 //    dbname/OPTIONS-[0-9]+
 //    dbname/OPTIONS-[0-9]+.dbtmp
 //    Disregards / at the beginning
-bool ParseFileName(const std::string& fname,
-                   uint64_t* number,
-                   FileType* type,
+bool ParseFileName(const std::string& fname, uint64_t* number, FileType* type,
                    WalFileType* log_type) {
   return ParseFileName(fname, number, "", type, log_type);
 }
@@ -335,7 +334,7 @@ bool ParseFileName(const std::string& fname, uint64_t* number,
       if (rest.size() <= ARCHIVAL_DIR.size()) {
         return false;
       }
-      rest.remove_prefix(ARCHIVAL_DIR.size() + 1); // Add 1 to remove / also
+      rest.remove_prefix(ARCHIVAL_DIR.size() + 1);  // Add 1 to remove / also
       if (log_type) {
         *log_type = kArchivedLogFile;
       }
@@ -357,7 +356,7 @@ bool ParseFileName(const std::string& fname, uint64_t* number,
         *log_type = kAliveLogFile;
       }
     } else if (archive_dir_found) {
-      return false; // Archive dir can contain only log files
+      return false;  // Archive dir can contain only log files
     } else if (suffix == Slice(kRocksDbTFileExt) ||
                suffix == Slice(kLevelDbTFileExt)) {
       *type = kTableFile;

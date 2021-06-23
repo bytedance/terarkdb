@@ -10,9 +10,9 @@
 #include "util/filename.h"
 
 #include "db/dbformat.h"
+#include "logging/logging.h"
 #include "port/port.h"
 #include "rocksdb/terark_namespace.h"
-#include "logging/logging.h"
 #include "util/testharness.h"
 
 namespace TERARKDB_NAMESPACE {

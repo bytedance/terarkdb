@@ -10,10 +10,10 @@
 #include <thread>
 #include <vector>
 
+#include "logging/logging.h"
 #include "port/port.h"
 #include "rocksdb/env.h"
 #include "rocksdb/terark_namespace.h"
-#include "logging/logging.h"
 #include "util/mutexlock.h"
 #include "util/sst_file_manager_impl.h"
 #include "util/sync_point.h"

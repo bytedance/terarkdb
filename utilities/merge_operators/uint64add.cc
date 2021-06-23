@@ -5,12 +5,12 @@
 
 #include <memory>
 
+#include "logging/logging.h"
 #include "rocksdb/env.h"
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
-#include "logging/logging.h"
 #include "utilities/merge_operators.h"
 
 using namespace TERARKDB_NAMESPACE;

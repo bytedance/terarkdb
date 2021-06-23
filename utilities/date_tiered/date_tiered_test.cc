@@ -11,11 +11,11 @@
 #include <map>
 #include <memory>
 
+#include "logging/logging.h"
 #include "port/port.h"
 #include "rocksdb/compaction_filter.h"
 #include "rocksdb/terark_namespace.h"
 #include "rocksdb/utilities/date_tiered_db.h"
-#include "logging/logging.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
 

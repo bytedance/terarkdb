@@ -6,6 +6,7 @@
 #pragma once
 
 #include <stdint.h>
+
 #include "rocksdb/slice.h"
 #include "rocksdb/terark_namespace.h"
 

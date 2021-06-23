@@ -19,6 +19,7 @@ typedef struct epoll_event Event;
 }
 
 #include <cache/lru_cache.h>
+#include <file/filename.h>
 #include <rocksdb/compaction_filter.h>
 #include <rocksdb/convenience.h>
 #include <rocksdb/db.h>
@@ -37,7 +38,6 @@ typedef struct epoll_event Event;
 #include <table/table_builder.h>
 #include <table/table_reader.h>
 #include <util/coding.h>
-#include <file/filename.h>
 #include <util/gflags_compat.h>
 #include <utilities/merge_operators/string_append/stringappend.h>
 #include <utilities/merge_operators/string_append/stringappend2.h>
@@ -100,7 +100,9 @@ std::string MaxKey;
 
 static thread_local std::mt19937_64 mt;
 std::hash<std::string> h1;
-std::string h(TERARKDB_NAMESPACE::Slice key) { return std::to_string(h1(key.ToString())); }
+std::string h(TERARKDB_NAMESPACE::Slice key) {
+  return std::to_string(h1(key.ToString()));
+}
 enum {
   TestIter = 1ULL << 0,
   TestTerark = 1ULL << 1,
@@ -126,7 +128,8 @@ class ComparatorRename : public TERARKDB_NAMESPACE::Comparator {
     return c->Equal(a, b);
   }
   virtual void FindShortestSeparator(
-      std::string *start, const TERARKDB_NAMESPACE::Slice &limit) const override {
+      std::string *start,
+      const TERARKDB_NAMESPACE::Slice &limit) const override {
     c->FindShortestSeparator(start, limit);
   }
 
@@ -143,8 +146,8 @@ class ComparatorRename : public TERARKDB_NAMESPACE::Comparator {
 
 class TestCompactionFilter : public TERARKDB_NAMESPACE::CompactionFilter {
   bool Filter(int /*level*/, const TERARKDB_NAMESPACE::Slice &key,
-              const TERARKDB_NAMESPACE::Slice &existing_value, std::string *new_value,
-              bool *value_changed) const override {
+              const TERARKDB_NAMESPACE::Slice &existing_value,
+              std::string *new_value, bool *value_changed) const override {
     assert(!existing_value.empty());
     // filter random
     // std::uniform_int_distribution<size_t> dis(0, 100);
@@ -170,7 +173,8 @@ class TestMergeOperator : public TERARKDB_NAMESPACE::StringAppendTESTOperator {
   TestMergeOperator(char delim_char)
       : TERARKDB_NAMESPACE::StringAppendTESTOperator(delim_char) {}
 
-  virtual TERARKDB_NAMESPACE::Status Serialize(std::string * /*bytes*/) const override {
+  virtual TERARKDB_NAMESPACE::Status Serialize(
+      std::string * /*bytes*/) const override {
     return TERARKDB_NAMESPACE::Status::OK();
   }
   virtual TERARKDB_NAMESPACE::Status Deserialize(
@@ -179,9 +183,11 @@ class TestMergeOperator : public TERARKDB_NAMESPACE::StringAppendTESTOperator {
   }
 };
 
-class AsyncCompactionDispatcher : public TERARKDB_NAMESPACE::RemoteCompactionDispatcher {
+class AsyncCompactionDispatcher
+    : public TERARKDB_NAMESPACE::RemoteCompactionDispatcher {
  public:
-  class AsyncWorker : public TERARKDB_NAMESPACE::RemoteCompactionDispatcher::Worker {
+  class AsyncWorker
+      : public TERARKDB_NAMESPACE::RemoteCompactionDispatcher::Worker {
    public:
     AsyncWorker(const TERARKDB_NAMESPACE::Options &options)
         : TERARKDB_NAMESPACE::RemoteCompactionDispatcher::Worker(
@@ -191,7 +197,8 @@ class AsyncCompactionDispatcher : public TERARKDB_NAMESPACE::RemoteCompactionDis
     }
   };
 
-  AsyncCompactionDispatcher(TERARKDB_NAMESPACE::Options options) : options_(options) {}
+  AsyncCompactionDispatcher(TERARKDB_NAMESPACE::Options options)
+      : options_(options) {}
   virtual std::future<std::string> DoCompaction(
       const std::string data) override {
     AsyncWorker worker(options_);
@@ -215,8 +222,8 @@ struct ReadContext {
       std::tuple<TERARKDB_NAMESPACE::Status, std::string, std::string>>>
       futures;
 #else
-  std::vector<
-      std::future<std::tuple<TERARKDB_NAMESPACE::Status, std::string, std::string>>>
+  std::vector<std::future<
+      std::tuple<TERARKDB_NAMESPACE::Status, std::string, std::string>>>
       futures;
 #endif
   std::vector<std::string> async_values;

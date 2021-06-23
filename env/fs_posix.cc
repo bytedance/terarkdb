@@ -15,7 +15,6 @@
 #endif
 #include <errno.h>
 #include <fcntl.h>
-
 #include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
@@ -32,6 +31,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <time.h>
+
 #include <algorithm>
 // Get nano time includes
 #if defined(OS_LINUX) || defined(OS_FREEBSD)
@@ -55,11 +55,11 @@
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/utilities/object_registry.h"
-#include "util/sync_point.h"
 #include "util/coding.h"
 #include "util/compression_context_cache.h"
 #include "util/random.h"
 #include "util/string_util.h"
+#include "util/sync_point.h"
 #include "util/thread_local.h"
 #include "util/threadpool_imp.h"
 
@@ -81,9 +81,7 @@ inline mode_t GetDBFileMode(bool allow_non_owner_access) {
   return allow_non_owner_access ? 0644 : 0600;
 }
 
-static uint64_t gettid() {
-  return Env::Default()->GetThreadID();
-}
+static uint64_t gettid() { return Env::Default()->GetThreadID(); }
 
 // list of pathnames that are locked
 // Only used for error message.
@@ -267,8 +265,7 @@ class PosixFileSystem : public FileSystem {
   }
 
   virtual IOStatus OpenWritableFile(const std::string& fname,
-                                    const FileOptions& options,
-                                    bool reopen,
+                                    const FileOptions& options, bool reopen,
                                     std::unique_ptr<FSWritableFile>* result,
                                     IODebugContext* /*dbg*/) {
     result->reset();
@@ -551,8 +548,8 @@ class PosixFileSystem : public FileSystem {
   }
 
   IOStatus NewLogger(const std::string& fname, const IOOptions& /*opts*/,
-                   std::shared_ptr<Logger>* result,
-                   IODebugContext* /*dbg*/) override {
+                     std::shared_ptr<Logger>* result,
+                     IODebugContext* /*dbg*/) override {
     FILE* f = nullptr;
     int fd;
     {
@@ -938,7 +935,7 @@ class PosixFileSystem : public FileSystem {
   }
 
   FileOptions OptimizeForLogWrite(const FileOptions& file_options,
-                                 const DBOptions& db_options) const override {
+                                  const DBOptions& db_options) const override {
     FileOptions optimized = file_options;
     optimized.use_mmap_writes = false;
     optimized.use_direct_writes = false;

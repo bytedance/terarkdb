@@ -16,9 +16,9 @@
 #include <string>
 #include <vector>
 
+#include "file/filename.h"
 #include "rocksdb/env.h"
 #include "rocksdb/terark_namespace.h"
-#include "file/filename.h"
 
 namespace TERARKDB_NAMESPACE {
 

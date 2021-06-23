@@ -13,10 +13,10 @@
 #include <memory>
 #include <vector>
 
+#include "logging/logging.h"
 #include "port/port.h"
 #include "rocksdb/terark_namespace.h"
 #include "util/crc32c.h"
-#include "logging/logging.h"
 
 namespace TERARKDB_NAMESPACE {
 

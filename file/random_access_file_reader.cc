@@ -17,9 +17,9 @@
 #include "monitoring/iostats_context_imp.h"
 #include "port/port.h"
 #include "table/format.h"
-#include "util/sync_point.h"
 #include "util/random.h"
 #include "util/rate_limiter.h"
+#include "util/sync_point.h"
 
 namespace TERARKDB_NAMESPACE {
 IOStatus RandomAccessFileReader::Create(
@@ -189,7 +189,7 @@ size_t End(const FSReadRequest& r) {
 FSReadRequest Align(const FSReadRequest& r, size_t alignment) {
   FSReadRequest req;
   req.offset = static_cast<uint64_t>(
-    TruncateToPageBoundary(alignment, static_cast<size_t>(r.offset)));
+      TruncateToPageBoundary(alignment, static_cast<size_t>(r.offset)));
   req.len = Roundup(End(r), alignment) - req.offset;
   req.scratch = nullptr;
   return req;

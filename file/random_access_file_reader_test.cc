@@ -11,10 +11,10 @@
 #include "port/port.h"
 #include "port/stack_trace.h"
 #include "rocksdb/file_system.h"
-#include "util/sync_point.h"
 #include "test_util/testharness.h"
 #include "test_util/testutil.h"
 #include "util/random.h"
+#include "util/sync_point.h"
 
 namespace TERARKDB_NAMESPACE {
 
@@ -60,9 +60,7 @@ class RandomAccessFileReaderTest : public testing::Test {
   std::shared_ptr<FileSystem> fs_;
   std::string test_dir_;
 
-  std::string Path(const std::string& fname) {
-    return test_dir_ + "/" + fname;
-  }
+  std::string Path(const std::string& fname) { return test_dir_ + "/" + fname; }
 };
 
 // Skip the following tests in lite mode since direct I/O is unsupported.

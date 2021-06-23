@@ -17,6 +17,7 @@
 #include "db/forward_iterator.h"
 #include "db/merge_context.h"
 #include "db/merge_helper.h"
+#include "logging/logging.h"
 #include "monitoring/perf_context_imp.h"
 #include "rocksdb/env.h"
 #include "rocksdb/iterator.h"
@@ -25,7 +26,6 @@
 #include "rocksdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 #include "util/arena.h"
-#include "logging/logging.h"
 #include "util/string_util.h"
 #include "util/util.h"
 

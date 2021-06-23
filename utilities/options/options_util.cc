@@ -7,10 +7,10 @@
 
 #include "rocksdb/utilities/options_util.h"
 
+#include "file/filename.h"
 #include "options/options_parser.h"
 #include "rocksdb/options.h"
 #include "rocksdb/terark_namespace.h"
-#include "file/filename.h"
 
 namespace TERARKDB_NAMESPACE {
 

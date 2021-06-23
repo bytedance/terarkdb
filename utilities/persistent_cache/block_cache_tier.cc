@@ -10,9 +10,9 @@
 #include <utility>
 #include <vector>
 
+#include "logging/logging.h"
 #include "port/port.h"
 #include "rocksdb/terark_namespace.h"
-#include "logging/logging.h"
 #include "util/stop_watch.h"
 #include "util/sync_point.h"
 #include "utilities/persistent_cache/block_cache_tier_file.h"

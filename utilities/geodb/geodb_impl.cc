@@ -16,9 +16,9 @@
 #include <string>
 #include <vector>
 
+#include "file/filename.h"
 #include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
-#include "file/filename.h"
 #include "util/string_util.h"
 
 //

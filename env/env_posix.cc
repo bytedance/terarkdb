@@ -44,6 +44,7 @@
 #include <vector>
 
 #include "env/io_posix.h"
+#include "logging/logging.h"
 #include "logging/posix_logger.h"
 #include "monitoring/iostats_context_imp.h"
 #include "monitoring/thread_status_updater.h"
@@ -53,7 +54,6 @@
 #include "rocksdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/compression_context_cache.h"
-#include "logging/logging.h"
 #include "util/random.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
