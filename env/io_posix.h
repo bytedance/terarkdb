@@ -168,11 +168,8 @@ class PosixMmapReadableFile : public RandomAccessFile {
                         size_t length, const EnvOptions& options);
   ~PosixMmapReadableFile();
   bool use_aio_reads() const final { return use_aio_reads_; }
-  bool is_mmap_open() const final { return true; }
   Status Read(uint64_t offset, size_t n, Slice* result,
               char* scratch) const final;
-  Status FsRead(uint64_t offset, size_t len, Slice* result,
-                void* buf) const final;
   Status InvalidateCache(size_t offset, size_t length) final;
   intptr_t FileDescriptor() const final;
 };
