@@ -186,11 +186,7 @@ Status RandomAccessFileReader::Read(uint64_t offset, size_t n, Slice* result,
 #endif
         // this is a workaround for resolve non-TerarkZipTable using mmap read
         // will OOM use 'static' for 'init on first use'
-        if (use_fsread_) {
-          s = file_->FsRead(offset + pos, allowed, &tmp_result, scratch + pos);
-        } else {
-          s = file_->Read(offset + pos, allowed, &tmp_result, scratch + pos);
-        }
+        s = file_->Read(offset + pos, allowed, &tmp_result, scratch + pos);
 #ifndef ROCKSDB_LITE
         if (ShouldNotifyListeners()) {
           auto finish_ts = std::chrono::system_clock::now();
@@ -805,20 +801,6 @@ class MemoryRandomAccessFile : public RandomAccessFile {
 
   Status InvalidateCache(size_t /*offset*/, size_t /*length*/) override {
     return Status::NotSupported("InvalidateCache not supported.");
-  }
-
-  Status FsRead(uint64_t offset, size_t len, Slice* result,
-                void* buf) const override {
-    if (offset > size_) {
-      *result = Slice();
-      return Status::IOError("MemoryRandomAccessFile::FsRead offset " +
-                                 ToString(offset) +
-                                 " larger than file length " + ToString(size_),
-                             ToString(file_->FileDescriptor()));
-    }
-    *result = Slice((char*)buf, std::min(size_t(size_ - offset), len));
-    memcpy(buf, data_.get() + offset, result->size());
-    return status_;
   }
 
   intptr_t FileDescriptor() const override { return file_->FileDescriptor(); }

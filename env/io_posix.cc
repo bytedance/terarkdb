@@ -503,18 +503,6 @@ Status PosixMmapReadableFile::Read(uint64_t offset, size_t n, Slice* result,
   return s;
 }
 
-// Now FsRead is only used by TerarkDB
-// Now FsRead is also used by RandomAccessFileReader
-// There are 2 purpose of FsRead:
-// 1. Preventing link page cache to process's address space
-// 2. Implement network fs by client lib(faster than fuse...)
-Status PosixMmapReadableFile::FsRead(uint64_t offset, size_t len, Slice* result,
-                                     void* buf) const {
-  bool use_direct_io = false;
-  return PosixFsRead(offset, len, result, (char*)buf, fd_, filename_,
-                     use_aio_reads_, use_direct_io, 0);
-}
-
 Status PosixMmapReadableFile::InvalidateCache(size_t offset, size_t length) {
   size_t upper_offset = ((offset + 4095) & ~4095);
   size_t lower_length = ((offset + length) & ~4095) - upper_offset;
