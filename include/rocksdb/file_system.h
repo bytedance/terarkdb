@@ -33,7 +33,7 @@
 #include "rocksdb/table.h"
 #include "rocksdb/thread_status.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMESPACE {
 
 class FileLock;
 class FSDirectory;
@@ -771,15 +771,13 @@ class FSWritableFile {
       : last_preallocated_block_(0),
         preallocation_block_size_(0),
         io_priority_(Env::IO_TOTAL),
-        write_hint_(Env::WLTH_NOT_SET),
-        strict_bytes_per_sync_(false) {}
+        write_hint_(Env::WLTH_NOT_SET) {}
 
   explicit FSWritableFile(const FileOptions& options)
       : last_preallocated_block_(0),
         preallocation_block_size_(0),
         io_priority_(Env::IO_TOTAL),
-        write_hint_(Env::WLTH_NOT_SET),
-        strict_bytes_per_sync_(options.strict_bytes_per_sync) {}
+        write_hint_(Env::WLTH_NOT_SET) {}
 
   virtual ~FSWritableFile() {}
 
@@ -935,9 +933,6 @@ class FSWritableFile {
   // Default implementation does nothing.
   virtual IOStatus RangeSync(uint64_t /*offset*/, uint64_t /*nbytes*/,
                              const IOOptions& options, IODebugContext* dbg) {
-    if (strict_bytes_per_sync_) {
-      return Sync(options, dbg);
-    }
     return IOStatus::OK();
   }
 
@@ -990,7 +985,6 @@ class FSWritableFile {
  protected:
   Env::IOPriority io_priority_;
   Env::WriteLifeTimeHint write_hint_;
-  const bool strict_bytes_per_sync_;
 };
 
 // A file abstraction for random reading and writing.
@@ -1536,4 +1530,4 @@ extern IOStatus WriteStringToFile(FileSystem* fs, const Slice& data,
 extern IOStatus ReadFileToString(FileSystem* fs, const std::string& fname,
                                  std::string* data);
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE

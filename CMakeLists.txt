@@ -839,10 +839,9 @@ if(WIN32)
 
     if(WITH_ZENFS)
       list(APPEND SOURCES
-        third-party/zenfs/fs/fs_zenfs.cc
-        third-party/zenfs/fs/io_zenfs.cc
-        third-party/zenfs/fs/zbd_zenfs.cc
-        third-party/zenfs/util/zenfs.cc
+        plugin/zenfs/fs/fs_zenfs.cc
+        plugin/zenfs/fs/io_zenfs.cc
+        plugin/zenfs/fs/zbd_zenfs.cc
         tools/zenfs_tool.cc)
     endif()
 endif()
