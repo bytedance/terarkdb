@@ -68,6 +68,7 @@ endif()
 
 if(WITH_ZENFS)
   add_definitions(-DLIBZBD)
+  add_compile_definitions(ROCKSDB_NAMESPACE=${WITH_TERARKDB_NAMESPACE})
 endif()
 
 IF(FORCE_TERARKDB_RELEASE_BUILD)
@@ -839,10 +840,10 @@ if(WIN32)
 
     if(WITH_ZENFS)
       list(APPEND SOURCES
-        env/env_zenfs.cc
-        env/io_zenfs.cc
-        env/zbd_zenfs.cc
-        tools/zenfs.cc
+        third-party/zenfs/fs/fs_zenfs.cc
+        third-party/zenfs/fs/io_zenfs.cc
+        third-party/zenfs/fs/zbd_zenfs.cc
+        third-party/zenfs/util/zenfs.cc
         tools/zenfs_tool.cc)
     endif()
 endif()
