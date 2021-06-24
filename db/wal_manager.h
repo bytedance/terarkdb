@@ -18,6 +18,9 @@
 #include <vector>
 
 #include "db/version_set.h"
+// ********* RD 6 *********
+#include "file/file_util.h"
+// ********* RD 6 *********
 #include "options/db_options.h"
 #include "port/port.h"
 #include "rocksdb/env.h"
@@ -94,6 +97,9 @@ class WalManager {
   const ImmutableDBOptions& db_options_;
   const EnvOptions& env_options_;
   Env* env_;
+  // ********* RD 6 *********
+  const FileSystemPtr fs_;
+  // ********* RD 6 *********
 
   // ------- WalManager state -------
   // cache for ReadFirstRecord() calls
