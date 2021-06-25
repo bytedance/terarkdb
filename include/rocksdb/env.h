@@ -61,7 +61,6 @@ class RateLimiter;
 class ThreadStatusUpdater;
 struct ThreadStatus;
 class FileSystem;
-class SystemClock;
 
 const size_t kDefaultPageSize = 4 * 1024;
 
@@ -125,8 +124,6 @@ struct EnvOptions {
 
   // If not nullptr, write rate limiting is enabled for flush and compaction
   RateLimiter* rate_limiter = nullptr;
-
-  void InitFromEnvVar();
 };
 
 class Env {
@@ -140,11 +137,9 @@ class Env {
   };
 
   Env();
-  // Construct an Env with a separate FileSystem and/or SystemClock
+  // Construct an Env with a separate FileSystem
   // implementation
   explicit Env(const std::shared_ptr<FileSystem>& fs);
-  Env(const std::shared_ptr<FileSystem>& fs,
-      const std::shared_ptr<SystemClock>& clock);
   // No copying allowed
   Env(const Env&) = delete;
   void operator=(const Env&) = delete;
@@ -419,7 +414,7 @@ class Env {
   // informational messages. Derived classes can override to provide custom
   // logger.
   virtual Status NewLogger(const std::string& fname,
-                           std::shared_ptr<Logger>* result);
+                           std::shared_ptr<Logger>* result) = 0;
 
   // Returns the number of micro-seconds since some fixed point in time.
   // It is often used as system time such as in GenericRateLimiter
@@ -567,9 +562,6 @@ class Env {
   // could be a fully implemented one, or a wrapper class around the Env
   const std::shared_ptr<FileSystem>& GetFileSystem() const;
 
-  // Get the SystemClock implementation this Env was constructed with. It
-  // could be a fully implemented one, or a wrapper class around the Env
-  const std::shared_ptr<SystemClock>& GetSystemClock() const;
 
   // If you're adding methods here, remember to add them to EnvWrapper too.
 
@@ -580,9 +572,6 @@ class Env {
 
   // Pointer to the underlying FileSystem implementation
   std::shared_ptr<FileSystem> file_system_;
-
-  // Pointer to the underlying SystemClock implementation
-  std::shared_ptr<SystemClock> system_clock_;
 
  private:
   static const size_t kMaxHostNameLen = 256;
@@ -1717,13 +1706,5 @@ Status NewHdfsEnv(Env** hdfs_env, const std::string& fsname);
 // operations, reporting results to variables in PerfContext.
 // This is a factory method for TimedEnv defined in utilities/env_timed.cc.
 Env* NewTimedEnv(Env* base_env);
-
-// Returns an instance of logger that can be used for storing informational
-// messages.
-// This is a factory method for EnvLogger declared in logging/env_logging.h
-Status NewEnvLogger(const std::string& fname, Env* env,
-                    std::shared_ptr<Logger>* result);
-
-std::unique_ptr<Env> NewCompositeEnv(const std::shared_ptr<FileSystem>& fs);
 
 }  // namespace TERARKDB_NAMESPACE

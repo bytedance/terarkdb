@@ -76,7 +76,7 @@ class IOProfRandomRWFile : public RandomRWFileWrapper {
 class IOProfWritableFile : public WritableFileWrapper {
  public:
   IOProfWritableFile(WritableFile* file) : WritableFileWrapper(file) {}
-  Status Append(const Slice& data) override {
+  Status Append(const Slice& data) final {
     IOProfiler::Scope _scope_(BOOST_CURRENT_FUNCTION);
     return WritableFileWrapper::Append(data);
   }
