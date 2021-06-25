@@ -612,6 +612,7 @@ set(SOURCES
         env/env_encryption.cc
         env/env_hdfs.cc
         env/env_io_prof.cc
+        env/file_system.cc
         env/mock_env.cc
         memtable/alloc_tracker.cc
         memtable/concurrent_hashduallist_rep.cc
@@ -841,8 +842,8 @@ if(WIN32)
       list(APPEND SOURCES
         plugin/zenfs/fs/fs_zenfs.cc
         plugin/zenfs/fs/io_zenfs.cc
-        plugin/zenfs/fs/zbd_zenfs.cc
-        tools/zenfs_tool.cc)
+        plugin/zenfs/fs/zbd_zenfs.cc)
+        #tools/zenfs_tool.cc
     endif()
 endif()
 
