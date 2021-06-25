@@ -743,6 +743,7 @@ set(SOURCES
         utilities/merge_operators/string_append/stringappend.cc
         utilities/merge_operators/string_append/stringappend2.cc
         utilities/merge_operators/uint64add.cc
+        utilities/object_registry.cc
         utilities/option_change_migration/option_change_migration.cc
         utilities/options/options_util.cc
         utilities/persistent_cache/block_cache_tier.cc
@@ -840,10 +841,10 @@ if(WIN32)
 
     if(WITH_ZENFS)
       list(APPEND SOURCES
+        env/env_zenfs.cc
         plugin/zenfs/fs/fs_zenfs.cc
         plugin/zenfs/fs/io_zenfs.cc
         plugin/zenfs/fs/zbd_zenfs.cc)
-        #tools/zenfs_tool.cc
     endif()
 endif()
 
@@ -1201,10 +1202,11 @@ if(WITH_TOOLS)
       $<TARGET_OBJECTS:testharness>)
   target_link_libraries(db_bench${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
 
-  add_executable(zenfs${ARTIFACT_SUFFIX} tools/zenfs.cc
-      tools/zenfs_tool.cc
-      $<TARGET_OBJECTS:testharness>)
-  target_link_libraries(zenfs${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
+  if(WITH_ZENFS)
+    add_executable(zenfs${ARTIFACT_SUFFIX} third-party/zenfs/util/zenfs.cc
+        $<TARGET_OBJECTS:testharness>)
+    target_link_libraries(zenfs${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
+  endif()
 
   if(WITH_TERARK_ZIP)
     add_subdirectory(terark-tools/terark-test)

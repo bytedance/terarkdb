@@ -146,6 +146,15 @@ class Env {
 
   virtual ~Env();
 
+  static const char* Type() { return "Environment"; }
+
+  // Loads the environment specified by the input value into the result
+  static Status LoadEnv(const std::string& value, Env** result);
+
+  // Loads the environment specified by the input value into the result
+  static Status LoadEnv(const std::string& value, Env** result,
+                        std::shared_ptr<Env>* guard);
+                        
   // Return a default environment suitable for the current operating
   // system.  Sophisticated users may wish to provide their own Env
   // implementation instead of relying on this default environment.
@@ -1706,5 +1715,7 @@ Status NewHdfsEnv(Env** hdfs_env, const std::string& fsname);
 // operations, reporting results to variables in PerfContext.
 // This is a factory method for TimedEnv defined in utilities/env_timed.cc.
 Env* NewTimedEnv(Env* base_env);
+
+Status NewZenfsEnv(Env** zenfs_env, const std::string& zdb_path, const std::string& aux_path, Env* base_env = Env::Default());
 
 }  // namespace TERARKDB_NAMESPACE

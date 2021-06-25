@@ -1530,4 +1530,7 @@ extern IOStatus WriteStringToFile(FileSystem* fs, const Slice& data,
 extern IOStatus ReadFileToString(FileSystem* fs, const std::string& fname,
                                  std::string* data);
 
+
+extern FileSystem* GetLegacyFileSystem(Env* base_env);
+
 }  // namespace TERARKDB_NAMESPACE

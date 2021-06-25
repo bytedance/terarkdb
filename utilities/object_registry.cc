@@ -5,10 +5,10 @@
 
 #include "rocksdb/utilities/object_registry.h"
 
-#include "logging/logging.h"
+#include "util/logging.h"
 #include "rocksdb/env.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMESPACE {
 #ifndef ROCKSDB_LITE
 // Looks through the "type" factories for one that matches "name".
 // If found, returns the pointer to the Entry matching this name.
@@ -30,20 +30,6 @@ void ObjectLibrary::AddEntry(const std::string &type,
                              std::unique_ptr<Entry> &entry) {
   auto &entries = entries_[type];
   entries.emplace_back(std::move(entry));
-}
-
-void ObjectLibrary::Dump(Logger *logger) const {
-  for (const auto &iter : entries_) {
-    ROCKS_LOG_HEADER(logger, "    Registered factories for type[%s] ",
-                     iter.first.c_str());
-    bool printed_one = false;
-    for (const auto &e : iter.second) {
-      ROCKS_LOG_HEADER(logger, "%c %s", (printed_one) ? ',' : ':',
-                       e->Name().c_str());
-      printed_one = true;
-    }
-  }
-  ROCKS_LOG_HEADER(logger, "\n");
 }
 
 // Returns the Default singleton instance of the ObjectLibrary
@@ -77,11 +63,5 @@ const ObjectLibrary::Entry *ObjectRegistry::FindEntry(
   return nullptr;
 }
 
-void ObjectRegistry::Dump(Logger *logger) const {
-  for (auto iter = libraries_.crbegin(); iter != libraries_.crend(); ++iter) {
-    iter->get()->Dump(logger);
-  }
-}
-
 #endif  // ROCKSDB_LITE
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE

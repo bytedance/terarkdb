@@ -16,18 +16,9 @@
 
 #include "rocksdb/status.h"
 #include "rocksdb/terark_namespace.h"
+#include "util/logging.h"
 
 namespace TERARKDB_NAMESPACE {
-
-// Creates a new T using the factory function that was registered with a pattern
-// that matches the provided "target" string according to std::regex_match.
-//
-// If no registered functions match, returns nullptr. If multiple functions
-// match, the factory function used is unspecified.
-//
-// Populates res_guard with result pointer if caller is granted ownership.
-template <typename T>
-T* NewCustomObject(const std::string& target, std::unique_ptr<T>* res_guard);
 
 // Returns a new T when called with a string. Populates the std::unique_ptr
 // argument if granting ownership to caller.
@@ -77,7 +68,6 @@ class ObjectLibrary {
   // Finds the entry matching the input name and type
   const Entry* FindEntry(const std::string& type,
                          const std::string& name) const;
-  void Dump(Logger* logger) const;
 
   // Registers the factory with the library for the pattern.
   // If the pattern matches, the factory may be used to create a new object.
@@ -200,9 +190,6 @@ class ObjectRegistry {
       return Status::OK();
     }
   }
-
-  // Dump the contents of the registry to the logger
-  void Dump(Logger* logger) const;
 
  private:
   const ObjectLibrary::Entry* FindEntry(const std::string& type,

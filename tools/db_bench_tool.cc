@@ -82,10 +82,6 @@
 #include <io.h>  // open/close
 #endif
 
-#ifdef LIBZBD
-#include "env/env_zenfs.h"
-#endif
-
 using GFLAGS_NAMESPACE::ParseCommandLineFlags;
 using GFLAGS_NAMESPACE::RegisterFlagValidator;
 using GFLAGS_NAMESPACE::SetUsageMessage;
@@ -838,6 +834,15 @@ DEFINE_string(fs_uri, "",
 DEFINE_string(hdfs, "",
               "Name of hdfs environment. Mutually exclusive with"
               " --env_uri and --fs_uri");
+#ifdef LIBZBD
+DEFINE_string(zbd_path, "",
+              "Path of zone block device.");
+DEFINE_string(aux_path, "",
+              "Aux path for zenfs.");
+#endif
+
+static std::shared_ptr<TERARKDB_NAMESPACE::Env> env_guard;
+
 static TERARKDB_NAMESPACE::Env* FLAGS_env = TERARKDB_NAMESPACE::Env::Default();
 
 DEFINE_int64(stats_interval, 0,
@@ -5793,9 +5798,8 @@ int db_bench_tool(int argc, char** argv) {
   }
   if (!FLAGS_statistics_string.empty()) {
     std::unique_ptr<Statistics> custom_stats_guard;
-    dbstats.reset(NewCustomObject<Statistics>(FLAGS_statistics_string,
-                                              &custom_stats_guard));
-    custom_stats_guard.release();
+    Status s = ObjectRegistry::NewInstance()->NewSharedObject<Statistics>(
+        FLAGS_statistics_string, &dbstats);
     if (dbstats == nullptr) {
       fprintf(stderr, "No Statistics registered matching string: %s\n",
               FLAGS_statistics_string.c_str());
@@ -5836,18 +5840,21 @@ int db_bench_tool(int argc, char** argv) {
     fprintf(stderr, "Cannot provide both --hdfs and --env_uri.\n");
     exit(1);
   } else if (!FLAGS_env_uri.empty()) {
-    FLAGS_env = NewCustomObject<Env>(FLAGS_env_uri, &custom_env_guard);
+    Status s = Env::LoadEnv(FLAGS_env_uri, &FLAGS_env, &env_guard);
     if (FLAGS_env == nullptr) {
       fprintf(stderr, "No Env registered for URI: %s\n", FLAGS_env_uri.c_str());
       exit(1);
     }
-  } else if (!FLAGS_fs_uri.empty()) {
-//    Status s = NewZenEnv(&FLAGS_env, FLAGS_fs_uri);
-    // if (!s.ok()) {
-    //   fprintf(stderr, "Error: %s\n", s.ToString().c_str());
-    //   exit(1);
-    // }
-  }
+  } 
+  #ifdef LIBZBD
+    else if (!FLAGS_zbd_path.empty() && !FLAGS_aux_path.empty()) {
+      FLAGS_env = NewZenfsEnv(FLAGS_zbd_path, FLAGS_aux_path);
+      if (FLAGS_env == nullptr) {
+        fprintf(stderr, "Error: Init zenfs env failed.\n");
+        exit(1);
+      }
+    }
+  #endif
 #endif  // ROCKSDB_LITE
   if (!FLAGS_hdfs.empty()) {
     FLAGS_env = new TERARKDB_NAMESPACE::HdfsEnv(FLAGS_hdfs);
