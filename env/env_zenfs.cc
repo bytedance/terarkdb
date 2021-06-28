@@ -157,7 +157,7 @@ class ZenfsWritableFile : public WritableFile {
   }
 
  private:
-  std::unique_ptr<FSWritableFile>&& target_;
+  std::unique_ptr<FSWritableFile> target_;
 };
 
 class ZenfsDirectory : public Directory {
@@ -179,7 +179,7 @@ class ZenfsDirectory : public Directory {
 class ZenfsEnv : public EnvWrapper {
  public:
   // Initialize an EnvWrapper that delegates all calls to *t
-  explicit ZenfsEnv(Env* t) : EnvWrapper(t) {}
+  explicit ZenfsEnv(Env* t) : EnvWrapper(t), target_(t) {}
 
   Status InitZenfs(const std::string& zdb_path) {
     return NewZenFS(&fs_, zdb_path);
@@ -348,7 +348,7 @@ class ZenfsEnv : public EnvWrapper {
 
   void Schedule(void (*f)(void* arg), void* a, Priority pri,
                 void* tag = nullptr, void (*u)(void* arg) = nullptr) override {
-    return target_->Schedule(f, a, pri, tag, u);
+    target_->Schedule(f, a, pri, tag, u);
   }
 
   int UnSchedule(void* tag, Priority pri) override {
@@ -356,7 +356,7 @@ class ZenfsEnv : public EnvWrapper {
   }
 
   void StartThread(void (*f)(void*), void* a) override {
-    return target_->StartThread(f, a);
+    target_->StartThread(f, a);
   }
   void WaitForJoin() override { return target_->WaitForJoin(); }
   unsigned int GetThreadPoolQueueLen(Priority pri = LOW) const override {
@@ -387,7 +387,7 @@ class ZenfsEnv : public EnvWrapper {
     return target_->GetAbsolutePath(db_path, output_path);
   }
   void SetBackgroundThreads(int num, Priority pri) override {
-    return target_->SetBackgroundThreads(num, pri);
+    target_->SetBackgroundThreads(num, pri);
   }
   int GetBackgroundThreads(Priority pri) override {
     return target_->GetBackgroundThreads(pri);
@@ -398,7 +398,7 @@ class ZenfsEnv : public EnvWrapper {
   }
 
   void IncBackgroundThreadsIfNeeded(int num, Priority pri) override {
-    return target_->IncBackgroundThreadsIfNeeded(num, pri);
+    target_->IncBackgroundThreadsIfNeeded(num, pri);
   }
 
   void LowerThreadPoolIOPriority(Priority pool) override {
