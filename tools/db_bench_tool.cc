@@ -1308,7 +1308,10 @@ class ReportFileOpEnv : public EnvWrapper {
                                             std::memory_order_relaxed);
         return rv;
       }
-
+      virtual Status Append(const Slice& data,
+                        const DataVerificationInfo& /* verification_info */) {
+        return Append(data);
+      }
       Status Truncate(uint64_t size) override {
         return target_->Truncate(size);
       }
