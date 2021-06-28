@@ -70,12 +70,12 @@ class LegacyRandomAccessFileWrapper : public FSRandomAccessFile {
   IOStatus MultiRead(FSReadRequest* fs_reqs, size_t num_reqs,
                      const IOOptions& /*options*/,
                      IODebugContext* /*dbg*/) override {
-    std::vector<ReadRequest> reqs;
+    std::vector<FSReadRequest> reqs;
     Status status;
 
     reqs.reserve(num_reqs);
     for (size_t i = 0; i < num_reqs; ++i) {
-      ReadRequest req;
+      FSReadRequest req;
 
       req.offset = fs_reqs[i].offset;
       req.len = fs_reqs[i].len;
@@ -273,6 +273,8 @@ class LegacyDirectoryWrapper : public FSDirectory {
  private:
   std::unique_ptr<Directory> target_;
 };
+
+}  // end anonymous namespace
 
 class LegacyFileSystemWrapper : public FileSystem {
  public:
@@ -519,7 +521,7 @@ class LegacyFileSystemWrapper : public FileSystem {
  private:
   Env* target_;
 };
-}  // end anonymous namespace
+
 
 Env::Env() : thread_status_updater_(nullptr) {
   file_system_ = std::make_shared<LegacyFileSystemWrapper>(this);
@@ -967,8 +969,11 @@ const std::shared_ptr<FileSystem>& Env::GetFileSystem() const {
   return file_system_;
 }
 
-FileSystem* GetLegacyFileSystem(Env* base_env) {
-  return new LegacyFileSystemWrapper(base_env);
+std::shared_ptr<FileSystem> FileSystem::Default() {
+    static LegacyFileSystemWrapper default_fs(Env::Default());
+    static std::shared_ptr<LegacyFileSystemWrapper> default_fs_ptr(
+    &default_fs, [](LegacyFileSystemWrapper*) {});
+    return default_fs_ptr;
 }
 
 }  // namespace TERARKDB_NAMESPACE

@@ -649,7 +649,7 @@ class SequentialFile {
 };
 
 // A read IO request structure for use in MultiRead
-struct ReadRequest {
+struct FSReadRequest {
   // File offset in bytes
   uint64_t offset;
 
@@ -704,10 +704,10 @@ class RandomAccessFile {
   // individual requests will be ignored and return status will be assumed
   // for all read requests. The function return status is only meant for any
   // any errors that occur before even processing specific read requests
-  virtual Status MultiRead(ReadRequest* reqs, size_t num_reqs) {
+  virtual Status MultiRead(FSReadRequest* reqs, size_t num_reqs) {
     assert(reqs != nullptr);
     for (size_t i = 0; i < num_reqs; ++i) {
-      ReadRequest& req = reqs[i];
+      FSReadRequest& req = reqs[i];
       req.status = Read(req.offset, req.len, &req.result, req.scratch);
     }
     return Status::OK();
@@ -1531,7 +1531,7 @@ class RandomAccessFileWrapper : public RandomAccessFile {
               char* scratch) const override {
     return target_->Read(offset, n, result, scratch);
   }
-  Status MultiRead(ReadRequest* reqs, size_t num_reqs) override {
+  Status MultiRead(FSReadRequest* reqs, size_t num_reqs) override {
     return target_->MultiRead(reqs, num_reqs);
   }
   Status Prefetch(uint64_t offset, size_t n) override {
@@ -1700,6 +1700,141 @@ class LoggerWrapper : public Logger {
  private:
   Logger* target_;
 };
+
+// class LegacyFileSystemWrapper : public FileSystem {
+//  public:
+//   // Initialize an EnvWrapper that delegates all calls to *t
+//   explicit LegacyFileSystemWrapper(Env* t) : target_(t) {}
+//   ~LegacyFileSystemWrapper() override {}
+
+//   const char* Name() const override { return "Legacy File System"; }
+
+//   // Return the target to which this Env forwards all calls
+//   Env* target() const { return target_; }
+
+//   // The following text is boilerplate that forwards all methods to target()
+//   IOStatus NewSequentialFile(const std::string& f, const FileOptions& file_opts,
+//                              std::unique_ptr<FSSequentialFile>* r,
+//                              IODebugContext* /*dbg*/) override;
+//   IOStatus NewRandomAccessFile(const std::string& f,
+//                                const FileOptions& file_opts,
+//                                std::unique_ptr<FSRandomAccessFile>* r,
+//                                IODebugContext* /*dbg*/) override;
+//   IOStatus NewWritableFile(const std::string& f, const FileOptions& file_opts,
+//                            std::unique_ptr<FSWritableFile>* r,
+//                            IODebugContext* /*dbg*/) override;
+//   IOStatus ReopenWritableFile(const std::string& fname,
+//                               const FileOptions& file_opts,
+//                               std::unique_ptr<FSWritableFile>* result,
+//                               IODebugContext* /*dbg*/) override;
+//   IOStatus ReuseWritableFile(const std::string& fname,
+//                              const std::string& old_fname,
+//                              const FileOptions& file_opts,
+//                              std::unique_ptr<FSWritableFile>* r,
+//                              IODebugContext* /*dbg*/) override;
+//   IOStatus NewRandomRWFile(const std::string& fname,
+//                            const FileOptions& file_opts,
+//                            std::unique_ptr<FSRandomRWFile>* result,
+//                            IODebugContext* /*dbg*/);
+//   IOStatus NewMemoryMappedFileBuffer(
+//       const std::string& fname,
+//       std::unique_ptr<MemoryMappedFileBuffer>* result) override;
+//   IOStatus NewDirectory(const std::string& name, const IOOptions& /*io_opts*/,
+//                         std::unique_ptr<FSDirectory>* result,
+//                         IODebugContext* /*dbg*/);
+//   IOStatus FileExists(const std::string& f, const IOOptions& /*io_opts*/,
+//                       IODebugContext* /*dbg*/) override;
+//   IOStatus GetChildren(const std::string& dir, const IOOptions& /*io_opts*/,
+//                        std::vector<std::string>* r,
+//                        IODebugContext* /*dbg*/) override;
+//   IOStatus GetChildrenFileAttributes(const std::string& dir,
+//                                      const IOOptions& /*options*/,
+//                                      std::vector<FileAttributes>* result,
+//                                      IODebugContext* /*dbg*/) override;
+//   IOStatus DeleteFile(const std::string& f, const IOOptions& /*options*/,
+//                       IODebugContext* /*dbg*/) override;
+//   IOStatus Truncate(const std::string& fname, size_t size,
+//                     const IOOptions& /*options*/,
+//                     IODebugContext* /*dbg*/) override ;
+//   IOStatus CreateDir(const std::string& d, const IOOptions& /*options*/,
+//                      IODebugContext* /*dbg*/) override;
+//   IOStatus CreateDirIfMissing(const std::string& d,
+//                               const IOOptions& /*options*/,
+//                               IODebugContext* /*dbg*/) override;
+//   IOStatus DeleteDir(const std::string& d, const IOOptions& /*options*/,
+//                      IODebugContext* /*dbg*/) override;
+//   IOStatus GetFileSize(const std::string& f, const IOOptions& /*options*/,
+//                        uint64_t* s, IODebugContext* /*dbg*/) override;
+
+//   IOStatus GetFileModificationTime(const std::string& fname,
+//                                    const IOOptions& /*options*/,
+//                                    uint64_t* file_mtime,
+//                                    IODebugContext* /*dbg*/) override;
+
+//   IOStatus GetAbsolutePath(const std::string& db_path,
+//                            const IOOptions& /*options*/,
+//                            std::string* output_path,
+//                            IODebugContext* /*dbg*/) override;
+
+//   IOStatus RenameFile(const std::string& s, const std::string& t,
+//                       const IOOptions& /*options*/,
+//                       IODebugContext* /*dbg*/) override ;
+
+//   IOStatus LinkFile(const std::string& s, const std::string& t,
+//                     const IOOptions& /*options*/,
+//                     IODebugContext* /*dbg*/) override ;
+
+//   IOStatus NumFileLinks(const std::string& fname, const IOOptions& /*options*/,
+//                         uint64_t* count, IODebugContext* /*dbg*/) override;
+
+//   IOStatus AreFilesSame(const std::string& first, const std::string& second,
+//                         const IOOptions& /*options*/, bool* res,
+//                         IODebugContext* /*dbg*/) override;
+
+//   IOStatus LockFile(const std::string& f, const IOOptions& /*options*/,
+//                     FileLock** l, IODebugContext* /*dbg*/) override;
+
+//   IOStatus UnlockFile(FileLock* l, const IOOptions& /*options*/,
+//                       IODebugContext* /*dbg*/) override;
+
+//   IOStatus GetTestDirectory(const IOOptions& /*options*/, std::string* path,
+//                             IODebugContext* /*dbg*/) override;
+//   IOStatus NewLogger(const std::string& fname, const IOOptions& /*options*/,
+//                      std::shared_ptr<Logger>* result,
+//                      IODebugContext* /*dbg*/) override;
+
+//   void SanitizeFileOptions(FileOptions* opts) const override;
+
+//   FileOptions OptimizeForLogRead(
+//       const FileOptions& file_options) const override;
+//   FileOptions OptimizeForManifestRead(
+//       const FileOptions& file_options) const override;
+//   FileOptions OptimizeForLogWrite(const FileOptions& file_options,
+//                                   const DBOptions& db_options) const override;
+//   FileOptions OptimizeForManifestWrite(
+//       const FileOptions& file_options) const override;
+//   FileOptions OptimizeForCompactionTableWrite(
+//       const FileOptions& file_options,
+//       const ImmutableDBOptions& immutable_ops) const override;
+//   FileOptions OptimizeForCompactionTableRead(
+//       const FileOptions& file_options,
+//       const ImmutableDBOptions& db_options) const override;
+//   FileOptions OptimizeForBlobFileRead(
+//       const FileOptions& file_options,
+//       const ImmutableDBOptions& db_options) const override;
+
+// #ifdef GetFreeSpace
+// #undef GetFreeSpace
+// #endif
+//   IOStatus GetFreeSpace(const std::string& path, const IOOptions& /*options*/,
+//                         uint64_t* diskfree, IODebugContext* /*dbg*/) override;
+//   IOStatus IsDirectory(const std::string& path, const IOOptions& /*options*/,
+//                        bool* is_dir, IODebugContext* /*dbg*/) override;
+
+//  private:
+//   Env* target_;
+// };
+
 
 // Returns a new environment that stores its data in memory and delegates
 // all non-file-storage tasks to base_env. The caller must delete the result
