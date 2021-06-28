@@ -5851,8 +5851,8 @@ int db_bench_tool(int argc, char** argv) {
     }
   } 
   #ifdef LIBZBD
-    else if (!FLAGS_zbd_path.empty() && !FLAGS_aux_path.empty()) {
-      Status s = NewZenfsEnv(&FLAGS_env, FLAGS_zbd_path, FLAGS_aux_path);
+    else if (!FLAGS_zbd_path.empty()) {
+      Status s = NewZenfsEnv(&FLAGS_env, FLAGS_zbd_path);
       if (!s.ok()) {
         fprintf(stderr, "Error: Init zenfs env failed.\nStatus : %s\n", s.ToString().c_str());
         exit(1);
