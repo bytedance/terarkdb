@@ -48,7 +48,7 @@ def bench(records, key_size, value_size, engine, db_dir, exist_db):
                        """ % BENCH_ARGS[0]
     cmd = """
            {db_bench} \
-           --zbd_path=/dev/nvme3n2
+           --zbd_path=nvme3n2
            --benchmarks={bench_type}
 	   --use_existing_db={exist_db}
            --sync=1
