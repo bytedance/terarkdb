@@ -181,7 +181,7 @@ class ZenfsEnv : public EnvWrapper {
   // Initialize an EnvWrapper that delegates all calls to *t
   explicit ZenfsEnv(Env* t) : EnvWrapper(t) {}
 
-  Status InitZenfs(const std::string& zdb_path, const std::string& aux_path) {
+  Status InitZenfs(const std::string& zdb_path) {
     return NewZenFS(&fs_, zdb_path);
   }
 
@@ -473,13 +473,10 @@ class ZenfsEnv : public EnvWrapper {
   FileSystem* fs_;
 };
 
-Status NewZenfsEnv(Env** zenfs_env, const std::string& zdb_path,
-                   const std::string& aux_path, Env* base_env) {
+Status NewZenfsEnv(Env** zenfs_env, const std::string& zdb_path) {
   assert(zdb_path.length() > 0);
-  assert(aux_path.length() > 0);
-  assert(base_env != nullptr);
-  auto env = new ZenfsEnv(base_env);
-  Status s = env->InitZenfs(zdb_path, aux_path);
+  auto env = new ZenfsEnv(Env::Default());
+  Status s = env->InitZenfs(zdb_path);
   *zenfs_env = s.ok() ? env : nullptr;
   return s;
 }
