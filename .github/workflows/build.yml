@@ -1,13 +1,10 @@
-name: CMake
+name: Build
 
 on:
   pull_request:
     branches: 
       - master
       - dev.*
-
-env:
-  BUILD_TYPE: RelWithDebInfo
 
 jobs:
   build:
@@ -23,19 +20,16 @@ jobs:
       run: |
         sudo apt-get install -y libaio-dev
         git submodule update --init --recursive
-        cmake -E make_directory ${{runner.workspace}}/build
+        cmake -E make_directory build
 
-    - name: Configure CMake
-      shell: bash
-      working-directory: ${{runner.workspace}}/build
-      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DWITH_TESTS=ON -DWITH_TOOLS=ON
+    - name: CMake
+      working-directory: build
+      run: cmake .. -DCMAKE_BUILD_TYPE=Debug -DWITH_TESTS=ON -DWITH_TOOLS=ON
 
     - name: Build
-      working-directory: ${{runner.workspace}}/build
-      shell: bash
-      run: make -j $(nproc)
+      working-directory: build
+      run: make
 
     - name: Test
-      working-directory: ${{runner.workspace}}/build
-      shell: bash
+      working-directory: build
       run: make test
