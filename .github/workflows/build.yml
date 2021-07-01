@@ -2,7 +2,11 @@ name: Build
 
 on:
   pull_request:
-    branches: 
+    branches:
+      - master
+      - dev.*
+  push:
+    branches:
       - master
       - dev.*
 
@@ -20,8 +24,17 @@ jobs:
       run: |
         sudo apt-get install -y libaio-dev
         git submodule update --init --recursive
-        cmake -E make_directory build
 
+    - uses: actions/cache@v2
+      name: Recover from cache
+      with:
+        path: |
+          build/
+        key: ${{ runner.os }}-cmake-${{ hashFiles('CMakeLists.txt') }}
+    
+    - name: Create Build Directory
+      run: cmake -E make_directory build || true
+        
     - name: CMake
       working-directory: build
       run: cmake .. -DCMAKE_BUILD_TYPE=Debug -DWITH_TESTS=ON -DWITH_TOOLS=ON
@@ -29,7 +42,3 @@ jobs:
     - name: Build
       working-directory: build
       run: make
-
-    - name: Test
-      working-directory: build
-      run: make test
