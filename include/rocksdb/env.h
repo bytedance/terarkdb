@@ -1716,6 +1716,8 @@ Status NewHdfsEnv(Env** hdfs_env, const std::string& fsname);
 // This is a factory method for TimedEnv defined in utilities/env_timed.cc.
 Env* NewTimedEnv(Env* base_env);
 
+#ifdef LIBZBD
 Status NewZenfsEnv(Env** zenfs_env, const std::string& zdb_path);
+#endif
 
 }  // namespace TERARKDB_NAMESPACE

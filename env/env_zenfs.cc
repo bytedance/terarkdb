@@ -468,6 +468,13 @@ class ZenfsEnv : public EnvWrapper {
     target_->SanitizeEnvOptions(env_opts);
   }
 
+  void GetZnsDiskSpaceInfo(uint64_t &total_size, uint64_t &avail_size, uint64_t &used_size) {
+    auto zbd = fs_->GetZonedBlockDevice();
+    used_size = zbd->GetUsedSpace();
+    avail_size = zbd->GetFreeSpace() + zbd->GetReclaimableSpace();
+    total_size = used_size + avail_size;
+  }
+
  private:
   Env* target_;
   FileSystem* fs_;
