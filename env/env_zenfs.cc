@@ -1,7 +1,8 @@
-#ifdef LIBZBD
 #include "rocksdb/env.h"
 #include "rocksdb/file_system.h"
 #include "rocksdb/terark_namespace.h"
+
+#ifdef LIBZBD
 #include "third-party/zenfs/fs/fs_zenfs.h"
 #include "third-party/zenfs/fs/zbd_zenfs.h"
 
@@ -494,4 +495,20 @@ void GetZbdDiskSpaceInfo(Env* env, uint64_t &total_size, uint64_t &avail_size, u
 
 }  // namespace TERARKDB_NAMESPACE
 
+#else
+
+namespace TERARKDB_NAMESPACE {
+
+Status NewZenfsEnv(Env** zenfs_env, const std::string& zdb_path) {
+  *zenfs_env = nullptr;
+  return Status::NotSupported("ZenFSEnv is not implemented.");
+}
+
+Status GetZbdDiskSpaceInfo(Env* env, uint64_t &total_size, uint64_t &avail_size, uint64_t &used_size) {
+  return Status::NotSupported("GetZbdDiskSpaceInfo is not implemented.");
+}
+
+}  // namespace TERARKDB_NAMESPACE
+
 #endif
+
