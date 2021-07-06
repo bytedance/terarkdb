@@ -469,11 +469,12 @@ class ZenfsEnv : public EnvWrapper {
     target_->SanitizeEnvOptions(env_opts);
   }
 
-  void GetZbdDiskSpaceInfo(uint64_t &total_size, uint64_t &avail_size, uint64_t &used_size) {
+  Status GetZbdDiskSpaceInfo(uint64_t &total_size, uint64_t &avail_size, uint64_t &used_size) {
     auto zbd = dynamic_cast<ZenFS*>(fs_)->GetZonedBlockDevice();
     used_size = zbd->GetUsedSpace();
     avail_size = zbd->GetFreeSpace() + zbd->GetReclaimableSpace();
     total_size = used_size + avail_size;
+    return Status::OK();
   }
 
  private:
@@ -489,8 +490,8 @@ Status NewZenfsEnv(Env** zenfs_env, const std::string& zdb_path) {
   return s;
 }
 
-void GetZbdDiskSpaceInfo(Env* env, uint64_t &total_size, uint64_t &avail_size, uint64_t &used_size) {
-  dynamic_cast<ZenfsEnv*>(env)->GetZbdDiskSpaceInfo(total_size, avail_size, used_size);
+Status GetZbdDiskSpaceInfo(Env* env, uint64_t &total_size, uint64_t &avail_size, uint64_t &used_size) {
+  return dynamic_cast<ZenfsEnv*>(env)->GetZbdDiskSpaceInfo(total_size, avail_size, used_size);
 }
 
 }  // namespace TERARKDB_NAMESPACE
