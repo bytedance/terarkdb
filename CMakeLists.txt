@@ -68,7 +68,7 @@ endif()
 
 if(WITH_ZENFS)
   add_definitions(-DLIBZBD)
-  add_compile_definitions(ROCKSDB_NAMESPACE=${WITH_TERARKDB_NAMESPACE})
+  add_definitions(-DROCKSDB_NAMESPACE=${WITH_TERARKDB_NAMESPACE})
 endif()
 
 IF(FORCE_TERARKDB_RELEASE_BUILD)
