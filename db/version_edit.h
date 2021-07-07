@@ -100,6 +100,7 @@ struct TablePropertyCache {
   uint64_t latest_time_end_compact = port::kMaxUint64;
 
   bool is_map_sst() const { return purpose == kMapSst; }
+  bool is_essense_sst() const { return purpose == kEssenceSst; }
   bool has_range_deletions() const { return (flags & kNoRangeDeletions) == 0; }
   bool map_handle_range_deletions() const {
     return (flags & kMapHandleRangeDeletions) != 0;
@@ -389,7 +390,9 @@ class VersionEdit {
 
   std::string DebugString(bool hex_key = false) const;
   std::string DebugJSON(int edit_num, bool hex_key = false) const;
-
+  void setRollback(const bool rollback = true){
+    rollback_ = rollback;
+  }
  private:
   friend class VersionSet;
   friend class Version;
@@ -432,6 +435,8 @@ class VersionEdit {
   bool is_open_db_;
   bool is_in_atomic_group_;
   uint32_t remaining_entries_;
+
+  bool rollback_ = false;
 };
 
 }  // namespace TERARKDB_NAMESPACE

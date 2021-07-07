@@ -32,6 +32,21 @@ class CompactorCommand : public LDBCommand {
   std::string from_;
   bool null_to_;
   std::string to_;
+  SeparationType separation_type;
+};
+// Command that removes the SST file forcibly from the manifest.
+class ManifestRollbackCommand : public LDBCommand {
+ public:
+  static std::string Name() { return "manifest_rollback"; }
+
+  ManifestRollbackCommand(const std::vector<std::string>& params,
+                             const std::map<std::string, std::string>& options,
+                             const std::vector<std::string>& flags);
+
+  static void Help(std::string& ret);
+
+  virtual void DoCommand() override;
+  virtual bool NoDBOpen() override { return true; }
 };
 
 class DBFileDumperCommand : public LDBCommand {

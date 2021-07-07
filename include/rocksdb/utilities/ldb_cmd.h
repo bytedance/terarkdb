@@ -57,6 +57,7 @@ class LDBCommand {
   static const std::string ARG_FILE_SIZE;
   static const std::string ARG_CREATE_IF_MISSING;
   static const std::string ARG_NO_VALUE;
+  static const std::string ARG_REBUILD;
 
   struct ParsedParams {
     std::string cmd;

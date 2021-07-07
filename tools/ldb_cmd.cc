@@ -81,6 +81,7 @@ const std::string LDBCommand::ARG_WRITE_BUFFER_SIZE = "write_buffer_size";
 const std::string LDBCommand::ARG_FILE_SIZE = "file_size";
 const std::string LDBCommand::ARG_CREATE_IF_MISSING = "create_if_missing";
 const std::string LDBCommand::ARG_NO_VALUE = "no_value";
+const std::string LDBCommand::ARG_REBUILD = "kv_combine";
 
 const char* LDBCommand::DELIM = " ==> ";
 
@@ -192,6 +193,9 @@ LDBCommand* LDBCommand::SelectCommand(const ParsedParams& parsed_params) {
                                 parsed_params.option_map, parsed_params.flags);
   } else if (parsed_params.cmd == CompactorCommand::Name()) {
     return new CompactorCommand(parsed_params.cmd_params,
+                                parsed_params.option_map, parsed_params.flags);
+  } else if (parsed_params.cmd == ManifestRollbackCommand::Name()) {
+    return new ManifestRollbackCommand(parsed_params.cmd_params,
                                 parsed_params.option_map, parsed_params.flags);
   } else if (parsed_params.cmd == WALDumperCommand::Name()) {
     return new WALDumperCommand(parsed_params.cmd_params,
@@ -792,7 +796,7 @@ CompactorCommand::CompactorCommand(
     const std::vector<std::string>& flags)
     : LDBCommand(options, flags, false,
                  BuildCmdLineOptions({ARG_FROM, ARG_TO, ARG_HEX, ARG_KEY_HEX,
-                                      ARG_VALUE_HEX, ARG_TTL})),
+                                      ARG_VALUE_HEX, ARG_TTL, ARG_REBUILD})),
       null_from_(true),
       null_to_(true) {
   std::map<std::string, std::string>::const_iterator itr =
@@ -816,6 +820,11 @@ CompactorCommand::CompactorCommand(
       to_ = HexToString(to_);
     }
   }
+  if(IsFlagPresent(flags, ARG_REBUILD)){
+    printf("compact with kv_combine \n");
+    separation_type = kCompactionCombineValue;
+  }
+
 }
 
 void CompactorCommand::Help(std::string& ret) {
@@ -841,6 +850,9 @@ void CompactorCommand::DoCommand() {
   }
 
   CompactRangeOptions cro;
+  if(separation_type == kCompactionCombineValue){
+    cro.separation_type = kCompactionCombineValue;
+  }
   cro.bottommost_level_compaction = BottommostLevelCompaction::kForce;
 
   db_->CompactRange(cro, GetCfHandle(), begin, end);
@@ -848,6 +860,51 @@ void CompactorCommand::DoCommand() {
 
   delete begin;
   delete end;
+}
+ManifestRollbackCommand::ManifestRollbackCommand(
+    const std::vector<std::string>& /*params*/,
+    const std::map<std::string, std::string>& options,
+    const std::vector<std::string>& flags)
+    : LDBCommand(options, flags, true, BuildCmdLineOptions({})) {}
+
+void ManifestRollbackCommand::Help(std::string& ret) {
+  ret.append("  ");
+  ret.append(ManifestRollbackCommand::Name());
+  ret.append("\n");
+}
+void ManifestRollbackCommand::DoCommand() {
+  Options options = PrepareOptionsForOpenDB();
+
+  if (options_.db_paths.empty()) {
+    // `VersionSet` expects options that have been through `SanitizeOptions()`,
+    // which would sanitize an empty `db_paths`.
+    options_.db_paths.emplace_back(db_path_, 0 /* target_size */);
+  }
+
+  WriteController wc(options_.delayed_write_rate);
+  WriteBufferManager wb(options_.db_write_buffer_size);
+
+  std::shared_ptr<Cache> tc(
+      NewLRUCache(1 << 20 /* capacity */, options_.table_cache_numshardbits));
+  EnvOptions sopt;
+  const bool seq_per_batch = false;
+  ImmutableDBOptions immutable_db_options(options);
+  VersionSet versions(db_path_, &immutable_db_options, sopt, seq_per_batch, tc.get(), &wb, &wc);
+  Status s = LoadLatestOptions(db_path_, Env::Default(), &options_,
+                               &column_families_, ignore_unknown_options_);
+  if (!s.ok()) {
+    printf("LoadLatestOptions Error %s\n",s.ToString().c_str());
+  }
+  versions.Recover(column_families_);
+  if (!s.ok()) {
+    printf("Error in Recover DB %s\n",s.ToString().c_str());
+  }
+  s = versions.ManifestRollback();
+  if (!s.ok()) {
+    printf("Error in Manifest Rollback %s\n",s.ToString().c_str());
+  }
+
+
 }
 
 // ----------------------------------------------------------------------------
