@@ -3016,9 +3016,8 @@ Status VersionSet::ManifestRollback(InstrumentedMutex* mu) {
     if(s.ok()) {
       VersionEdit e;
       for(auto cfd : *column_family_set_) {
-        LogAndApplyHelper(cfd, nullptr, cfd->current(), &e, mu);
+        LogAndApplyHelper(cfd, nullptr, cfd->current(), &e, mu, false);
       }
-      LogAndApplyCFHelper(&e);
       std::string record;
       if (!e.EncodeTo(&record)) {
         s = Status::Corruption("Unable to encode VersionEdit:" +
