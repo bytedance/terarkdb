@@ -3012,6 +3012,29 @@ Status VersionSet::ManifestRollback() {
         new log::Writer(std::move(file_writer), 0, false));
     s = WriteSnapshot(descriptor_log_.get(), true);
   }
+  do {
+    if(s.ok()) {
+      VersionEdit e;
+      e.SetNextFile(next_file_number_.load());
+      std::string record;
+      if (!e.EncodeTo(&record)) {
+        s = Status::Corruption("Unable to encode VersionEdit:" +
+                               e.DebugString(true));
+      }
+      s = descriptor_log_->AddRecord(record);
+      if (!s.ok()) {
+        break;
+      }
+      if (s.ok()) {
+        s = SyncManifest(env_, db_options_, descriptor_log_->file());
+      }
+      if (!s.ok()) {
+        ROCKS_LOG_ERROR(db_options_->info_log, "MANIFEST write %s\n",
+                        s.ToString().c_str());
+      }
+    }
+  }while(false);
+
   if (s.ok()) {
     s = SetCurrentFile(env_, dbname_, pending_manifest_file_number_,nullptr);
   }
