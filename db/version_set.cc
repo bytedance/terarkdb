@@ -3016,6 +3016,7 @@ Status VersionSet::ManifestRollback() {
     if(s.ok()) {
       VersionEdit e;
       e.SetNextFile(next_file_number_.load());
+      LogAndApplyCFHelper(&e);
       std::string record;
       if (!e.EncodeTo(&record)) {
         s = Status::Corruption("Unable to encode VersionEdit:" +
