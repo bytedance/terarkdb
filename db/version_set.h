@@ -927,7 +927,7 @@ class VersionSet {
   // are not opened
   Status Recover(const std::vector<ColumnFamilyDescriptor>& column_families,
                  bool read_only = false);
-  Status ManifestRollback();
+  Status ManifestRollback(InstrumentedMutex* mu);
 
   // Reads a manifest file and returns a list of column families in
   // column_families.

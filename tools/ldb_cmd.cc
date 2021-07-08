@@ -900,7 +900,8 @@ void ManifestRollbackCommand::DoCommand() {
     printf("Error in Recover DB %s\n",s.ToString().c_str());
     return;
   }
-  s = versions.ManifestRollback();
+  InstrumentedMutex mutex;
+  s = versions.ManifestRollback(&mutex);
   if (!s.ok()) {
     printf("Error in Manifest Rollback %s\n",s.ToString().c_str());
   }

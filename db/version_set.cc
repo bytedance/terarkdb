@@ -2992,7 +2992,7 @@ void VersionSet::AppendVersion(ColumnFamilyData* column_family_data,
   v->prev_->next_ = v;
   v->next_->prev_ = v;
 }
-Status VersionSet::ManifestRollback() {
+Status VersionSet::ManifestRollback(InstrumentedMutex* mu) {
   Status s;
   pending_manifest_file_number_ = NewFileNumber();
   std::string descriptor_fname =
@@ -3015,7 +3015,9 @@ Status VersionSet::ManifestRollback() {
   do {
     if(s.ok()) {
       VersionEdit e;
-      e.SetNextFile(next_file_number_.load());
+      for(auto cfd : *column_family_set_) {
+        LogAndApplyHelper(cfd, nullptr, cfd->current(), &e, mu);
+      }
       LogAndApplyCFHelper(&e);
       std::string record;
       if (!e.EncodeTo(&record)) {
