@@ -895,9 +895,10 @@ void ManifestRollbackCommand::DoCommand() {
   if (!s.ok()) {
     printf("LoadLatestOptions Error %s\n",s.ToString().c_str());
   }
-  versions.Recover(column_families_);
+  s = versions.Recover(column_families_);
   if (!s.ok()) {
     printf("Error in Recover DB %s\n",s.ToString().c_str());
+    return;
   }
   s = versions.ManifestRollback();
   if (!s.ok()) {
