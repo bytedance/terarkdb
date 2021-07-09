@@ -4,6 +4,7 @@
 
 #ifdef LIBZBD
 #include "third-party/zenfs/fs/fs_zenfs.h"
+#include "third-party/zenfs/fs/zbd_stat.h"
 #include "third-party/zenfs/fs/zbd_zenfs.h"
 
 namespace TERARKDB_NAMESPACE {
@@ -170,8 +171,10 @@ class ZenfsEnv : public EnvWrapper {
   // Initialize an EnvWrapper that delegates all calls to *t
   explicit ZenfsEnv(Env* t) : EnvWrapper(t), target_(t) {}
 
-  Status InitZenfs(const std::string& zdb_path) {
-    return NewZenFS(&fs_, zdb_path);
+  Status InitZenfs(
+      const std::string& zdb_path, std::string bytedance_tags_,
+      std::shared_ptr<MetricsReporterFactory> metrics_reporter_factory_) {
+    return NewZenFS(&fs_, zdb_path, bytedance_tags_, metrics_reporter_factory_);
   }
 
   // Return the target to which this Env forwards all calls
@@ -457,9 +460,14 @@ class ZenfsEnv : public EnvWrapper {
                              uint64_t& used_size) {
     auto zbd = dynamic_cast<ZenFS*>(fs_)->GetZonedBlockDevice();
     used_size = zbd->GetUsedSpace();
-    avail_size = zbd->GetFreeSpace() + zbd->GetReclaimableSpace();
+    avail_size = zbd->GetFreeSpace();
     total_size = used_size + avail_size;
     return Status::OK();
+  }
+
+  std::vector<ZoneStat> GetStat() {
+    auto zen_fs = dynamic_cast<ZenFS*>(fs_);
+    return zen_fs->GetStat();
   }
 
  private:
@@ -467,10 +475,13 @@ class ZenfsEnv : public EnvWrapper {
   FileSystem* fs_;
 };
 
-Status NewZenfsEnv(Env** zenfs_env, const std::string& zdb_path) {
+Status NewZenfsEnv(
+    Env** zenfs_env, const std::string& zdb_path, std::string bytedance_tags_,
+    std::shared_ptr<MetricsReporterFactory> metrics_reporter_factory_) {
   assert(zdb_path.length() > 0);
   auto env = new ZenfsEnv(Env::Default());
-  Status s = env->InitZenfs(zdb_path);
+  Status s =
+      env->InitZenfs(zdb_path, bytedance_tags_, metrics_reporter_factory_);
   *zenfs_env = s.ok() ? env : nullptr;
   return s;
 }
@@ -481,13 +492,21 @@ Status GetZbdDiskSpaceInfo(Env* env, uint64_t& total_size, uint64_t& avail_size,
       total_size, avail_size, used_size);
 }
 
+std::vector<ZoneStat> GetStat(Env* env) {
+  auto zen_env = dynamic_cast<ZenfsEnv*>(env);
+  if (!zen_env) return {};
+  return zen_env->GetStat();
+}
+
 }  // namespace TERARKDB_NAMESPACE
 
 #else
 
 namespace TERARKDB_NAMESPACE {
 
-Status NewZenfsEnv(Env** zenfs_env, const std::string& zdb_path) {
+Status NewZenfsEnv(
+    Env** zenfs_env, const std::string& zdb_path, std::string bytedance_tags_,
+    std::shared_ptr<MetricsReporterFactory> metrics_reporter_factory_) {
   *zenfs_env = nullptr;
   return Status::NotSupported("ZenFSEnv is not implemented.");
 }
@@ -496,6 +515,8 @@ Status GetZbdDiskSpaceInfo(Env* env, uint64_t& total_size, uint64_t& avail_size,
                            uint64_t& used_size) {
   return Status::NotSupported("GetZbdDiskSpaceInfo is not implemented.");
 }
+
+std::vector<ZoneStat> GetStat(Env* env) { return {}; }
 
 }  // namespace TERARKDB_NAMESPACE
 

@@ -76,7 +76,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
                          bool disable_memtable, uint64_t* seq_used,
                          size_t batch_cnt,
                          PreReleaseCallback* pre_release_callback) {
-  LatencyHistGuard guard(&write_latency_reporter_);
+  LatencyHistLoggedGuard guard(&write_latency_reporter_, 500000);
   write_qps_reporter_.AddCount(WriteBatchInternal::Count(my_batch));
   write_throughput_reporter_.AddCount(WriteBatchInternal::ByteSize(my_batch));
   write_batch_size_reporter_.AddRecord(WriteBatchInternal::ByteSize(my_batch));
@@ -903,7 +903,10 @@ Status DBImpl::WriteToWAL(const WriteThread::WriteGroup& write_group,
     //  - as long as other threads don't modify it, it's safe to read
     //    from std::deque from multiple threads concurrently.
     for (auto& log : logs_) {
-      status = log.writer->file()->Sync(immutable_db_options_.use_fsync);
+      auto f = log.writer->file();
+      if (f != nullptr) {
+        status = f->Sync(immutable_db_options_.use_fsync);
+      }
       if (!status.ok()) {
         break;
       }
@@ -1614,6 +1617,20 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
                          cfd->GetName().c_str(),
                          cur_log_writer->get_log_number(), new_log_number);
       }
+      // Dirty trick for limited active zones.
+      // TODO(Changlong Chen) Revert it when using lavafs.
+      cur_log_writer->Close();
+      size_t alive_log_file_count = 0;
+      // Output alive logger number for debug.
+      for (auto& l : logs_) {
+        if ((l.writer)->file() != nullptr) {
+          alive_log_file_count++;
+        }
+      }
+      ROCKS_LOG_WARN(immutable_db_options_.info_log,
+                     "Current Log count : %" PRIu64
+                     ", when close log writer: %" PRIu64 ".",
+                     alive_log_file_count, cur_log_writer->get_log_number());
     }
     logs_.emplace_back(logfile_number_, new_log);
     alive_log_files_.push_back(LogFileNumberSize(logfile_number_));

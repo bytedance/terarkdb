@@ -86,6 +86,7 @@ struct ImmutableDBOptions {
   bool two_write_queues;
   bool manual_wal_flush;
   bool avoid_unnecessary_blocking_io;
+  double zenfs_gc_ratio;
   bool persist_stats_to_disk;
 };
 

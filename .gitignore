@@ -83,6 +83,8 @@ terark-core.got
 cmake-build-debug
 pkg
 .DS_Store
+.clangd/
+compile_commands.json
 
 lz4-1.8.0/
 snappy-1.1.4/

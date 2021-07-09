@@ -738,6 +738,7 @@ class DBImpl : public DB {
   }
 
   void AddToLogsToFreeQueue(log::Writer* log_writer) {
+    log_writer->Close();
     logs_to_free_queue_.push_back(log_writer);
   }
 
@@ -805,6 +806,11 @@ class DBImpl : public DB {
   void FlushInfoLog();
 
   void ScheduleTtlGC();
+
+#ifdef LIBZBD
+  // schedule GC by polling ZNS zone status
+  void ScheduleZNSGC();
+#endif
 
  protected:
   Env* const env_;

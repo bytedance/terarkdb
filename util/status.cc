@@ -40,8 +40,15 @@ static const char* msgs[static_cast<int>(Status::kMaxSubCode)] = {
     "Stale file handle",                                  // kStaleFile
     "Memory limit reached",                               // kMemoryLimit
     "Space limit reached",                                // kSpaceLimit
+    "Path Not Found",                                     // kPathNotFound
+    "Merge Operands Insufficient Capacity",               // KMergeOperandsInsufficientCapacity
+    "Manual Compaction Paused",                           // kManualCompactionPaused
+    "Overwritten",                                        // kOverwritten
+    "Txn Not Prepared",                                   // kTxnNotPrepared
+    "IO Fenced",                                          // kIOFenced
     "Bad allocation",                                     // kBadAlloc
     "Require mmap open file",                             // kRequireMmap
+    "Install Timeout",                                    // kInstallTimeout
 };
 
 Status::Status(Code _code, SubCode _subcode, const Slice& msg,

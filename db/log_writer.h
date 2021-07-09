@@ -83,6 +83,8 @@ class Writer {
   WritableFileWriter* file() { return dest_.get(); }
   const WritableFileWriter* file() const { return dest_.get(); }
 
+  void Close();
+
   uint64_t get_log_number() const { return log_number_; }
 
   Status WriteBuffer();
