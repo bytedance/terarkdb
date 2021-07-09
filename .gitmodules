@@ -22,3 +22,6 @@
 [submodule "third-party/zenfs"]
 	path = third-party/zenfs
 	url = https://github.com/bzbd/zenfs.git
+[submodule "third-party/metrics2-cmake"]
+	path = third-party/metrics2-cmake
+	url = git@code.byted.org:storage/metrics2-cmake.git
