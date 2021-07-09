@@ -43,14 +43,15 @@ IF(WITH_SNAPPY)
 ENDIF()
 
 # Bytedance Internal Metrics Library
-IF(WITH_BYTEDANCE_METRICS)	
+# You can either add metrics2 target or specify a BYTEDANCE_METRICS_PATH
+IF(WITH_BYTEDANCE_METRICS)
   IF(TARGET metrics2)
     MESSAGE("[terarkdb/third-party] bytedance_metrics2 target exist, re-use it!")
   ELSE()
     MESSAGE("[terarkdb/third-party] bytedance_metrics2 target not exist, let's build it!")
     ExternalProject_Add(metrics2-project
-        SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/metrics2-cmake
-        CONFIGURE_COMMAND cmake ${CMAKE_CURRENT_SOURCE_DIR}/metrics2-cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-fPIC -DCMAKE_CXX_FLAGS=-fPIC -DCMAKE_VERBOSE_MAKEFILE=${CMAKE_VERBOSE_MAKEFILE}
+        SOURCE_DIR ${BYTEDANCE_METRICS_PATH}
+        CONFIGURE_COMMAND cmake ${BYTEDANCE_METRICS_PATH} -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-fPIC -DCMAKE_CXX_FLAGS=-fPIC -DCMAKE_VERBOSE_MAKEFILE=${CMAKE_VERBOSE_MAKEFILE}
         BUILD_IN_SOURCE 0
         BUILD_COMMAND $(MAKE)
         # metrics2 doesn't have a install instruction, so we have to manully install it
@@ -60,7 +61,7 @@ IF(WITH_BYTEDANCE_METRICS)
     ADD_DEPENDENCIES(metrics2 metrics2-project)
     SET_TARGET_PROPERTIES(metrics2 PROPERTIES
         IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/lib/libmetrics2.a
-        INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/metrics2-cmake
+        INCLUDE_DIRECTORIES ${BYTEDANCE_METRICS_PATH}
         POSITION_INDEPENDENT_CODE ON
     )
   ENDIF()	

@@ -25,6 +25,7 @@ else()
   SET(CMAKE_INSTALL_INCLUDEDIR ${CMAKE_INSTALL_PREFIX}/include)
 endif()
 
+# Enable or disable flags
 option(WITH_COVERAGE "build with gcov support" OFF)
 option(WITH_JEMALLOC "build with JeMalloc" ON)
 option(WITH_SNAPPY "build with SNAPPY" ON)
@@ -45,6 +46,13 @@ option(WITH_ZENFS "build with experimental zenfs" OFF)
 option(WITH_DIAGNOSE_CACHE "build with diagnosable cache support" OFF)
 option(WITH_BOOSTLIB "build with boost, if WITH_TERARK_ZIP is ON, this will also set to ON" OFF)
 option(WITH_TERARKDB_NAMESPACE "namespace" "terarkdb")
+
+# Plugins
+SET(BYTEDANCE_METRICS_PATH "" CACHE STRING "root directory of the metrics library source code")
+
+if(WITH_BYTEDANCE_METRICS AND BYTEDANCE_METRICS_PATH STREQUAL "" AND NOT TARGET metrics2)
+  MESSAGE(FATAL_ERROR "WITH_BYTEDANCE_METRICS enabled but BYTEDANCE_METRICS_PATH is not configured")
+endif()
 
 if(NOT WITH_TERARKDB_NAMESPACE)
   SET(WITH_TERARKDB_NAMESPACE "terarkdb")
@@ -96,6 +104,7 @@ MESSAGE("[terarkdb] WITH_JEMALLOC = ${WITH_JEMALLOC}, WITH_COVERAGE=${WITH_COVER
 MESSAGE("[terarkdb] CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}, BUILD_SUFFIX=${BUILD_SUFFIX}")
 MESSAGE("[terarkdb] CMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}")
 MESSAGE("[terarkdb] CMAKE_THREAD_LIBS_INIT=${CMAKE_THREAD_LIBS_INIT}")
+MESSAGE("[terarkdb] BYTEDANCE_METRICS_PATH=${BYTEDANCE_METRICS_PATH}")
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/rocksdb/terark_namespace.h.in ${CMAKE_CURRENT_SOURCE_DIR}/include/rocksdb/terark_namespace.h)
 
