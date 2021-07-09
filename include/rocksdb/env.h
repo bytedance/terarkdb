@@ -17,12 +17,14 @@
 #pragma once
 
 #include <stdint.h>
+
 #include <cstdarg>
 #include <functional>
 #include <limits>
 #include <memory>
 #include <string>
 #include <vector>
+
 #include "rocksdb/status.h"
 #include "rocksdb/terark_namespace.h"
 #include "rocksdb/thread_status.h"
@@ -36,7 +38,7 @@
 
 #if defined(__GNUC__) || defined(__clang__)
 #define ROCKSDB_PRINTF_FORMAT_ATTR(format_param, dots_param) \
-    __attribute__((__format__(__printf__, format_param, dots_param)))
+  __attribute__((__format__(__printf__, format_param, dots_param)))
 #else
 #define ROCKSDB_PRINTF_FORMAT_ATTR(format_param, dots_param)
 #endif
@@ -154,7 +156,7 @@ class Env {
   // Loads the environment specified by the input value into the result
   static Status LoadEnv(const std::string& value, Env** result,
                         std::shared_ptr<Env>* guard);
-                        
+
   // Return a default environment suitable for the current operating
   // system.  Sophisticated users may wish to provide their own Env
   // implementation instead of relying on this default environment.
@@ -571,7 +573,6 @@ class Env {
   // could be a fully implemented one, or a wrapper class around the Env
   const std::shared_ptr<FileSystem>& GetFileSystem() const;
 
-
   // If you're adding methods here, remember to add them to EnvWrapper too.
 
  protected:
@@ -761,7 +762,7 @@ class RandomAccessFile {
     assert(false);
     return -1;
   }
-  
+
   // If you're adding methods here, remember to add them to
   // RandomAccessFileWrapper too.
 };
@@ -1553,6 +1554,7 @@ class RandomAccessFileWrapper : public RandomAccessFile {
   virtual intptr_t FileDescriptor() const override {
     return target_->FileDescriptor();
   }
+
  private:
   RandomAccessFile* target_;
 };
@@ -1716,8 +1718,12 @@ Status NewHdfsEnv(Env** hdfs_env, const std::string& fsname);
 // This is a factory method for TimedEnv defined in utilities/env_timed.cc.
 Env* NewTimedEnv(Env* base_env);
 
-Status NewZenfsEnv(Env** zenfs_env, const std::string& zdb_path);
+class MetricsReporterFactory;
 
-Status GetZbdDiskSpaceInfo(Env* env, uint64_t &total_size, uint64_t &avail_size, uint64_t &used_size);
+Status NewZenfsEnv(
+    Env** zenfs_env, const std::string& zdb_path, std::string bytedance_tags_,
+    std::shared_ptr<MetricsReporterFactory> metrics_reporter_factory_);
 
+Status GetZbdDiskSpaceInfo(Env* env, uint64_t& total_size, uint64_t& avail_size,
+                           uint64_t& used_size);
 }  // namespace TERARKDB_NAMESPACE

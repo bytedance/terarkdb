@@ -77,6 +77,7 @@
 #include "utilities/merge_operators.h"
 #include "utilities/merge_operators/bytesxor.h"
 #include "utilities/persistent_cache/block_cache_tier.h"
+#include "utilities/trace/bytedance_metrics_reporter.h"
 
 #ifdef OS_WIN
 #include <io.h>  // open/close
@@ -1172,6 +1173,13 @@ DEFINE_bool(report_file_operations, false,
             "if report number of file "
             "operations");
 
+DEFINE_double(zenfs_gc_ratio, 0.25,
+              "When ZenFS support is enabled, a full zone with more than "
+              "garbage of this ratio will be recycled. This options is "
+              "not recommended to be used with lazy compaction. At the "
+              "same time, zone size * gc ratio should be less than "
+              "zone size minus single SST size.");
+
 static const bool FLAGS_soft_rate_limit_dummy __attribute__((__unused__)) =
     RegisterFlagValidator(&FLAGS_soft_rate_limit, &ValidateRateLimit);
 
@@ -1201,6 +1209,8 @@ static const bool FLAGS_table_cache_numshardbits_dummy
         &FLAGS_table_cache_numshardbits, &ValidateTableCacheNumshardbits);
 
 namespace TERARKDB_NAMESPACE {
+
+static std::shared_ptr<ByteDanceMetricsReporterFactory> metrics_reporter_factory = nullptr;
 
 namespace {
 struct ReportFileOpCounters {
@@ -3227,6 +3237,9 @@ class Benchmark {
 
     assert(db_.db == nullptr);
 
+    if (metrics_reporter_factory == nullptr)
+      metrics_reporter_factory = std::make_shared<ByteDanceMetricsReporterFactory>();
+    options.metrics_reporter_factory = metrics_reporter_factory;
     options.max_open_files = FLAGS_open_files;
     if (FLAGS_cost_write_buffer_to_cache || FLAGS_db_write_buffer_size != 0) {
       options.write_buffer_manager.reset(
@@ -3250,6 +3263,7 @@ class Benchmark {
     options.use_direct_io_for_flush_and_compaction =
         FLAGS_use_direct_io_for_flush_and_compaction;
     options.use_aio_reads = FLAGS_use_aio_reads;
+    options.zenfs_gc_ratio = FLAGS_zenfs_gc_ratio;
     if (FLAGS_prefix_size != 0) {
       options.prefix_extractor.reset(
           NewFixedPrefixTransform(FLAGS_prefix_size));
@@ -5852,7 +5866,9 @@ int db_bench_tool(int argc, char** argv) {
   } 
   #ifdef LIBZBD
     else if (!FLAGS_zbd_path.empty()) {
-      Status s = NewZenfsEnv(&FLAGS_env, FLAGS_zbd_path);
+      if (metrics_reporter_factory == nullptr)
+        metrics_reporter_factory = std::make_shared<ByteDanceMetricsReporterFactory>();
+      Status s = NewZenfsEnv(&FLAGS_env, FLAGS_zbd_path, "dbname=noname_zenfs", metrics_reporter_factory);
       if (!s.ok()) {
         fprintf(stderr, "Error: Init zenfs env failed.\nStatus : %s\n", s.ToString().c_str());
         exit(1);

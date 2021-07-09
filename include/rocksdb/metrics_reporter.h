@@ -61,6 +61,7 @@ class LatencyHistLoggedGuard {
   uint64_t log_threshold_us_;
   void* start_stacktrace_;
 };
+
 class MetricsReporterFactory {
  public:
   MetricsReporterFactory() = default;
