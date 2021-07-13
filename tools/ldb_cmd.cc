@@ -194,7 +194,10 @@ LDBCommand* LDBCommand::SelectCommand(const ParsedParams& parsed_params) {
   } else if (parsed_params.cmd == CompactorCommand::Name()) {
     return new CompactorCommand(parsed_params.cmd_params,
                                 parsed_params.option_map, parsed_params.flags);
-  } else if (parsed_params.cmd == ManifestRollbackCommand::Name()) {
+  } else if (parsed_params.cmd == KvCombineCommand::Name()) {
+    return new KvCombineCommand(parsed_params.cmd_params,
+                                parsed_params.option_map, parsed_params.flags);
+  }else if (parsed_params.cmd == ManifestRollbackCommand::Name()) {
     return new ManifestRollbackCommand(parsed_params.cmd_params,
                                 parsed_params.option_map, parsed_params.flags);
   } else if (parsed_params.cmd == WALDumperCommand::Name()) {
@@ -860,6 +863,36 @@ void CompactorCommand::DoCommand() {
 
   delete begin;
   delete end;
+}
+KvCombineCommand::KvCombineCommand(
+    const std::vector<std::string>& /*params*/,
+    const std::map<std::string, std::string>& options,
+    const std::vector<std::string>& flags)
+    : LDBCommand(options, flags, false,BuildCmdLineOptions({})){
+}
+void KvCombineCommand::Help(std::string& ret) {
+    ret.append("  ");
+    ret.append(KvCombineCommand::Name());
+    ret.append("\n");
+}
+void KvCombineCommand::DoCommand() {
+  // rate_limiter_bytes_per_sec
+  CompactionOptions cfo;
+
+  cfo.separation_type = kCompactionCombineValue;
+  // we should skip the last level file that kv already combine
+  ColumnFamilyHandle* cfh = GetCfHandle();
+  std::vector<LiveFileMetaData> LiveFiles;
+  db_->GetLiveFilesMetaData(&LiveFiles);
+  for(auto& file : LiveFiles){
+    if(file.terarkdb_file){
+      std::vector<std::string> inputs = {file.name};
+      std::cout <<"cf:" << file.column_family_name << " level " << file.level <<  " compact file " <<file.name << std::endl;
+      db_->CompactFiles(cfo,inputs,file.level);
+    }
+  }
+  std::cout << "kv_combine finish!" << std::endl;
+
 }
 ManifestRollbackCommand::ManifestRollbackCommand(
     const std::vector<std::string>& /*params*/,

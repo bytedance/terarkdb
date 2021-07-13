@@ -34,6 +34,21 @@ class CompactorCommand : public LDBCommand {
   std::string to_;
   SeparationType separation_type;
 };
+
+class KvCombineCommand : public LDBCommand {
+ public:
+  static std::string Name() { return "combine"; }
+
+  KvCombineCommand(const std::vector<std::string>& params,
+                   const std::map<std::string, std::string>& options,
+                   const std::vector<std::string>& flags);
+
+  static void Help(std::string& ret);
+
+  virtual void DoCommand() override;
+
+};
+
 // Command that removes the SST file forcibly from the manifest.
 class ManifestRollbackCommand : public LDBCommand {
  public:

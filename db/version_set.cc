@@ -4817,6 +4817,9 @@ void VersionSet::GetLiveFilesMetaData(std::vector<LiveFileMetaData>* metadata) {
         filemetadata.being_compacted = file->being_compacted;
         filemetadata.num_entries = file->prop.num_entries;
         filemetadata.num_deletions = file->prop.num_deletions;
+        if(file->prop.dependence.size() != 0 || file->prop.inheritance.size() !=0 || !file->prop.is_essense_sst()) {
+          filemetadata.terarkdb_file = true;
+        }
         metadata->push_back(filemetadata);
       }
     }

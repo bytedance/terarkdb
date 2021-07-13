@@ -101,6 +101,8 @@ struct SstFileMetaData {
 
   uint64_t num_entries;
   uint64_t num_deletions;
+  // true Means a terarkdb sst file instead of rocksdb file
+  bool terarkdb_file;
 };
 
 // The full set of metadata associated with each SST file.
