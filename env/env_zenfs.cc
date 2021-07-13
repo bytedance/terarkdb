@@ -471,8 +471,8 @@ class ZenfsEnv : public EnvWrapper {
 
   Status GetZbdDiskSpaceInfo(uint64_t &total_size, uint64_t &avail_size, uint64_t &used_size) {
     auto zbd = dynamic_cast<ZenFS*>(fs_)->GetZonedBlockDevice();
-    used_size = zbd->GetUsedSpace();
-    avail_size = zbd->GetFreeSpace() + zbd->GetReclaimableSpace();
+    used_size = zbd->GetUsedSpace() + zbd->GetReclaimableSpace();
+    avail_size = zbd->GetFreeSpace();
     total_size = used_size + avail_size;
     return Status::OK();
   }
