@@ -10,7 +10,9 @@
 #include <boost/current_function.hpp>
 #include <boost/noncopyable.hpp>
 #else
+#ifndef BOOST_CURRENT_FUNCTION
 #define BOOST_CURRENT_FUNCTION "(unknown)"
+#endif
 #endif
 
 #include <mutex>
