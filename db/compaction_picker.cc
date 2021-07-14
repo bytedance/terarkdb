@@ -556,7 +556,7 @@ Compaction* CompactionPicker::CompactFiles(
   // This compaction output should not overlap with a running compaction as
   // `SanitizeCompactionInputFiles` should've checked earlier and db mutex
   // shouldn't have been released since.
-  assert(!FilesRangeOverlapWithCompaction(input_files, output_level));
+  assert(output_level == 0 || !FilesRangeOverlapWithCompaction(input_files, output_level));
 
   CompressionType compression_type;
   if (compact_options.compression == kDisableCompressionOption) {
@@ -1591,7 +1591,7 @@ Status CompactionPicker::SanitizeCompactionInputFilesForAllLevels(
       }
     }
   }
-  if (RangeOverlapWithCompaction(smallestkey, largestkey, output_level)) {
+  if (output_level != 0 && RangeOverlapWithCompaction(smallestkey, largestkey, output_level)) {
     return Status::Aborted(
         "A running compaction is writing to the same output level in an "
         "overlapping key range");

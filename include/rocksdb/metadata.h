@@ -65,7 +65,8 @@ struct SstFileMetaData {
         num_reads_sampled(0),
         being_compacted(false),
         num_entries(0),
-        num_deletions(0) {}
+        num_deletions(0),
+        non_origin_file(false) {}
 
   SstFileMetaData(const std::string& _file_name, const std::string& _path,
                   size_t _size, SequenceNumber _smallest_seqno,
@@ -83,7 +84,8 @@ struct SstFileMetaData {
         num_reads_sampled(_num_reads_sampled),
         being_compacted(_being_compacted),
         num_entries(0),
-        num_deletions(0) {}
+        num_deletions(0),
+        non_origin_file(false) {}
 
   // File size in bytes.
   size_t size;
@@ -102,7 +104,7 @@ struct SstFileMetaData {
   uint64_t num_entries;
   uint64_t num_deletions;
   // true Means a terarkdb sst file instead of rocksdb file
-  bool terarkdb_file;
+  bool non_origin_file;
 };
 
 // The full set of metadata associated with each SST file.

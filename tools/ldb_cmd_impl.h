@@ -46,6 +46,8 @@ class KvCombineCommand : public LDBCommand {
   static void Help(std::string& ret);
 
   virtual void DoCommand() override;
+ private:
+  int parallel_;
 
 };
 
