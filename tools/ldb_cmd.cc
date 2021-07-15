@@ -911,38 +911,39 @@ void KvCombineCommand::DoCommand() {
 
   cfo.separation_type = kCompactionCombineValue;
   // we should skip the last level file that kv already combine
-
+  MutableCFOptions mutable_db_options(options_);
   while (true) {
-    bool has_non_origin_file = false;
     std::vector<LiveFileMetaData> LiveFiles;
     db_->GetLiveFilesMetaData(&LiveFiles);
     std::atomic<size_t> next_file_index(0);
+
+    std::vector<LiveFileMetaData> NonOriginFiles;
+    for(auto& file:LiveFiles){
+      if(file.non_origin_file){
+        NonOriginFiles.push_back(file);
+      }
+    }
     std::function<void()> worker_func([&]() {
       while (true) {
         size_t index = next_file_index.fetch_add(1);
-        if (index >= LiveFiles.size()) {
+        if (index >= NonOriginFiles.size()) {
           break;
         }
         std::ostringstream output;
-        auto file = LiveFiles[index];
-        if (file.non_origin_file) {
-          has_non_origin_file = true;
-          std::vector<std::string> inputs = {file.name};
-          output << "file_index: " << index << "cf:" << file.column_family_name
-                 << " level " << file.level << " compact file " << file.name
-                 << std::endl;
-
-          ColumnFamilyHandle* cfh = cf_handles_[file.column_family_name];
-          MutableCFOptions immutable_db_options(options_);
-          cfo.output_file_size_limit = MaxFileSizeForLevel(
-              immutable_db_options, file.level, options_.compaction_style);
-          Status s = db_->CompactFiles(cfo, cfh, inputs, file.level);
-          output << "file_index: " << index << " " << s.ToString() << std::endl;
-          if (!s.ok()) {
-            std::cerr << output.str();
-          } else
-            std::cout << index << "/" << LiveFiles.size() << std::endl;
-        }
+        auto file = NonOriginFiles[index];
+        std::vector<std::string> inputs = {file.name};
+        output << "file_index: " << index << "cf:" << file.column_family_name
+               << " level " << file.level << " compact file " << file.name
+               << std::endl;
+        ColumnFamilyHandle* cfh = cf_handles_[file.column_family_name];
+        cfo.output_file_size_limit = MaxFileSizeForLevel(
+            mutable_db_options, file.level, options_.compaction_style);
+        Status s = db_->CompactFiles(cfo, cfh, inputs, file.level);
+        output << "file_index: " << index << " " << s.ToString() << std::endl;
+        if (!s.ok()) {
+          std::cerr << output.str();
+        } else
+          std::cout << index << "/" << NonOriginFiles.size() << std::endl;
       }
     });
     std::vector<port::Thread> threads;
@@ -953,7 +954,7 @@ void KvCombineCommand::DoCommand() {
     for (auto& t : threads) {
       t.join();
     }
-    if (!has_non_origin_file) break;
+    if (NonOriginFiles.size() == 0) break;
   }
   std::cout << "kv_combine finish!" << std::endl;
 }
