@@ -83,6 +83,7 @@ const std::string LDBCommand::ARG_CREATE_IF_MISSING = "create_if_missing";
 const std::string LDBCommand::ARG_NO_VALUE = "no_value";
 const std::string LDBCommand::ARG_REBUILD = "kv_combine";
 const std::string LDBCommand::ARG_PARALLEL = "parallel";
+const std::string LDBCommand::ARG_RATE_LIMITER = "rate_limiter_bytes_per_sec";
 
 const char* LDBCommand::DELIM = " ==> ";
 
@@ -650,6 +651,18 @@ Options LDBCommand::PrepareOptionsForOpenDB() {
           LDBCommandExecuteResult::Failed(ARG_FIX_PREFIX_LEN + " must be > 0.");
     }
   }
+  int rate_limiter_bytes_per_sec;
+  if (ParseIntOption(option_map_, ARG_RATE_LIMITER, rate_limiter_bytes_per_sec, exec_state_)) {
+    if (rate_limiter_bytes_per_sec > 0) {
+      options_.rate_limiter.reset(NewGenericRateLimiter(
+          rate_limiter_bytes_per_sec, 100 * 1000 /* refill_period_us */, 10 /* fairness */,
+          RateLimiter::Mode::kWritesOnly, false));
+    } else {
+      exec_state_ =
+          LDBCommandExecuteResult::Failed(ARG_RATE_LIMITER + " must be > 0.");
+    }
+  }
+
   // TODO(ajkr): this return value doesn't reflect the CF options changed, so
   // subcommands that rely on this won't see the effect of CF-related CLI args.
   // Such subcommands need to be changed to properly support CFs.
@@ -869,8 +882,10 @@ KvCombineCommand::KvCombineCommand(
     const std::vector<std::string>& /*params*/,
     const std::map<std::string, std::string>& options,
     const std::vector<std::string>& flags)
-    : LDBCommand(options, flags, false, BuildCmdLineOptions({ARG_PARALLEL})),
-      parallel_(8) {}
+    : LDBCommand(options, flags, false,
+                 BuildCmdLineOptions({ARG_PARALLEL, ARG_RATE_LIMITER})),
+      parallel_(8) {
+}
 void KvCombineCommand::Help(std::string& ret) {
   ret.append("  ");
   ret.append(KvCombineCommand::Name());
@@ -881,6 +896,7 @@ void KvCombineCommand::DoCommand() {
     assert(GetExecuteState().IsFailed());
     return;
   }
+
   int parallel;
   if (ParseIntOption(option_map_, ARG_PARALLEL, parallel, exec_state_)) {
     if (parallel > 0) {
@@ -891,14 +907,13 @@ void KvCombineCommand::DoCommand() {
       return;
     }
   }
-  // rate_limiter_bytes_per_sec
   CompactionOptions cfo;
 
   cfo.separation_type = kCompactionCombineValue;
   // we should skip the last level file that kv already combine
 
   while (true) {
-    std::atomic<size_t> failed_cnt(0);
+    bool has_non_origin_file = false;
     std::vector<LiveFileMetaData> LiveFiles;
     db_->GetLiveFilesMetaData(&LiveFiles);
     std::atomic<size_t> next_file_index(0);
@@ -911,16 +926,19 @@ void KvCombineCommand::DoCommand() {
         std::ostringstream output;
         auto file = LiveFiles[index];
         if (file.non_origin_file) {
+          has_non_origin_file = true;
           std::vector<std::string> inputs = {file.name};
           output << "file_index: " << index << "cf:" << file.column_family_name
                  << " level " << file.level << " compact file " << file.name
                  << std::endl;
 
           ColumnFamilyHandle* cfh = cf_handles_[file.column_family_name];
+          MutableCFOptions immutable_db_options(options_);
+          cfo.output_file_size_limit = MaxFileSizeForLevel(
+              immutable_db_options, file.level, options_.compaction_style);
           Status s = db_->CompactFiles(cfo, cfh, inputs, file.level);
           output << "file_index: " << index << " " << s.ToString() << std::endl;
           if (!s.ok()) {
-            failed_cnt.fetch_add(1);
             std::cerr << output.str();
           } else
             std::cout << index << "/" << LiveFiles.size() << std::endl;
@@ -935,7 +953,7 @@ void KvCombineCommand::DoCommand() {
     for (auto& t : threads) {
       t.join();
     }
-    if (failed_cnt.load() == 0) break;
+    if (!has_non_origin_file) break;
   }
   std::cout << "kv_combine finish!" << std::endl;
 }

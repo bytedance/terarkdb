@@ -59,6 +59,7 @@ class LDBCommand {
   static const std::string ARG_NO_VALUE;
   static const std::string ARG_REBUILD;
   static const std::string ARG_PARALLEL;
+  static const std::string ARG_RATE_LIMITER;
 
   struct ParsedParams {
     std::string cmd;
