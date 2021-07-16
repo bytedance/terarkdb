@@ -69,6 +69,11 @@ endif()
 if(WITH_ZENFS)
   add_definitions(-DLIBZBD)
   add_definitions(-DROCKSDB_NAMESPACE=${WITH_TERARKDB_NAMESPACE})
+  if(NOT EXISTS ${PROJECT_SOURCE_DIR}/include/rocksdb/plugin)
+    execute_process(COMMAND
+      bash -c "ln -s ../../third-party ${PROJECT_SOURCE_DIR}/include/rocksdb/plugin"
+    )
+  endif()
 endif()
 
 IF(FORCE_TERARKDB_RELEASE_BUILD)
@@ -1205,11 +1210,6 @@ if(WITH_TOOLS)
   target_link_libraries(db_bench${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
 
   if(WITH_ZENFS)
-    if(NOT EXISTS ../includee/rocksdb/plugin)
-      execute_process(COMMAND
-        bash -c "ln -s ../../third-party ../include/rocksdb/plugin"
-      )
-    endif()
     add_executable(zenfs${ARTIFACT_SUFFIX} third-party/zenfs/util/zenfs.cc
         $<TARGET_OBJECTS:testharness>)
     target_link_libraries(zenfs${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
