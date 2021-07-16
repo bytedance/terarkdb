@@ -197,8 +197,11 @@ LDBCommand* LDBCommand::SelectCommand(const ParsedParams& parsed_params) {
     return new CompactorCommand(parsed_params.cmd_params,
                                 parsed_params.option_map, parsed_params.flags);
   } else if (parsed_params.cmd == KvCombineCommand::Name()) {
-    return new KvCombineCommand(parsed_params.cmd_params,
-                                parsed_params.option_map, parsed_params.flags);
+    ParsedParams combineParam = parsed_params;
+    combineParam.option_map["auto_compaction"] = "false";
+    combineParam.flags.push_back("try_load_options");
+    return new KvCombineCommand(combineParam.cmd_params,
+                                combineParam.option_map, combineParam.flags);
   } else if (parsed_params.cmd == ManifestRollbackCommand::Name()) {
     return new ManifestRollbackCommand(parsed_params.cmd_params,
                                        parsed_params.option_map,
@@ -919,7 +922,7 @@ void KvCombineCommand::DoCommand() {
 
     std::vector<LiveFileMetaData> NonOriginFiles;
     for(auto& file:LiveFiles){
-      if(file.non_origin_file){
+      if(file.non_origin_file && file.level >= 0){
         NonOriginFiles.push_back(file);
       }
     }
