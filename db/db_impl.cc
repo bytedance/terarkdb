@@ -1050,8 +1050,8 @@ void DBImpl::ScheduleZNSGC() {
         continue;
       }
 
-      // > 50% space could be recycled
-      if (total_size <= initial_db_options_.zenfs_gc_ratio * written_data) {
+      // if data in zone <= (1 - ratio) * total_capacity, recycle the zone
+      if (total_size <= (1.0 - initial_db_options_.zenfs_gc_ratio) * written_data) {
         for (auto&& file_id : sst_in_zone) {
           mark_for_gc.insert(file_id);
         }
