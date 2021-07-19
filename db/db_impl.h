@@ -806,6 +806,11 @@ class DBImpl : public DB {
 
   void ScheduleTtlGC();
 
+#ifdef LIBZBD
+  // schedule GC by polling ZNS zone status
+  void ScheduleZNSGC();
+#endif
+
  protected:
   Env* const env_;
   const std::string dbname_;

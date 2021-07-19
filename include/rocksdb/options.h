@@ -1078,6 +1078,11 @@ struct DBOptions {
   // If set to true, takes precedence over
   // ReadOptions::background_purge_on_iterator_cleanup.
   bool avoid_unnecessary_blocking_io = false;
+
+  // If ZenFS reports a full zone contains more garbage than
+  // this ratio, a compaction job on this zone will be submitted.
+  // This option is incompatible with lazy compaction.
+  double zenfs_gc_ratio = 0.5;
 };
 
 // Options to control the behavior of a database (passed to DB::Open)
