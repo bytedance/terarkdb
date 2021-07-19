@@ -410,11 +410,11 @@ class DBImpl : public DB {
   // Implemented in db_impl_debug.cc
 
   // Compact any files in the named level that overlap [*begin, *end]
-  Status TEST_CompactRange(int level, const Slice* begin, const Slice* end,
-                           ColumnFamilyHandle* column_family = nullptr,
-                           SeparationType separation_type =
-                               kCompactionTransToSeparate,
-                           bool disallow_trivial_move = false);
+  Status TEST_CompactRange(
+      int level, const Slice* begin, const Slice* end,
+      ColumnFamilyHandle* column_family = nullptr,
+      SeparationType separation_type = kCompactionTransToSeparate,
+      bool disallow_trivial_move = false);
 
   void TEST_SwitchWAL();
 
@@ -805,6 +805,11 @@ class DBImpl : public DB {
   void FlushInfoLog();
 
   void ScheduleTtlGC();
+
+#ifdef LIBZBD
+  // schedule GC by polling ZNS zone status
+  void ScheduleZNSGC();
+#endif
 
  protected:
   Env* const env_;
