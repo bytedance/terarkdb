@@ -988,26 +988,41 @@ void DBImpl::ScheduleZNSGC() {
 
   chash_set<uint64_t> mark_for_gc;
 
+  if (initial_db_options_.zenfs_gc_ratio <= 0.0 ||
+      initial_db_options_.zenfs_gc_ratio >= 1.0) {
+    // GC is not enabled
+    return;
+  }
+
   // pick files for GC
   auto stat = GetStat(env_);
 
   uint64_t number;
   FileType type;
 
-  for (auto&& zone : stat) {
+  for (const auto& zone : stat) {
     std::vector<uint64_t> sst_in_zone;
     uint64_t written_data = zone.write_position - zone.start_position;
     // zone is full
     if (written_data == zone.total_capacity) {
       uint64_t total_size = 0;
       bool ignore_zone = false;
-      for (auto&& file : zone.files) {
+      for (const auto& file : zone.files) {
         std::string strip_filename;
 
-        for (auto&& path : immutable_db_options_.db_paths) {
+        for (const auto& path : immutable_db_options_.db_paths) {
           if (Slice(file.filename).starts_with(path.path)) {
             strip_filename = file.filename.substr(path.path.length());
             break;
+          }
+        }
+
+        if (strip_filename.empty()) {
+          for (const auto& path : initial_db_options_.cf_paths) {
+            if (Slice(file.filename).starts_with(path.path)) {
+              strip_filename = file.filename.substr(path.path.length());
+              break;
+            }
           }
         }
 
@@ -1043,7 +1058,8 @@ void DBImpl::ScheduleZNSGC() {
       }
 
       // if data in zone <= (1 - ratio) * total_capacity, recycle the zone
-      if (total_size <= (1.0 - initial_db_options_.zenfs_gc_ratio) * written_data) {
+      if (total_size <=
+          (1.0 - initial_db_options_.zenfs_gc_ratio) * written_data) {
         for (auto&& file_id : sst_in_zone) {
           mark_for_gc.insert(file_id);
         }

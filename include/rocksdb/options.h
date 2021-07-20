@@ -1081,7 +1081,10 @@ struct DBOptions {
 
   // If ZenFS reports a full zone contains more garbage than
   // this ratio, a compaction job on this zone will be submitted.
-  // This option is incompatible with lazy compaction.
+  // This option is not recommended to be used with lazy compaction and multiple
+  // cf paths. At the same time, zone size * gc ratio should be less than zone
+  // size minus single SST size, otherwise GC will never take effect.
+  // If being set to value <= 0.0 or >= 1.0, ZenFS GC will not run.
   double zenfs_gc_ratio = 0.5;
 };
 
