@@ -68,6 +68,7 @@
 #include "table/block_based_table_factory.h"
 #include "table/merging_iterator.h"
 #include "table/two_level_iterator.h"
+#include "third-party/zenfs/fs/zbd_stat.h"
 #include "util/autovector.h"
 #include "util/build_version.h"
 #include "util/c_style_callback.h"
@@ -112,6 +113,8 @@
 #endif
 
 namespace TERARKDB_NAMESPACE {
+
+std::vector<ZoneStat> GetStat(Env* env);
 
 const std::string kDefaultColumnFamilyName("default");
 const uint64_t kDumpStatsWaitMicroseconds = 10000;

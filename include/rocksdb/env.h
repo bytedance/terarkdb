@@ -28,7 +28,6 @@
 #include "rocksdb/status.h"
 #include "rocksdb/terark_namespace.h"
 #include "rocksdb/thread_status.h"
-#include "third-party/zenfs/fs/zbd_stat.h"
 
 #ifdef _WIN32
 // Windows API macro interference
@@ -1723,7 +1722,4 @@ Status NewZenfsEnv(Env** zenfs_env, const std::string& zdb_path);
 
 Status GetZbdDiskSpaceInfo(Env* env, uint64_t& total_size, uint64_t& avail_size,
                            uint64_t& used_size);
-
-std::vector<ZoneStat> GetStat(Env* env);
-
 }  // namespace TERARKDB_NAMESPACE
