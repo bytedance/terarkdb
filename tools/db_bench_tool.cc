@@ -1175,8 +1175,8 @@ DEFINE_bool(report_file_operations, false,
 DEFINE_double(zenfs_gc_ratio, 0.5,
               "When ZenFS support is enabled, a full zone with more than "
               "garbage of this ratio will be recycled. This options is "
-              "not recommended to be used with lazy compaction, multiple"
-              "cf paths, and zone size * gc ratio should be less than"
+              "not recommended to be used with lazy compaction. At the "
+              "same time, zone size * gc ratio should be less than "
               "zone size minus single SST size.");
 
 static const bool FLAGS_soft_rate_limit_dummy __attribute__((__unused__)) =
