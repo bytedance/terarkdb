@@ -1028,8 +1028,9 @@ void DBImpl::ScheduleZNSGC() {
         std::string strip_filename;
 
         for (const auto& path : db_paths) {
-          if (Slice(file.filename).starts_with(path.path)) {
-            strip_filename = file.filename.substr(path.path.length());
+          if (Slice(file.filename).starts_with(path)) {
+            strip_filename.assign(file.filename, path.length(),
+                                  file.filename.length() - path.length());
             break;
           }
         }
