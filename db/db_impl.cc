@@ -994,21 +994,28 @@ void DBImpl::ScheduleZNSGC() {
     return;
   }
 
-  // pick files for GC
+  // Pick files for GC
   auto stat = GetStat(env_);
 
   uint64_t number;
   FileType type;
 
-  std::vector<DbPath> cf_db_paths;
+  // Merge db paths and column family paths together
+  std::set<std::string> db_paths;
 
+  // Get column family paths
   mutex_.Lock();
   for (auto cfd : *versions_->GetColumnFamilySet()) {
     for (const auto& path : cfd->ioptions()->db_paths) {
-      cf_db_paths.emplace_back(path);
+      db_paths.emplace(path.path);
     }
   }
   mutex_.Unlock();
+
+  // Get database paths
+  for (const auto& path : immutable_db_options_.db_paths) {
+    db_paths.emplace(path.path);
+  }
 
   for (const auto& zone : stat) {
     std::vector<uint64_t> sst_in_zone;
@@ -1020,19 +1027,10 @@ void DBImpl::ScheduleZNSGC() {
       for (const auto& file : zone.files) {
         std::string strip_filename;
 
-        for (const auto& path : immutable_db_options_.db_paths) {
+        for (const auto& path : db_paths) {
           if (Slice(file.filename).starts_with(path.path)) {
             strip_filename = file.filename.substr(path.path.length());
             break;
-          }
-        }
-
-        if (strip_filename.empty()) {
-          for (const auto& path : cf_db_paths) {
-            if (Slice(file.filename).starts_with(path.path)) {
-              strip_filename = file.filename.substr(path.path.length());
-              break;
-            }
           }
         }
 
