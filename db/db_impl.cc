@@ -1000,6 +1000,16 @@ void DBImpl::ScheduleZNSGC() {
   uint64_t number;
   FileType type;
 
+  std::vector<DbPath> cf_db_paths;
+
+  mutex_.Lock();
+  for (auto cfd : *versions_->GetColumnFamilySet()) {
+    for (const auto& path : cfd->ioptions()->db_paths) {
+      cf_db_paths.emplace_back(path);
+    }
+  }
+  mutex_.Unlock();
+
   for (const auto& zone : stat) {
     std::vector<uint64_t> sst_in_zone;
     uint64_t written_data = zone.write_position - zone.start_position;
@@ -1018,7 +1028,7 @@ void DBImpl::ScheduleZNSGC() {
         }
 
         if (strip_filename.empty()) {
-          for (const auto& path : initial_db_options_.cf_paths) {
+          for (const auto& path : cf_db_paths) {
             if (Slice(file.filename).starts_with(path.path)) {
               strip_filename = file.filename.substr(path.path.length());
               break;
