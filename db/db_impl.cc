@@ -1020,8 +1020,6 @@ void DBImpl::ScheduleZNSGC() {
     db_paths.emplace(path.path);
   }
 
-  for(const auto& path : db_paths) { std::cerr << path << std::endl; }
-
   std::string strip_filename;
 
   for (const auto& zone : stat) {
