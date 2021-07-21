@@ -1172,7 +1172,7 @@ DEFINE_bool(report_file_operations, false,
             "if report number of file "
             "operations");
 
-DEFINE_double(zenfs_gc_ratio, 0.5,
+DEFINE_double(zenfs_gc_ratio, 0.25,
               "When ZenFS support is enabled, a full zone with more than "
               "garbage of this ratio will be recycled. This options is "
               "not recommended to be used with lazy compaction. At the "
