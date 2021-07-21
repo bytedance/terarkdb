@@ -1012,7 +1012,7 @@ void DBImpl::ScheduleZNSGC() {
   FileType type;
 
   // Merge db paths and column family paths together
-  std::set<std::string> db_paths;
+  chash_set<std::string> db_paths;
 
   // Get column family paths
   mutex_.Lock();
@@ -1028,6 +1028,10 @@ void DBImpl::ScheduleZNSGC() {
     db_paths.emplace(path.path);
   }
 
+  for(const auto& path : db_paths) { std::cerr << path << std::endl; }
+
+  std::string strip_filename;
+
   for (const auto& zone : stat) {
     std::vector<uint64_t> sst_in_zone;
     uint64_t written_data = zone.write_position - zone.start_position;
@@ -1036,7 +1040,7 @@ void DBImpl::ScheduleZNSGC() {
       uint64_t total_size = 0;
       bool ignore_zone = false;
       for (const auto& file : zone.files) {
-        std::string strip_filename;
+        strip_filename.clear();
 
         for (const auto& path : db_paths) {
           if (Slice(file.filename).starts_with(path)) {
@@ -1126,11 +1130,13 @@ void DBImpl::ScheduleZNSGC() {
         unscheduled_compactions_++;
       }
     }
-    ROCKS_LOG_BUFFER(&log_buffer_info,
-                     "[%s] ZNS GC: SSTs total marked = %" PRIu64
-                     ", new marked = %" PRIu64 ", file count: %" PRIu64,
-                     cfd->GetName().c_str(), old_mark_count, new_mark_count,
-                     total_count);
+    if (old_mark_count != 0 && new_mark_count != 0) {
+      ROCKS_LOG_BUFFER(&log_buffer_info,
+                       "[%s] ZNS GC: SSTs total marked = %" PRIu64
+                       ", new marked = %" PRIu64 ", file count: %" PRIu64,
+                       cfd->GetName().c_str(), old_mark_count, new_mark_count,
+                       total_count);
+    }
   }
   if (unscheduled_compactions_ > 0) {
     MaybeScheduleFlushOrCompaction();
