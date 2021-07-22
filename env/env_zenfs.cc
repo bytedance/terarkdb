@@ -4,6 +4,7 @@
 
 #ifdef LIBZBD
 #include "third-party/zenfs/fs/fs_zenfs.h"
+#include "third-party/zenfs/fs/zbd_stat.h"
 #include "third-party/zenfs/fs/zbd_zenfs.h"
 
 namespace TERARKDB_NAMESPACE {
@@ -166,9 +167,7 @@ class ZenfsDirectory : public Directory {
   explicit ZenfsDirectory(std::unique_ptr<FSDirectory>&& target)
       : target_(std::move(target)) {}
 
-  Status Fsync() override {
-    return target_->Fsync(IOOptions(), nullptr);
-  }
+  Status Fsync() override { return target_->Fsync(IOOptions(), nullptr); }
   size_t GetUniqueId(char* id, size_t max_size) const override {
     return target_->GetUniqueId(id, max_size);
   }
@@ -469,12 +468,18 @@ class ZenfsEnv : public EnvWrapper {
     target_->SanitizeEnvOptions(env_opts);
   }
 
-  Status GetZbdDiskSpaceInfo(uint64_t &total_size, uint64_t &avail_size, uint64_t &used_size) {
+  Status GetZbdDiskSpaceInfo(uint64_t& total_size, uint64_t& avail_size,
+                             uint64_t& used_size) {
     auto zbd = dynamic_cast<ZenFS*>(fs_)->GetZonedBlockDevice();
     used_size = zbd->GetUsedSpace() + zbd->GetReclaimableSpace();
     avail_size = zbd->GetFreeSpace();
     total_size = used_size + avail_size;
     return Status::OK();
+  }
+
+  std::vector<ZoneStat> GetStat() {
+    auto zen_fs = dynamic_cast<ZenFS*>(fs_);
+    return zen_fs->GetStat();
   }
 
  private:
@@ -490,8 +495,16 @@ Status NewZenfsEnv(Env** zenfs_env, const std::string& zdb_path) {
   return s;
 }
 
-Status GetZbdDiskSpaceInfo(Env* env, uint64_t &total_size, uint64_t &avail_size, uint64_t &used_size) {
-  return dynamic_cast<ZenfsEnv*>(env)->GetZbdDiskSpaceInfo(total_size, avail_size, used_size);
+Status GetZbdDiskSpaceInfo(Env* env, uint64_t& total_size, uint64_t& avail_size,
+                           uint64_t& used_size) {
+  return dynamic_cast<ZenfsEnv*>(env)->GetZbdDiskSpaceInfo(
+      total_size, avail_size, used_size);
+}
+
+std::vector<ZoneStat> GetStat(Env* env) {
+  auto zen_env = dynamic_cast<ZenfsEnv*>(env);
+  if (!zen_env) return {};
+  return zen_env->GetStat();
 }
 
 }  // namespace TERARKDB_NAMESPACE
@@ -505,11 +518,13 @@ Status NewZenfsEnv(Env** zenfs_env, const std::string& zdb_path) {
   return Status::NotSupported("ZenFSEnv is not implemented.");
 }
 
-Status GetZbdDiskSpaceInfo(Env* env, uint64_t &total_size, uint64_t &avail_size, uint64_t &used_size) {
+Status GetZbdDiskSpaceInfo(Env* env, uint64_t& total_size, uint64_t& avail_size,
+                           uint64_t& used_size) {
   return Status::NotSupported("GetZbdDiskSpaceInfo is not implemented.");
 }
+
+std::vector<ZoneStat> GetStat(Env* env) { return {}; }
 
 }  // namespace TERARKDB_NAMESPACE
 
 #endif
-
