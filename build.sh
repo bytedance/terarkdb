@@ -18,7 +18,7 @@ fi
 
 git submodule update --init --recursive
 
-if [ "$WITH_TESTS" == "1" ];then
+if [ "$WITH_TESTS" == "1" ]; then
   WITH_TESTS=ON
   echo "build $BUILD_TYPE, with_tests = $WITH_TESTS"
   cd $BASE/$OUTPUT && cmake ../ -DCMAKE_INSTALL_PREFIX=$OUTPUT -DCMAKE_BUILD_TYPE=Debug -DWITH_TESTS=${WITH_TESTS} -DWITH_TOOLS=ON -DWITH_TERARK_ZIP=ON
