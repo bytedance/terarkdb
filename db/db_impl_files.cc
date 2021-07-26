@@ -537,11 +537,11 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
     // closed. This means that the underlying FS must support deferred delete.
     // In this case, we delete the writer before issuing delete to FS.
     if (type == kLogFile) {
-      auto it =
-          std::find_if(state.logs_to_free.begin(), state.logs_to_free.end(),
-                       [number](log::Writer* writer) {
-                         return writer->get_log_number() == number;
-                       });
+      auto it = std::find_if(
+          state.logs_to_free.begin(), state.logs_to_free.end(),
+          [number](log::Writer* writer) {
+            return writer != nullptr && writer->get_log_number() == number;
+          });
       if (it != state.logs_to_free.end()) {
         delete *it;
         *it = nullptr;
