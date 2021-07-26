@@ -2656,7 +2656,7 @@ void VersionStorageInfo::CalculateBaseBytes(const ImmutableCFOptions& ioptions,
     for (int i = 1; i < num_levels_; i++) {
       uint64_t total_size = 0;
       for (const auto& f : files_[i]) {
-        total_size += f->fd.GetFileSize();
+        total_size += f->compensated_file_size;
       }
       if (total_size > 0 && first_non_empty_level == -1) {
         first_non_empty_level = i;
@@ -2678,7 +2678,7 @@ void VersionStorageInfo::CalculateBaseBytes(const ImmutableCFOptions& ioptions,
     } else {
       uint64_t l0_size = 0;
       for (const auto& f : files_[0]) {
-        l0_size += f->fd.GetFileSize();
+        l0_size += f->compensated_file_size;
       }
 
       uint64_t base_bytes_max =
@@ -2724,25 +2724,15 @@ void VersionStorageInfo::CalculateBaseBytes(const ImmutableCFOptions& ioptions,
 
       level_multiplier_ = options.max_bytes_for_level_multiplier;
       assert(base_level_size > 0);
-      if (l0_size > base_level_size &&
-          (l0_size > options.max_bytes_for_level_base ||
-           static_cast<int>(files_[0].size() / 2) >=
-               options.level0_file_num_compaction_trigger)) {
-        // We adjust the base level according to actual L0 size, and adjust
-        // the level multiplier accordingly, when:
-        //   1. the L0 size is larger than level size base, or
-        //   2. number of L0 files reaches twice the L0->L1 compaction trigger
-        // We don't do this otherwise to keep the LSM-tree structure stable
-        // unless the L0 compation is backlogged.
-        base_level_size = l0_size;
-        if (base_level_ == num_levels_ - 1) {
-          level_multiplier_ = 1.0;
-        } else {
-          level_multiplier_ = std::pow(
-              static_cast<double>(max_level_size) /
-                  static_cast<double>(base_level_size),
-              1.0 / static_cast<double>(num_levels_ - base_level_ - 1));
-        }
+
+      base_level_size = l0_size;
+      if (base_level_ == num_levels_ - 1) {
+        level_multiplier_ = 1.0;
+      } else {
+        level_multiplier_ =
+            std::pow(static_cast<double>(max_level_size) /
+                         static_cast<double>(base_level_size),
+                     1.0 / static_cast<double>(num_levels_ - base_level_ - 1));
       }
 
       uint64_t level_size = base_level_size;
