@@ -441,6 +441,8 @@ Options DBTestBase::GetOptions(
       break;
     case kDBLogDir:
       options.db_log_dir = alternative_db_log_dir_;
+      env_->CreateDirIfMissing(options.db_log_dir);
+      CreateLoggerFromOptions(dbname_, options, &options.info_log);
       break;
     case kWalDirAndMmapReads:
       options.wal_dir = alternative_wal_dir_;
