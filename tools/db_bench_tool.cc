@@ -4029,6 +4029,7 @@ class Benchmark {
         }
       }
       if (!s.ok()) {
+        fprintf(stderr, "try recovering from put error: %s\n", s.ToString().c_str());
         s = listener_->WaitForRecovery(600000000) ? Status::OK() : s;
       }
 
