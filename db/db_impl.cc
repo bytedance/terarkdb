@@ -900,7 +900,6 @@ Status DBImpl::GetStatsHistory(
 
 void DBImpl::ScheduleTtlGC() {
   TEST_SYNC_POINT("DBImpl:ScheduleTtlGC");
-  uint64_t nowSeconds = env_->NowMicros() / 1000U / 1000U;
   LogBuffer log_buffer_info(InfoLogLevel::INFO_LEVEL,
                             immutable_db_options_.info_log.get());
   LogBuffer log_buffer_debug(InfoLogLevel::DEBUG_LEVEL,
@@ -913,12 +912,15 @@ void DBImpl::ScheduleTtlGC() {
     bool should_mark =
         std::min(earliest_time_begin_compact, latest_time_end_compact) <= now;
     if (should_mark) {
-      ROCKS_LOG_BUFFER(&log_buffer_info,
-                       "SST #%" PRIu64
-                       " marked for compaction @L%d , property: (%" PRIu64
-                       " , %" PRIu64 ") now: %" PRIu64,
-                       file_number, level, earliest_time_begin_compact,
-                       latest_time_end_compact, now);
+      auto max_to_zero = [](uint64_t v) {
+        return v == port::kMaxUint64 ? 0 : v;
+      };
+      ROCKS_LOG_BUFFER(
+          &log_buffer_info,
+          "SST #%" PRIu64 " marked for compaction @L%d , property: (%" PRIu64
+          " , %" PRIu64 ") now: %" PRIu64,
+          file_number, level, max_to_zero(earliest_time_begin_compact),
+          max_to_zero(latest_time_end_compact), now);
     }
     return should_mark;
   };
@@ -931,6 +933,7 @@ void DBImpl::ScheduleTtlGC() {
         cfd->ioptions()->ttl_extractor_factory == nullptr) {
       continue;
     }
+    uint64_t now = cfd->ioptions()->ttl_extractor_factory->Now();
     VersionStorageInfo* vstorage = cfd->current()->storage_info();
     for (int l = 0; l < vstorage->num_non_empty_levels(); l++) {
       for (auto meta : vstorage->LevelFiles(l)) {
@@ -943,7 +946,7 @@ void DBImpl::ScheduleTtlGC() {
         if (!meta->marked_for_compaction &&
             should_marked_for_compacted(
                 l, meta->fd.GetNumber(), meta->prop.earliest_time_begin_compact,
-                meta->prop.latest_time_end_compact, nowSeconds)) {
+                meta->prop.latest_time_end_compact, now)) {
           meta->marked_for_compaction = true;
         }
         if (meta->marked_for_compaction) {

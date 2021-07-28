@@ -164,7 +164,7 @@ TEST_P(TerarkZipTableBuilderTest, BoundaryTest) {
   auto n = GetParam();
   options.ttl_gc_ratio = n.ttl_ratio;
   options.ttl_max_scan_gap = n.ttl_scan;
-  options.ttl_extractor_factory.reset(new test::TestTtlExtractorFactory());
+  options.ttl_extractor_factory.reset(new test::TestTtlExtractorFactory(env));
   Status s = DB::Open(options, dbname, &db);
   ASSERT_OK(s);
   ASSERT_TRUE(db != nullptr);
@@ -178,9 +178,9 @@ TEST_P(TerarkZipTableBuilderTest, BoundaryTest) {
       int_tbl_prop_collector_factories;
 
   int_tbl_prop_collector_factories.emplace_back(
-      NewTtlIntTblPropCollectorFactory(
-          options.ttl_extractor_factory.get(), env,
-          moptions.ttl_gc_ratio, moptions.ttl_max_scan_gap));
+      NewTtlIntTblPropCollectorFactory(options.ttl_extractor_factory.get(),
+                                       moptions.ttl_gc_ratio,
+                                       moptions.ttl_max_scan_gap));
   std::string column_family_name;
   int unknown_level = -1;
   std::unique_ptr<TableBuilder> builder(options.table_factory->NewTableBuilder(

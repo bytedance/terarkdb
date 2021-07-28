@@ -511,7 +511,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
     // What this extractor will do is still unknown
     int_tbl_prop_collector_factories.data.emplace_back(
         NewTtlIntTblPropCollectorFactory(
-            immutable_cf_options.ttl_extractor_factory, rep_->env,
+            immutable_cf_options.ttl_extractor_factory,
             mutable_cf_options.ttl_gc_ratio,
             mutable_cf_options.ttl_max_scan_gap));
   }

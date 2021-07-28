@@ -26,10 +26,10 @@ class TtlExtractor {
   virtual ~TtlExtractor(){};
 
   // Extract a custom info from a specified key value pair. This method is
-  // called when we need get left ttl about key.
+  // called when we need get left ttl time point about key.
   virtual Status Extract(EntryType entry_type, const Slice& user_key,
                          const Slice& value_or_meta, bool* has_ttl,
-                         std::chrono::seconds* ttl) const = 0;
+                         uint64_t* ttl_time_point) const = 0;
 };
 
 class TtlExtractorFactory
@@ -41,6 +41,8 @@ class TtlExtractorFactory
 
   virtual std::unique_ptr<TtlExtractor> CreateTtlExtractor(
       const TtlContext& context) const = 0;
+
+  virtual uint64_t Now() const = 0;
 
   virtual const char* Name() const = 0;
 

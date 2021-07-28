@@ -4,8 +4,8 @@
 #include "db/table_properties_collector.h"
 #include "rocksdb/terark_namespace.h"
 #include "table/block_based_table_builder.h"
-#include "util/string_util.h"
 #include "util/coding.h"
+#include "util/string_util.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
@@ -72,7 +72,6 @@ INSTANTIATE_TEST_CASE_P(CorrectnessTest, BlockBasedTableBuilderTest,
                         testing::ValuesIn(ttl_param));
 
 TEST_F(BlockBasedTableBuilderTest, FunctionTest) {
-
   BlockBasedTableOptions blockbasedtableoptions;
   BlockBasedTableFactory factory(blockbasedtableoptions);
   test::StringSink sink;
@@ -164,7 +163,7 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
   auto n = GetParam();
   options.ttl_gc_ratio = n.ttl_ratio;
   options.ttl_max_scan_gap = n.ttl_scan;
-  options.ttl_extractor_factory.reset(new test::TestTtlExtractorFactory());
+  options.ttl_extractor_factory.reset(new test::TestTtlExtractorFactory(env));
   Status s = DB::Open(options, dbname, &db);
   ASSERT_OK(s);
   ASSERT_TRUE(db != nullptr);
@@ -178,9 +177,9 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
       int_tbl_prop_collector_factories;
 
   int_tbl_prop_collector_factories.emplace_back(
-      NewTtlIntTblPropCollectorFactory(
-          options.ttl_extractor_factory.get(), env,
-          moptions.ttl_gc_ratio, moptions.ttl_max_scan_gap));
+      NewTtlIntTblPropCollectorFactory(options.ttl_extractor_factory.get(),
+                                       moptions.ttl_gc_ratio,
+                                       moptions.ttl_max_scan_gap));
   std::string column_family_name;
   int unknown_level = -1;
   std::unique_ptr<TableBuilder> builder(factory.NewTableBuilder(

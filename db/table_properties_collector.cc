@@ -15,8 +15,6 @@
 
 namespace TERARKDB_NAMESPACE {
 
-const uint64_t kFiftyYearSecondsNumber = 1576800000;
-
 namespace {
 
 uint64_t GetUint64Property(const UserCollectedProperties& props,
@@ -64,63 +62,65 @@ UserCollectedProperties UserKeyTablePropertiesCollector::GetReadableProperties()
 
 class TtlIntTblPropCollector : public IntTblPropCollector {
  private:
+  const TtlExtractorFactory* ttl_extractor_factory_;
   TtlExtractor* ttl_extractor_;
-  Env* env_;
   double ttl_gc_ratio_;
   size_t ttl_max_scan_cap_;
   HistogramImpl histogram_;
-  std::vector<uint64_t> ttl_seconds_slice_window_;
+  std::vector<uint64_t> ttl_slice_window_;
   std::deque<size_t> slice_window_ttl_index_;
+  uint64_t now_;
   size_t slice_index_ = 0;
   std::string name_;
   uint64_t total_entries_ = 0;
   uint64_t ttl_entries_ = 0;
 
-  uint64_t min_scan_cap_ttl_seconds_ = port::kMaxUint64;
+  uint64_t min_scan_cap_ttl_ = port::kMaxUint64;
 
   void AddTtlToSliceWindow(uint64_t ttl) {
     if (ttl_max_scan_cap_ > 0) {
       if (slice_index_ < ttl_max_scan_cap_) {
         while (!slice_window_ttl_index_.empty() &&
-               ttl >=
-                   ttl_seconds_slice_window_[slice_window_ttl_index_.back()]) {
+               ttl >= ttl_slice_window_[slice_window_ttl_index_.back()]) {
           slice_window_ttl_index_.pop_back();
         }
-        ttl_seconds_slice_window_.emplace_back(ttl);
+        ttl_slice_window_.emplace_back(ttl);
       } else {
-        assert(ttl_seconds_slice_window_.size() == ttl_max_scan_cap_);
+        assert(ttl_slice_window_.size() == ttl_max_scan_cap_);
         while (!slice_window_ttl_index_.empty() &&
                slice_window_ttl_index_.front() <=
                    slice_index_ - ttl_max_scan_cap_) {
           slice_window_ttl_index_.pop_front();
         }
         while (!slice_window_ttl_index_.empty() &&
-               ttl >= ttl_seconds_slice_window_[slice_window_ttl_index_.back() %
-                                                ttl_max_scan_cap_]) {
+               ttl >= ttl_slice_window_[slice_window_ttl_index_.back() %
+                                        ttl_max_scan_cap_]) {
           slice_window_ttl_index_.pop_back();
         }
-        ttl_seconds_slice_window_[slice_index_ % ttl_max_scan_cap_] = ttl;
+        ttl_slice_window_[slice_index_ % ttl_max_scan_cap_] = ttl;
       }
       slice_window_ttl_index_.push_back(slice_index_);
       slice_index_++;
       if (slice_index_ >= ttl_max_scan_cap_) {
-        min_scan_cap_ttl_seconds_ =
-            std::min(min_scan_cap_ttl_seconds_,
-                     ttl_seconds_slice_window_[slice_window_ttl_index_.front() %
-                                               ttl_max_scan_cap_]);
+        min_scan_cap_ttl_ =
+            std::min(min_scan_cap_ttl_,
+                     ttl_slice_window_[slice_window_ttl_index_.front() %
+                                       ttl_max_scan_cap_]);
       }
     }
   }
 
  public:
-  TtlIntTblPropCollector(TtlExtractor* _ttl_extractor, Env* _env,
-                         double _ttl_gc_ratio, size_t _ttl_max_scan_cap,
-                         const std::string& _name)
-      : ttl_extractor_(_ttl_extractor),
-        env_(_env),
+  TtlIntTblPropCollector(const TtlExtractorFactory* _ttl_extractor_factory,
+                         TtlExtractor* _ttl_extractor, double _ttl_gc_ratio,
+                         size_t _ttl_max_scan_cap, const std::string& _name)
+      : ttl_extractor_factory_(_ttl_extractor_factory),
+        ttl_extractor_(_ttl_extractor),
         ttl_gc_ratio_(_ttl_gc_ratio),
         ttl_max_scan_cap_(_ttl_max_scan_cap),
-        name_(_name) {}
+        name_(_name) {
+    now_ = ttl_extractor_factory_->Now();
+  }
 
   ~TtlIntTblPropCollector() { delete ttl_extractor_; }
 
@@ -132,20 +132,17 @@ class TtlIntTblPropCollector : public IntTblPropCollector {
   }
 
   Status Finish(UserCollectedProperties* properties) override {
-    uint64_t now_time_seconds = env_->NowMicros() / 1000000;
-    if (!histogram_.Empty() && ttl_entries_ >= ttl_gc_ratio_ * total_entries_) {
+    if (!histogram_.Empty() &&
+        double(ttl_entries_) >= ttl_gc_ratio_ * total_entries_) {
       uint64_t earliest_time_begin_compact =
-          now_time_seconds +
-          static_cast<uint64_t>(histogram_.Percentile(
-              ttl_gc_ratio_ * total_entries_ / ttl_entries_ * 100.0));
+          now_ + static_cast<uint64_t>(histogram_.Percentile(
+                     ttl_gc_ratio_ * total_entries_ / ttl_entries_ * 100.0));
       PushItem(properties, TablePropertiesNames::kEarliestTimeBeginCompact,
                earliest_time_begin_compact);
     }
-    if (min_scan_cap_ttl_seconds_ < port::kMaxUint64) {
-      uint64_t latest_time_end_compact =
-          min_scan_cap_ttl_seconds_ + now_time_seconds;
+    if (min_scan_cap_ttl_ < port::kMaxUint64) {
       PushItem(properties, TablePropertiesNames::kLatestTimeEndCompact,
-               latest_time_end_compact);
+               min_scan_cap_ttl_);
     }
     return Status::OK();
   }
@@ -161,7 +158,7 @@ class TtlIntTblPropCollector : public IntTblPropCollector {
     if (entry_type == kEntryMerge || entry_type == kEntryPut ||
         entry_type == kEntryMergeIndex || entry_type == kEntryValueIndex) {
       bool has_ttl = false;
-      std::chrono::seconds ttl(0);
+      uint64_t ttl_time_point(0);
       assert(ttl_extractor_ != nullptr);
 
       Slice user_key = ExtractUserKey(key);
@@ -170,19 +167,17 @@ class TtlIntTblPropCollector : public IntTblPropCollector {
         value_or_meta = SeparateHelper::DecodeValueMeta(value);
       }
       Status s = ttl_extractor_->Extract(entry_type, user_key, value_or_meta,
-                                         &has_ttl, &ttl);
+                                         &has_ttl, &ttl_time_point);
       if (!s.ok()) {
         return s;
       }
-      if (has_ttl) {
+      if (has_ttl && ttl_time_point != port::kMaxUint64) {
         ++ttl_entries_;
-        uint64_t key_ttl =
-            std::min(static_cast<uint64_t>(ttl.count()),
-                     kFiftyYearSecondsNumber);  // ttl is limited to 50 years.
-        histogram_.Add(key_ttl);
-        AddTtlToSliceWindow(key_ttl);
+        uint64_t ttl_duration = std::max(ttl_time_point, now_) - now_;
+        histogram_.Add(ttl_duration);
+        AddTtlToSliceWindow(ttl_time_point);
       } else {
-        ttl_seconds_slice_window_.clear();
+        ttl_slice_window_.clear();
         slice_window_ttl_index_.clear();
         slice_index_ = 0;
       }
@@ -202,10 +197,9 @@ class TtlIntTblPropCollector : public IntTblPropCollector {
 class TtlIntTblPropCollectorFactory : public IntTblPropCollectorFactory {
  public:
   TtlIntTblPropCollectorFactory(
-      const TtlExtractorFactory* _ttl_extractor_factory, Env* _env,
-      double _ttl_gc_ratio, size_t _ttl_max_scan_cap)
+      const TtlExtractorFactory* _ttl_extractor_factory, double _ttl_gc_ratio,
+      size_t _ttl_max_scan_cap)
       : ttl_extractor_factory_(_ttl_extractor_factory),
-        env_(_env),
         ttl_gc_ratio_(_ttl_gc_ratio),
         ttl_max_scan_cap_(_ttl_max_scan_cap) {
     name_ =
@@ -219,7 +213,8 @@ class TtlIntTblPropCollectorFactory : public IntTblPropCollectorFactory {
     auto ttl_extractor =
         ttl_extractor_factory_->CreateTtlExtractor(ttl_context);
     return new TtlIntTblPropCollector(
-        ttl_extractor.release(), env_, ttl_gc_ratio_, ttl_max_scan_cap_,
+        ttl_extractor_factory_, ttl_extractor.release(), ttl_gc_ratio_,
+        ttl_max_scan_cap_,
         std::string("TtlCollector.") + ttl_extractor_factory_->Name());
   }
 
@@ -230,17 +225,16 @@ class TtlIntTblPropCollectorFactory : public IntTblPropCollectorFactory {
 
  private:
   const TtlExtractorFactory* ttl_extractor_factory_;
-  Env* env_;
   double ttl_gc_ratio_;
   size_t ttl_max_scan_cap_;
   std::string name_;
 };
 
 IntTblPropCollectorFactory* NewTtlIntTblPropCollectorFactory(
-    const TtlExtractorFactory* ttl_extractor_factory, Env* env,
-    double ttl_gc_ratio, size_t ttl_max_scan_cap) {
-  return new TtlIntTblPropCollectorFactory(ttl_extractor_factory, env,
-                                           ttl_gc_ratio, ttl_max_scan_cap);
+    const TtlExtractorFactory* ttl_extractor_factory, double ttl_gc_ratio,
+    size_t ttl_max_scan_cap) {
+  return new TtlIntTblPropCollectorFactory(ttl_extractor_factory, ttl_gc_ratio,
+                                           ttl_max_scan_cap);
 }
 
 uint64_t GetDeletedKeys(const UserCollectedProperties& props) {
