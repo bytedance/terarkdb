@@ -23,7 +23,7 @@ struct TtlExtractorContext {
 
 class TtlExtractor {
  public:
-  virtual ~TtlExtractor(){};
+  virtual ~TtlExtractor() = default;
 
   // Extract a custom info from a specified key value pair. This method is
   // called when we need get left ttl time point about key.
@@ -35,7 +35,7 @@ class TtlExtractor {
 class TtlExtractorFactory
     : public terark::Factoryable<TtlExtractorFactory*, Slice> {
  public:
-  virtual ~TtlExtractorFactory() {}
+  virtual ~TtlExtractorFactory() = default;
 
   using TtlContext = TtlExtractorContext;
 
