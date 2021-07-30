@@ -2051,7 +2051,7 @@ Status DBImpl::CreateColumnFamilies(
   }
   autovector<Status> s_list = CreateColumnFamilyImpl(
       cf_options_list, column_family_name_list, handle_list);
-  bool success_count = std::count_if(s_list.begin(), s_list.end(),
+  int success_count = std::count_if(s_list.begin(), s_list.end(),
                                      [](const Status& s) { return s.ok(); });
   Status s;
   if (success_count > 0) {
@@ -2090,7 +2090,7 @@ Status DBImpl::CreateColumnFamilies(
   }
   autovector<Status> s_list = CreateColumnFamilyImpl(
       cf_options_list, column_family_name_list, handle_list);
-  bool success_count = std::count_if(s_list.begin(), s_list.end(),
+  int success_count = std::count_if(s_list.begin(), s_list.end(),
                                      [](const Status& s) { return s.ok(); });
   Status s;
   if (success_count > 0) {
@@ -2172,15 +2172,20 @@ autovector<Status> DBImpl::CreateColumnFamilyImpl(
 
   SuperVersionContext sv_context(/* create_superversion */ true);
   if (ok_count > 0) {
-    struct CreateCFContext {
-      VersionEdit edit;
-      MutableCFOptions mopt;
-    };
-    autovector<CreateCFContext> edit_vec;
     autovector<ColumnFamilyData*> cfds;
     autovector<const MutableCFOptions*> mutable_cf_options_list;
     autovector<autovector<VersionEdit*>> edit_lists;
     autovector<const ColumnFamilyOptions*> column_family_options_list;
+    auto CleanupCFContext = [&]() {
+      for (const auto& e : mutable_cf_options_list) {
+        delete e;
+      }
+      for (const auto& vec : edit_lists) {
+        for (const auto& e : vec) {
+          delete e;
+        }
+      }
+    };
 
     InstrumentedMutexLock l(&mutex_);
 
@@ -2195,20 +2200,20 @@ autovector<Status> DBImpl::CreateColumnFamilyImpl(
         continue;
       }
 
-      edit_vec.emplace_back();
-      VersionEdit& edit = edit_vec.back().edit;
-      edit.AddColumnFamily(*column_family_name[i]);
+      VersionEdit* const edit_ptr = new VersionEdit();
+      edit_ptr->AddColumnFamily(*column_family_name[i]);
       uint32_t new_id =
           versions_->GetColumnFamilySet()->GetNextColumnFamilyID();
-      edit.SetColumnFamily(new_id);
-      edit.SetLogNumber(logfile_number_);
-      edit.SetComparatorName(cf_options[i]->comparator->Name());
-      edit_vec[i].mopt = MutableCFOptions(*cf_options[i], env_);
+      edit_ptr->SetColumnFamily(new_id);
+      edit_ptr->SetLogNumber(logfile_number_);
+      edit_ptr->SetComparatorName(cf_options[i]->comparator->Name());
+      const MutableCFOptions* const mopt_ptr =
+          new MutableCFOptions(*cf_options[i], env_);
 
       cfds.emplace_back(nullptr);
-      mutable_cf_options_list.emplace_back(&edit_vec.back().mopt);
+      mutable_cf_options_list.push_back(mopt_ptr);
       autovector<VersionEdit*> edit_list;
-      edit_list.emplace_back(&edit);
+      edit_list.push_back(edit_ptr);
       edit_lists.emplace_back(edit_list);
       column_family_options_list.emplace_back(cf_options[i]);
 
@@ -2226,6 +2231,7 @@ autovector<Status> DBImpl::CreateColumnFamilyImpl(
           cfds, mutable_cf_options_list, edit_lists, &mutex_,
           directories_.GetDbDir(), false, column_family_options_list);
       write_thread_.ExitUnbatched(&w);
+      CleanupCFContext();
       if (!apply_s.ok()) {
         for (size_t i = 0; i < cf_options.size(); ++i) {
           if (s[i].ok()) {
