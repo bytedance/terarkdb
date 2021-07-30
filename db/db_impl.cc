@@ -2052,7 +2052,7 @@ Status DBImpl::CreateColumnFamilies(
   autovector<Status> s_list = CreateColumnFamilyImpl(
       cf_options_list, column_family_name_list, handle_list);
   int success_count = std::count_if(s_list.begin(), s_list.end(),
-                                     [](const Status& s) { return s.ok(); });
+                                    [](const Status& s) { return s.ok(); });
   Status s;
   if (success_count > 0) {
     Status persist_options_status = WriteOptionsFile(
@@ -2091,7 +2091,7 @@ Status DBImpl::CreateColumnFamilies(
   autovector<Status> s_list = CreateColumnFamilyImpl(
       cf_options_list, column_family_name_list, handle_list);
   int success_count = std::count_if(s_list.begin(), s_list.end(),
-                                     [](const Status& s) { return s.ok(); });
+                                    [](const Status& s) { return s.ok(); });
   Status s;
   if (success_count > 0) {
     Status persist_options_status = WriteOptionsFile(
