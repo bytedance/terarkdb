@@ -2051,8 +2051,8 @@ Status DBImpl::CreateColumnFamilies(
   }
   autovector<Status> s_list = CreateColumnFamilyImpl(
       cf_options_list, column_family_name_list, handle_list);
-  bool success_count = std::count_if(s_list.begin(), s_list.end(),
-                                     [](const Status& s) { return s.ok(); });
+  int success_count = std::count_if(s_list.begin(), s_list.end(),
+                                    [](const Status& s) { return s.ok(); });
   Status s;
   if (success_count > 0) {
     Status persist_options_status = WriteOptionsFile(
@@ -2090,8 +2090,8 @@ Status DBImpl::CreateColumnFamilies(
   }
   autovector<Status> s_list = CreateColumnFamilyImpl(
       cf_options_list, column_family_name_list, handle_list);
-  bool success_count = std::count_if(s_list.begin(), s_list.end(),
-                                     [](const Status& s) { return s.ok(); });
+  int success_count = std::count_if(s_list.begin(), s_list.end(),
+                                    [](const Status& s) { return s.ok(); });
   Status s;
   if (success_count > 0) {
     Status persist_options_status = WriteOptionsFile(
@@ -2176,11 +2176,12 @@ autovector<Status> DBImpl::CreateColumnFamilyImpl(
       VersionEdit edit;
       MutableCFOptions mopt;
     };
-    autovector<CreateCFContext> edit_vec;
+    autovector<CreateCFContext> context_vec;
     autovector<ColumnFamilyData*> cfds;
     autovector<const MutableCFOptions*> mutable_cf_options_list;
     autovector<autovector<VersionEdit*>> edit_lists;
     autovector<const ColumnFamilyOptions*> column_family_options_list;
+    context_vec.resize(cf_options.size());
 
     InstrumentedMutexLock l(&mutex_);
 
@@ -2195,26 +2196,29 @@ autovector<Status> DBImpl::CreateColumnFamilyImpl(
         continue;
       }
 
-      edit_vec.emplace_back();
-      VersionEdit& edit = edit_vec.back().edit;
+      auto& context = context_vec[ok_count];
+      VersionEdit& edit = context.edit;
       edit.AddColumnFamily(*column_family_name[i]);
       uint32_t new_id =
           versions_->GetColumnFamilySet()->GetNextColumnFamilyID();
       edit.SetColumnFamily(new_id);
       edit.SetLogNumber(logfile_number_);
       edit.SetComparatorName(cf_options[i]->comparator->Name());
-      edit_vec[i].mopt = MutableCFOptions(*cf_options[i], env_);
+      context.mopt = MutableCFOptions(*cf_options[i], env_);
 
       cfds.emplace_back(nullptr);
-      mutable_cf_options_list.emplace_back(&edit_vec.back().mopt);
+      mutable_cf_options_list.emplace_back(&context.mopt);
       autovector<VersionEdit*> edit_list;
       edit_list.emplace_back(&edit);
-      edit_lists.emplace_back(edit_list);
+      edit_lists.emplace_back(std::move(edit_list));
       column_family_options_list.emplace_back(cf_options[i]);
 
       ++ok_count;
+      assert(ok_count == cfds.size());
+      assert(ok_count == mutable_cf_options_list.size());
+      assert(ok_count == edit_lists.size());
+      assert(ok_count == column_family_options_list.size());
     }
-
     // LogAndApply will both write the creation in MANIFEST and create
     // ColumnFamilyData object
     if (ok_count > 0) {  // write thread
