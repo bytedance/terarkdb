@@ -181,8 +181,10 @@ class ZenfsEnv : public EnvWrapper {
   // Initialize an EnvWrapper that delegates all calls to *t
   explicit ZenfsEnv(Env* t) : EnvWrapper(t), target_(t) {}
 
-  Status InitZenfs(const std::string& zdb_path) {
-    return NewZenFS(&fs_, zdb_path);
+  Status InitZenfs(
+      const std::string& zdb_path, std::string bytedance_tags_,
+      std::shared_ptr<MetricsReporterFactory> metrics_reporter_factory_) {
+    return NewZenFS(&fs_, zdb_path, bytedance_tags_, metrics_reporter_factory_);
   }
 
   // Return the target to which this Env forwards all calls
@@ -487,10 +489,13 @@ class ZenfsEnv : public EnvWrapper {
   FileSystem* fs_;
 };
 
-Status NewZenfsEnv(Env** zenfs_env, const std::string& zdb_path) {
+Status NewZenfsEnv(
+    Env** zenfs_env, const std::string& zdb_path, std::string bytedance_tags_,
+    std::shared_ptr<MetricsReporterFactory> metrics_reporter_factory_) {
   assert(zdb_path.length() > 0);
   auto env = new ZenfsEnv(Env::Default());
-  Status s = env->InitZenfs(zdb_path);
+  Status s =
+      env->InitZenfs(zdb_path, bytedance_tags_, metrics_reporter_factory_);
   *zenfs_env = s.ok() ? env : nullptr;
   return s;
 }
@@ -513,7 +518,9 @@ std::vector<ZoneStat> GetStat(Env* env) {
 
 namespace TERARKDB_NAMESPACE {
 
-Status NewZenfsEnv(Env** zenfs_env, const std::string& zdb_path) {
+Status NewZenfsEnv(
+    Env** zenfs_env, const std::string& zdb_path, std::string bytedance_tags_,
+    std::shared_ptr<MetricsReporterFactory> metrics_reporter_factory_) {
   *zenfs_env = nullptr;
   return Status::NotSupported("ZenFSEnv is not implemented.");
 }
