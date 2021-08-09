@@ -77,6 +77,7 @@
 #include "utilities/merge_operators.h"
 #include "utilities/merge_operators/bytesxor.h"
 #include "utilities/persistent_cache/block_cache_tier.h"
+#include "utilities/trace/bytedance_metrics_reporter.h"
 
 #ifdef OS_WIN
 #include <io.h>  // open/close
@@ -5860,7 +5861,7 @@ int db_bench_tool(int argc, char** argv) {
   } 
   #ifdef LIBZBD
     else if (!FLAGS_zbd_path.empty()) {
-      Status s = NewZenfsEnv(&FLAGS_env, FLAGS_zbd_path);
+      Status s = NewZenfsEnv(&FLAGS_env, FLAGS_zbd_path, "db_bench", std::make_shared<ByteDanceMetricsReporterFactory>());
       if (!s.ok()) {
         fprintf(stderr, "Error: Init zenfs env failed.\nStatus : %s\n", s.ToString().c_str());
         exit(1);
