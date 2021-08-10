@@ -1210,6 +1210,8 @@ static const bool FLAGS_table_cache_numshardbits_dummy
 
 namespace TERARKDB_NAMESPACE {
 
+static std::shared_ptr<ByteDanceMetricsReporterFactory> metrics_reporter_factory = nullptr;
+
 namespace {
 struct ReportFileOpCounters {
   std::atomic<int> open_counter_;
@@ -3235,6 +3237,9 @@ class Benchmark {
 
     assert(db_.db == nullptr);
 
+    if (metrics_reporter_factory == nullptr)
+      metrics_reporter_factory = std::make_shared<ByteDanceMetricsReporterFactory>();
+    options.metrics_reporter_factory = metrics_reporter_factory;
     options.max_open_files = FLAGS_open_files;
     if (FLAGS_cost_write_buffer_to_cache || FLAGS_db_write_buffer_size != 0) {
       options.write_buffer_manager.reset(
@@ -5860,7 +5865,9 @@ int db_bench_tool(int argc, char** argv) {
   } 
   #ifdef LIBZBD
     else if (!FLAGS_zbd_path.empty()) {
-      Status s = NewZenfsEnv(&FLAGS_env, FLAGS_zbd_path, "db_bench", std::make_shared<ByteDanceMetricsReporterFactory>());
+      if (metrics_reporter_factory == nullptr)
+        metrics_reporter_factory = std::make_shared<ByteDanceMetricsReporterFactory>();
+      Status s = NewZenfsEnv(&FLAGS_env, FLAGS_zbd_path, "dbname=noname_zenfs", metrics_reporter_factory);
       if (!s.ok()) {
         fprintf(stderr, "Error: Init zenfs env failed.\nStatus : %s\n", s.ToString().c_str());
         exit(1);
