@@ -394,8 +394,12 @@ Status BuildTable(
     if (s.ok()) {
       s = c_iter.status();
     }
-    if (s.ok() && separate_helper.builder) {
-      s = finish_output_blob_sst();
+    if (separate_helper.builder) {
+      if (!s.ok() || empty) {
+        separate_helper.builder->Abandon();
+      } else {
+        s = finish_output_blob_sst();
+      }
     }
     if (!s.ok() || empty) {
       builder->Abandon();
