@@ -3080,12 +3080,14 @@ void CompactionJob::CleanupCompaction() {
   for (SubcompactionState& sub_compact : compact_->sub_compact_states) {
     const auto& sub_status = sub_compact.status;
 
+    if (sub_compact.blob_builder != nullptr) {
+      sub_compact.blob_builder->Abandon();
+      sub_compact.blob_builder.reset();
+    }
     if (sub_compact.builder != nullptr) {
       // May happen if we get a shutdown call in the middle of compaction
       sub_compact.builder->Abandon();
       sub_compact.builder.reset();
-    } else {
-      assert(!sub_status.ok() || sub_compact.outfile == nullptr);
     }
     for (const auto& out : sub_compact.outputs) {
       // If this file was inserted into the table cache then remove
