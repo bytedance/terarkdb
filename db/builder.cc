@@ -414,8 +414,7 @@ Status BuildTable(
     if (s.ok() && !empty) {
       uint64_t file_size = builder->FileSize();
       sst_meta()->fd.file_size = file_size;
-      sst_meta()->marked_for_compaction =
-          builder->NeedCompact() ? FileMetaData::kMarkedFromTableBuilder : 0;
+      // we ignore TableBuilder's flag
       sst_meta()->prop.num_entries = builder->NumEntries();
       assert(sst_meta()->fd.GetFileSize() > 0);
       // refresh now that builder is finished

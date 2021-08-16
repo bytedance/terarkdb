@@ -2722,10 +2722,9 @@ void VersionStorageInfo::CalculateBaseBytes(const ImmutableCFOptions& ioptions,
         }
       }
 
-      level_multiplier_ = options.max_bytes_for_level_multiplier;
       assert(base_level_size > 0);
+      base_level_size = std::max(base_level_size, l0_size);
 
-      base_level_size = l0_size;
       if (base_level_ == num_levels_ - 1) {
         level_multiplier_ = 1.0;
       } else {
