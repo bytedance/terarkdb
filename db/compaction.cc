@@ -182,6 +182,34 @@ std::vector<uint64_t> InheritanceTreeToSet(const std::vector<uint64_t>& tree) {
   return set;
 }
 
+void ProcessFileMetaData(const char* job_info, FileMetaData* meta,
+                         const TableProperties* tp,
+                         const ImmutableCFOptions* iopt,
+                         const MutableCFOptions* mopt) {
+  meta->prop.num_deletions = tp->num_deletions;
+  meta->prop.raw_key_size = tp->raw_key_size;
+  meta->prop.raw_value_size = tp->raw_value_size;
+  meta->prop.flags |=
+      tp->num_range_deletions > 0 ? 0 : TablePropertyCache::kNoRangeDeletions;
+  meta->prop.flags |=
+      tp->snapshots.empty() ? 0 : TablePropertyCache::kHasSnapshots;
+
+  if (tp->num_range_deletions > 0 && mopt->optimize_range_deletion &&
+      !iopt->enable_lazy_compaction) {
+    meta->marked_for_compaction = true;
+  }
+  if (iopt->ttl_extractor_factory != nullptr) {
+    GetCompactionTimePoint(tp->user_collected_properties,
+                           &meta->prop.earliest_time_begin_compact,
+                           &meta->prop.latest_time_end_compact);
+  }
+  ROCKS_LOG_INFO(iopt->info_log,
+                 "%s earliest_time_begin_compact = %" PRIu64
+                 ", latest_time_end_compact = %" PRIu64,
+                 job_info, meta->prop.earliest_time_begin_compact,
+                 meta->prop.latest_time_end_compact);
+}
+
 void Compaction::SetInputVersion(Version* _input_version) {
   input_version_ = _input_version;
   cfd_ = input_version_->cfd();

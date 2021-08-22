@@ -608,7 +608,6 @@ struct AdvancedColumnFamilyOptions {
   // Default: false
   bool optimize_filters_for_hits = false;
 
-  // Enable lazy level compaction fast push range_deletions
   // It is recommended to disabled when RangeDeletion writes frequently
   //
   // Default: false

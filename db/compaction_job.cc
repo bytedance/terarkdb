@@ -2460,25 +2460,9 @@ Status CompactionJob::FinishCompactionOutputFile(
   TableProperties tp;
   if (s.ok()) {
     tp = sub_compact->builder->GetTableProperties();
-    meta->prop.num_deletions = tp.num_deletions;
-    meta->prop.raw_key_size = tp.raw_key_size;
-    meta->prop.raw_value_size = tp.raw_value_size;
-    meta->prop.flags |=
-        tp.num_range_deletions > 0 ? 0 : TablePropertyCache::kNoRangeDeletions;
-    meta->prop.flags |=
-        tp.snapshots.empty() ? 0 : TablePropertyCache::kHasSnapshots;
-
-    if (compact_->compaction->immutable_cf_options()->ttl_extractor_factory !=
-        nullptr) {
-      GetCompactionTimePoint(tp.user_collected_properties,
-                             &meta->prop.earliest_time_begin_compact,
-                             &meta->prop.latest_time_end_compact);
-      ROCKS_LOG_INFO(db_options_.info_log,
-                     "CompactionOutput earliest_time_begin_compact = %" PRIu64
-                     ", latest_time_end_compact = %" PRIu64,
-                     meta->prop.earliest_time_begin_compact,
-                     meta->prop.latest_time_end_compact);
-    }
+    ProcessFileMetaData("CompactionOutput", meta, &tp,
+                        sub_compact->compaction->immutable_cf_options(),
+                        sub_compact->compaction->mutable_cf_options());
   }
 
   if (s.ok() && tp.num_entries == 0 && tp.num_range_deletions == 0) {

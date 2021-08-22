@@ -546,4 +546,9 @@ extern Status BuildInheritanceTree(
 extern std::vector<uint64_t> InheritanceTreeToSet(
     const std::vector<uint64_t>& tree);
 
+extern void ProcessFileMetaData(const char* job_info, FileMetaData* meta,
+                                const TableProperties* tp,
+                                const ImmutableCFOptions* iopt,
+                                const MutableCFOptions* mopt);
+
 }  // namespace TERARKDB_NAMESPACE
