@@ -738,7 +738,7 @@ class DBImpl : public DB {
   }
 
   void AddToLogsToFreeQueue(log::Writer* log_writer) {
-    log_writer->file()->Close();
+    log_writer->Close();
     logs_to_free_queue_.push_back(log_writer);
   }
 
