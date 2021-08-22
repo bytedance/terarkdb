@@ -21,6 +21,7 @@
 #include "db/version_set.h"
 #include "rocksdb/compaction_filter.h"
 #include "rocksdb/terark_namespace.h"
+#include "util/c_style_callback.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
 #include "utilities/util/factory.h"

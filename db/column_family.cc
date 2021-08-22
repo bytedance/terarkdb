@@ -212,8 +212,7 @@ ColumnFamilyOptions SanitizeOptions(const ImmutableDBOptions& db_options,
     result.num_levels = 3;
   }
 
-  if (result.compaction_style != CompactionStyle::kCompactionStyleLevel ||
-      !result.enable_lazy_compaction) {
+  if (result.compaction_style != CompactionStyle::kCompactionStyleLevel) {
     result.optimize_range_deletion = false;
   }
 

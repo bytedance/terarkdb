@@ -406,20 +406,9 @@ Status BuildTable(
       }
       auto shrinked_snapshots = sst_meta()->ShrinkSnapshot(snapshots);
       s = builder->Finish(&sst_meta()->prop, &shrinked_snapshots);
-      sst_meta()->prop.num_deletions = tp.num_deletions;
-      sst_meta()->prop.raw_key_size = tp.raw_key_size;
-      sst_meta()->prop.raw_value_size = tp.raw_value_size;
-      sst_meta()->prop.flags |= tp.num_range_deletions > 0
-                                    ? 0
-                                    : TablePropertyCache::kNoRangeDeletions;
-      sst_meta()->prop.flags |=
-          tp.snapshots.empty() ? 0 : TablePropertyCache::kHasSnapshots;
-      if (ioptions.ttl_extractor_factory != nullptr) {
-        GetCompactionTimePoint(
-            builder->GetTableProperties().user_collected_properties,
-            &sst_meta()->prop.earliest_time_begin_compact,
-            &sst_meta()->prop.latest_time_end_compact);
-      }
+
+      ProcessFileMetaData("FlushOutput", sst_meta(), &tp, &ioptions,
+                          &mutable_cf_options);
     }
 
     if (s.ok() && !empty) {
