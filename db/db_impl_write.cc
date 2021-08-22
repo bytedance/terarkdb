@@ -1614,6 +1614,9 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
                          cfd->GetName().c_str(),
                          cur_log_writer->get_log_number(), new_log_number);
       }
+      // Dirty trick
+      // TODO revert it when using lavafs
+      cur_log_writer->Close();
     }
     logs_.emplace_back(logfile_number_, new_log);
     alive_log_files_.push_back(LogFileNumberSize(logfile_number_));
