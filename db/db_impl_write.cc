@@ -1569,6 +1569,16 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
                        immutable_db_options_.prepare_log_writer_num == 0
                            ? "."
                            : ", prepare_log_writer_num should be increased.");
+      size_t alive_log_file_count = 0;
+      for (auto& l : logs_) {
+        if ((l.writer)->file() != nullptr) {
+          alive_log_file_count++;
+        }
+      }
+      ROCKS_LOG_BUFFER(&context->warn_buffer,
+                     "Current Log count : %" PRIu64
+                     ", when create log writer: %" PRIu64 ".",
+                     alive_log_file_count, new_log_number);
     }
     mutex_.Lock();
     assert(log_writer_pool_state_ == kLogWriterPoolWorking);
@@ -1617,6 +1627,16 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
       // Dirty trick
       // TODO revert it when using lavafs
       cur_log_writer->Close();
+      size_t alive_log_file_count = 0;
+      for (auto& l : logs_) {
+        if ((l.writer)->file() != nullptr) {
+          alive_log_file_count++;
+        }
+      }
+      ROCKS_LOG_WARN(immutable_db_options_.info_log,
+                     "Current Log count : %" PRIu64
+                     ", when close log writer: %" PRIu64 ".",
+                     alive_log_file_count, cur_log_writer->get_log_number());
     }
     logs_.emplace_back(logfile_number_, new_log);
     alive_log_files_.push_back(LogFileNumberSize(logfile_number_));
