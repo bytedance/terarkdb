@@ -3264,6 +3264,7 @@ class Benchmark {
         FLAGS_use_direct_io_for_flush_and_compaction;
     options.use_aio_reads = FLAGS_use_aio_reads;
     options.zenfs_gc_ratio = FLAGS_zenfs_gc_ratio;
+    options.avoid_unnecessary_blocking_io = true;
     if (FLAGS_prefix_size != 0) {
       options.prefix_extractor.reset(
           NewFixedPrefixTransform(FLAGS_prefix_size));
