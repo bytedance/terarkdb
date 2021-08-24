@@ -903,7 +903,10 @@ Status DBImpl::WriteToWAL(const WriteThread::WriteGroup& write_group,
     //  - as long as other threads don't modify it, it's safe to read
     //    from std::deque from multiple threads concurrently.
     for (auto& log : logs_) {
-      status = log.writer->file()->Sync(immutable_db_options_.use_fsync);
+      auto f = log.writer->file();
+      if (f != nullptr) {
+        status = f->Sync(immutable_db_options_.use_fsync);
+      }
       if (!status.ok()) {
         break;
       }
@@ -1570,6 +1573,7 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
                            ? "."
                            : ", prepare_log_writer_num should be increased.");
       size_t alive_log_file_count = 0;
+      // Output alive logger number for debug.
       for (auto& l : logs_) {
         if ((l.writer)->file() != nullptr) {
           alive_log_file_count++;
@@ -1624,10 +1628,11 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
                          cfd->GetName().c_str(),
                          cur_log_writer->get_log_number(), new_log_number);
       }
-      // Dirty trick
-      // TODO revert it when using lavafs
+      // Dirty trick for limited active zones.
+      // TODO(Changlong Chen) Revert it when using lavafs.
       cur_log_writer->Close();
       size_t alive_log_file_count = 0;
+      // Output alive logger number for debug.
       for (auto& l : logs_) {
         if ((l.writer)->file() != nullptr) {
           alive_log_file_count++;

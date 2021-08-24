@@ -39,7 +39,6 @@ void Writer::Close() {
   if (dest_) {
     dest_->Flush();
     dest_->Close();
-    dest_.reset(nullptr);
   }
 }
 

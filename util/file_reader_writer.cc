@@ -356,6 +356,10 @@ Status WritableFileWriter::Close() {
 // write out the cached data to the OS cache or storage if direct I/O
 // enabled
 Status WritableFileWriter::Flush() {
+  if (!writable_file_) {
+    return Status::OK();
+  }
+
   Status s;
   TEST_KILL_RANDOM("WritableFileWriter::Flush:0",
                    rocksdb_kill_odds * REDUCE_ODDS2);
@@ -383,6 +387,9 @@ Status WritableFileWriter::Flush() {
 }
 
 Status WritableFileWriter::Sync(bool use_fsync) {
+  if (!writable_file_) {
+    return Status::OK();
+  }
   Status s = Flush();
   if (!s.ok()) {
     return s;
@@ -400,6 +407,9 @@ Status WritableFileWriter::Sync(bool use_fsync) {
 }
 
 Status WritableFileWriter::SyncWithoutFlush(bool use_fsync) {
+  if (!writable_file_) {
+    return Status::OK();
+  }
   if (!writable_file_->IsSyncThreadSafe()) {
     return Status::NotSupported(
         "Can't WritableFileWriter::SyncWithoutFlush() because "
