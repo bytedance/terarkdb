@@ -36,7 +36,7 @@ Writer::Writer(std::unique_ptr<WritableFileWriter>&& dest, uint64_t log_number,
 Writer::~Writer() { Close(); }
 
 void Writer::Close() {
-  if (!dest_) {
+  if (dest_) {
     dest_->Flush();
     dest_->Close();
     dest_.reset(nullptr);
