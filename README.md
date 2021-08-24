@@ -1,5 +1,5 @@
 # 0. What is TerarkDB
-TerarkDB is a RocksDB replacement with optimized tail latency, throughput and compression etc. In most cases you can migirate your existing RocksDB instance to TerarkDB without any
+TerarkDB is a RocksDB replacement with optimized tail latency, throughput and compression etc. In most cases you can migrate your existing RocksDB instance to TerarkDB without any
 drawbacks.
 
 - [All-in-one Docs](https://bytedance.feishu.cn/docs/doccnZmYFqHBm06BbvYgjsHHcKc#)
@@ -8,7 +8,7 @@ drawbacks.
 **NOTES**
 - TerarkDB was only tested and production ready under Linux platform
 - Language bindings except C/C++ are not fully tested yet.
-- Existing data can be migirated from RocksDB directly to TerarkDB, but cannot migrate back to RocksDB.
+- Existing data can be migrated from RocksDB directly to TerarkDB, but cannot migrate back to RocksDB.
 - TerarkDB was forked from RocksDB v5.18.3.
 
 
