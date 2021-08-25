@@ -773,7 +773,7 @@ static bool SaveValue(void* arg, const Slice& internal_key, const char* value) {
         }
         *s->status = Status::OK();
         if (*s->merge_in_progress) {
-          if (s->value != nullptr) {
+          if (LIKELY(s->value != nullptr)) {
             LazyBuffer lazy_val(GetLengthPrefixedSlice(value), false);
             *s->status = MergeHelper::TimedFullMerge(
                 merge_operator, s->key->user_key(), &lazy_val,
@@ -783,7 +783,7 @@ static bool SaveValue(void* arg, const Slice& internal_key, const char* value) {
               s->value->pin(LazyBufferPinLevel::Internal);
             }
           }
-        } else if (s->value != nullptr) {
+        } else if (LIKELY(s->value != nullptr)) {
           s->value->reset(GetLengthPrefixedSlice(value),
                           s->inplace_update_support);
         }
@@ -797,7 +797,7 @@ static bool SaveValue(void* arg, const Slice& internal_key, const char* value) {
       case kTypeSingleDeletion:
       case kTypeRangeDeletion: {
         if (*s->merge_in_progress) {
-          if (s->value != nullptr) {
+          if (LIKELY(s->value != nullptr)) {
             *s->status = MergeHelper::TimedFullMerge(
                 merge_operator, s->key->user_key(), nullptr,
                 merge_context->GetOperands(), s->value, s->logger,
@@ -831,12 +831,14 @@ static bool SaveValue(void* arg, const Slice& internal_key, const char* value) {
             LazyBuffer(GetLengthPrefixedSlice(value), Cleanable()));
         if (merge_operator->ShouldMerge(
                 merge_context->GetOperandsDirectionBackward())) {
-          *s->status = MergeHelper::TimedFullMerge(
-              merge_operator, s->key->user_key(), nullptr,
-              merge_context->GetOperands(), s->value, s->logger, s->statistics,
-              s->env_, true);
-          if (s->status->ok()) {
-            s->value->pin(LazyBufferPinLevel::Internal);
+          if (LIKELY(s->value != nullptr)) {
+            *s->status = MergeHelper::TimedFullMerge(
+                merge_operator, s->key->user_key(), nullptr,
+                merge_context->GetOperands(), s->value, s->logger,
+                s->statistics, s->env_, true);
+            if (s->status->ok()) {
+              s->value->pin(LazyBufferPinLevel::Internal);
+            }
           }
           *s->found_final_value = true;
           return false;
