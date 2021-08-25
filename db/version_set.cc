@@ -1410,11 +1410,13 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
     }
     // merge_operands are in saver and we hit the beginning of the key history
     // do a final merge of nullptr and operands;
-    *status = MergeHelper::TimedFullMerge(
-        merge_operator_, user_key, nullptr, merge_context->GetOperands(), value,
-        info_log_, db_statistics_, env_, true);
-    if (status->ok()) {
-      value->pin(LazyBufferPinLevel::Internal);
+    if (value != nullptr) {
+      *status = MergeHelper::TimedFullMerge(
+          merge_operator_, user_key, nullptr, merge_context->GetOperands(),
+          value, info_log_, db_statistics_, env_, true);
+      if (status->ok()) {
+        value->pin(LazyBufferPinLevel::Internal);
+      }
     }
   } else {
     if (key_exists != nullptr) {
