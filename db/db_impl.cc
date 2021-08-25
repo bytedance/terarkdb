@@ -1637,7 +1637,7 @@ Status DBImpl::Get(const ReadOptions& read_options,
                    ColumnFamilyHandle* column_family, const Slice& key,
                    LazyBuffer* value) {
   auto s = GetImpl(read_options, column_family, key, value);
-  assert(!s.ok() || value->valid());
+  assert(!s.ok() || value == nullptr || value->valid());
   return s;
 }
 
@@ -1648,7 +1648,6 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
   LatencyHistGuard guard(&read_latency_reporter_);
   read_qps_reporter_.AddCount(1);
 
-  assert(lazy_val != nullptr);
   StopWatch sw(env_, stats_, DB_GET);
   PERF_TIMER_GUARD(get_snapshot_time);
 
@@ -1742,7 +1741,7 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
     RecordTick(stats_, MEMTABLE_MISS);
   }
 
-  if (s.ok()) {
+  if (s.ok() && lazy_val != nullptr) {
     lazy_val->pin(LazyBufferPinLevel::DB);
     s = lazy_val->fetch();
   }

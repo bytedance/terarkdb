@@ -5684,6 +5684,38 @@ TEST_F(DBTest, ThreadLocalPtrDeadlock) {
   fprintf(stderr, "Done. Flushed %d times, destroyed %d threads\n",
           flushes_done.load(), threads_destroyed.load());
 }
+
+TEST_F(DBTest, SkipValueGet) {
+  Options options = CurrentOptions();
+  DestroyAndReopen(options);
+
+  ASSERT_OK(Put(Key(0), ""));
+
+  // memtable get
+  auto s = db_->Get(ReadOptions{}, db_->DefaultColumnFamily(), Key(0));
+  ASSERT_OK(s);
+  s = db_->Get(ReadOptions{}, db_->DefaultColumnFamily(), Key(0),
+               static_cast<LazyBuffer*>(nullptr));
+  ASSERT_OK(s);
+  s = db_->Get(ReadOptions{}, Key(0), static_cast<std::string*>(nullptr));
+  ASSERT_OK(s);
+  s = db_->Get(ReadOptions{}, Key(1), static_cast<std::string*>(nullptr));
+  ASSERT_TRUE(s.IsNotFound());
+
+  ASSERT_OK(Flush());
+  dbfull()->TEST_WaitForFlushMemTable();
+
+  // sst get
+  s = db_->Get(ReadOptions{}, db_->DefaultColumnFamily(), Key(0));
+  ASSERT_OK(s);
+  s = db_->Get(ReadOptions{}, db_->DefaultColumnFamily(), Key(0),
+               static_cast<LazyBuffer*>(nullptr));
+  ASSERT_OK(s);
+  s = db_->Get(ReadOptions{}, Key(0), static_cast<std::string*>(nullptr));
+  ASSERT_OK(s);
+  s = db_->Get(ReadOptions{}, Key(1), static_cast<std::string*>(nullptr));
+  ASSERT_TRUE(s.IsNotFound());
+}
 }  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {

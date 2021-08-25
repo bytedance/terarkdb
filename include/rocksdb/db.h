@@ -353,6 +353,7 @@ class DB {
 
   // If the database contains an entry for "key" store the
   // corresponding value in *value and return OK.
+  // If "value" equals to nullptr, the corresponding value will not be loaded.
   //
   // If there is no entry for "key" leave *value unchanged and return
   // a status for which Status::IsNotFound() returns true.
@@ -361,20 +362,32 @@ class DB {
   virtual inline Status Get(const ReadOptions& options,
                             ColumnFamilyHandle* column_family, const Slice& key,
                             std::string* value) {
-    assert(value != nullptr);
-    LazyBuffer lazy_val(value);
-    auto s = Get(options, column_family, key, &lazy_val);
-    if (s.ok()) {
-      s = std::move(lazy_val).dump(value);
+    if (value != nullptr) {
+      LazyBuffer lazy_val(value);
+      auto s = Get(options, column_family, key, &lazy_val);
+      if (s.ok()) {
+        s = std::move(lazy_val).dump(value);
+      }
+      return s;
+    } else {
+      return Get(options, column_family, key,
+                 static_cast<LazyBuffer*>(nullptr));
     }
-    return s;
   }
   virtual Status Get(const ReadOptions& options,
                      ColumnFamilyHandle* column_family, const Slice& key,
                      LazyBuffer* value) = 0;
+  virtual Status Get(const ReadOptions& options,
+                     ColumnFamilyHandle* column_family, const Slice& key) {
+    return Get(options, column_family, key, static_cast<LazyBuffer*>(nullptr));
+  }
   virtual Status Get(const ReadOptions& options, const Slice& key,
                      std::string* value) {
     return Get(options, DefaultColumnFamily(), key, value);
+  }
+  virtual Status Get(const ReadOptions& options, const Slice& key) {
+    return Get(options, DefaultColumnFamily(), key,
+               static_cast<LazyBuffer*>(nullptr));
   }
 #ifdef BOOSTLIB
   static void CallOnMainStack(const std::function<void()>&);

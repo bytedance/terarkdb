@@ -169,6 +169,7 @@ class Counters {
   bool get(const std::string& key, uint64_t* value) {
     std::string str;
     auto s = db_->Get(get_option_, key, &str);
+    assert(db_->Get(get_option_, key).code() == s.code());
 
     if (s.IsNotFound()) {
       // return default value if not found;
