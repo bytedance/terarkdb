@@ -209,6 +209,10 @@ Status DBWithTTLImpl::Put(const WriteOptions& options,
 Status DBWithTTLImpl::Get(const ReadOptions& options,
                           ColumnFamilyHandle* column_family, const Slice& key,
                           LazyBuffer* value) {
+  LazyBuffer buffer;
+  if (value == nullptr) {
+    value = &buffer;
+  }
   Status st = db_->Get(options, column_family, key, value);
   if (!st.ok()) {
     return st;
