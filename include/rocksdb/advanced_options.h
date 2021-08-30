@@ -159,6 +159,11 @@ enum UpdateStatus {     // Return status For inplace update callback
   UPDATED = 2,          // No inplace update. Merged value set
 };
 
+class AtomicFlushGroup {
+ public:
+  virtual ~AtomicFlushGroup(){};
+};
+
 struct AdvancedColumnFamilyOptions {
   // The maximum number of write buffers that are built up in memory.
   // The default and the minimum number is 2, so that when 1 write buffer
@@ -558,6 +563,8 @@ struct AdvancedColumnFamilyOptions {
   std::shared_ptr<MemTableRepFactory> memtable_factory =
       std::shared_ptr<SkipListFactory>(new SkipListFactory);
 
+  std::shared_ptr<AtomicFlushGroup> atomic_flush_group;
+
   // Block-based table related options are moved to BlockBasedTableOptions.
   // Related options that were originally here but now moved include:
   //   no_block_cache
@@ -663,5 +670,7 @@ struct AdvancedColumnFamilyOptions {
   // Does not have any effect.
   bool purge_redundant_kvs_while_flush = true;
 };
+
+extern std::shared_ptr<AtomicFlushGroup> NewAtomicFlushGroup();
 
 }  // namespace TERARKDB_NAMESPACE

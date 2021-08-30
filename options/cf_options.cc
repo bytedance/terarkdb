@@ -56,6 +56,7 @@ ImmutableCFOptions::ImmutableCFOptions(const ImmutableDBOptions& db_options,
       allow_mmap_writes(db_options.allow_mmap_writes),
       db_paths(db_options.db_paths),
       memtable_factory(cf_options.memtable_factory.get()),
+      atomic_flush_group(cf_options.atomic_flush_group.get()),
       table_factory(cf_options.table_factory.get()),
       table_properties_collector_factories(
           cf_options.table_properties_collector_factories),

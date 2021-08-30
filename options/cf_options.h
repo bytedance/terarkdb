@@ -82,6 +82,8 @@ struct ImmutableCFOptions {
 
   MemTableRepFactory* memtable_factory;
 
+  AtomicFlushGroup* atomic_flush_group;
+
   TableFactory* table_factory;
 
   Options::TablePropertiesCollectorFactories
