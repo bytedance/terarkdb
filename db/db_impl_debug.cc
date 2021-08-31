@@ -120,7 +120,7 @@ Status DBImpl::TEST_FlushMemTable(bool wait, bool allow_write_stall,
     auto cfhi = reinterpret_cast<ColumnFamilyHandleImpl*>(cfh);
     cfd = cfhi->cfd();
   }
-  return FlushMemTable(cfd, fo, FlushReason::kTest);
+  return FlushMemTable({cfd}, fo, FlushReason::kTest);
 }
 
 Status DBImpl::TEST_WaitForFlushMemTable(ColumnFamilyHandle* column_family) {
