@@ -1071,20 +1071,6 @@ struct DBOptions {
   // file.
   bool manual_wal_flush = false;
 
-  // If true, RocksDB supports flushing multiple column families and committing
-  // their results atomically to MANIFEST. Note that it is not
-  // necessary to set atomic_flush to true if WAL is always enabled since WAL
-  // allows the database to be restored to the last persistent state in WAL.
-  // This option is useful when there are column families with writes NOT
-  // protected by WAL.
-  // For manual flush, application has to specify which column families to
-  // flush atomically in DB::Flush.
-  // For auto-triggered flush, RocksDB atomically flushes ALL column families.
-  //
-  // Currently, any WAL-enabled writes after atomic flush may be replayed
-  // independently if the process crashes later and tries to recover.
-  bool atomic_flush = false;
-
   // If true, working thread may avoid doing unnecessary and long-latency
   // operation (such as deleting obsolete files directly or deleting memtable)
   // and will instead schedule a background job to do it.

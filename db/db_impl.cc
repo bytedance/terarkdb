@@ -503,11 +503,10 @@ void DBImpl::CancelAllBackgroundWork(bool wait) {
       !mutable_db_options_.avoid_flush_during_shutdown) {
     autovector<ColumnFamilyData*> cfds;
     for (auto cfd : *versions_->GetColumnFamilySet()) {
-      if (cfd->IsDropped()) {
-        continue;
+      if (!cfd->IsDropped() && cfd->initialized() && !cfd->mem()->IsEmpty()) {
+        cfd->Ref();
+        cfds.push_back(cfd);
       }
-      cfd->Ref();
-      cfds.push_back(cfd);
     }
     mutex_.Unlock();
     FlushMemTable(cfds, FlushOptions(), FlushReason::kShutDown);

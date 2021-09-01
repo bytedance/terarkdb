@@ -1082,7 +1082,7 @@ Status DBImpl::SwitchWAL(WriteContext* write_context) {
     }
   }
   FlushRequestVec flush_req_vec;
-  GenerateFlushRequest(&cfds, &flush_req_vec);
+  ProcessAtomicFlushGroup(&cfds, &flush_req_vec);
   uint64_t total_log_size = total_log_size_.load();
   uint64_t max_total_wal_size = GetMaxTotalWalSize();
   for (const auto cfd : cfds) {
@@ -1101,7 +1101,7 @@ Status DBImpl::SwitchWAL(WriteContext* write_context) {
     }
   }
   if (status.ok()) {
-    AssignAtomicFlushSeq(flush_req_vec);
+    PrepareFlushReqVec(flush_req_vec);
     SchedulePendingFlush(flush_req_vec, FlushReason::kWriteBufferManager);
     MaybeScheduleFlushOrCompaction();
   }
@@ -1162,7 +1162,7 @@ Status DBImpl::HandleWriteBufferFull(WriteContext* write_context) {
   if (cfd_picked != nullptr) {
     cfds.push_back(cfd_picked);
   }
-  GenerateFlushRequest(&cfds, &flush_req_vec);
+  ProcessAtomicFlushGroup(&cfds, &flush_req_vec);
   if (flush_reason == FlushReason::kWriteBufferManager) {
     for (auto cfd : cfds) {
       ROCKS_LOG_BUFFER(
@@ -1198,7 +1198,7 @@ Status DBImpl::HandleWriteBufferFull(WriteContext* write_context) {
     }
   }
   if (status.ok()) {
-    AssignAtomicFlushSeq(flush_req_vec);
+    PrepareFlushReqVec(flush_req_vec);
     SchedulePendingFlush(flush_req_vec, flush_reason);
     MaybeScheduleFlushOrCompaction();
   }
@@ -1329,28 +1329,31 @@ Status DBImpl::ThrottleLowPriWritesIfNeeded(const WriteOptions& write_options,
 
 Status DBImpl::ScheduleFlushes(WriteContext* context) {
   mutex_.AssertHeld();
-  autovector<ColumnFamilyData*> cfds;
-  FlushRequestVec flush_req_vec;
+  autovector<ColumnFamilyData*> tmp_cfds;
   ColumnFamilyData* tmp_cfd;
   while ((tmp_cfd = flush_scheduler_.TakeNextColumnFamily()) != nullptr) {
-    cfds.push_back(tmp_cfd);
+    tmp_cfds.push_back(tmp_cfd);
   }
-  GenerateFlushRequest(&cfds, &flush_req_vec);
+  autovector<ColumnFamilyData*> cfds = tmp_cfds;
+  FlushRequestVec flush_req_vec;
+  ProcessAtomicFlushGroup(&cfds, &flush_req_vec);
   Status status;
   for (auto& cfd : cfds) {
     if (!cfd->mem()->IsEmpty()) {
       status = SwitchMemtable(cfd, context);
+      if (!status.ok()) {
+        break;
+      }
     }
+  }
+  for (auto& cfd : tmp_cfds) {
     if (cfd->Unref()) {
       delete cfd;
       cfd = nullptr;
     }
-    if (!status.ok()) {
-      break;
-    }
   }
   if (status.ok()) {
-    AssignAtomicFlushSeq(flush_req_vec);
+    PrepareFlushReqVec(flush_req_vec);
     SchedulePendingFlush(flush_req_vec, FlushReason::kWriteBufferFull);
     MaybeScheduleFlushOrCompaction();
   }

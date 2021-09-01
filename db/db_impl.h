@@ -1220,11 +1220,11 @@ class DBImpl : public DB {
   typedef autovector<FlushRequest> FlushRequestVec;
 
   // process atomic flush group
-  void GenerateFlushRequest(autovector<ColumnFamilyData*>* cfds,
-                            FlushRequestVec* req);
+  void ProcessAtomicFlushGroup(autovector<ColumnFamilyData*>* cfds,
+                               FlushRequestVec* req);
 
   // REQUIRES: mutex locked and in write thread.
-  void AssignAtomicFlushSeq(const FlushRequestVec& req);
+  void PrepareFlushReqVec(FlushRequestVec& req);
 
   void SchedulePendingFlush(const FlushRequestVec& req,
                             FlushReason flush_reason);

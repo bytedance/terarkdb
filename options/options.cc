@@ -38,7 +38,13 @@ namespace TERARKDB_NAMESPACE {
 
 class AtomicFlushGroupImpl : public AtomicFlushGroup {
  public:
-  AtomicFlushGroupImpl() {}
+  AtomicFlushGroupImpl() {
+    static std::atomic_size_t group_id_seed{0};
+    group_id = ++group_id_seed;
+  }
+
+ private:
+  size_t group_id;  //  diagnosis only
 };
 
 std::shared_ptr<AtomicFlushGroup> NewAtomicFlushGroup() {

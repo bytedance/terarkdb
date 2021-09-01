@@ -308,7 +308,6 @@ std::string get_value(size_t i) {
 void get_options(int argc, const char *argv[], TERARKDB_NAMESPACE::Options &options,
                  TERARKDB_NAMESPACE::BlockBasedTableOptions &bbto,
                  TERARKDB_NAMESPACE::TerarkZipTableOptions &tzto) {
-  options.atomic_flush = false;
   options.allow_mmap_reads = true;
   options.max_open_files = 8192;
   options.allow_fallocate = true;

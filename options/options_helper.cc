@@ -140,7 +140,6 @@ DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
   options.preserve_deletes = immutable_db_options.preserve_deletes;
   options.two_write_queues = immutable_db_options.two_write_queues;
   options.manual_wal_flush = immutable_db_options.manual_wal_flush;
-  options.atomic_flush = immutable_db_options.atomic_flush;
   options.avoid_unnecessary_blocking_io =
       immutable_db_options.avoid_unnecessary_blocking_io;
 
@@ -1776,10 +1775,6 @@ std::unordered_map<std::string, OptionTypeInfo>
         {"seq_per_batch",
          {0, OptionType::kBoolean, OptionVerificationType::kDeprecated, false,
           0}},
-        {"atomic_flush",
-         {offsetof(struct DBOptions, atomic_flush), OptionType::kBoolean,
-          OptionVerificationType::kNormal, false,
-          offsetof(struct ImmutableDBOptions, atomic_flush)}},
         {"avoid_unnecessary_blocking_io",
          {offsetof(struct DBOptions, avoid_unnecessary_blocking_io),
           OptionType::kBoolean, OptionVerificationType::kNormal, false,

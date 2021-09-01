@@ -227,9 +227,15 @@ Status DBImpl::FlushMemTableToOutputFile(
   if (flush_job.IsInstallTimeout()) {
     autovector<ColumnFamilyData*> cfds = {cfd};
     FlushRequestVec flush_req_vec;
-    GenerateFlushRequest(&cfds, &flush_req_vec);
-    AssignAtomicFlushSeq(flush_req_vec);
+    // Let's re-schedule this cfd for flush
+    WriteThread::Writer w;
+    write_thread_.EnterUnbatched(&w, &mutex_);
+    ProcessAtomicFlushGroup(&cfds, &flush_req_vec);
+    assert(cfds.size() == 1);
+    assert(flush_req_vec.size() == 1 && flush_req_vec.front().size() == 1);
+    PrepareFlushReqVec(flush_req_vec);
     SchedulePendingFlush(flush_req_vec, FlushReason::kInstallTimeout);
+    write_thread_.ExitUnbatched(&w);
   }
   return s;
 }
@@ -260,7 +266,7 @@ Status DBImpl::FlushMemTablesToOutputFiles(
   apply_callback.args =
       new CleanPendingOutputs{CaptureCurrentFileNumberInPendingOutputs(), this};
 
-  auto arg = bg_flush_args.front();
+  auto& arg = bg_flush_args.front();
   ColumnFamilyData* cfd = arg.cfd_;
   MutableCFOptions mutable_cf_options = *cfd->GetLatestMutableCFOptions();
   SuperVersionContext* superversion_context = arg.superversion_context_;
@@ -1346,24 +1352,18 @@ Status DBImpl::Flush(const FlushOptions& flush_options,
 Status DBImpl::Flush(const FlushOptions& flush_options,
                      const std::vector<ColumnFamilyHandle*>& column_families) {
   ROCKS_LOG_INFO(immutable_db_options_.info_log,
-                 "Manual atomic flush start.\n"
+                 "Manual flush start.\n"
                  "=====Column families:=====");
+  autovector<ColumnFamilyData*> cfds;
   for (auto cfh : column_families) {
     auto cfhi = static_cast<ColumnFamilyHandleImpl*>(cfh);
     ROCKS_LOG_INFO(immutable_db_options_.info_log, "%s",
                    cfhi->GetName().c_str());
+    cfds.emplace_back(cfhi->cfd());
   }
-  ROCKS_LOG_INFO(immutable_db_options_.info_log,
-                 "=====End of column families list=====");
-  autovector<ColumnFamilyData*> cfds;
-  std::for_each(column_families.begin(), column_families.end(),
-                [&cfds](ColumnFamilyHandle* elem) {
-                  auto cfh = static_cast<ColumnFamilyHandleImpl*>(elem);
-                  cfds.emplace_back(cfh->cfd());
-                });
   Status s = FlushMemTable(cfds, flush_options, FlushReason::kManualFlush);
   ROCKS_LOG_INFO(immutable_db_options_.info_log,
-                 "Manual atomic flush finished, status: %s\n",
+                 "Manual flush finished, status: %s\n",
                  "=====Column families:=====", s.ToString().c_str());
   for (auto cfh : column_families) {
     auto cfhi = static_cast<ColumnFamilyHandleImpl*>(cfh);
@@ -1507,8 +1507,8 @@ Status DBImpl::RunManualCompaction(
   return manual.status;
 }
 
-void DBImpl::GenerateFlushRequest(autovector<ColumnFamilyData*>* cfds,
-                                  FlushRequestVec* req_vec) {
+void DBImpl::ProcessAtomicFlushGroup(autovector<ColumnFamilyData*>* cfds,
+                                     FlushRequestVec* req_vec) {
   assert(cfds != nullptr);
   assert(req_vec != nullptr);
   assert(req_vec->size() == 0);
@@ -1516,9 +1516,7 @@ void DBImpl::GenerateFlushRequest(autovector<ColumnFamilyData*>* cfds,
 
   size_t cfd_count = 0;
   auto push_cfd = [&](ColumnFamilyData* cfd, FlushRequest* req) {
-    cfd->imm()->FlushRequested();
-    uint64_t max_memtable_id = cfd->imm()->GetLatestMemTableID();
-    req->emplace_back(cfd, max_memtable_id);
+    req->emplace_back(cfd, 0);
     ++cfd_count;
   };
 
@@ -1557,11 +1555,14 @@ void DBImpl::GenerateFlushRequest(autovector<ColumnFamilyData*>* cfds,
 }
 
 // Assign sequence number for atomic flush.
-void DBImpl::AssignAtomicFlushSeq(const FlushRequestVec& req_vec) {
+void DBImpl::PrepareFlushReqVec(FlushRequestVec& req_vec) {
   auto seq = versions_->LastSequence();
-  for (auto req : req_vec) {
-    if (req.size() > 1) {
-      for (auto pair : req) {
+  for (auto& req : req_vec) {
+    for (auto& pair : req) {
+      auto cfd = pair.first;
+      cfd->imm()->FlushRequested();
+      pair.second = cfd->imm()->GetLatestMemTableID();
+      if (req.size() > 1) {
         pair.first->imm()->AssignAtomicFlushSeq(seq);
       }
     }
@@ -1600,7 +1601,7 @@ Status DBImpl::FlushMemTable(
       write_thread_.EnterUnbatched(&w, &mutex_);
     }
 
-    GenerateFlushRequest(&cfds, &flush_req_vec);
+    ProcessAtomicFlushGroup(&cfds, &flush_req_vec);
     for (auto cfd : cfds) {
       if (!cfd->mem()->IsEmpty() || !cached_recoverable_state_empty_.load()) {
         s = SwitchMemtable(cfd, &context);
@@ -1609,7 +1610,6 @@ Status DBImpl::FlushMemTable(
         break;
       }
     }
-
     if (s.ok()) {
       bool need_flush = false;
       for (auto cfd : cfds) {
@@ -1620,11 +1620,11 @@ Status DBImpl::FlushMemTable(
         }
       }
       if (!need_flush) {
-        cfds.clear();
+        flush_req_vec.clear();
       }
     }
-    if (s.ok() && !cfds.empty()) {
-      AssignAtomicFlushSeq(flush_req_vec);
+    if (s.ok() && !flush_req_vec.empty()) {
+      PrepareFlushReqVec(flush_req_vec);
       SchedulePendingFlush(flush_req_vec, flush_reason);
       MaybeScheduleFlushOrCompaction();
     }
@@ -1634,7 +1634,7 @@ Status DBImpl::FlushMemTable(
     }
   }
 
-  if (s.ok() && flush_options.wait) {
+  if (s.ok() && !flush_req_vec.empty() && flush_options.wait) {
     cfds.clear();
     autovector<const uint64_t*> flush_memtable_ids;
     for (auto& flush_req : flush_req_vec) {

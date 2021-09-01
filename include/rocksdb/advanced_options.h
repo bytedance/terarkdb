@@ -563,6 +563,21 @@ struct AdvancedColumnFamilyOptions {
   std::shared_ptr<MemTableRepFactory> memtable_factory =
       std::shared_ptr<SkipListFactory>(new SkipListFactory);
 
+  // If set, RocksDB supports flushing multiple column families and committin
+  // their results atomically to MANIFEST.
+  //
+  // Note that it is not necessary to set atomic_flush_group if WAL is always
+  // enabled since WAL allows the database to be restored to the last persistent
+  // state in WAL.
+  //
+  // This option is useful when there are column families with writes NOT
+  // protected by WAL.
+  //
+  // For both manual flush and auto-triggered flush, RocksDB atomically flushes
+  // ALL column families which in same group.
+  //
+  // Currently, any WAL-enabled writes after atomic flush may be replayed
+  // independently if the process crashes later and tries to recover.
   std::shared_ptr<AtomicFlushGroup> atomic_flush_group;
 
   // Block-based table related options are moved to BlockBasedTableOptions.
