@@ -35,7 +35,7 @@ class ByteDanceHistReporterHandle : public HistReporterHandle {
 
  private:
   enum {
-      kMaxThreadNum = 8192,
+    kMaxThreadNum = 8192,
   };
 
   const std::string& name_;
