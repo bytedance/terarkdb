@@ -1,11 +1,19 @@
 #pragma once
 
+#include <inttypes.h>
+
 #include <chrono>
 #include <cstddef>
 #include <string>
 
 #include "rocksdb/env.h"
 #include "rocksdb/terark_namespace.h"
+#include "util/logging.h"
+#define REPORT_DEBUG_STACKTRACE 0
+
+#if REPORT_DEBUG_STACKTRACE
+#include <boost/stacktrace.hpp>
+#endif
 
 namespace TERARKDB_NAMESPACE {
 class HistReporterHandle {
@@ -35,7 +43,7 @@ class LatencyHistGuard {
 
  private:
   HistReporterHandle* handle_;
-  decltype(std::chrono::high_resolution_clock::now()) begin_time_;
+  std::chrono::high_resolution_clock::time_point begin_time_;
 };
 
 class LatencyHistLoggedGuard {
@@ -47,7 +55,12 @@ class LatencyHistLoggedGuard {
         begin_time_(std::chrono::high_resolution_clock::now()),
         log_threshold_us_(threshold),
         logger_(logger),
-        tag_(tag) {}
+        tag_(tag) {
+#if REPORT_DEBUG_STACKTRACE
+    auto stacktrace = new boost::stacktrace::stacktrace();
+    start_stacktrace_ = stacktrace;
+#endif
+  }
 
   ~LatencyHistLoggedGuard() {
     if (handle_ != nullptr) {
@@ -56,18 +69,31 @@ class LatencyHistLoggedGuard {
                     .count();
       handle_->AddRecord(us);
       if (us > log_threshold_us_) {
-        ROCKS_LOG_WARN(logger_, "[%s]: %" PRIu64 "", tag_,
-                       static_cast<uint64_t>(us));
+#if REPORT_DEBUG_STACKTRACE
+        auto stacktrace =
+            static_cast<boost::stacktrace::stacktrace*>(start_stacktrace_);
+        start_stacktrace_ = nullptr;
+        ROCKS_LOG_WARN(
+            logger_, "[%s]: %" PRIu64 "us\n%s----------\n%s-----------\n", tag_,
+            static_cast<uint64_t>(us),
+            boost::stacktrace::to_string(*stacktrace).c_str(),
+            boost::stacktrace::to_string(boost::stacktrace::stacktrace())
+                .c_str());
+        delete stacktrace;
+#endif
       }
     }
   }
 
  private:
   HistReporterHandle* handle_;
-  decltype(std::chrono::high_resolution_clock::now()) begin_time_;
-  Logger* logger_;
+  std::chrono::high_resolution_clock::time_point begin_time_;
   unsigned int log_threshold_us_;
+  Logger* logger_;
   const char* tag_;
+#if REPORT_DEBUG_STACKTRACE
+  void* start_stacktrace_ = nullptr;
+#endif
 };
 
 class CountReporterHandle {
