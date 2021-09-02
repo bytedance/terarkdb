@@ -38,6 +38,35 @@ class LatencyHistGuard {
   decltype(std::chrono::high_resolution_clock::now()) begin_time_;
 };
 
+class LatencyHistLoggedGuard {
+ public:
+  explicit LatencyHistLoggedGuard(HistReporterHandle* handle, Logger* logger , unsigned  int threshold, const char* tag = "LatencyHistLoggedGuard")
+      : handle_(handle),
+        begin_time_(std::chrono::high_resolution_clock::now()),
+        log_threshold_us_(threshold),
+        logger_(logger),
+        tag_(tag){}
+
+  ~LatencyHistLoggedGuard() {
+    if (handle_ != nullptr) {
+      auto us = std::chrono::duration_cast<std::chrono::microseconds>(
+          std::chrono::high_resolution_clock::now() - begin_time_)
+          .count();
+      handle_->AddRecord(us);
+      if(us > log_threshold_us_){
+        ROCKS_LOG_WARN(logger_, "[%s]: %" PRIu64"" ,tag_, static_cast<uint64_t>(us));
+      }
+    }
+  }
+
+ private:
+  HistReporterHandle* handle_;
+  decltype(std::chrono::high_resolution_clock::now()) begin_time_;
+  Logger* logger_;
+  unsigned int log_threshold_us_;
+  const char* tag_;
+};
+
 class CountReporterHandle {
  public:
   CountReporterHandle() = default;
