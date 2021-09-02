@@ -34,7 +34,6 @@ class ByteDanceHistReporterHandle : public HistReporterHandle {
   void AddRecord(size_t val) override;
 
  private:
-#ifdef TERARKDB_ENABLE_METRICS
   enum {
       kMaxThreadNum = 8192,
   };
@@ -49,7 +48,6 @@ class ByteDanceHistReporterHandle : public HistReporterHandle {
 
   std::atomic<bool> merge_lock_{false};
   HistStats<> stats_;
-#endif
 
   HistStats<>* GetThreadLocalStats();
 };
@@ -75,7 +73,6 @@ class ByteDanceCountReporterHandle : public CountReporterHandle {
   void AddCount(size_t val) override;
 
  private:
-#ifdef TERARKDB_ENABLE_METRICS
   std::atomic<bool> reporter_lock_{false};
 
   const std::string& name_;
@@ -90,7 +87,6 @@ class ByteDanceCountReporterHandle : public CountReporterHandle {
   char _padding_[64 /* x86 cache line size */ - 8 * 7];
 
   std::atomic<size_t> count_{0};
-#endif
 };
 
 class ByteDanceMetricsReporterFactory : public MetricsReporterFactory {
@@ -111,10 +107,8 @@ class ByteDanceMetricsReporterFactory : public MetricsReporterFactory {
                                                    Logger* log) override;
 
  private:
-#ifdef TERARKDB_ENABLE_METRICS
   std::list<ByteDanceHistReporterHandle> hist_reporters_;
   std::list<ByteDanceCountReporterHandle> count_reporters_;
-#endif
 
   void InitNamespace(const std::string& ns);
 };
