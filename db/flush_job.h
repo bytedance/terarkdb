@@ -77,7 +77,7 @@ class FlushJob {
   // Once PickMemTable() is called, either Run() or Cancel() has to be called.
   void PickMemTable();
   Status Run(LogsWithPrepTracker* prep_tracker = nullptr);
-  void Cancel();
+  void Cancel(const Status& s);
   const std::vector<FileMetaData>& GetFileMetas() const { return meta_; }
   const std::vector<TableProperties>& GetTableProperties() const {
     return table_properties_;

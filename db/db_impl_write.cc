@@ -1101,7 +1101,7 @@ Status DBImpl::SwitchWAL(WriteContext* write_context) {
     }
   }
   if (status.ok()) {
-    PrepareFlushReqVec(flush_req_vec);
+    PrepareFlushReqVec(flush_req_vec, true /* force_flush */);
     SchedulePendingFlush(flush_req_vec, FlushReason::kWriteBufferManager);
     MaybeScheduleFlushOrCompaction();
   }
@@ -1198,7 +1198,7 @@ Status DBImpl::HandleWriteBufferFull(WriteContext* write_context) {
     }
   }
   if (status.ok()) {
-    PrepareFlushReqVec(flush_req_vec);
+    PrepareFlushReqVec(flush_req_vec, true /* force_flush */);
     SchedulePendingFlush(flush_req_vec, flush_reason);
     MaybeScheduleFlushOrCompaction();
   }
@@ -1353,7 +1353,7 @@ Status DBImpl::ScheduleFlushes(WriteContext* context) {
     }
   }
   if (status.ok()) {
-    PrepareFlushReqVec(flush_req_vec);
+    PrepareFlushReqVec(flush_req_vec, false /* force_flush */);
     SchedulePendingFlush(flush_req_vec, FlushReason::kWriteBufferFull);
     MaybeScheduleFlushOrCompaction();
   }

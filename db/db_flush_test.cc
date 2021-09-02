@@ -448,7 +448,7 @@ TEST_P(DBAtomicFlushTest,
   SyncPoint::GetInstance()->DisableProcessing();
   SyncPoint::GetInstance()->ClearAllCallBacks();
   SyncPoint::GetInstance()->LoadDependency(
-      {{"DBImpl::AtomicFlushMemTables:AfterScheduleFlush",
+      {{"DBImpl::FlushMemTable:AfterScheduleFlush",
         "DBAtomicFlushTest::BeforeDropCF"},
        {"DBAtomicFlushTest::AfterDropCF",
         "DBImpl::BackgroundCallFlush:start"}});

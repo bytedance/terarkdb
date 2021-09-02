@@ -1224,7 +1224,7 @@ class DBImpl : public DB {
                                FlushRequestVec* req);
 
   // REQUIRES: mutex locked and in write thread.
-  void PrepareFlushReqVec(FlushRequestVec& req);
+  void PrepareFlushReqVec(FlushRequestVec& req, bool force_flush);
 
   void SchedulePendingFlush(const FlushRequestVec& req,
                             FlushReason flush_reason);

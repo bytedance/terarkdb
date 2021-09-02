@@ -292,8 +292,11 @@ Status FlushJob::Run(LogsWithPrepTracker* prep_tracker) {
   return s;
 }
 
-void FlushJob::Cancel() {
+void FlushJob::Cancel(const Status& s) {
   db_mutex_->AssertHeld();
+  for (auto mem : mems_) {
+    mem->GetEdits()->DoApplyCallback(s);
+  }
   assert(base_ != nullptr);
   base_->Unref();
 }

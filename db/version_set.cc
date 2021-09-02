@@ -3471,6 +3471,9 @@ Status VersionSet::LogAndApply(
     // TODO (yanqin) maybe use a different status code to denote column family
     // drop other than OK and ShutdownInProgress
     for (int i = 0; i != num_cfds; ++i) {
+      for (auto& edit : manifest_writers_.front()->edit_list) {
+        edit->DoApplyCallback(Status::ShutdownInProgress());
+      }
       manifest_writers_.pop_front();
     }
     // Notify new head of manifest write queue.
