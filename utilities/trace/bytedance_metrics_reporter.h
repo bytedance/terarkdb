@@ -33,6 +33,28 @@ class ByteDanceHistReporterHandle : public HistReporterHandle {
  public:
   void AddRecord(size_t val) override;
 
+  Logger* GetLogger() override {
+#ifdef TERARKDB_ENABLE_METRICS
+    return log_;
+#else
+    return nullptr;
+#endif
+  }
+  const char* GetTag() {
+#ifdef TERARKDB_ENABLE_METRICS
+    return tags_.c_str();
+#else
+    return "";
+#endif
+  }
+  const char* GetName() {
+#ifdef TERARKDB_ENABLE_METRICS
+    return name_.c_str();
+#else
+    return "";
+#endif
+  }
+
  private:
 #ifdef TERARKDB_ENABLE_METRICS
   enum {
