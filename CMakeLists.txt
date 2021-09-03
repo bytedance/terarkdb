@@ -995,6 +995,7 @@ if(WITH_TESTS)
         db/memtable_list_test.cc
         db/merge_helper_test.cc
         db/merge_test.cc
+        db/metrics_reporter_test.cc
         db/options_file_test.cc
         db/perf_context_test.cc
         db/periodic_work_scheduler_test.cc

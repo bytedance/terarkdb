@@ -16,8 +16,7 @@
 namespace TERARKDB_NAMESPACE {
 
 LatencyHistLoggedGuard::LatencyHistLoggedGuard(HistReporterHandle* handle,
-                                               unsigned int threshold_us = 500 *
-                                                                           1000)
+                                               unsigned int threshold_us)
     : handle_(handle),
       begin_time_(std::chrono::high_resolution_clock::now()),
       log_threshold_us_(threshold_us) {
@@ -33,7 +32,7 @@ LatencyHistLoggedGuard::~LatencyHistLoggedGuard() {
                   std::chrono::high_resolution_clock::now() - begin_time_)
                   .count();
     handle_->AddRecord(us);
-    if (us > log_threshold_us_ && handle_->GetLogger() != nullptr) {
+    if (us >= log_threshold_us_ && handle_->GetLogger() != nullptr) {
 #if REPORT_DEBUG_STACKTRACE
       auto stacktrace =
           static_cast<boost::stacktrace::stacktrace*>(start_stacktrace_);

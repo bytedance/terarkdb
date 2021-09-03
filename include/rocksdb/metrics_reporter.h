@@ -48,7 +48,7 @@ class LatencyHistGuard {
 class LatencyHistLoggedGuard {
  public:
   explicit LatencyHistLoggedGuard(HistReporterHandle* handle,
-                                  unsigned int threshold_us);
+                                  unsigned int threshold_us = 500 * 1000);
   ~LatencyHistLoggedGuard();
 
  private:
