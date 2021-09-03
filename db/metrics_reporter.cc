@@ -33,27 +33,30 @@ LatencyHistLoggedGuard::~LatencyHistLoggedGuard() {
                   std::chrono::high_resolution_clock::now() - begin_time_)
                   .count();
     handle_->AddRecord(us);
-    if (us > log_threshold_us_) {
-      if (handle_->GetLogger() != nullptr) {
+    if (us > log_threshold_us_ && handle_->GetLogger() != nullptr) {
 #if REPORT_DEBUG_STACKTRACE
-        auto stacktrace =
-            static_cast<boost::stacktrace::stacktrace*>(start_stacktrace_);
-        start_stacktrace_ = nullptr;
-        ROCKS_LOG_WARN(
-            handle_->GetLogger(),
-            "[name:%s] [tags:%s]: %" PRIu64 "us\n%s----------\n%s-----------\n",
-            handle_->GetName(), handle_->GetTag(), static_cast<uint64_t>(us),
-            boost::stacktrace::to_string(*stacktrace).c_str(),
-            boost::stacktrace::to_string(boost::stacktrace::stacktrace())
-                .c_str());
-        delete stacktrace;
+      auto stacktrace =
+          static_cast<boost::stacktrace::stacktrace*>(start_stacktrace_);
+      ROCKS_LOG_WARN(
+          handle_->GetLogger(),
+          "[name:%s] [tags:%s]: %" PRIu64 "us\n%s----------\n%s-----------\n",
+          handle_->GetName(), handle_->GetTag(), static_cast<uint64_t>(us),
+          boost::stacktrace::to_string(*stacktrace).c_str(),
+          boost::stacktrace::to_string(boost::stacktrace::stacktrace())
+              .c_str());
 #else
-        ROCKS_LOG_WARN(handle_->GetLogger(), "[%s]: %" PRIu64 "us\n",
-                       handle_->GetTag(), static_cast<uint64_t>(us));
+      ROCKS_LOG_WARN(handle_->GetLogger(),
+                     "[name:%s] [tags:%s]: %" PRIu64 "us\n", handle_->GetName(),
+                     handle_->GetTag(), static_cast<uint64_t>(us));
 #endif
-      }
     }
   }
+#if REPORT_DEBUG_STACKTRACE
+  auto stacktrace =
+      static_cast<boost::stacktrace::stacktrace*>(start_stacktrace_);
+  start_stacktrace_ = nullptr;
+  delete stacktrace;
+#endif
 }
 
 }  // namespace TERARKDB_NAMESPACE
