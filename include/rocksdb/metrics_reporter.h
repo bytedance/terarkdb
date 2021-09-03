@@ -91,9 +91,7 @@ class LatencyHistLoggedGuard {
   unsigned int log_threshold_us_;
   Logger* logger_;
   const char* tag_;
-#if REPORT_DEBUG_STACKTRACE
   void* start_stacktrace_ = nullptr;
-#endif
 };
 
 class CountReporterHandle {
