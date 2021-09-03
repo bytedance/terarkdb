@@ -377,6 +377,7 @@ class VersionEdit {
     for (auto& apply_callback : apply_callback_vec_) {
       apply_callback(s);
     }
+    apply_callback_vec_.clear();
   }
 
   void MarkAtomicGroup(uint32_t remaining_entries) {

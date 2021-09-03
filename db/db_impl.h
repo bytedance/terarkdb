@@ -1128,16 +1128,10 @@ class DBImpl : public DB {
 
   Status SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context);
 
-  void SelectColumnFamiliesForAtomicFlush(autovector<ColumnFamilyData*>* cfds);
-
   // Force current memtable contents to be flushed.
-  Status FlushMemTable(ColumnFamilyData* cfd, const FlushOptions& options,
-                       FlushReason flush_reason, bool writes_stopped = false);
-
-  Status AtomicFlushMemTables(
-      const autovector<ColumnFamilyData*>& column_family_datas,
-      const FlushOptions& options, FlushReason flush_reason,
-      bool writes_stopped = false);
+  Status FlushMemTable(const autovector<ColumnFamilyData*>& column_family_datas,
+                       const FlushOptions& options, FlushReason flush_reason,
+                       bool writes_stopped = false);
 
   // Wait until flushing this column family won't stall writes
   Status WaitUntilFlushWouldNotStallWrites(ColumnFamilyData* cfd,
@@ -1160,9 +1154,6 @@ class DBImpl : public DB {
       const autovector<ColumnFamilyData*>& cfds,
       const autovector<const uint64_t*>& flush_memtable_ids,
       bool resuming_from_bg_err);
-
-  // REQUIRES: mutex locked and in write thread.
-  void AssignAtomicFlushSeq(const autovector<ColumnFamilyData*>& cfds);
 
   // REQUIRES: mutex locked
   Status SwitchWAL(WriteContext* write_context);
@@ -1225,12 +1216,18 @@ class DBImpl : public DB {
   // specified value, this flush request is considered to have completed its
   // work of flushing this column family. After completing the work for all
   // column families in this request, this flush is considered complete.
-  typedef std::vector<std::pair<ColumnFamilyData*, uint64_t>> FlushRequest;
+  typedef autovector<std::pair<ColumnFamilyData*, uint64_t>> FlushRequest;
+  typedef autovector<FlushRequest> FlushRequestVec;
 
-  void GenerateFlushRequest(const autovector<ColumnFamilyData*>& cfds,
-                            FlushRequest* req);
+  // process atomic flush group
+  void ProcessAtomicFlushGroup(autovector<ColumnFamilyData*>* cfds,
+                               FlushRequestVec* req);
 
-  void SchedulePendingFlush(const FlushRequest& req, FlushReason flush_reason);
+  // REQUIRES: mutex locked and in write thread.
+  void PrepareFlushReqVec(FlushRequestVec& req, bool force_flush);
+
+  void SchedulePendingFlush(const FlushRequestVec& req,
+                            FlushReason flush_reason);
   void SchedulePendingCompaction(ColumnFamilyData* cfd);
   void SchedulePendingGarbageCollection(ColumnFamilyData* cfd);
   void SchedulePendingPurge(const std::string& fname,

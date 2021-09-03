@@ -490,6 +490,8 @@ TEST_F(VersionBuilderTest, HugeLSM) {
   version_builder.Apply(&version_edit);
 
   version_builder.SaveTo(&new_vstorage);
+
+  UnrefFilesInVersion(&new_vstorage);
 }
 
 }  // namespace TERARKDB_NAMESPACE

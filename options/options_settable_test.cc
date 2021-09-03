@@ -305,7 +305,6 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
                              "two_write_queues=false;"
                              "manual_wal_flush=false;"
                              "seq_per_batch=false;"
-                             "atomic_flush=false;"
                              "avoid_unnecessary_blocking_io=false",
                              new_options));
 
@@ -350,6 +349,8 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
        sizeof(std::vector<int>)},
       {offset_of(&ColumnFamilyOptions::memtable_factory),
        sizeof(std::shared_ptr<MemTableRepFactory>)},
+      {offset_of(&ColumnFamilyOptions::atomic_flush_group),
+       sizeof(std::shared_ptr<AtomicFlushGroup>)},
       {offset_of(&ColumnFamilyOptions::table_properties_collector_factories),
        sizeof(ColumnFamilyOptions::TablePropertiesCollectorFactories)},
       {offset_of(&ColumnFamilyOptions::comparator), sizeof(Comparator*)},

@@ -2448,7 +2448,9 @@ class StressTest {
           FLAGS_universal_max_merge_width;
       options_.compaction_options_universal.max_size_amplification_percent =
           FLAGS_universal_max_size_amplification_percent;
-      options_.atomic_flush = FLAGS_atomic_flush;
+      if (FLAGS_atomic_flush) {
+        options_.atomic_flush_group = NewAtomicFlushGroup();
+      }
     } else {
 #ifdef ROCKSDB_LITE
       fprintf(stderr, "--options_file not supported in lite mode\n");

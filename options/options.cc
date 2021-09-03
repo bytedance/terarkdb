@@ -36,6 +36,21 @@
 
 namespace TERARKDB_NAMESPACE {
 
+class AtomicFlushGroupImpl : public AtomicFlushGroup {
+ public:
+  AtomicFlushGroupImpl() {
+    static std::atomic_size_t group_id_seed{0};
+    group_id = ++group_id_seed;
+  }
+
+ private:
+  size_t group_id;  //  diagnosis only
+};
+
+std::shared_ptr<AtomicFlushGroup> NewAtomicFlushGroup() {
+  return std::shared_ptr<AtomicFlushGroup>(new AtomicFlushGroupImpl());
+}
+
 AdvancedColumnFamilyOptions::AdvancedColumnFamilyOptions() {
   assert(memtable_factory.get() != nullptr);
 }
@@ -134,6 +149,8 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
       compaction_dispatcher ? compaction_dispatcher->Name() : "None");
   ROCKS_LOG_HEADER(log, "        Options.memtable_factory: %s",
                    memtable_factory->Name());
+  ROCKS_LOG_HEADER(log, "      Options.atomic_flush_group: %012X",
+                   atomic_flush_group.get());
   ROCKS_LOG_HEADER(log, "           Options.table_factory: %s",
                    table_factory->Name());
   ROCKS_LOG_HEADER(log, "           table_factory options: %s",

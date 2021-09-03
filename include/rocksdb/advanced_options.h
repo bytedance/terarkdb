@@ -159,6 +159,11 @@ enum UpdateStatus {     // Return status For inplace update callback
   UPDATED = 2,          // No inplace update. Merged value set
 };
 
+class AtomicFlushGroup {
+ public:
+  virtual ~AtomicFlushGroup(){};
+};
+
 struct AdvancedColumnFamilyOptions {
   // The maximum number of write buffers that are built up in memory.
   // The default and the minimum number is 2, so that when 1 write buffer
@@ -558,6 +563,23 @@ struct AdvancedColumnFamilyOptions {
   std::shared_ptr<MemTableRepFactory> memtable_factory =
       std::shared_ptr<SkipListFactory>(new SkipListFactory);
 
+  // If set, RocksDB supports flushing multiple column families and committin
+  // their results atomically to MANIFEST.
+  //
+  // Note that it is not necessary to set atomic_flush_group if WAL is always
+  // enabled since WAL allows the database to be restored to the last persistent
+  // state in WAL.
+  //
+  // This option is useful when there are column families with writes NOT
+  // protected by WAL.
+  //
+  // For both manual flush and auto-triggered flush, RocksDB atomically flushes
+  // ALL column families which in same group.
+  //
+  // Currently, any WAL-enabled writes after atomic flush may be replayed
+  // independently if the process crashes later and tries to recover.
+  std::shared_ptr<AtomicFlushGroup> atomic_flush_group;
+
   // Block-based table related options are moved to BlockBasedTableOptions.
   // Related options that were originally here but now moved include:
   //   no_block_cache
@@ -663,5 +685,7 @@ struct AdvancedColumnFamilyOptions {
   // Does not have any effect.
   bool purge_redundant_kvs_while_flush = true;
 };
+
+extern std::shared_ptr<AtomicFlushGroup> NewAtomicFlushGroup();
 
 }  // namespace TERARKDB_NAMESPACE

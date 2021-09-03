@@ -62,7 +62,6 @@ class ChaosTest {
   }
 
   void set_options() {
-    options.atomic_flush = false;
     options.allow_mmap_reads = false;
     options.max_open_files = 8192;
     options.allow_fallocate = true;

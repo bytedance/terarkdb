@@ -291,7 +291,7 @@ TEST_F(DBFlushTest, ManualFlushFailsInReadOnlyMode) {
 TEST_P(DBAtomicFlushTest, ManualAtomicFlush) {
   Options options = CurrentOptions();
   options.create_if_missing = true;
-  options.atomic_flush = GetParam();
+  options.atomic_flush_group = NewAtomicFlushGroup();
   options.write_buffer_size = (static_cast<size_t>(64) << 20);
 
   CreateAndReopenWithCF({"pikachu", "eevee"}, options);
@@ -317,7 +317,7 @@ TEST_P(DBAtomicFlushTest, ManualAtomicFlush) {
 TEST_P(DBAtomicFlushTest, AtomicFlushTriggeredByMemTableFull) {
   Options options = CurrentOptions();
   options.create_if_missing = true;
-  options.atomic_flush = GetParam();
+  options.atomic_flush_group = NewAtomicFlushGroup();
   // 4KB so that we can easily trigger auto flush.
   options.write_buffer_size = 4096;
 
@@ -343,7 +343,7 @@ TEST_P(DBAtomicFlushTest, AtomicFlushTriggeredByMemTableFull) {
 
   TEST_SYNC_POINT(
       "DBAtomicFlushTest::AtomicFlushTriggeredByMemTableFull:BeforeCheck");
-  if (options.atomic_flush) {
+  if (options.atomic_flush_group != nullptr) {
     for (size_t i = 0; i != num_cfs - 1; ++i) {
       auto cfh = static_cast<ColumnFamilyHandleImpl*>(handles_[i]);
       ASSERT_EQ(0, cfh->cfd()->imm()->NumNotFlushed());
@@ -368,7 +368,7 @@ TEST_P(DBAtomicFlushTest, AtomicFlushRollbackSomeJobs) {
       new FaultInjectionTestEnv(env_));
   Options options = CurrentOptions();
   options.create_if_missing = true;
-  options.atomic_flush = atomic_flush;
+  options.atomic_flush_group = NewAtomicFlushGroup();
   options.env = fault_injection_env.get();
   SyncPoint::GetInstance()->DisableProcessing();
   SyncPoint::GetInstance()->LoadDependency(
@@ -412,7 +412,7 @@ TEST_P(DBAtomicFlushTest, FlushMultipleCFs_DropSomeBeforeRequestFlush) {
   }
   Options options = CurrentOptions();
   options.create_if_missing = true;
-  options.atomic_flush = atomic_flush;
+  options.atomic_flush_group = NewAtomicFlushGroup();
   SyncPoint::GetInstance()->DisableProcessing();
   SyncPoint::GetInstance()->ClearAllCallBacks();
   SyncPoint::GetInstance()->EnableProcessing();
@@ -441,14 +441,14 @@ TEST_P(DBAtomicFlushTest,
   }
   Options options = CurrentOptions();
   options.create_if_missing = true;
-  options.atomic_flush = atomic_flush;
+  options.atomic_flush_group = NewAtomicFlushGroup();
 
   CreateAndReopenWithCF({"pikachu", "eevee"}, options);
 
   SyncPoint::GetInstance()->DisableProcessing();
   SyncPoint::GetInstance()->ClearAllCallBacks();
   SyncPoint::GetInstance()->LoadDependency(
-      {{"DBImpl::AtomicFlushMemTables:AfterScheduleFlush",
+      {{"DBImpl::FlushMemTable:AfterScheduleFlush",
         "DBAtomicFlushTest::BeforeDropCF"},
        {"DBAtomicFlushTest::AfterDropCF",
         "DBImpl::BackgroundCallFlush:start"}});

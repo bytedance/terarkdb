@@ -141,6 +141,7 @@ TEST_F(TerarkZipTableBuilderTest, FunctionTest) {
               props->user_collected_properties.end());
   // ASSERT_EQ(std::numeric_limits<uint64_t>::max(),
   // props->scan_gap_expire_time);
+  options.info_log.reset();
   delete options.env;
 }
 
@@ -268,6 +269,7 @@ TEST_P(TerarkZipTableBuilderTest, BoundaryTest) {
              [](const int& val) -> void { std::cout << val << "-"; });
     std::cout << std::endl;
   }
+  options.info_log.reset();
   delete options.env;
 }
 }  // namespace TERARKDB_NAMESPACE

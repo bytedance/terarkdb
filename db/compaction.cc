@@ -202,12 +202,12 @@ void ProcessFileMetaData(const char* job_info, FileMetaData* meta,
     GetCompactionTimePoint(tp->user_collected_properties,
                            &meta->prop.earliest_time_begin_compact,
                            &meta->prop.latest_time_end_compact);
+    ROCKS_LOG_INFO(iopt->info_log,
+                   "%s earliest_time_begin_compact = %" PRIu64
+                   ", latest_time_end_compact = %" PRIu64,
+                   job_info, meta->prop.earliest_time_begin_compact,
+                   meta->prop.latest_time_end_compact);
   }
-  ROCKS_LOG_INFO(iopt->info_log,
-                 "%s earliest_time_begin_compact = %" PRIu64
-                 ", latest_time_end_compact = %" PRIu64,
-                 job_info, meta->prop.earliest_time_begin_compact,
-                 meta->prop.latest_time_end_compact);
 }
 
 void Compaction::SetInputVersion(Version* _input_version) {

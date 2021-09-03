@@ -1028,28 +1028,6 @@ Status DBImpl::WriteRecoverableState() {
   return Status::OK();
 }
 
-void DBImpl::SelectColumnFamiliesForAtomicFlush(
-    autovector<ColumnFamilyData*>* cfds) {
-  for (ColumnFamilyData* cfd : *versions_->GetColumnFamilySet()) {
-    if (cfd->IsDropped()) {
-      continue;
-    }
-    if (cfd->imm()->NumNotFlushed() != 0 || !cfd->mem()->IsEmpty() ||
-        !cached_recoverable_state_empty_.load()) {
-      cfds->push_back(cfd);
-    }
-  }
-}
-
-// Assign sequence number for atomic flush.
-void DBImpl::AssignAtomicFlushSeq(const autovector<ColumnFamilyData*>& cfds) {
-  assert(immutable_db_options_.atomic_flush);
-  auto seq = versions_->LastSequence();
-  for (auto cfd : cfds) {
-    cfd->imm()->AssignAtomicFlushSeq(seq);
-  }
-}
-
 Status DBImpl::SwitchWAL(WriteContext* write_context) {
   mutex_.AssertHeld();
   assert(write_context != nullptr);
@@ -1095,18 +1073,16 @@ Status DBImpl::SwitchWAL(WriteContext* write_context) {
   // no need to refcount because drop is happening in write thread, so can't
   // happen while we're in the write thread
   autovector<ColumnFamilyData*> cfds;
-  if (immutable_db_options_.atomic_flush) {
-    SelectColumnFamiliesForAtomicFlush(&cfds);
-  } else {
-    for (auto cfd : *versions_->GetColumnFamilySet()) {
-      if (cfd->IsDropped()) {
-        continue;
-      }
-      if (cfd->OldestLogToKeep() <= oldest_alive_log) {
-        cfds.push_back(cfd);
-      }
+  for (auto cfd : *versions_->GetColumnFamilySet()) {
+    if (cfd->IsDropped()) {
+      continue;
+    }
+    if (cfd->OldestLogToKeep() <= oldest_alive_log) {
+      cfds.push_back(cfd);
     }
   }
+  FlushRequestVec flush_req_vec;
+  ProcessAtomicFlushGroup(&cfds, &flush_req_vec);
   uint64_t total_log_size = total_log_size_.load();
   uint64_t max_total_wal_size = GetMaxTotalWalSize();
   for (const auto cfd : cfds) {
@@ -1125,15 +1101,8 @@ Status DBImpl::SwitchWAL(WriteContext* write_context) {
     }
   }
   if (status.ok()) {
-    if (immutable_db_options_.atomic_flush) {
-      AssignAtomicFlushSeq(cfds);
-    }
-    for (auto cfd : cfds) {
-      cfd->imm()->FlushRequested();
-    }
-    FlushRequest flush_req;
-    GenerateFlushRequest(cfds, &flush_req);
-    SchedulePendingFlush(flush_req, FlushReason::kWriteBufferManager);
+    PrepareFlushReqVec(flush_req_vec, true /* force_flush */);
+    SchedulePendingFlush(flush_req_vec, FlushReason::kWriteBufferManager);
     MaybeScheduleFlushOrCompaction();
   }
   return status;
@@ -1162,40 +1131,38 @@ Status DBImpl::HandleWriteBufferFull(WriteContext* write_context) {
   // no need to refcount because drop is happening in write thread, so can't
   // happen while we're in the write thread
   autovector<ColumnFamilyData*> cfds;
-  if (immutable_db_options_.atomic_flush) {
-    SelectColumnFamiliesForAtomicFlush(&cfds);
-  } else {
-    ColumnFamilyData* cfd_picked = nullptr;
-    SequenceNumber seq_num_for_cf_picked = kMaxSequenceNumber;
-    size_t largest_cfd_size = 0;
+  FlushRequestVec flush_req_vec;
+  ColumnFamilyData* cfd_picked = nullptr;
+  SequenceNumber seq_num_for_cf_picked = kMaxSequenceNumber;
+  size_t largest_cfd_size = 0;
 
-    for (auto cfd : *versions_->GetColumnFamilySet()) {
-      if (cfd->IsDropped()) {
-        continue;
-      }
-      if (!cfd->mem()->IsEmpty()) {
-        // We only consider active mem table, hoping immutable memtable is
-        // already in the process of flushing.
-        if (flush_pri == kFlushOldest) {
-          uint64_t seq = cfd->mem()->GetCreationSeq();
-          if (cfd_picked == nullptr || seq < seq_num_for_cf_picked) {
-            cfd_picked = cfd;
-            seq_num_for_cf_picked = seq;
-          }
-        } else if (!cfd->queued_for_flush()) {
-          assert(flush_pri == kFlushLargest);
-          size_t cfd_size = cfd->mem()->ApproximateMemoryUsage();
-          if (cfd_picked == nullptr || cfd_size > largest_cfd_size) {
-            cfd_picked = cfd;
-            largest_cfd_size = cfd_size;
-          }
+  for (auto cfd : *versions_->GetColumnFamilySet()) {
+    if (cfd->IsDropped()) {
+      continue;
+    }
+    if (!cfd->mem()->IsEmpty()) {
+      // We only consider active mem table, hoping immutable memtable is already
+      // in the process of flushing.
+      if (flush_pri == kFlushOldest) {
+        uint64_t seq = cfd->mem()->GetCreationSeq();
+        if (cfd_picked == nullptr || seq < seq_num_for_cf_picked) {
+          cfd_picked = cfd;
+          seq_num_for_cf_picked = seq;
+        }
+      } else if (!cfd->queued_for_flush()) {
+        assert(flush_pri == kFlushLargest);
+        size_t cfd_size = cfd->mem()->ApproximateMemoryUsage();
+        if (cfd_picked == nullptr || cfd_size > largest_cfd_size) {
+          cfd_picked = cfd;
+          largest_cfd_size = cfd_size;
         }
       }
     }
-    if (cfd_picked != nullptr) {
-      cfds.push_back(cfd_picked);
-    }
   }
+  if (cfd_picked != nullptr) {
+    cfds.push_back(cfd_picked);
+  }
+  ProcessAtomicFlushGroup(&cfds, &flush_req_vec);
   if (flush_reason == FlushReason::kWriteBufferManager) {
     for (auto cfd : cfds) {
       ROCKS_LOG_BUFFER(
@@ -1231,15 +1198,8 @@ Status DBImpl::HandleWriteBufferFull(WriteContext* write_context) {
     }
   }
   if (status.ok()) {
-    if (immutable_db_options_.atomic_flush) {
-      AssignAtomicFlushSeq(cfds);
-    }
-    for (const auto cfd : cfds) {
-      cfd->imm()->FlushRequested();
-    }
-    FlushRequest flush_req;
-    GenerateFlushRequest(cfds, &flush_req);
-    SchedulePendingFlush(flush_req, flush_reason);
+    PrepareFlushReqVec(flush_req_vec, true /* force_flush */);
+    SchedulePendingFlush(flush_req_vec, flush_reason);
     MaybeScheduleFlushOrCompaction();
   }
   return status;
@@ -1368,39 +1328,33 @@ Status DBImpl::ThrottleLowPriWritesIfNeeded(const WriteOptions& write_options,
 }
 
 Status DBImpl::ScheduleFlushes(WriteContext* context) {
-  autovector<ColumnFamilyData*> cfds;
-  if (immutable_db_options_.atomic_flush) {
-    SelectColumnFamiliesForAtomicFlush(&cfds);
-    for (auto cfd : cfds) {
-      cfd->Ref();
-    }
-    flush_scheduler_.Clear();
-  } else {
-    ColumnFamilyData* tmp_cfd;
-    while ((tmp_cfd = flush_scheduler_.TakeNextColumnFamily()) != nullptr) {
-      cfds.push_back(tmp_cfd);
-    }
+  mutex_.AssertHeld();
+  autovector<ColumnFamilyData*> tmp_cfds;
+  ColumnFamilyData* tmp_cfd;
+  while ((tmp_cfd = flush_scheduler_.TakeNextColumnFamily()) != nullptr) {
+    tmp_cfds.push_back(tmp_cfd);
   }
+  autovector<ColumnFamilyData*> cfds = tmp_cfds;
+  FlushRequestVec flush_req_vec;
+  ProcessAtomicFlushGroup(&cfds, &flush_req_vec);
   Status status;
   for (auto& cfd : cfds) {
     if (!cfd->mem()->IsEmpty()) {
       status = SwitchMemtable(cfd, context);
+      if (!status.ok()) {
+        break;
+      }
     }
+  }
+  for (auto& cfd : tmp_cfds) {
     if (cfd->Unref()) {
       delete cfd;
       cfd = nullptr;
     }
-    if (!status.ok()) {
-      break;
-    }
   }
   if (status.ok()) {
-    if (immutable_db_options_.atomic_flush) {
-      AssignAtomicFlushSeq(cfds);
-    }
-    FlushRequest flush_req;
-    GenerateFlushRequest(cfds, &flush_req);
-    SchedulePendingFlush(flush_req, FlushReason::kWriteBufferFull);
+    PrepareFlushReqVec(flush_req_vec, false /* force_flush */);
+    SchedulePendingFlush(flush_req_vec, FlushReason::kWriteBufferFull);
     MaybeScheduleFlushOrCompaction();
   }
   return status;
