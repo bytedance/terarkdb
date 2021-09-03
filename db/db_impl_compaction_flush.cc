@@ -244,7 +244,7 @@ Status DBImpl::FlushMemTablesToOutputFiles(
     const autovector<BGFlushArg>& bg_flush_args, bool* made_progress,
     JobContext* job_context, LogBuffer* log_buffer) {
   assert(!bg_flush_args.empty());
-  if (bg_flush_args.size() > 1) {
+  if (bg_flush_args.front().cfd_->ioptions()->atomic_flush_group != nullptr) {
     auto pending_outputs_inserted_elem =
         CaptureCurrentFileNumberInPendingOutputs();
     auto s = AtomicFlushMemTablesToOutputFiles(bg_flush_args, made_progress,
@@ -294,6 +294,12 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
   for (const auto& arg : bg_flush_args) {
     cfds.emplace_back(arg.cfd_);
   }
+
+#ifndef NDEBUG
+  for (const auto cfd : cfds) {
+    assert(cfd->imm()->NumNotFlushed() != 0);
+  }
+#endif /* !NDEBUG */
 
   SequenceNumber earliest_write_conflict_snapshot;
   std::vector<SequenceNumber> snapshot_seqs =
@@ -350,9 +356,6 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
 
 #ifndef ROCKSDB_LITE
   for (int i = 0; i != num_cfs; ++i) {
-    if (jobs[i].GetMemTables().empty()) {
-      continue;
-    }
     const MutableCFOptions& mutable_cf_options = all_mutable_cf_options.at(i);
     // may temporarily unlock and lock the mutex.
     NotifyOnFlushBegin(cfds[i], mutable_cf_options, job_context->job_id);
@@ -480,7 +483,7 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
     assert(num_cfs ==
            static_cast<int>(job_context->superversion_contexts.size()));
     for (int i = 0; i != num_cfs; ++i) {
-      if (cfds[i]->IsDropped() || jobs[i].GetMemTables().empty()) {
+      if (cfds[i]->IsDropped()) {
         continue;
       }
       InstallSuperVersionAndScheduleWork(cfds[i],
@@ -498,7 +501,7 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
     auto sfm = static_cast<SstFileManagerImpl*>(
         immutable_db_options_.sst_file_manager.get());
     for (int i = 0; i != num_cfs; ++i) {
-      if (cfds[i]->IsDropped() || jobs[i].GetMemTables().empty()) {
+      if (cfds[i]->IsDropped()) {
         continue;
       }
       NotifyOnFlushCompleted(cfds[i], jobs[i].GetFileMetas(),
@@ -1560,7 +1563,7 @@ void DBImpl::PrepareFlushReqVec(FlushRequestVec& req_vec, bool force_flush) {
         cfd->imm()->FlushRequested();
       }
       pair.second = cfd->imm()->GetLatestMemTableID();
-      if (req.size() > 1) {
+      if (pair.first->ioptions()->atomic_flush_group != nullptr) {
         pair.first->imm()->AssignAtomicFlushSeq(seq);
       }
     }
@@ -2149,7 +2152,7 @@ Status DBImpl::BackgroundFlush(bool* made_progress, JobContext* job_context,
     if (has_pending) {
       for (auto& pair : flush_req) {
         ColumnFamilyData* cfd = pair.first;
-        if (cfd->IsDropped()) {
+        if (cfd->IsDropped() || cfd->imm()->NumNotFlushed() == 0) {
           unref_cfd(cfd);
         } else {
           superversion_contexts.emplace_back(SuperVersionContext(true));
