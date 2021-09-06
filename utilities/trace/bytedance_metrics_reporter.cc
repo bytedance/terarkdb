@@ -202,7 +202,7 @@ ByteDanceHistReporterHandle* ByteDanceMetricsReporterFactory::BuildHistReporter(
 #else
 ByteDanceHistReporterHandle* ByteDanceMetricsReporterFactory::BuildHistReporter(
     const std::string& /*name*/, const std::string& /*tags*/, Logger* /*log*/,
-    Env* const env) {
+    Env* const /*env*/) {
   return &dummy_hist_;
 }
 #endif
@@ -222,7 +222,7 @@ ByteDanceCountReporterHandle*
 ByteDanceMetricsReporterFactory::BuildCountReporter(const std::string& /*name*/,
                                                     const std::string& /*tags*/,
                                                     Logger* /*log*/,
-                                                    Env* const env) {
+                                                    Env* const /*env*/) {
   return &dummy_count_;
 }
 #endif

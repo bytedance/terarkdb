@@ -13,7 +13,7 @@ namespace TERARKDB_NAMESPACE {
 template <size_t MAX_LATENCY_US_FAST = 10 * 1000>  // 10ms
 class HistStats {
  public:
-  HistStats(uint64_t last_report_time_ns)
+  explicit HistStats(uint64_t last_report_time_ns)
       : last_report_time_ns_(last_report_time_ns) {}
 
   void AppendRecord(size_t us) {

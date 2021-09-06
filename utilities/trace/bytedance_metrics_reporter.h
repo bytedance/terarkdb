@@ -21,7 +21,7 @@ class ByteDanceHistReporterHandle : public HistReporterHandle {
 #else
   ByteDanceHistReporterHandle(const std::string& /*name*/,
                               const std::string& /*tags*/, Logger* /*log*/,
-                              Env* const env) {}
+                              Env* const /*env*/) {}
 #endif
 
   ~ByteDanceHistReporterHandle() override {
@@ -86,14 +86,14 @@ class ByteDanceCountReporterHandle : public CountReporterHandle {
                                Logger* log, Env* const env)
       : name_(name),
         tags_(tags),
-        env_(env == nullptr ? Env::Default() : env),
+        env_(env),
         last_report_time_ns_(env_->NowNanos()),
         last_log_time_ns_(env_->NowNanos()),
         log_(log) {}
 #else
   ByteDanceCountReporterHandle(const std::string& /*name*/,
                                const std::string& /*tags*/, Logger* /*log*/,
-                               Env* const) {}
+                               Env* const /*env*/) {}
 #endif
 
   ~ByteDanceCountReporterHandle() override = default;
