@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <string>
 
+#include "rocksdb/env.h"
 #include "util/logging.h"
 
 #define REPORT_DEBUG_STACKTRACE 1
@@ -14,6 +15,16 @@
 
 #include <iostream>
 namespace TERARKDB_NAMESPACE {
+
+LatencyHistGuard::LatencyHistGuard(HistReporterHandle* handle)
+    : handle_(handle), begin_time_ns_(handle_->GetEnv()->NowNanos()) {
+  assert(handle_ != nullptr);
+}
+
+LatencyHistGuard::~LatencyHistGuard() {
+  auto us = (handle_->GetEnv()->NowNanos() - begin_time_ns_) / 1000;
+  handle_->AddRecord(us);
+}
 
 LatencyHistLoggedGuard::LatencyHistLoggedGuard(HistReporterHandle* handle,
                                                uint64_t threshold_us)

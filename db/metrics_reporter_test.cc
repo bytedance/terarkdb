@@ -9,6 +9,7 @@
 #include "rocksdb/terark_namespace.h"
 #include "util/testharness.h"
 #include "util/mock_time_env.h"
+#include "util/logging.h"
 
 namespace TERARKDB_NAMESPACE {
 

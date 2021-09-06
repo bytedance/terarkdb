@@ -5,11 +5,13 @@
 #include <cstddef>
 #include <string>
 
-#include "rocksdb/env.h"
 #include "rocksdb/terark_namespace.h"
-#include "util/logging.h"
 
 namespace TERARKDB_NAMESPACE {
+
+class Env;
+class Logger;
+
 class HistReporterHandle {
  public:
   HistReporterHandle() = default;
@@ -27,15 +29,9 @@ class HistReporterHandle {
 
 class LatencyHistGuard {
  public:
-  explicit LatencyHistGuard(HistReporterHandle* handle)
-      : handle_(handle), begin_time_ns_(handle_->GetEnv()->NowNanos()) {
-    assert(handle_ != nullptr);
-  }
+  explicit LatencyHistGuard(HistReporterHandle* handle);
 
-  ~LatencyHistGuard() {
-    auto us = (handle_->GetEnv()->NowNanos() - begin_time_ns_) / 1000;
-    handle_->AddRecord(us);
-  }
+  ~LatencyHistGuard();
 
  private:
   HistReporterHandle* handle_;
