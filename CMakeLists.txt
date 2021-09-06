@@ -581,6 +581,7 @@ set(SOURCES
         db/memtable_list.cc
         db/merge_helper.cc
         db/merge_operator.cc
+        db/metrics_reporter.cc
         db/periodic_work_scheduler.cc
         db/range_del_aggregator.cc
         db/range_tombstone_fragmenter.cc
@@ -994,6 +995,7 @@ if(WITH_TESTS)
         db/memtable_list_test.cc
         db/merge_helper_test.cc
         db/merge_test.cc
+        db/metrics_reporter_test.cc
         db/options_file_test.cc
         db/perf_context_test.cc
         db/periodic_work_scheduler_test.cc

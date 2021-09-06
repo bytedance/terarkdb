@@ -281,55 +281,55 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
 
       write_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
           write_qps_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get())),
+          immutable_db_options_.info_log.get(), env_)),
       read_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
           read_qps_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get())),
+          immutable_db_options_.info_log.get(), env_)),
       newiterator_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
           newiterator_qps_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get())),
+          immutable_db_options_.info_log.get(), env_)),
       seek_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
           seek_qps_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get())),
+          immutable_db_options_.info_log.get(), env_)),
       next_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
           next_qps_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get())),
+          immutable_db_options_.info_log.get(), env_)),
       seekforprev_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
           seekforprev_qps_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get())),
+          immutable_db_options_.info_log.get(), env_)),
       prev_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
           prev_qps_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get())),
+          immutable_db_options_.info_log.get(), env_)),
 
       write_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
           write_latency_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get())),
+          immutable_db_options_.info_log.get(), env_)),
       read_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
           read_latency_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get())),
+          immutable_db_options_.info_log.get(), env_)),
       newiterator_latency_reporter_(
           *metrics_reporter_factory_->BuildHistReporter(
               newiterator_latency_metric_name, bytedance_tags_,
-              immutable_db_options_.info_log.get())),
+              immutable_db_options_.info_log.get(), env_)),
       seek_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
           seek_latency_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get())),
+          immutable_db_options_.info_log.get(), env_)),
       next_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
           next_latency_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get())),
+          immutable_db_options_.info_log.get(), env_)),
       seekforprev_latency_reporter_(
           *metrics_reporter_factory_->BuildHistReporter(
               seekforprev_latency_metric_name, bytedance_tags_,
-              immutable_db_options_.info_log.get())),
+              immutable_db_options_.info_log.get(), env_)),
       prev_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
           prev_latency_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get())),
+          immutable_db_options_.info_log.get(), env_)),
       write_throughput_reporter_(*metrics_reporter_factory_->BuildCountReporter(
           write_throughput_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get())),
+          immutable_db_options_.info_log.get(), env_)),
       write_batch_size_reporter_(*metrics_reporter_factory_->BuildHistReporter(
           write_batch_size_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get())) {
+          immutable_db_options_.info_log.get(), env_)) {
   // !batch_per_trx_ implies seq_per_batch_ because it is only unset for
   // WriteUnprepared, which should use seq_per_batch_.
   assert(batch_per_txn_ || seq_per_batch_);
