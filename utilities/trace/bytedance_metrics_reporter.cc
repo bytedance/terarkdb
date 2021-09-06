@@ -11,7 +11,7 @@
 
 namespace TERARKDB_NAMESPACE {
 
-const int kNanosInMili = 1000000;
+const int kNanosInMilli = 1000000;
 
 #ifdef TERARKDB_ENABLE_METRICS
 static std::mutex metrics_mtx;
@@ -67,13 +67,13 @@ void ByteDanceHistReporterHandle::AddRecord(size_t val) {
   tls_stat.AppendRecord(val);
 
   auto curr_time_ns = env_->NowNanos();
-  auto diff_ms = (curr_time_ns - tls_stat.last_report_time_ns_) / kNanosInMili;
+  auto diff_ms = (curr_time_ns - tls_stat.last_report_time_ns_) / kNanosInMilli;
 
   if (diff_ms > 1000 && !merge_lock_.load(std::memory_order_relaxed) &&
       !merge_lock_.exchange(true, std::memory_order_acquire)) {
     stats_.Merge(tls_stat);
 
-    diff_ms = (curr_time_ns - stats_.last_report_time_ns_) / kNanosInMili;
+    diff_ms = (curr_time_ns - stats_.last_report_time_ns_) / kNanosInMilli;
     if (diff_ms > 5000) {
       auto result = stats_.GetResult({0.50, 0.99, 0.999});
       stats_.Reset();
@@ -86,7 +86,7 @@ void ByteDanceHistReporterHandle::AddRecord(size_t val) {
       cpputil::metrics2::Metrics::emit_store(name_ + "_avg", result[3], tags_);
       cpputil::metrics2::Metrics::emit_store(name_ + "_max", result[4], tags_);
 
-      diff_ms = (curr_time_ns - last_log_time_ns_) / kNanosInMili;
+      diff_ms = (curr_time_ns - last_log_time_ns_) / kNanosInMilli;
       if (diff_ms > 10 * 60 * 1000) {
         ROCKS_LOG_INFO(log_, "name:%s P50, tags:%s, val:%zu", name_.c_str(),
                        tags_.c_str(), result[0]);
@@ -134,7 +134,7 @@ void ByteDanceCountReporterHandle::AddCount(size_t n) {
   if (!reporter_lock_.load(std::memory_order_relaxed)) {
     if (!reporter_lock_.exchange(true, std::memory_order_acquire)) {
       auto curr_time_ns = env_->NowNanos();
-      auto diff_ms = (curr_time_ns - last_report_time_ns_) / kNanosInMili;
+      auto diff_ms = (curr_time_ns - last_report_time_ns_) / kNanosInMilli;
       if (diff_ms > 1000) {
         size_t curr_count = count_.load(std::memory_order_relaxed);
         size_t qps = (curr_count - last_report_count_) /
@@ -144,7 +144,7 @@ void ByteDanceCountReporterHandle::AddCount(size_t n) {
         last_report_time_ns_ = curr_time_ns;
         last_report_count_ = curr_count;
 
-        diff_ms = (curr_time_ns - last_log_time_ns_) / kNanosInMili;
+        diff_ms = (curr_time_ns - last_log_time_ns_) / kNanosInMilli;
         if (diff_ms > 10 * 60 * 1000) {
           ROCKS_LOG_INFO(log_, "name:%s, tags:%s, val:%zu", name_.c_str(),
                          tags_.c_str(), qps);
