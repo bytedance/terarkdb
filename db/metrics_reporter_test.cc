@@ -9,76 +9,68 @@
 #include "rocksdb/env.h"
 #include "rocksdb/terark_namespace.h"
 #include "util/testharness.h"
+#include "util/mock_time_env.h"
 
 namespace TERARKDB_NAMESPACE {
 
 class TestLogger : public Logger {
  public:
+  TestLogger(int* count) : count_(count) {}
+
   using Logger::Logv;
   virtual void Logv(const char* /*format*/, va_list /*ap*/) override {
-    ++count_;
+    ++*count_;
   };
-  int Count() const { return count_; }
 
  private:
-  int count_ = 0;
+  int* count_;
 };
 class TestHistReporterHandle : public HistReporterHandle {
  public:
-  TestHistReporterHandle()
-      : name_("name"), tags_("tags"), log_(new TestLogger) {}
+  TestHistReporterHandle(Env* const env)
+      : name_("name"), tags_("tags"), count(0), log_(&count), env_(env) {}
+  Env* GetEnv() { return env_; }
 
-  ~TestHistReporterHandle() { delete log_; }
+  ~TestHistReporterHandle() {}
 
  public:
   void AddRecord(size_t val) override { stat_.push_back(val); }
 
-  Logger* GetLogger() override { return log_; }
+  Logger* GetLogger() override { return &log_; }
   const char* GetTag() { return tags_.c_str(); }
   const char* GetName() { return name_.c_str(); }
+  int LoggerCount() { return count; }
 
  private:
   const std::string name_;
   const std::string tags_;
-  Logger* log_;
+  int count;
+  TestLogger log_;
+  Env* env_;
   std::vector<size_t> stat_;
 };
 
-class MetricsReporterTest : public testing::Test {
+class MockMetricsReporterTest : public testing::Test {
  public:
-  MetricsReporterTest() {
-    log_ = reinterpret_cast<TestLogger*>(handler_.GetLogger());
-  }
+  MockMetricsReporterTest() : env_(Env::Default()), handler_(&env_) {}
 
  protected:
-  TestHistReporterHandle handler_ = TestHistReporterHandle();
-  TestLogger* log_;
+  MockTimeEnv env_;
+  TestHistReporterHandle handler_;
 };
 
-TEST_F(MetricsReporterTest, Basic) {
-  MockEnv* env = new MockEnv(Env::Default());
-  { LatencyHistLoggedGuard g(nullptr, 100, env); }
-  ASSERT_EQ(log_->Count(), 0);
+TEST_F(MockMetricsReporterTest, Basic) {
+  ASSERT_EQ(handler_.LoggerCount(), 0);
   {
-    LatencyHistLoggedGuard g(&handler_, 100, env);
-    env->FakeSleepForMicroseconds(100);
+    LatencyHistLoggedGuard g(&handler_, 100);
+    env_.MockSleepForMicroseconds(100);
   }
-  ASSERT_EQ(log_->Count(), 1);
+  ASSERT_EQ(handler_.LoggerCount(), 1);
   {
-    LatencyHistLoggedGuard g(&handler_, 100, env);
-    env->FakeSleepForMicroseconds(90);
+    LatencyHistLoggedGuard g(&handler_, 100);
+    env_.MockSleepForMicroseconds(99);
   }
-  ASSERT_EQ(log_->Count(), 1);
-  {
-    LatencyHistLoggedGuard g(&handler_, 100, nullptr);
-    env->FakeSleepForMicroseconds(100);
-  }
-  ASSERT_EQ(log_->Count(), 1);
-  {
-    LatencyHistLoggedGuard g(&handler_, 100, nullptr);
-    env->SleepForMicroseconds(100);
-  }
-  ASSERT_EQ(log_->Count(), 2);
+  ASSERT_EQ(handler_.LoggerCount(), 1);
 }
 }  // namespace TERARKDB_NAMESPACE
 int main(int argc, char** argv) {

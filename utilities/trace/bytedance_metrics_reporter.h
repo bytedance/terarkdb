@@ -1,25 +1,27 @@
 #include <atomic>
 #include <chrono>
-#include <list>
+#include <deque>
 
 #include "rocksdb/env.h"
 #include "rocksdb/metrics_reporter.h"
 #include "rocksdb/terark_namespace.h"
 #include "stats.h"
-
 namespace TERARKDB_NAMESPACE {
 class ByteDanceHistReporterHandle : public HistReporterHandle {
  public:
 #ifdef TERARKDB_ENABLE_METRICS
   ByteDanceHistReporterHandle(const std::string& name, const std::string& tags,
-                              Logger* log)
+                              Logger* log, Env* const env)
       : name_(name),
         tags_(tags),
-        last_log_time_(std::chrono::high_resolution_clock::now()),
+        env_(env),
+        last_log_time_(env_->NowMicros()),
         log_(log) {}
+  virtual Env* const GetEnv() override { return env_; }
 #else
   ByteDanceHistReporterHandle(const std::string& /*name*/,
-                              const std::string& /*tags*/, Logger* /*log*/) {}
+                              const std::string& /*tags*/, Logger* /*log*/,
+                              Env* const env) {}
 #endif
 
   ~ByteDanceHistReporterHandle() override {
@@ -63,8 +65,9 @@ class ByteDanceHistReporterHandle : public HistReporterHandle {
 
   const std::string& name_;
   const std::string& tags_;
+  Env* env_;
 
-  std::chrono::high_resolution_clock::time_point last_log_time_;
+  uint64_t last_log_time_;
   Logger* log_;
 
   std::array<HistStats<>*, kMaxThreadNum> stats_arr_{};
@@ -80,15 +83,17 @@ class ByteDanceCountReporterHandle : public CountReporterHandle {
  public:
 #ifdef TERARKDB_ENABLE_METRICS
   ByteDanceCountReporterHandle(const std::string& name, const std::string& tags,
-                               Logger* log)
+                               Logger* log, Env* const env)
       : name_(name),
         tags_(tags),
-        last_report_time_(std::chrono::high_resolution_clock::now()),
-        last_log_time_(std::chrono::high_resolution_clock::now()),
+        env_(env == nullptr ? Env::Default() : env),
+        last_report_time_us(env_->NowMicros()),
+        last_log_time_us(env_->NowMicros()),
         log_(log) {}
 #else
   ByteDanceCountReporterHandle(const std::string& /*name*/,
-                               const std::string& /*tags*/, Logger* /*log*/) {}
+                               const std::string& /*tags*/, Logger* /*log*/,
+                               Env* const) {}
 #endif
 
   ~ByteDanceCountReporterHandle() override = default;
@@ -102,14 +107,12 @@ class ByteDanceCountReporterHandle : public CountReporterHandle {
 
   const std::string& name_;
   const std::string& tags_;
-
-  std::chrono::high_resolution_clock::time_point last_report_time_;
+  Env* const env_;
+  uint64_t last_report_time_us;
   size_t last_report_count_ = 0;
 
-  std::chrono::high_resolution_clock::time_point last_log_time_;
+  uint64_t last_log_time_us;
   Logger* log_;
-
-  char _padding_[64 /* x86 cache line size */ - 8 * 7];
 
   std::atomic<size_t> count_{0};
 #endif
@@ -119,23 +122,25 @@ class ByteDanceMetricsReporterFactory : public MetricsReporterFactory {
  public:
   ByteDanceMetricsReporterFactory();
 
-  ByteDanceMetricsReporterFactory(const std::string& ns);
+  explicit ByteDanceMetricsReporterFactory(const std::string& ns);
 
   ~ByteDanceMetricsReporterFactory() override = default;
 
  public:
   ByteDanceHistReporterHandle* BuildHistReporter(const std::string& name,
                                                  const std::string& tags,
-                                                 Logger* log) override;
+                                                 Logger* log,
+                                                 Env* const env) override;
 
   ByteDanceCountReporterHandle* BuildCountReporter(const std::string& name,
                                                    const std::string& tags,
-                                                   Logger* log) override;
+                                                   Logger* log,
+                                                   Env* const env) override;
 
  private:
 #ifdef TERARKDB_ENABLE_METRICS
-  std::list<ByteDanceHistReporterHandle> hist_reporters_;
-  std::list<ByteDanceCountReporterHandle> count_reporters_;
+  std::deque<ByteDanceHistReporterHandle> hist_reporters_;
+  std::deque<ByteDanceCountReporterHandle> count_reporters_;
 #endif
 
   void InitNamespace(const std::string& ns);

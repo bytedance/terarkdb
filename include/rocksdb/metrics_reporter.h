@@ -18,6 +18,7 @@ class HistReporterHandle {
   virtual Logger* GetLogger() { return nullptr; }
   virtual const char* GetTag() { return ""; }
   virtual const char* GetName() { return ""; }
+  virtual Env* GetEnv() { return nullptr; }
 
   virtual ~HistReporterHandle() = default;
 
@@ -27,35 +28,29 @@ class HistReporterHandle {
 
 class LatencyHistGuard {
  public:
-  explicit LatencyHistGuard(HistReporterHandle* handle, Env* env = nullptr)
-      : handle_(handle),
-        env_(handle == nullptr ? nullptr
-                               : (env == nullptr ? Env::Default() : env)),
-        begin_time_(env_ == nullptr ? 0 : env_->NowMicros()) {}
+  explicit LatencyHistGuard(HistReporterHandle* handle)
+      : handle_(handle), begin_time_us(handle_->GetEnv()->NowMicros()) {
+    assert(handle_ != nullptr);
+  }
 
   ~LatencyHistGuard() {
-    if (handle_ != nullptr) {
-      auto us = env_->NowMicros() - begin_time_;
-      handle_->AddRecord(us);
-    }
+    auto us = handle_->GetEnv()->NowMicros() - begin_time_us;
+    handle_->AddRecord(us);
   }
 
  private:
   HistReporterHandle* handle_;
-  Env* const env_;
-  uint64_t begin_time_;
+  uint64_t begin_time_us;
 };
 
 class LatencyHistLoggedGuard {
  public:
   explicit LatencyHistLoggedGuard(HistReporterHandle* handle,
-                                  unsigned int threshold_us = 500 * 1000,
-                                  Env* env = nullptr);
+                                  uint64_t threshold_us = 500 * 1000);
   ~LatencyHistLoggedGuard();
 
  private:
   HistReporterHandle* handle_;
-  Env* const env_;
   uint64_t begin_time_;
   unsigned int log_threshold_us_;
   void* start_stacktrace_;
@@ -80,10 +75,12 @@ class MetricsReporterFactory {
  public:
   virtual HistReporterHandle* BuildHistReporter(const std::string& name,
                                                 const std::string& tags,
-                                                Logger* log) = 0;
+                                                Logger* log,
+                                                Env* const env) = 0;
 
   virtual CountReporterHandle* BuildCountReporter(const std::string& name,
                                                   const std::string& tags,
-                                                  Logger* log) = 0;
+                                                  Logger* log,
+                                                  Env* const env) = 0;
 };
 }  // namespace TERARKDB_NAMESPACE
