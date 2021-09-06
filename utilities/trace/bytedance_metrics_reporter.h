@@ -15,7 +15,7 @@ class ByteDanceHistReporterHandle : public HistReporterHandle {
       : name_(name),
         tags_(tags),
         env_(env),
-        last_log_time_(env_->NowMicros()),
+        last_log_time_ns_(env_->NowNanos()),
         log_(log) {}
   virtual Env* const GetEnv() override { return env_; }
 #else
@@ -67,7 +67,7 @@ class ByteDanceHistReporterHandle : public HistReporterHandle {
   const std::string& tags_;
   Env* env_;
 
-  uint64_t last_log_time_;
+  uint64_t last_log_time_ns_;
   Logger* log_;
 
   std::array<HistStats<>*, kMaxThreadNum> stats_arr_{};

@@ -19,7 +19,7 @@ namespace TERARKDB_NAMESPACE {
 LatencyHistLoggedGuard::LatencyHistLoggedGuard(HistReporterHandle* handle,
                                                uint64_t threshold_us)
     : handle_(handle),
-      begin_time_(handle_->GetEnv()->NowMicros()),
+      begin_time_ns_(handle_->GetEnv()->NowNanos()),
       log_threshold_us_(threshold_us) {
   assert(handle_ != nullptr);
 #if REPORT_DEBUG_STACKTRACE
@@ -29,7 +29,7 @@ LatencyHistLoggedGuard::LatencyHistLoggedGuard(HistReporterHandle* handle,
 }
 
 LatencyHistLoggedGuard::~LatencyHistLoggedGuard() {
-  auto us = (handle_->GetEnv()->NowMicros() - begin_time_);
+  auto us = (handle_->GetEnv()->NowNanos() - begin_time_ns_) / 1000;
   handle_->AddRecord(us);
   if (us >= log_threshold_us_ && handle_->GetLogger() != nullptr) {
 #if REPORT_DEBUG_STACKTRACE

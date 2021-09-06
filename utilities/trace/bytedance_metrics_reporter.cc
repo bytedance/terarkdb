@@ -64,18 +64,18 @@ void ByteDanceHistReporterHandle::AddRecord(size_t val) {
   auto& tls_stat = *tls_stat_ptr;
   tls_stat.AppendRecord(val);
 
-  auto curr_time = env_->NowMicros();
-  auto diff_ms = (curr_time - tls_stat.last_report_time) / 1000;
+  auto curr_time_ns = env_->NowNanos();
+  auto diff_ms = (curr_time_ns - tls_stat.last_report_time_ns_) / 1000000;
 
   if (diff_ms > 1000 && !merge_lock_.load(std::memory_order_relaxed) &&
       !merge_lock_.exchange(true, std::memory_order_acquire)) {
     stats_.Merge(tls_stat);
 
-    diff_ms = (curr_time - stats_.last_report_time) / 1000;
+    diff_ms = (curr_time_ns - stats_.last_report_time_ns_) / 1000000;
     if (diff_ms > 5000) {
       auto result = stats_.GetResult({0.50, 0.99, 0.999});
       stats_.Reset();
-      stats_.last_report_time = curr_time;
+      stats_.last_report_time_ns_ = curr_time_ns;
       merge_lock_.store(false, std::memory_order_release);
 
       cpputil::metrics2::Metrics::emit_store(name_ + "_p50", result[0], tags_);
@@ -84,7 +84,7 @@ void ByteDanceHistReporterHandle::AddRecord(size_t val) {
       cpputil::metrics2::Metrics::emit_store(name_ + "_avg", result[3], tags_);
       cpputil::metrics2::Metrics::emit_store(name_ + "_max", result[4], tags_);
 
-      diff_ms = (curr_time - last_log_time_) / 1000;
+      diff_ms = (curr_time_ns - last_log_time_ns_) / 1000000;
       if (diff_ms > 10 * 60 * 1000) {
         ROCKS_LOG_INFO(log_, "name:%s P50, tags:%s, val:%zu", name_.c_str(),
                        tags_.c_str(), result[0]);
@@ -96,14 +96,14 @@ void ByteDanceHistReporterHandle::AddRecord(size_t val) {
                        tags_.c_str(), result[3]);
         ROCKS_LOG_INFO(log_, "name:%s Max, tags:%s, val:%zu", name_.c_str(),
                        tags_.c_str(), result[4]);
-        last_log_time_ = curr_time;
+        last_log_time_ns_ = curr_time_ns;
       }
     } else {
       merge_lock_.store(false, std::memory_order_release);
     }
 
     tls_stat.Reset();
-    tls_stat.last_report_time = curr_time;
+    tls_stat.last_report_time_ns_ = curr_time_ns;
   }
 }
 #else
@@ -118,7 +118,7 @@ HistStats<>* ByteDanceHistReporterHandle::GetThreadLocalStats() {
   }
   auto& s = stats_arr_[id];
   if (s == nullptr) {
-    s = new HistStats<>;
+    s = new HistStats<>(env_->NowNanos());
   }
   return s;
 #else
@@ -131,22 +131,22 @@ void ByteDanceCountReporterHandle::AddCount(size_t n) {
   count_.fetch_add(n, std::memory_order_relaxed);
   if (!reporter_lock_.load(std::memory_order_relaxed)) {
     if (!reporter_lock_.exchange(true, std::memory_order_acquire)) {
-      auto curr_time = env_->NowMicros();
-      auto diff_ms = (curr_time - last_report_time_) / 1000;
+      auto curr_time_ns = env_->NowNaNos();
+      auto diff_ms = (curr_time_ns - last_report_time_ns_) / 1000000;
       if (diff_ms > 1000) {
         size_t curr_count = count_.load(std::memory_order_relaxed);
         size_t qps = (curr_count - last_report_count_) /
                      (static_cast<double>(diff_ms) / 1000);
         cpputil::metrics2::Metrics::emit_store(name_, qps, tags_);
 
-        last_report_time_ = curr_time;
+        last_report_time_ns_ = curr_time_ns;
         last_report_count_ = curr_count;
 
-        diff_ms = (curr_time - last_log_time_) / 1000;
+        diff_ms = (curr_time_ns - last_log_time_ns_) / 1000000;
         if (diff_ms > 10 * 60 * 1000) {
           ROCKS_LOG_INFO(log_, "name:%s, tags:%s, val:%zu", name_.c_str(),
                          tags_.c_str(), qps);
-          last_log_time_ = curr_time;
+          last_log_time_ns_ = curr_time_ns;
         }
       }
       reporter_lock_.store(false, std::memory_order_release);

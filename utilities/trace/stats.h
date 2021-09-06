@@ -14,7 +14,7 @@ namespace TERARKDB_NAMESPACE {
 template <size_t MAX_LATENCY_US_FAST = 10 * 1000>  // 10ms
 class HistStats {
  public:
-  HistStats() : last_report_time(std::chrono::high_resolution_clock::now()) {}
+  HistStats(uint64_t last_report_time_ns_) : last_report_time_ns_() {}
 
   void AppendRecord(size_t us) {
     if (us < buckets_.size()) {
@@ -82,7 +82,7 @@ class HistStats {
     }
   }
 
-  std::chrono::high_resolution_clock::time_point last_report_time;
+  uint64_t last_report_time_ns_;
 
  private:
   std::array<size_t, MAX_LATENCY_US_FAST> buckets_{};

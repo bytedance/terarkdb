@@ -29,18 +29,18 @@ class HistReporterHandle {
 class LatencyHistGuard {
  public:
   explicit LatencyHistGuard(HistReporterHandle* handle)
-      : handle_(handle), begin_time_us(handle_->GetEnv()->NowMicros()) {
+      : handle_(handle), begin_time_ns_(handle_->GetEnv()->NowNanos()) {
     assert(handle_ != nullptr);
   }
 
   ~LatencyHistGuard() {
-    auto us = handle_->GetEnv()->NowMicros() - begin_time_us;
+    auto us = (handle_->GetEnv()->NowNanos() - begin_time_ns_) / 1000;
     handle_->AddRecord(us);
   }
 
  private:
   HistReporterHandle* handle_;
-  uint64_t begin_time_us;
+  uint64_t begin_time_ns_;
 };
 
 class LatencyHistLoggedGuard {
@@ -51,8 +51,8 @@ class LatencyHistLoggedGuard {
 
  private:
   HistReporterHandle* handle_;
-  uint64_t begin_time_;
-  unsigned int log_threshold_us_;
+  uint64_t begin_time_ns_;
+  uint64_t log_threshold_us_;
   void* start_stacktrace_;
 };
 
