@@ -131,7 +131,7 @@ void ByteDanceCountReporterHandle::AddCount(size_t n) {
   count_.fetch_add(n, std::memory_order_relaxed);
   if (!reporter_lock_.load(std::memory_order_relaxed)) {
     if (!reporter_lock_.exchange(true, std::memory_order_acquire)) {
-      auto curr_time_ns = env_->NowNaNos();
+      auto curr_time_ns = env_->NowNanos();
       auto diff_ms = (curr_time_ns - last_report_time_ns_) / 1000000;
       if (diff_ms > 1000) {
         size_t curr_count = count_.load(std::memory_order_relaxed);
@@ -192,7 +192,7 @@ void ByteDanceMetricsReporterFactory::InitNamespace(const std::string&) {}
 #ifdef TERARKDB_ENABLE_METRICS
 ByteDanceHistReporterHandle* ByteDanceMetricsReporterFactory::BuildHistReporter(
     const std::string& name, const std::string& tags, Logger* log,
-    Env* const env = nullptr) {
+    Env* const env) {
   std::lock_guard<std::mutex> guard(metrics_mtx);
   hist_reporters_.emplace_back(name, tags, log, env);
   return &hist_reporters_.back();
@@ -209,9 +209,10 @@ ByteDanceHistReporterHandle* ByteDanceMetricsReporterFactory::BuildHistReporter(
 ByteDanceCountReporterHandle*
 ByteDanceMetricsReporterFactory::BuildCountReporter(const std::string& name,
                                                     const std::string& tags,
-                                                    Logger* log) {
+                                                    Logger* log,
+                                                    Env* const env) {
   std::lock_guard<std::mutex> guard(metrics_mtx);
-  count_reporters_.emplace_back(name, tags, log);
+  count_reporters_.emplace_back(name, tags, log, env);
   return &count_reporters_.back();
 }
 #else

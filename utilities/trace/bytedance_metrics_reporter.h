@@ -16,8 +16,9 @@ class ByteDanceHistReporterHandle : public HistReporterHandle {
         tags_(tags),
         env_(env),
         last_log_time_ns_(env_->NowNanos()),
-        log_(log) {}
-  virtual Env* const GetEnv() override { return env_; }
+        log_(log),
+        stats_(env_->NowNanos()) {}
+  virtual Env* GetEnv() override { return env_; }
 #else
   ByteDanceHistReporterHandle(const std::string& /*name*/,
                               const std::string& /*tags*/, Logger* /*log*/,
@@ -87,8 +88,8 @@ class ByteDanceCountReporterHandle : public CountReporterHandle {
       : name_(name),
         tags_(tags),
         env_(env == nullptr ? Env::Default() : env),
-        last_report_time_us(env_->NowMicros()),
-        last_log_time_us(env_->NowMicros()),
+        last_report_time_ns_(env_->NowNanos()),
+        last_log_time_ns_(env_->NowNanos()),
         log_(log) {}
 #else
   ByteDanceCountReporterHandle(const std::string& /*name*/,
@@ -108,10 +109,10 @@ class ByteDanceCountReporterHandle : public CountReporterHandle {
   const std::string& name_;
   const std::string& tags_;
   Env* const env_;
-  uint64_t last_report_time_us;
+  uint64_t last_report_time_ns_;
   size_t last_report_count_ = 0;
 
-  uint64_t last_log_time_us;
+  uint64_t last_log_time_ns_;
   Logger* log_;
 
   std::atomic<size_t> count_{0};
