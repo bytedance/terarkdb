@@ -16,9 +16,12 @@
 namespace TERARKDB_NAMESPACE {
 
 LatencyHistLoggedGuard::LatencyHistLoggedGuard(HistReporterHandle* handle,
-                                               unsigned int threshold_us)
+                                               unsigned int threshold_us,
+                                               Env* env)
     : handle_(handle),
-      begin_time_(std::chrono::high_resolution_clock::now()),
+      env_(handle_ == nullptr ? nullptr
+                              : env == nullptr ? Env::Default() : env),
+      begin_time_(env_ == nullptr ? 0 : env_->NowMicros()),
       log_threshold_us_(threshold_us) {
 #if REPORT_DEBUG_STACKTRACE
   auto stacktrace = new boost::stacktrace::stacktrace();
@@ -28,9 +31,7 @@ LatencyHistLoggedGuard::LatencyHistLoggedGuard(HistReporterHandle* handle,
 
 LatencyHistLoggedGuard::~LatencyHistLoggedGuard() {
   if (handle_ != nullptr) {
-    auto us = std::chrono::duration_cast<std::chrono::microseconds>(
-                  std::chrono::high_resolution_clock::now() - begin_time_)
-                  .count();
+    auto us = (env_->NowMicros() - begin_time_);
     handle_->AddRecord(us);
     if (us >= log_threshold_us_ && handle_->GetLogger() != nullptr) {
 #if REPORT_DEBUG_STACKTRACE
@@ -39,7 +40,7 @@ LatencyHistLoggedGuard::~LatencyHistLoggedGuard() {
       ROCKS_LOG_WARN(
           handle_->GetLogger(),
           "[name:%s] [tags:%s]: %" PRIu64 "us\n%s----------\n%s-----------\n",
-          handle_->GetName(), handle_->GetTag(), static_cast<uint64_t>(us),
+          handle_->GetName(), handle_->GetTag(), us,
           boost::stacktrace::to_string(*stacktrace).c_str(),
           boost::stacktrace::to_string(boost::stacktrace::stacktrace())
               .c_str());

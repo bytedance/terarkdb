@@ -4,6 +4,7 @@
 #include <chrono>
 #include <list>
 
+#include "env/mock_env.h"
 #include "port/stack_trace.h"
 #include "rocksdb/env.h"
 #include "rocksdb/terark_namespace.h"
@@ -25,10 +26,7 @@ class TestLogger : public Logger {
 class TestHistReporterHandle : public HistReporterHandle {
  public:
   TestHistReporterHandle()
-      : name_("name"),
-        tags_("tags"),
-        log_(new TestLogger),
-        last_log_time_(std::chrono::high_resolution_clock::now()) {}
+      : name_("name"), tags_("tags"), log_(new TestLogger) {}
 
   ~TestHistReporterHandle() { delete log_; }
 
@@ -43,7 +41,6 @@ class TestHistReporterHandle : public HistReporterHandle {
   const std::string name_;
   const std::string tags_;
   Logger* log_;
-  std::chrono::high_resolution_clock::time_point last_log_time_;
   std::vector<size_t> stat_;
 };
 
@@ -59,16 +56,29 @@ class MetricsReporterTest : public testing::Test {
 };
 
 TEST_F(MetricsReporterTest, Basic) {
+  MockEnv* env = new MockEnv(Env::Default());
+  { LatencyHistLoggedGuard g(nullptr, 100, env); }
+  ASSERT_EQ(log_->Count(), 0);
   {
-    LatencyHistLoggedGuard g(&handler_);
-    usleep(500001);
+    LatencyHistLoggedGuard g(&handler_, 100, env);
+    env->FakeSleepForMicroseconds(100);
   }
   ASSERT_EQ(log_->Count(), 1);
   {
-    LatencyHistLoggedGuard g(&handler_);
-    usleep(400000);
+    LatencyHistLoggedGuard g(&handler_, 100, env);
+    env->FakeSleepForMicroseconds(90);
   }
   ASSERT_EQ(log_->Count(), 1);
+  {
+    LatencyHistLoggedGuard g(&handler_, 100, nullptr);
+    env->FakeSleepForMicroseconds(100);
+  }
+  ASSERT_EQ(log_->Count(), 1);
+  {
+    LatencyHistLoggedGuard g(&handler_, 100, nullptr);
+    env->SleepForMicroseconds(100);
+  }
+  ASSERT_EQ(log_->Count(), 2);
 }
 }  // namespace TERARKDB_NAMESPACE
 int main(int argc, char** argv) {
