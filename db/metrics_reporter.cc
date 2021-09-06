@@ -13,7 +13,6 @@
 #include <boost/stacktrace.hpp>
 #endif
 
-#include <iostream>
 namespace TERARKDB_NAMESPACE {
 
 LatencyHistGuard::LatencyHistGuard(HistReporterHandle* handle)
