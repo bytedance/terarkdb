@@ -1,5 +1,4 @@
 #include <atomic>
-#include <chrono>
 #include <deque>
 
 #include "rocksdb/env.h"
