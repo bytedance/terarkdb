@@ -1,7 +1,6 @@
 #include "rocksdb/metrics_reporter.h"
 
 #include <atomic>
-#include <chrono>
 #include <list>
 
 #include "env/mock_env.h"

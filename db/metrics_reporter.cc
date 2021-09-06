@@ -2,7 +2,6 @@
 
 #include <inttypes.h>
 
-#include <chrono>
 #include <cstddef>
 #include <string>
 
