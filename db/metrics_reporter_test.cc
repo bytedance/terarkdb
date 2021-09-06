@@ -26,25 +26,25 @@ class TestLogger : public Logger {
 class TestHistReporterHandle : public HistReporterHandle {
  public:
   TestHistReporterHandle(Env* const env)
-      : name_("name"), tags_("tags"), count(0), logger_(&count), env_(env) {}
+      : name_("name"), tags_("tags"), count(0), log_(&count), env_(env) {}
+  Env* GetEnv() { return env_; }
 
   ~TestHistReporterHandle() {}
 
  public:
   void AddRecord(size_t val) override { stat_.push_back(val); }
 
-  const char* GetName() override { return name_.c_str(); }
-  const char* GetTag() override { return tags_.c_str(); }
-  Logger* GetLogger() override { return &logger_; }
-  Env* GetEnv() override { return env_; }
 
+  Logger* GetLogger() override { return &log_; }
+  const char* GetTag() { return tags_.c_str(); }
+  const char* GetName() { return name_.c_str(); }
   int LoggerCount() { return count; }
 
  private:
   const std::string name_;
   const std::string tags_;
   int count;
-  TestLogger logger_;
+  TestLogger log_;
   Env* env_;
   std::vector<size_t> stat_;
 };

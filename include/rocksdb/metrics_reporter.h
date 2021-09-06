@@ -30,29 +30,30 @@ class HistReporterHandle {
 
 class LatencyHistGuard {
  public:
-  LatencyHistGuard() = default;
+  explicit LatencyHistGuard(HistReporterHandle* handle);
 
-  explicit LatencyHistGuard(HistReporterHandle* handle)
-      : handle_(handle),
-        begin_time_(std::chrono::high_resolution_clock::now()) {}
+  ~LatencyHistGuard();
 
-  ~LatencyHistGuard() {
-    if (handle_ != nullptr) {
-      auto us = std::chrono::duration_cast<std::chrono::microseconds>(
-                    std::chrono::high_resolution_clock::now() - begin_time_)
-                    .count();
-      handle_->AddRecord(us);
-    }
-  }
-
-  void count_now(HistReporterHandle* handle) {
-      handle_ = handle;
-      begin_time_ = std::chrono::high_resolution_clock::now();
-  }
+  void count_now(HistReporterHandle *handle);
 
  private:
-  HistReporterHandle* handle_ = nullptr;
-  decltype(std::chrono::high_resolution_clock::now()) begin_time_;
+  HistReporterHandle* handle_;
+  uint64_t begin_time_ns_;
+};
+
+class LatencyHistLoggedGuard {
+ public:
+  explicit LatencyHistLoggedGuard(HistReporterHandle* handle,
+                                  uint64_t threshold_us = 500 * 1000);
+  ~LatencyHistLoggedGuard();
+
+  void count_now(HistReporterHandle* handle);
+
+ private:
+  HistReporterHandle* handle_;
+  uint64_t begin_time_ns_;
+  uint64_t log_threshold_us_;
+  void* start_stacktrace_;
 };
 
 class CountReporterHandle {

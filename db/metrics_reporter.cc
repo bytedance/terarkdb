@@ -28,6 +28,11 @@ LatencyHistGuard::~LatencyHistGuard() {
   handle_->AddRecord(us);
 }
 
+void LatencyHistGuard::count_now(HistReporterHandle *handle)  {
+  handle_ = handle;
+  begin_time_ns_ = handle_->GetEnv()->NowNanos();
+}
+
 LatencyHistLoggedGuard::LatencyHistLoggedGuard(HistReporterHandle* handle,
                                                uint64_t threshold_us)
     : handle_(handle),
@@ -66,6 +71,11 @@ LatencyHistLoggedGuard::~LatencyHistLoggedGuard() {
   start_stacktrace_ = nullptr;
   delete stacktrace;
 #endif
+}
+
+void LatencyHistLoggedGuard::count_now(HistReporterHandle *handle)  {
+  handle_ = handle;
+  begin_time_ns_ = handle_->GetEnv()->NowNanos();
 }
 
 CurriedMetricsReporterFactory::CurriedMetricsReporterFactory(
