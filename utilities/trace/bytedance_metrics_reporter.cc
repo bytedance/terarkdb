@@ -50,7 +50,7 @@ static int GetThreadID() {
 namespace {
 static ByteDanceHistReporterHandle dummy_hist_("", "", nullptr);
 static ByteDanceCountReporterHandle dummy_count_("", "", nullptr);
-}
+}  // namespace
 #endif
 
 #ifdef TERARKDB_ENABLE_METRICS
@@ -75,7 +75,7 @@ void ByteDanceHistReporterHandle::AddRecord(size_t val) {
     diff_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                   curr_time - stats_.last_report_time)
                   .count();
-    if (diff_ms > 5000) {
+    if (diff_ms > 30 * 1000) {
       auto result = stats_.GetResult({0.50, 0.99, 0.999});
       stats_.Reset();
       stats_.last_report_time = curr_time;
@@ -86,6 +86,11 @@ void ByteDanceHistReporterHandle::AddRecord(size_t val) {
       cpputil::metrics2::Metrics::emit_store(name_ + "_p999", result[2], tags_);
       cpputil::metrics2::Metrics::emit_store(name_ + "_avg", result[3], tags_);
       cpputil::metrics2::Metrics::emit_store(name_ + "_max", result[4], tags_);
+
+      if (result[4] > 1000) {
+        ROCKS_LOG_WARN(log_, "name:%s Spike, tags:%s, val:%zu", name_.c_str(),
+                       tags_.c_str(), result[4]);
+      }
 
       diff_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                     curr_time - last_log_time_)
@@ -180,8 +185,7 @@ ByteDanceMetricsReporterFactory::ByteDanceMetricsReporterFactory(
 }
 #else
 ByteDanceMetricsReporterFactory::ByteDanceMetricsReporterFactory(
-    const std::string& /*ns*/) {
-}
+    const std::string& /*ns*/) {}
 #endif
 
 #ifdef TERARKDB_ENABLE_METRICS
