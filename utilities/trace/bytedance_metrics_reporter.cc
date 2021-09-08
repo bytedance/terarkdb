@@ -95,19 +95,17 @@ void ByteDanceHistReporterHandle::AddRecord(size_t val) {
       diff_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                     curr_time - last_log_time_)
                     .count();
-      if (diff_ms > 10 * 60 * 1000) {
-        ROCKS_LOG_INFO(log_, "name:%s P50, tags:%s, val:%zu", name_.c_str(),
-                       tags_.c_str(), result[0]);
-        ROCKS_LOG_INFO(log_, "name:%s P99, tags:%s, val:%zu", name_.c_str(),
-                       tags_.c_str(), result[1]);
-        ROCKS_LOG_INFO(log_, "name:%s P999, tags:%s, val:%zu", name_.c_str(),
-                       tags_.c_str(), result[2]);
-        ROCKS_LOG_INFO(log_, "name:%s Avg, tags:%s, val:%zu", name_.c_str(),
-                       tags_.c_str(), result[3]);
-        ROCKS_LOG_INFO(log_, "name:%s Max, tags:%s, val:%zu", name_.c_str(),
-                       tags_.c_str(), result[4]);
-        last_log_time_ = curr_time;
-      }
+      ROCKS_LOG_INFO(log_, "name:%s P50, tags:%s, val:%zu", name_.c_str(),
+                     tags_.c_str(), result[0]);
+      ROCKS_LOG_INFO(log_, "name:%s P99, tags:%s, val:%zu", name_.c_str(),
+                     tags_.c_str(), result[1]);
+      ROCKS_LOG_INFO(log_, "name:%s P999, tags:%s, val:%zu", name_.c_str(),
+                     tags_.c_str(), result[2]);
+      ROCKS_LOG_INFO(log_, "name:%s Avg, tags:%s, val:%zu", name_.c_str(),
+                     tags_.c_str(), result[3]);
+      ROCKS_LOG_INFO(log_, "name:%s Max, tags:%s, val:%zu", name_.c_str(),
+                     tags_.c_str(), result[4]);
+      last_log_time_ = curr_time;
     } else {
       merge_lock_.store(false, std::memory_order_release);
     }
