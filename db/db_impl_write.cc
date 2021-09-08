@@ -76,7 +76,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
                          bool disable_memtable, uint64_t* seq_used,
                          size_t batch_cnt,
                          PreReleaseCallback* pre_release_callback) {
-  LatencyHistGuard guard(&write_latency_reporter_);
+  LatencyHistLoggedGuard guard(&write_latency_reporter_, 500000);
   write_qps_reporter_.AddCount(WriteBatchInternal::Count(my_batch));
   write_throughput_reporter_.AddCount(WriteBatchInternal::ByteSize(my_batch));
   write_batch_size_reporter_.AddRecord(WriteBatchInternal::ByteSize(my_batch));
