@@ -92,9 +92,6 @@ void ByteDanceHistReporterHandle::AddRecord(size_t val) {
                        tags_.c_str(), result[4]);
       }
 
-      diff_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                    curr_time - last_log_time_)
-                    .count();
       ROCKS_LOG_INFO(log_, "name:%s P50, tags:%s, val:%zu", name_.c_str(),
                      tags_.c_str(), result[0]);
       ROCKS_LOG_INFO(log_, "name:%s P99, tags:%s, val:%zu", name_.c_str(),
