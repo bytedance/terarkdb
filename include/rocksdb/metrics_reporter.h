@@ -30,7 +30,8 @@ class HistReporterHandle {
 
 class LatencyHistGuard {
  public:
-  explicit LatencyHistGuard(HistReporterHandle* handle);
+  LatencyHistGuard() = default;
+  LatencyHistGuard(HistReporterHandle* handle);
 
   ~LatencyHistGuard();
 
@@ -43,8 +44,9 @@ class LatencyHistGuard {
 
 class LatencyHistLoggedGuard {
  public:
-  explicit LatencyHistLoggedGuard(HistReporterHandle* handle,
-                                  uint64_t threshold_us = 500 * 1000);
+  LatencyHistLoggedGuard() = default;	 
+  LatencyHistLoggedGuard(HistReporterHandle* handle,
+                         uint64_t threshold_us = 500 * 1000);
   ~LatencyHistLoggedGuard();
 
   void count_now(HistReporterHandle* handle);
