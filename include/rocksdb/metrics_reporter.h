@@ -3,6 +3,7 @@
 #include <inttypes.h>
 
 #include <cstddef>
+#include <memory>
 #include <string>
 
 #include "rocksdb/terark_namespace.h"
@@ -70,12 +71,37 @@ class MetricsReporterFactory {
  public:
   virtual HistReporterHandle* BuildHistReporter(const std::string& name,
                                                 const std::string& tags,
-                                                Logger* log,
+                                                Logger* logger,
                                                 Env* const env) = 0;
 
   virtual CountReporterHandle* BuildCountReporter(const std::string& name,
                                                   const std::string& tags,
-                                                  Logger* log,
+                                                  Logger* logger,
                                                   Env* const env) = 0;
 };
+
+// curried -> https://en.wikipedia.org/wiki/Currying
+class CurriedMetricsReporterFactory {
+  std::shared_ptr<MetricsReporterFactory> factory_;
+  Logger* logger_;
+  Env* const env_;
+
+ public:
+  CurriedMetricsReporterFactory(std::shared_ptr<MetricsReporterFactory> factory,
+                                Logger* logger, Env* const env);
+
+  Logger* GetLogger() const { return logger_; }
+  Env* GetEnv() { return env_; }
+
+  HistReporterHandle* BuildHistReporter(const std::string& name,
+                                        const std::string& tags) {
+    return factory_->BuildHistReporter(name, tags, logger_, env_);
+  }
+
+  CountReporterHandle* BuildCountReporter(const std::string& name,
+                                          const std::string& tags) {
+    return factory_->BuildCountReporter(name, tags, logger_, env_);
+  }
+};
+
 }  // namespace TERARKDB_NAMESPACE

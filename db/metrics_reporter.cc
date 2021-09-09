@@ -2,15 +2,18 @@
 
 #include <inttypes.h>
 
+#include <cassert>
 #include <cstddef>
 #include <string>
 
 #include "rocksdb/env.h"
 #include "util/logging.h"
 
+#if BOOSTLIB
 #define REPORT_DEBUG_STACKTRACE 1
 #if REPORT_DEBUG_STACKTRACE
 #include <boost/stacktrace.hpp>
+#endif
 #endif
 
 namespace TERARKDB_NAMESPACE {
@@ -64,4 +67,14 @@ LatencyHistLoggedGuard::~LatencyHistLoggedGuard() {
   delete stacktrace;
 #endif
 }
+
+CurriedMetricsReporterFactory::CurriedMetricsReporterFactory(
+    std::shared_ptr<MetricsReporterFactory> factory, Logger* logger,
+    Env* const env)
+    : factory_(std::move(factory)), logger_(logger), env_(env) {
+  assert(factory_ != nullptr);
+  assert(logger_ != nullptr);
+  assert(env_ != nullptr);
+}
+
 }  // namespace TERARKDB_NAMESPACE
