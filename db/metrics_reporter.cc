@@ -8,9 +8,11 @@
 #include "rocksdb/env.h"
 #include "util/logging.h"
 
+#if BOOSTLIB
 #define REPORT_DEBUG_STACKTRACE 1
 #if REPORT_DEBUG_STACKTRACE
 #include <boost/stacktrace.hpp>
+#endif
 #endif
 
 namespace TERARKDB_NAMESPACE {

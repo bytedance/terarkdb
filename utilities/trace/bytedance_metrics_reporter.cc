@@ -74,7 +74,7 @@ void ByteDanceHistReporterHandle::AddRecord(size_t val) {
     stats_.Merge(tls_stat);
 
     diff_ms = (curr_time_ns - stats_.last_report_time_ns_) / kNanosInMilli;
-    if (diff_ms > 5000) {
+    if (diff_ms >= 30000 /* 30 seconds */) {
       auto result = stats_.GetResult({0.50, 0.99, 0.999});
       stats_.Reset();
       stats_.last_report_time_ns_ = curr_time_ns;
@@ -87,19 +87,26 @@ void ByteDanceHistReporterHandle::AddRecord(size_t val) {
       cpputil::metrics2::Metrics::emit_store(name_ + "_max", result[4], tags_);
 
       diff_ms = (curr_time_ns - last_log_time_ns_) / kNanosInMilli;
-      if (diff_ms > 10 * 60 * 1000) {
-        ROCKS_LOG_INFO(log_, "name:%s P50, tags:%s, val:%zu", name_.c_str(),
-                       tags_.c_str(), result[0]);
-        ROCKS_LOG_INFO(log_, "name:%s P99, tags:%s, val:%zu", name_.c_str(),
-                       tags_.c_str(), result[1]);
-        ROCKS_LOG_INFO(log_, "name:%s P999, tags:%s, val:%zu", name_.c_str(),
-                       tags_.c_str(), result[2]);
-        ROCKS_LOG_INFO(log_, "name:%s Avg, tags:%s, val:%zu", name_.c_str(),
-                       tags_.c_str(), result[3]);
-        ROCKS_LOG_INFO(log_, "name:%s Max, tags:%s, val:%zu", name_.c_str(),
-                       tags_.c_str(), result[4]);
+      InfoLogLevel log_level = InfoLogLevel::DEBUG_LEVEL;
+      if (diff_ms > 10 * 60 * 1000 /* 10 minutes */) {
+        log_level = InfoLogLevel::INFO_LEVEL;
         last_log_time_ns_ = curr_time_ns;
       }
+      TERARKDB_NAMESPACE::Log(log_level, logger_,
+                              "name:%s P50, tags:%s, val:%zu", name_.c_str(),
+                              tags_.c_str(), result[0]);
+      TERARKDB_NAMESPACE::Log(log_level, logger_,
+                              "name:%s P99, tags:%s, val:%zu", name_.c_str(),
+                              tags_.c_str(), result[1]);
+      TERARKDB_NAMESPACE::Log(log_level, logger_,
+                              "name:%s P999, tags:%s, val:%zu", name_.c_str(),
+                              tags_.c_str(), result[2]);
+      TERARKDB_NAMESPACE::Log(log_level, logger_,
+                              "name:%s Avg, tags:%s, val:%zu", name_.c_str(),
+                              tags_.c_str(), result[3]);
+      TERARKDB_NAMESPACE::Log(log_level, logger_,
+                              "name:%s Max, tags:%s, val:%zu", name_.c_str(),
+                              tags_.c_str(), result[4]);
     } else {
       merge_lock_.store(false, std::memory_order_release);
     }
@@ -135,7 +142,7 @@ void ByteDanceCountReporterHandle::AddCount(size_t n) {
     if (!reporter_lock_.exchange(true, std::memory_order_acquire)) {
       auto curr_time_ns = env_->NowNanos();
       auto diff_ms = (curr_time_ns - last_report_time_ns_) / kNanosInMilli;
-      if (diff_ms > 1000) {
+      if (diff_ms >= 30000 /* 30 seconds */) {
         size_t curr_count = count_.load(std::memory_order_relaxed);
         size_t qps = (curr_count - last_report_count_) /
                      (static_cast<double>(diff_ms) / 1000);
@@ -145,11 +152,13 @@ void ByteDanceCountReporterHandle::AddCount(size_t n) {
         last_report_count_ = curr_count;
 
         diff_ms = (curr_time_ns - last_log_time_ns_) / kNanosInMilli;
-        if (diff_ms > 10 * 60 * 1000) {
-          ROCKS_LOG_INFO(log_, "name:%s, tags:%s, val:%zu", name_.c_str(),
-                         tags_.c_str(), qps);
+        InfoLogLevel log_level = InfoLogLevel::DEBUG_LEVEL;
+        if (diff_ms > 10 * 60 * 1000 /* 10 minutes */) {
+          log_level = InfoLogLevel::INFO_LEVEL;
           last_log_time_ns_ = curr_time_ns;
         }
+        TERARKDB_NAMESPACE::Log(log_level, logger_, "name:%s, tags:%s, val:%zu",
+                                name_.c_str(), tags_.c_str(), qps);
       }
       reporter_lock_.store(false, std::memory_order_release);
     }
@@ -193,16 +202,16 @@ void ByteDanceMetricsReporterFactory::InitNamespace(const std::string&) {}
 
 #ifdef TERARKDB_ENABLE_METRICS
 ByteDanceHistReporterHandle* ByteDanceMetricsReporterFactory::BuildHistReporter(
-    const std::string& name, const std::string& tags, Logger* log,
+    const std::string& name, const std::string& tags, Logger* logger,
     Env* const env) {
   std::lock_guard<std::mutex> guard(metrics_mtx);
-  hist_reporters_.emplace_back(name, tags, log, env);
+  hist_reporters_.emplace_back(name, tags, logger, env);
   return &hist_reporters_.back();
 }
 #else
 ByteDanceHistReporterHandle* ByteDanceMetricsReporterFactory::BuildHistReporter(
-    const std::string& /*name*/, const std::string& /*tags*/, Logger* /*log*/,
-    Env* const /*env*/) {
+    const std::string& /*name*/, const std::string& /*tags*/,
+    Logger* /*logger*/, Env* const /*env*/) {
   return &dummy_hist_;
 }
 #endif
@@ -211,17 +220,17 @@ ByteDanceHistReporterHandle* ByteDanceMetricsReporterFactory::BuildHistReporter(
 ByteDanceCountReporterHandle*
 ByteDanceMetricsReporterFactory::BuildCountReporter(const std::string& name,
                                                     const std::string& tags,
-                                                    Logger* log,
+                                                    Logger* logger,
                                                     Env* const env) {
   std::lock_guard<std::mutex> guard(metrics_mtx);
-  count_reporters_.emplace_back(name, tags, log, env);
+  count_reporters_.emplace_back(name, tags, logger, env);
   return &count_reporters_.back();
 }
 #else
 ByteDanceCountReporterHandle*
 ByteDanceMetricsReporterFactory::BuildCountReporter(const std::string& /*name*/,
                                                     const std::string& /*tags*/,
-                                                    Logger* /*log*/,
+                                                    Logger* /*logger*/,
                                                     Env* const /*env*/) {
   return &dummy_count_;
 }

@@ -10,17 +10,17 @@ class ByteDanceHistReporterHandle : public HistReporterHandle {
  public:
 #ifdef TERARKDB_ENABLE_METRICS
   ByteDanceHistReporterHandle(const std::string& name, const std::string& tags,
-                              Logger* log, Env* const env)
+                              Logger* logger, Env* const env)
       : name_(name),
         tags_(tags),
         env_(env),
         last_log_time_ns_(env_->NowNanos()),
-        log_(log),
+        logger_(logger),
         stats_(env_->NowNanos()) {}
   virtual Env* GetEnv() override { return env_; }
 #else
   ByteDanceHistReporterHandle(const std::string& /*name*/,
-                              const std::string& /*tags*/, Logger* /*log*/,
+                              const std::string& /*tags*/, Logger* /*logger*/,
                               Env* const /*env*/) {}
 #endif
 
@@ -37,7 +37,7 @@ class ByteDanceHistReporterHandle : public HistReporterHandle {
 
   Logger* GetLogger() override {
 #ifdef TERARKDB_ENABLE_METRICS
-    return log_;
+    return logger_;
 #else
     return nullptr;
 #endif
@@ -68,7 +68,7 @@ class ByteDanceHistReporterHandle : public HistReporterHandle {
   Env* env_;
 
   uint64_t last_log_time_ns_;
-  Logger* log_;
+  Logger* logger_;
 
   std::array<HistStats<>*, kMaxThreadNum> stats_arr_{};
 
@@ -83,16 +83,16 @@ class ByteDanceCountReporterHandle : public CountReporterHandle {
  public:
 #ifdef TERARKDB_ENABLE_METRICS
   ByteDanceCountReporterHandle(const std::string& name, const std::string& tags,
-                               Logger* log, Env* const env)
+                               Logger* logger, Env* const env)
       : name_(name),
         tags_(tags),
         env_(env),
         last_report_time_ns_(env_->NowNanos()),
         last_log_time_ns_(env_->NowNanos()),
-        log_(log) {}
+        logger_(logger) {}
 #else
   ByteDanceCountReporterHandle(const std::string& /*name*/,
-                               const std::string& /*tags*/, Logger* /*log*/,
+                               const std::string& /*tags*/, Logger* /*logger*/,
                                Env* const /*env*/) {}
 #endif
 
@@ -112,7 +112,7 @@ class ByteDanceCountReporterHandle : public CountReporterHandle {
   size_t last_report_count_ = 0;
 
   uint64_t last_log_time_ns_;
-  Logger* log_;
+  Logger* logger_;
 
   std::atomic<size_t> count_{0};
 #endif
@@ -129,12 +129,12 @@ class ByteDanceMetricsReporterFactory : public MetricsReporterFactory {
  public:
   ByteDanceHistReporterHandle* BuildHistReporter(const std::string& name,
                                                  const std::string& tags,
-                                                 Logger* log,
+                                                 Logger* logger,
                                                  Env* const env) override;
 
   ByteDanceCountReporterHandle* BuildCountReporter(const std::string& name,
                                                    const std::string& tags,
-                                                   Logger* log,
+                                                   Logger* logger,
                                                    Env* const env) override;
 
  private:
