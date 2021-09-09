@@ -2,6 +2,7 @@
 
 #include <inttypes.h>
 
+#include <cassert>
 #include <cstddef>
 #include <string>
 
@@ -66,4 +67,14 @@ LatencyHistLoggedGuard::~LatencyHistLoggedGuard() {
   delete stacktrace;
 #endif
 }
+
+CurriedMetricsReporterFactory::CurriedMetricsReporterFactory(
+    std::shared_ptr<MetricsReporterFactory> factory, Logger* logger,
+    Env* const env)
+    : factory_(std::move(factory)), logger_(logger), env_(env) {
+  assert(factory_ != nullptr);
+  assert(logger_ != nullptr);
+  assert(env_ != nullptr);
+}
+
 }  // namespace TERARKDB_NAMESPACE
