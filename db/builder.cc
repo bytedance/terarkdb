@@ -453,19 +453,24 @@ Status BuildTable(
       // No matter whether use_direct_io_for_flush_and_compaction is true,
       // we will regrad this verification as user reads since the goal is
       // to cache it here for further user reads
-      std::unique_ptr<InternalIterator> it(table_cache->NewIterator(
-          ReadOptions(), env_options, internal_comparator, *sst_meta(),
-          empty_dependence_map, nullptr /* range_del_agg */,
-          mutable_cf_options.prefix_extractor.get(), nullptr,
-          (internal_stats == nullptr) ? nullptr
-                                      : internal_stats->GetFileReadHist(0),
-          false /* for_compaction */, nullptr /* arena */,
-          false /* skip_filter */, level));
-      s = it->status();
-      if (s.ok() && paranoid_file_checks) {
-        for (it->SeekToFirst(); it->Valid(); it->Next()) {
-        }
+      for (auto& meta : *meta_vec) {
+        std::unique_ptr<InternalIterator> it(table_cache->NewIterator(
+            ReadOptions(), env_options, internal_comparator, meta,
+            empty_dependence_map, nullptr /* range_del_agg */,
+            mutable_cf_options.prefix_extractor.get(), nullptr,
+            (internal_stats == nullptr) ? nullptr
+                                        : internal_stats->GetFileReadHist(0),
+            false /* for_compaction */, nullptr /* arena */,
+            false /* skip_filter */, level));
         s = it->status();
+        if (s.ok() && paranoid_file_checks) {
+          for (it->SeekToFirst(); it->Valid(); it->Next()) {
+          }
+          s = it->status();
+        }
+        if (!s.ok()) {
+          break;
+        }
       }
     }
   }
