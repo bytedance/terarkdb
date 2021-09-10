@@ -13,11 +13,10 @@ class ByteDanceHistReporterHandle : public HistReporterHandle {
                               Logger* logger, Env* const env)
       : name_(name),
         tags_(tags),
+        logger_(logger),
         env_(env),
         last_log_time_ns_(env_->NowNanos()),
-        logger_(logger),
-        stats_(env_->NowNanos()) {}
-  virtual Env* GetEnv() override { return env_; }
+        stats_(last_log_time_ns_) {}
 #else
   ByteDanceHistReporterHandle(const std::string& /*name*/,
                               const std::string& /*tags*/, Logger* /*logger*/,
@@ -35,6 +34,20 @@ class ByteDanceHistReporterHandle : public HistReporterHandle {
  public:
   void AddRecord(size_t val) override;
 
+  const char* GetName() override {
+#ifdef TERARKDB_ENABLE_METRICS
+    return name_.c_str();
+#else
+    return "";
+#endif
+  }
+  const char* GetTag() override {
+#ifdef TERARKDB_ENABLE_METRICS
+    return tags_.c_str();
+#else
+    return "";
+#endif
+  }
   Logger* GetLogger() override {
 #ifdef TERARKDB_ENABLE_METRICS
     return logger_;
@@ -42,18 +55,11 @@ class ByteDanceHistReporterHandle : public HistReporterHandle {
     return nullptr;
 #endif
   }
-  const char* GetTag() {
+  Env* GetEnv() override {
 #ifdef TERARKDB_ENABLE_METRICS
-    return tags_.c_str();
+    return env_;
 #else
-    return "";
-#endif
-  }
-  const char* GetName() {
-#ifdef TERARKDB_ENABLE_METRICS
-    return name_.c_str();
-#else
-    return "";
+    return nullptr;
 #endif
   }
 
@@ -65,10 +71,10 @@ class ByteDanceHistReporterHandle : public HistReporterHandle {
 
   const std::string& name_;
   const std::string& tags_;
-  Env* env_;
 
-  uint64_t last_log_time_ns_;
   Logger* logger_;
+  Env* env_;
+  uint64_t last_log_time_ns_;
 
   std::array<HistStats<>*, kMaxThreadNum> stats_arr_{};
 
