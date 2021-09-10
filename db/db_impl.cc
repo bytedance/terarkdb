@@ -103,7 +103,7 @@
 #include <terark/util/fiber_pool.hpp>
 #endif
 
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
 #include <boost/fiber/all.hpp>
 #endif
 
@@ -1749,7 +1749,7 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
   return s;
 }
 
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
 struct SimpleFiberTls {
   static constexpr intptr_t MAX_QUEUE_LEN = 256;
   static constexpr intptr_t DEFAULT_FIBER_CNT = 8;
@@ -1840,7 +1840,7 @@ struct SimpleFiberTls {
 // because SimpleFiberTls.channel must be destructed first
 static thread_local SimpleFiberTls gt_fibers(
     boost::fibers::context::active_pp());
-#endif  // BOOSTLIB
+#endif  // WITH_BOOSTLIB
 
 std::vector<Status> DBImpl::MultiGet(
     const ReadOptions& read_options,
@@ -1944,7 +1944,7 @@ std::vector<Status> DBImpl::MultiGet(
     }
     counting--;
   };
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
   if (read_options.aio_concurrency && immutable_db_options_.use_aio_reads) {
 #if 0
     static thread_local terark::RunOnceFiberPool fiber_pool(16);
@@ -1971,7 +1971,7 @@ std::vector<Status> DBImpl::MultiGet(
     for (size_t i = 0; i < num_keys; ++i) {
       get_one(i);
     }
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
   }
 #endif
 
@@ -3539,7 +3539,7 @@ Status DB::DestroyColumnFamilyHandle(ColumnFamilyHandle* column_family) {
 
 DB::~DB() {}
 
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
 void DB::CallOnMainStack(const std::function<void()>& fn) {
   gt_fibers.m_fy.sched()->call_on_main_stack(fn);
 }
@@ -3610,7 +3610,7 @@ void DB::GetAsync(const ReadOptions& ro, std::string key, GetAsyncCallback cb) {
 int DB::WaitAsync(int timeout_us) { return gt_fibers.wait(timeout_us); }
 
 int DB::WaitAsync() { return gt_fibers.wait(); }
-#endif  // BOOSTLIB
+#endif  // WITH_BOOSTLIB
 
 // using future needs boost symbols to be exported, but we don't want to
 // export boost symbols

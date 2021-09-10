@@ -42,7 +42,7 @@ typedef struct epoll_event Event;
 #include <utilities/merge_operators/string_append/stringappend.h>
 #include <utilities/merge_operators/string_append/stringappend2.h>
 
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
 #include <boost/fiber/future.hpp>
 #endif
 
@@ -210,7 +210,7 @@ struct ReadContext {
   std::vector<TERARKDB_NAMESPACE::Status> ss;
   std::vector<TERARKDB_NAMESPACE::Slice> keys;
   std::vector<std::string> values;
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
   std::vector<boost::fibers::future<
       std::tuple<TERARKDB_NAMESPACE::Status, std::string, std::string>>>
       futures;

@@ -49,7 +49,6 @@ if(NOT WITH_TERARKDB_NAMESPACE)
   SET(WITH_TERARKDB_NAMESPACE "terarkdb")
 endif()
 MESSAGE(STATUS "terarkdb namespace: " ${WITH_TERARKDB_NAMESPACE})
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/rocksdb/terark_namespace.h.in ${CMAKE_CURRENT_SOURCE_DIR}/include/rocksdb/terark_namespace.h)
 
 option(BUILD_SUFFIX "library sufix" "d")
 option(FORCE_TERARKDB_RELEASE_BUILD "ignore outside cmake_build_type" OFF)
@@ -78,7 +77,6 @@ ENDIF()
 
 # terark-zip embedded boost, will remove the boost library in the future
 if(WITH_TERARK_ZIP)
-  add_definitions(-DWITH_TERARK_ZIP=1)
   SET(WITH_BOOSTLIB ON)
   SET(TERARK_ZIP_LIB terark-zip-${BUILD_SUFFIX})
 endif()
@@ -95,6 +93,8 @@ MESSAGE("[terarkdb] WITH_JEMALLOC = ${WITH_JEMALLOC}, WITH_COVERAGE=${WITH_COVER
 MESSAGE("[terarkdb] CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}, BUILD_SUFFIX=${BUILD_SUFFIX}")
 MESSAGE("[terarkdb] CMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}")
 MESSAGE("[terarkdb] CMAKE_THREAD_LIBS_INIT=${CMAKE_THREAD_LIBS_INIT}")
+
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/rocksdb/terark_namespace.h.in ${CMAKE_CURRENT_SOURCE_DIR}/include/rocksdb/terark_namespace.h)
 
 #-------------------------- Third-party Libraries
 ADD_SUBDIRECTORY(third-party)
@@ -122,7 +122,6 @@ if(WITH_GFLAGS)
 endif()
 
 if(WITH_BOOSTLIB)
-  add_definitions(-DBOOSTLIB=1)
   message("[terarkdb] with boost")
 else()
   message("[terarkdb] without boost")
@@ -158,12 +157,11 @@ if(WITH_BZ2)
   message("[terarkdb] bzip2 include dir : ${bzip2_INCLUDE_DIR}")
 endif()
 
-if(WITH_BYTEDANCE_METRICS)	
-  add_definitions(-DTERARKDB_ENABLE_METRICS)	
-  get_target_property(metrics2_INCLUDE_DIR metrics2 INCLUDE_DIRECTORIES)	
-  include_directories(${metrics2_INCLUDE_DIR})	
-  list(APPEND THIRDPARTY_LIBS metrics2)	
-  message("[terarkdb] bytedance_metrics2 include dir : ${metrics2_INCLUDE_DIR}")	
+if(WITH_BYTEDANCE_METRICS)
+  get_target_property(metrics2_INCLUDE_DIR metrics2 INCLUDE_DIRECTORIES)
+  include_directories(${metrics2_INCLUDE_DIR})
+  list(APPEND THIRDPARTY_LIBS metrics2)
+  message("[terarkdb] bytedance_metrics2 include dir : ${metrics2_INCLUDE_DIR}")
 endif()
 
 if(WITH_LZ4)

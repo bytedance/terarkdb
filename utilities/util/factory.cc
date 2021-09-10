@@ -1,5 +1,8 @@
 // Copyright (c) 2020-present, Bytedance Inc.  All rights reserved.
 // This source code is licensed under Apache 2.0 License.
+
+#include "rocksdb/terark_namespace.h"
+
 #ifndef WITH_TERARK_ZIP
 #include "utilities/util/factory.h"
 //#include <terark/hash_strmap.hpp>

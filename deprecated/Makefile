@@ -262,8 +262,8 @@ else
 $(warning Warning: Compiling in debug mode. Don't use the resulting binary in production)
 endif
 
-ifeq ($(TERARKDB_ENABLE_METRICS),1)
-OPT += -DTERARKDB_ENABLE_METRICS
+ifeq ($(WITH_BYTEDANCE_METRICS),1)
+OPT += -DWITH_BYTEDANCE_METRICS
 endif
 
 ifeq ($(TERARKDB_ENABLE_CONSOLE),1)

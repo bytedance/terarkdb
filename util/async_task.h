@@ -12,7 +12,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
 #endif
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
 #include <boost/fiber/future.hpp>
 #endif
 #ifdef __clang__
@@ -27,7 +27,7 @@ namespace TERARKDB_NAMESPACE {
 template <typename T>
 class AsyncTask {
  private:
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
   boost::fibers::promise<T> promise;
   boost::fibers::future<T> future;
 #else

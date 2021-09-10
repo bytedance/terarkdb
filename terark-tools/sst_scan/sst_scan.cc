@@ -2,7 +2,7 @@
 
 #include "rocksdb/terark_namespace.h"
 
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
 #include <boost/filesystem.hpp>
 // #else
 // #if __cplusplus <= 201402L
@@ -393,7 +393,7 @@ int main(const int argc, const char** argv) {
 
   if (memcmp(command, "listkeys", 8) == 0) {
     if (dir) {
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
       for (auto& p : boost::filesystem::directory_iterator(target_sst)) {
         auto fname = p.path().string().c_str();
         if (strncmp(boost::filesystem::extension(fname).c_str(), ".sst", 4) ==
@@ -412,7 +412,7 @@ int main(const int argc, const char** argv) {
     std::cout << "Get(" << target_key << ") from " << target_sst << std::endl;
     // if input target is a directory
     if (dir) {
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
       for (auto& p : boost::filesystem::directory_iterator(target_sst)) {
         auto fname = p.path().string().c_str();
         if (strncmp(boost::filesystem::extension(fname).c_str(), ".sst", 4) ==

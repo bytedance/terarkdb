@@ -13,7 +13,7 @@
 
 #include <inttypes.h>
 
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
 #include <boost/range/algorithm.hpp>
 #endif
 #include <iostream>
@@ -518,7 +518,7 @@ int SSTDumpTool::Run(int argc, char** argv) {
       std::istringstream iss(compression_types_csv);
       std::string compression_type;
       while (std::getline(iss, compression_type, ',')) {
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
         auto iter = boost::find_if(
             kCompressions, TERARK_GET(.second) == std::cref(compression_type));
 #else

@@ -693,7 +693,7 @@ class ChaosTest {
       for (auto &k : ctx.keys) {
         k = ctx.key;
       }
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
       for (size_t i = 0; i < hs.size(); ++i) {
         ctx.ss[i] = db->Get(ctx.ro, hs[i], ctx.keys[i], &(ctx.values[i]));
         db->GetAsync(
@@ -737,7 +737,7 @@ class ChaosTest {
                     "Get vs GetFuture");
 #endif
       }
-#endif  // BOOSTLIB
+#endif  // WITH_BOOSTLIB
     }
   }
 

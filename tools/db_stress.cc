@@ -75,7 +75,7 @@ int main() {
 #if !(defined NDEBUG) || !defined(OS_WIN)
 #include "util/sync_point.h"
 #endif  // !(defined NDEBUG) || !defined(OS_WIN)
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
 #include <boost/range/algorithm.hpp>
 #endif
 #include "util/testutil.h"
