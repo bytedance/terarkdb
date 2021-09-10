@@ -2,9 +2,11 @@
 
 #include "rocksdb/terark_namespace.h"
 #include "utilities/ioprof/ioprof.h"
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
 #include <boost/current_function.hpp>
 #else
+#endif
+#ifndef BOOST_CURRENT_FUNCTION
 #define BOOST_CURRENT_FUNCTION "(unknown)"
 #endif
 

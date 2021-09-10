@@ -1,4 +1,4 @@
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
 #include <boost/filesystem.hpp>
 #endif
 
@@ -306,7 +306,7 @@ int main(const int argc, const char** argv) {
     assert(target_key);
     // if input target is a directory
     if (argv[4] && strncmp("--dir", argv[4], 5) == 0) {
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
       std::cout << "Get(" << key_slice.ToString(true) << ") from " << target_sst
                 << std::endl;
       boost::filesystem::recursive_directory_iterator p(target_sst), end;
@@ -331,7 +331,7 @@ int main(const int argc, const char** argv) {
     assert(target_key);
     // if input target is a directory
     if (argv[4] && strncmp("--dir", argv[4], 5) == 0) {
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
       std::cout << "Seek(" << target_key << ") from " << target_sst
                 << std::endl;
       for (auto& p :

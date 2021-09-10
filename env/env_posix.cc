@@ -60,7 +60,7 @@
 #include "util/thread_local.h"
 #include "util/threadpool_imp.h"
 
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
 #include <boost/fiber/operations.hpp>
 #endif
 
@@ -862,7 +862,7 @@ class PosixEnv : public Env {
   }
 
   virtual void SleepForMicroseconds(int micros) override {
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
     boost::this_fiber::sleep_for(std::chrono::microseconds(micros));
 #else
     usleep(micros);

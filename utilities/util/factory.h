@@ -1,18 +1,19 @@
 #pragma once
 
+#include "rocksdb/terark_namespace.h"
+
 #ifdef WITH_TERARK_ZIP
 #include "terark/util/factory.ipp"
 #else
 
 #include <rocksdb/slice.h>
 
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
 #include <boost/current_function.hpp>
 #include <boost/noncopyable.hpp>
-#else
+#endif
 #ifndef BOOST_CURRENT_FUNCTION
 #define BOOST_CURRENT_FUNCTION "(unknown)"
-#endif
 #endif
 
 #include <mutex>
@@ -41,13 +42,14 @@ class Factoryable {
 
   TERARKDB_NAMESPACE::Slice reg_name() const;
 
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
   struct AutoReg : boost::noncopyable {
 #else
   struct AutoReg : boost::noncopyable {
 #endif
     typedef function<ProductPtr(CreatorArgs...)> CreatorFunc;
-    AutoReg(TERARKDB_NAMESPACE::Slice name, CreatorFunc creator, const std::type_info&);
+    AutoReg(TERARKDB_NAMESPACE::Slice name, CreatorFunc creator,
+            const std::type_info&);
     ~AutoReg();
     std::string m_name;
     std::type_index m_type_idx;
@@ -116,7 +118,8 @@ struct Factoryable<ProductPtr, CreatorArgs...>::AutoReg::Impl {
 
 template <class ProductPtr, class... CreatorArgs>
 Factoryable<ProductPtr, CreatorArgs...>::AutoReg::AutoReg(
-    TERARKDB_NAMESPACE::Slice name, CreatorFunc creator, const std::type_info& ti)
+    TERARKDB_NAMESPACE::Slice name, CreatorFunc creator,
+    const std::type_info& ti)
     : m_name(name.ToString()), m_type_idx(ti) {
   auto& imp = Impl::s_singleton();
   auto& func_map = imp.func_map;
@@ -177,7 +180,8 @@ ProductPtr Factoryable<ProductPtr, CreatorArgs...>::create(
 }
 
 template <class ProductPtr, class... CreatorArgs>
-TERARKDB_NAMESPACE::Slice Factoryable<ProductPtr, CreatorArgs...>::reg_name() const {
+TERARKDB_NAMESPACE::Slice Factoryable<ProductPtr, CreatorArgs...>::reg_name()
+    const {
   auto& imp = AutoReg::Impl::s_singleton();
   TERARKDB_NAMESPACE::Slice name;
   imp.mtx.lock();

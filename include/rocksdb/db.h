@@ -39,7 +39,7 @@
 #elif _WIN32
 #define ROCKSDB_DEPRECATED_FUNC __declspec(deprecated)
 #endif
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
 namespace boost {
 namespace fibers {
 template <typename>
@@ -389,7 +389,7 @@ class DB {
     return Get(options, DefaultColumnFamily(), key,
                static_cast<LazyBuffer*>(nullptr));
   }
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
   static void CallOnMainStack(const std::function<void()>&);
   static void SubmitAsyncTask(std::function<void()>);
   static void SubmitAsyncTask(std::function<void()>, size_t concurrency);
@@ -410,7 +410,7 @@ class DB {
 
   static int WaitAsync(int timeout_us);
   static int WaitAsync();
-#endif  // BOOSTLIB
+#endif  // WITH_BOOSTLIB
 
 #if defined(TERARKDB_WITH_AIO_FUTURE)
   future<std::tuple<Status, std::string, std::string*>> GetFuture(

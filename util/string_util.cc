@@ -16,7 +16,7 @@
 #include <stdlib.h>
 
 #include <algorithm>
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
 #include <boost/range/algorithm.hpp>
 #endif
 #include <cmath>
@@ -193,7 +193,7 @@ using CharMap = std::pair<char, char>;
 char UnescapeChar(const char c) {
   static const CharMap convert_map[] = {{'r', '\r'}, {'n', '\n'}};
 
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
   auto iter = boost::find_if(convert_map, TERARK_GET(.first) == c);
 #else
   auto iter = std::find_if(std::begin(convert_map), std::end(convert_map),
@@ -209,7 +209,7 @@ char UnescapeChar(const char c) {
 char EscapeChar(const char c) {
   static const CharMap convert_map[] = {{'\n', 'n'}, {'\r', 'r'}};
 
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
   auto iter = boost::find_if(convert_map, TERARK_GET(.first) == c);
 #else
   auto iter = std::find_if(std::begin(convert_map), std::end(convert_map),

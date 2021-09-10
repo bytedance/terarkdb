@@ -9,7 +9,7 @@
 #include "rocksdb/env.h"
 #include "util/logging.h"
 
-#if BOOSTLIB
+#ifdef WITH_BOOSTLIB
 #define REPORT_DEBUG_STACKTRACE 1
 #if REPORT_DEBUG_STACKTRACE
 #include <boost/stacktrace.hpp>

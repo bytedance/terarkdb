@@ -6,3 +6,7 @@
 #pragma once
 
 #define TERARKDB_NAMESPACE @WITH_TERARKDB_NAMESPACE@
+
+#cmakedefine WITH_BYTEDANCE_METRICS
+#cmakedefine WITH_TERARK_ZIP
+#cmakedefine WITH_BOOSTLIB

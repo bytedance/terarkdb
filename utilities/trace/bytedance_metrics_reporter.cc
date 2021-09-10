@@ -2,7 +2,7 @@
 
 #include <cassert>
 #include <mutex>
-#ifdef TERARKDB_ENABLE_METRICS
+#ifdef WITH_BYTEDANCE_METRICS
 #include "metrics.h"
 #endif
 
@@ -13,7 +13,7 @@ namespace TERARKDB_NAMESPACE {
 
 const int kNanosInMilli = 1000000;
 
-#ifdef TERARKDB_ENABLE_METRICS
+#ifdef WITH_BYTEDANCE_METRICS
 static std::mutex metrics_mtx;
 static std::atomic<bool> metrics_init{false};
 static const char default_namespace[] = "terarkdb.engine.stats";
@@ -78,7 +78,7 @@ static ByteDanceCountReporterHandle dummy_count_("", "", &dummy_logger_,
 }  // namespace
 #endif
 
-#ifdef TERARKDB_ENABLE_METRICS
+#ifdef WITH_BYTEDANCE_METRICS
 void ByteDanceHistReporterHandle::AddRecord(size_t val) {
   auto* tls_stat_ptr = GetThreadLocalStats();
   if (tls_stat_ptr == nullptr) {
@@ -142,7 +142,7 @@ void ByteDanceHistReporterHandle::AddRecord(size_t) {}
 #endif
 
 HistStats<>* ByteDanceHistReporterHandle::GetThreadLocalStats() {
-#ifdef TERARKDB_ENABLE_METRICS
+#ifdef WITH_BYTEDANCE_METRICS
   auto id = GetThreadID();
   if (id == -1) {
     return nullptr;
@@ -157,7 +157,7 @@ HistStats<>* ByteDanceHistReporterHandle::GetThreadLocalStats() {
 #endif
 }
 
-#ifdef TERARKDB_ENABLE_METRICS
+#ifdef WITH_BYTEDANCE_METRICS
 void ByteDanceCountReporterHandle::AddCount(size_t n) {
   count_.fetch_add(n, std::memory_order_relaxed);
   if (!reporter_lock_.load(std::memory_order_relaxed)) {
@@ -191,12 +191,12 @@ void ByteDanceCountReporterHandle::AddCount(size_t) {}
 #endif
 
 ByteDanceMetricsReporterFactory::ByteDanceMetricsReporterFactory() {
-#ifdef TERARKDB_ENABLE_METRICS
+#ifdef WITH_BYTEDANCE_METRICS
   InitNamespace(default_namespace);
 #endif
 }
 
-#ifdef TERARKDB_ENABLE_METRICS
+#ifdef WITH_BYTEDANCE_METRICS
 ByteDanceMetricsReporterFactory::ByteDanceMetricsReporterFactory(
     const std::string& ns) {
   InitNamespace(ns);
@@ -206,7 +206,7 @@ ByteDanceMetricsReporterFactory::ByteDanceMetricsReporterFactory(
     const std::string& /*ns*/) {}
 #endif
 
-#ifdef TERARKDB_ENABLE_METRICS
+#ifdef WITH_BYTEDANCE_METRICS
 void ByteDanceMetricsReporterFactory::InitNamespace(const std::string& ns) {
   if (!metrics_init.load(std::memory_order_acquire)) {
     std::lock_guard<std::mutex> guard(metrics_mtx);
@@ -222,7 +222,7 @@ void ByteDanceMetricsReporterFactory::InitNamespace(const std::string& ns) {
 void ByteDanceMetricsReporterFactory::InitNamespace(const std::string&) {}
 #endif
 
-#ifdef TERARKDB_ENABLE_METRICS
+#ifdef WITH_BYTEDANCE_METRICS
 ByteDanceHistReporterHandle* ByteDanceMetricsReporterFactory::BuildHistReporter(
     const std::string& name, const std::string& tags, Logger* logger,
     Env* const env) {
@@ -238,7 +238,7 @@ ByteDanceHistReporterHandle* ByteDanceMetricsReporterFactory::BuildHistReporter(
 }
 #endif
 
-#ifdef TERARKDB_ENABLE_METRICS
+#ifdef WITH_BYTEDANCE_METRICS
 ByteDanceCountReporterHandle*
 ByteDanceMetricsReporterFactory::BuildCountReporter(const std::string& name,
                                                     const std::string& tags,

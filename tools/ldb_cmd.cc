@@ -12,7 +12,7 @@
 
 #include <inttypes.h>
 
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
 #include <boost/range/algorithm.hpp>
 #endif
 #include <cstdlib>
@@ -505,7 +505,7 @@ bool LDBCommand::ParseStringOption(
 
 Options LDBCommand::PrepareOptionsForOpenDB() {
   ColumnFamilyOptions* cf_opts;
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
   auto column_families_iter = boost::find_if(
       column_families_, TERARK_GET(.name) == std::cref(column_family_name_));
 #else

@@ -24,7 +24,7 @@
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #endif
 
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
 #include <boost/fiber/all.hpp>
 #endif
 

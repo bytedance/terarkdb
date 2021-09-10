@@ -1,5 +1,5 @@
 #pragma once
-#ifdef BOOSTLIB
+#ifdef WITH_BOOSTLIB
 #include <boost/noncopyable.hpp>
 #elif __has_include("boost/noncopyable.hpp")
 #include <boost/noncopyable.hpp>
