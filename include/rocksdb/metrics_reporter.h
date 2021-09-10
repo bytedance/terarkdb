@@ -17,10 +17,10 @@ class HistReporterHandle {
  public:
   HistReporterHandle() = default;
 
-  virtual Logger* GetLogger() { return nullptr; }
-  virtual const char* GetTag() { return ""; }
-  virtual const char* GetName() { return ""; }
-  virtual Env* GetEnv() { return nullptr; }
+  virtual const char* GetName() = 0;
+  virtual const char* GetTag() = 0;
+  virtual Logger* GetLogger() = 0;
+  virtual Env* GetEnv() = 0;
 
   virtual ~HistReporterHandle() = default;
 

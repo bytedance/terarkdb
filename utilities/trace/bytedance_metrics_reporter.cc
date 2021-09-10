@@ -51,8 +51,30 @@ static int GetThreadID() {
 }
 #else
 namespace {
-static ByteDanceHistReporterHandle dummy_hist_("", "", nullptr, nullptr);
-static ByteDanceCountReporterHandle dummy_count_("", "", nullptr, nullptr);
+// Ignore NowMicros & NowNanos
+class EnvForDummyReporter : public EnvWrapper {
+ public:
+  EnvForDummyReporter() : EnvWrapper(Env::Default()) {}
+
+  uint64_t NowMicros() override { return 0; }
+  uint64_t NowNanos() override { return 0; }
+};
+// Do nothing
+class LoggerForDummyReporter : public Logger {
+ public:
+  LoggerForDummyReporter() : Logger(InfoLogLevel::HEADER_LEVEL) {}
+
+  void LogHeader(const char* /*format*/, va_list /*ap*/) override {}
+  void Logv(const char* /*format*/, va_list /*ap*/) override {}
+  void Logv(const InfoLogLevel /*log_level*/, const char* /*format*/,
+            va_list /*ap*/) override {}
+};
+static EnvForDummyReporter dummy_env_;
+static LoggerForDummyReporter dummy_logger_;
+static ByteDanceHistReporterHandle dummy_hist_("", "", &dummy_logger_,
+                                               &dummy_env_);
+static ByteDanceCountReporterHandle dummy_count_("", "", &dummy_logger_,
+                                                 &dummy_env_);
 }  // namespace
 #endif
 
