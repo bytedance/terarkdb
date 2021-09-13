@@ -10,3 +10,4 @@
 #cmakedefine WITH_BYTEDANCE_METRICS
 #cmakedefine WITH_TERARK_ZIP
 #cmakedefine WITH_BOOSTLIB
+#cmakedefine WITH_DIAGNOSE_CACHE

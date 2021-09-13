@@ -14,9 +14,6 @@
 #include <set>
 #include <sstream>
 #include <string>
-#ifdef WITH_DIAGNOSE_CACHE
-#include <terark/heap_ext.hpp>
-#endif  // !NDEBUG
 #include <unordered_map>
 
 #include "cache/sharded_cache.h"
@@ -24,6 +21,10 @@
 #include "rocksdb/terark_namespace.h"
 #include "util/autovector.h"
 #include "util/mutexlock.h"
+
+#ifdef WITH_DIAGNOSE_CACHE
+#include <terark/heap_ext.hpp>
+#endif  // !NDEBUG
 
 namespace TERARKDB_NAMESPACE {
 
