@@ -6,9 +6,10 @@
 #include "rocksdb/terark_namespace.h"
 #include "stats.h"
 namespace TERARKDB_NAMESPACE {
+
+#ifdef WITH_BYTEDANCE_METRICS
 class ByteDanceHistReporterHandle : public HistReporterHandle {
  public:
-#ifdef WITH_BYTEDANCE_METRICS
   ByteDanceHistReporterHandle(const std::string& name, const std::string& tags,
                               Logger* logger, Env* const env)
       : name_(name),
@@ -17,45 +18,24 @@ class ByteDanceHistReporterHandle : public HistReporterHandle {
         env_(env),
         last_log_time_ns_(env_->NowNanos()),
         stats_(last_log_time_ns_) {}
-#else
-  ByteDanceHistReporterHandle(const std::string& /*name*/,
-                              const std::string& /*tags*/, Logger* logger,
-                              Env* const env)
-      : logger_(logger), env_(env) {}
-#endif
 
   ~ByteDanceHistReporterHandle() override {
-#ifdef WITH_BYTEDANCE_METRICS
     for (auto* s : stats_arr_) {
       delete s;
     }
-#endif
   }
 
  public:
   void AddRecord(size_t val) override;
 
-  const char* GetName() override {
-#ifdef WITH_BYTEDANCE_METRICS
-    return name_.c_str();
-#else
-    return "";
-#endif
-  }
-  const char* GetTag() override {
-#ifdef WITH_BYTEDANCE_METRICS
-    return tags_.c_str();
-#else
-    return "";
-#endif
-  }
+  const char* GetName() override { return name_.c_str(); }
+  const char* GetTag() override { return tags_.c_str(); }
   Logger* GetLogger() override { return logger_; }
   Env* GetEnv() override { return env_; }
 
  private:
-#ifdef WITH_BYTEDANCE_METRICS
   enum {
-      kMaxThreadNum = 8192,
+    kMaxThreadNum = 8192,
   };
   const std::string& name_;
   const std::string& tags_;
@@ -68,17 +48,12 @@ class ByteDanceHistReporterHandle : public HistReporterHandle {
 
   std::atomic<bool> merge_lock_{false};
   HistStats<> stats_;
-#else
-  Logger* logger_;
-  Env* env_;
-#endif
 
   HistStats<>* GetThreadLocalStats();
 };
 
 class ByteDanceCountReporterHandle : public CountReporterHandle {
  public:
-#ifdef WITH_BYTEDANCE_METRICS
   ByteDanceCountReporterHandle(const std::string& name, const std::string& tags,
                                Logger* logger, Env* const env)
       : name_(name),
@@ -87,11 +62,6 @@ class ByteDanceCountReporterHandle : public CountReporterHandle {
         last_report_time_ns_(env_->NowNanos()),
         last_log_time_ns_(env_->NowNanos()),
         logger_(logger) {}
-#else
-  ByteDanceCountReporterHandle(const std::string& /*name*/,
-                               const std::string& /*tags*/, Logger* /*logger*/,
-                               Env* const /*env*/) {}
-#endif
 
   ~ByteDanceCountReporterHandle() override = default;
 
@@ -99,7 +69,6 @@ class ByteDanceCountReporterHandle : public CountReporterHandle {
   void AddCount(size_t val) override;
 
  private:
-#ifdef WITH_BYTEDANCE_METRICS
   std::atomic<bool> reporter_lock_{false};
 
   const std::string& name_;
@@ -112,8 +81,8 @@ class ByteDanceCountReporterHandle : public CountReporterHandle {
   Logger* logger_;
 
   std::atomic<size_t> count_{0};
-#endif
 };
+#endif
 
 class ByteDanceMetricsReporterFactory : public MetricsReporterFactory {
  public:
@@ -124,15 +93,14 @@ class ByteDanceMetricsReporterFactory : public MetricsReporterFactory {
   ~ByteDanceMetricsReporterFactory() override = default;
 
  public:
-  ByteDanceHistReporterHandle* BuildHistReporter(const std::string& name,
-                                                 const std::string& tags,
-                                                 Logger* logger,
-                                                 Env* const env) override;
+  HistReporterHandle* BuildHistReporter(const std::string& name,
+                                        const std::string& tags, Logger* logger,
+                                        Env* const env) override;
 
-  ByteDanceCountReporterHandle* BuildCountReporter(const std::string& name,
-                                                   const std::string& tags,
-                                                   Logger* logger,
-                                                   Env* const env) override;
+  CountReporterHandle* BuildCountReporter(const std::string& name,
+                                          const std::string& tags,
+                                          Logger* logger,
+                                          Env* const env) override;
 
  private:
 #ifdef WITH_BYTEDANCE_METRICS

@@ -28,6 +28,16 @@ class HistReporterHandle {
   virtual void AddRecord(size_t val) = 0;
 };
 
+class CountReporterHandle {
+ public:
+  CountReporterHandle() = default;
+
+  virtual ~CountReporterHandle() = default;
+
+ public:
+  virtual void AddCount(size_t val) = 0;
+};
+
 class LatencyHistGuard {
  public:
   explicit LatencyHistGuard(HistReporterHandle* handle);
@@ -51,17 +61,6 @@ class LatencyHistLoggedGuard {
   uint64_t log_threshold_us_;
   void* start_stacktrace_;
 };
-
-class CountReporterHandle {
- public:
-  CountReporterHandle() = default;
-
-  virtual ~CountReporterHandle() = default;
-
- public:
-  virtual void AddCount(size_t val) = 0;
-};
-
 class MetricsReporterFactory {
  public:
   MetricsReporterFactory() = default;
@@ -103,5 +102,8 @@ class CurriedMetricsReporterFactory {
     return factory_->BuildCountReporter(name, tags, logger_, env_);
   }
 };
+
+extern HistReporterHandle* DummyHistReporterHandle();
+extern CountReporterHandle* DummyCountReporterHandle();
 
 }  // namespace TERARKDB_NAMESPACE
