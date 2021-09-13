@@ -12,11 +12,11 @@
 namespace TERARKDB_NAMESPACE {
 
 const int kNanosInMilli = 1000000;
+static const char default_namespace[] = "terarkdb.engine.stats";
 
 #ifdef WITH_BYTEDANCE_METRICS
 static std::mutex metrics_mtx;
 static std::atomic<bool> metrics_init{false};
-static const char default_namespace[] = "terarkdb.engine.stats";
 
 static int GetThreadID() {
   static std::mutex mutex;
@@ -49,36 +49,82 @@ static int GetThreadID() {
   }
   return id;
 }
-#else
-namespace {
-// Ignore NowMicros & NowNanos
-class EnvForDummyReporter : public EnvWrapper {
+
+class ByteDanceHistReporterHandle : public HistReporterHandle {
  public:
-  EnvForDummyReporter() : EnvWrapper(Env::Default()) {}
+  ByteDanceHistReporterHandle(const std::string& name, const std::string& tags,
+                              Logger* logger, Env* const env)
+      : name_(name),
+        tags_(tags),
+        logger_(logger),
+        env_(env),
+        last_log_time_ns_(env_->NowNanos()),
+        stats_(last_log_time_ns_) {}
 
-  uint64_t NowMicros() override { return 0; }
-  uint64_t NowNanos() override { return 0; }
-};
-// Do nothing
-class LoggerForDummyReporter : public Logger {
+  ~ByteDanceHistReporterHandle() override {
+    for (auto* s : stats_arr_) {
+      delete s;
+    }
+  }
+
  public:
-  LoggerForDummyReporter() : Logger(InfoLogLevel::HEADER_LEVEL) {}
+  void AddRecord(size_t val) override;
 
-  void LogHeader(const char* /*format*/, va_list /*ap*/) override {}
-  void Logv(const char* /*format*/, va_list /*ap*/) override {}
-  void Logv(const InfoLogLevel /*log_level*/, const char* /*format*/,
-            va_list /*ap*/) override {}
+  const char* GetName() override { return name_.c_str(); }
+  const char* GetTag() override { return tags_.c_str(); }
+  Logger* GetLogger() override { return logger_; }
+  Env* GetEnv() override { return env_; }
+
+ private:
+  enum {
+    kMaxThreadNum = 8192,
+  };
+  const std::string& name_;
+  const std::string& tags_;
+
+  Logger* logger_;
+  Env* env_;
+  uint64_t last_log_time_ns_;
+
+  std::array<HistStats<>*, kMaxThreadNum> stats_arr_{};
+
+  std::atomic<bool> merge_lock_{false};
+  HistStats<> stats_;
+
+  HistStats<>* GetThreadLocalStats();
 };
-static EnvForDummyReporter dummy_env_;
-static LoggerForDummyReporter dummy_logger_;
-static ByteDanceHistReporterHandle dummy_hist_("", "", &dummy_logger_,
-                                               &dummy_env_);
-static ByteDanceCountReporterHandle dummy_count_("", "", &dummy_logger_,
-                                                 &dummy_env_);
-}  // namespace
-#endif
 
-#ifdef WITH_BYTEDANCE_METRICS
+class ByteDanceCountReporterHandle : public CountReporterHandle {
+ public:
+  ByteDanceCountReporterHandle(const std::string& name, const std::string& tags,
+                               Logger* logger, Env* const env)
+      : name_(name),
+        tags_(tags),
+        env_(env),
+        last_report_time_ns_(env_->NowNanos()),
+        last_log_time_ns_(env_->NowNanos()),
+        logger_(logger) {}
+
+  ~ByteDanceCountReporterHandle() override = default;
+
+ public:
+  void AddCount(size_t val) override;
+
+ private:
+  std::atomic<bool> reporter_lock_{false};
+
+  const std::string& name_;
+  const std::string& tags_;
+  Env* const env_;
+  uint64_t last_report_time_ns_;
+  size_t last_report_count_ = 0;
+
+  uint64_t last_log_time_ns_;
+  Logger* logger_;
+
+  std::atomic<size_t> count_{0};
+};
+
 void ByteDanceHistReporterHandle::AddRecord(size_t val) {
   auto* tls_stat_ptr = GetThreadLocalStats();
   if (tls_stat_ptr == nullptr) {
@@ -137,12 +183,8 @@ void ByteDanceHistReporterHandle::AddRecord(size_t val) {
     tls_stat.last_report_time_ns_ = curr_time_ns;
   }
 }
-#else
-void ByteDanceHistReporterHandle::AddRecord(size_t) {}
-#endif
 
 HistStats<>* ByteDanceHistReporterHandle::GetThreadLocalStats() {
-#ifdef WITH_BYTEDANCE_METRICS
   auto id = GetThreadID();
   if (id == -1) {
     return nullptr;
@@ -152,12 +194,8 @@ HistStats<>* ByteDanceHistReporterHandle::GetThreadLocalStats() {
     s = new HistStats<>(env_->NowNanos());
   }
   return s;
-#else
-  return nullptr;
-#endif
 }
 
-#ifdef WITH_BYTEDANCE_METRICS
 void ByteDanceCountReporterHandle::AddCount(size_t n) {
   count_.fetch_add(n, std::memory_order_relaxed);
   if (!reporter_lock_.load(std::memory_order_relaxed)) {
@@ -186,28 +224,19 @@ void ByteDanceCountReporterHandle::AddCount(size_t n) {
     }
   }
 }
-#else
-void ByteDanceCountReporterHandle::AddCount(size_t) {}
 #endif
 
 ByteDanceMetricsReporterFactory::ByteDanceMetricsReporterFactory() {
-#ifdef WITH_BYTEDANCE_METRICS
   InitNamespace(default_namespace);
-#endif
 }
 
-#ifdef WITH_BYTEDANCE_METRICS
 ByteDanceMetricsReporterFactory::ByteDanceMetricsReporterFactory(
     const std::string& ns) {
   InitNamespace(ns);
 }
-#else
-ByteDanceMetricsReporterFactory::ByteDanceMetricsReporterFactory(
-    const std::string& /*ns*/) {}
-#endif
 
-#ifdef WITH_BYTEDANCE_METRICS
 void ByteDanceMetricsReporterFactory::InitNamespace(const std::string& ns) {
+#ifdef WITH_BYTEDANCE_METRICS
   if (!metrics_init.load(std::memory_order_acquire)) {
     std::lock_guard<std::mutex> guard(metrics_mtx);
     if (!metrics_init.load(std::memory_order_relaxed)) {
@@ -217,44 +246,34 @@ void ByteDanceMetricsReporterFactory::InitNamespace(const std::string& ns) {
       metrics_init.store(true, std::memory_order_release);
     }
   }
-}
 #else
-void ByteDanceMetricsReporterFactory::InitNamespace(const std::string&) {}
+  (void)ns;
 #endif
+}
 
-#ifdef WITH_BYTEDANCE_METRICS
-ByteDanceHistReporterHandle* ByteDanceMetricsReporterFactory::BuildHistReporter(
+HistReporterHandle* ByteDanceMetricsReporterFactory::BuildHistReporter(
     const std::string& name, const std::string& tags, Logger* logger,
     Env* const env) {
+#ifdef WITH_BYTEDANCE_METRICS
   std::lock_guard<std::mutex> guard(metrics_mtx);
   hist_reporters_.emplace_back(name, tags, logger, env);
   return &hist_reporters_.back();
-}
 #else
-ByteDanceHistReporterHandle* ByteDanceMetricsReporterFactory::BuildHistReporter(
-    const std::string& /*name*/, const std::string& /*tags*/,
-    Logger* /*logger*/, Env* const /*env*/) {
-  return &dummy_hist_;
-}
+  (void)name, (void)tags, (void)logger, (void)env;
+  return DummyHistReporterHandle();
 #endif
+}
 
+CountReporterHandle* ByteDanceMetricsReporterFactory::BuildCountReporter(
+    const std::string& name, const std::string& tags, Logger* logger,
+    Env* const env) {
 #ifdef WITH_BYTEDANCE_METRICS
-ByteDanceCountReporterHandle*
-ByteDanceMetricsReporterFactory::BuildCountReporter(const std::string& name,
-                                                    const std::string& tags,
-                                                    Logger* logger,
-                                                    Env* const env) {
   std::lock_guard<std::mutex> guard(metrics_mtx);
   count_reporters_.emplace_back(name, tags, logger, env);
   return &count_reporters_.back();
-}
 #else
-ByteDanceCountReporterHandle*
-ByteDanceMetricsReporterFactory::BuildCountReporter(const std::string& /*name*/,
-                                                    const std::string& /*tags*/,
-                                                    Logger* /*logger*/,
-                                                    Env* const /*env*/) {
-  return &dummy_count_;
-}
+  (void)name, (void)tags, (void)logger, (void)env;
+  return DummyCountReporterHandle();
 #endif
+}
 }  // namespace TERARKDB_NAMESPACE

@@ -352,7 +352,7 @@ static std::string metrics_test_dbname = "metrics_test_dbname";
 void DBIter::Next() {
   static const std::string metric_name = "dbiter_next";
   LatencyHistGuard guard(db_impl_ == nullptr
-                             ? nullptr
+                             ? DummyHistReporterHandle()
                              : (db_impl_->next_qps_reporter().AddCount(1),
                                 &db_impl_->next_latency_reporter()));
 
@@ -684,7 +684,7 @@ bool DBIter::MergeValuesNewToOld() {
 void DBIter::Prev() {
   static const std::string metric_name = "dbiter_prev";
   LatencyHistGuard guard(db_impl_ == nullptr
-                             ? nullptr
+                             ? DummyHistReporterHandle()
                              : (db_impl_->prev_qps_reporter().AddCount(1),
                                 &db_impl_->prev_latency_reporter()));
 
@@ -1183,7 +1183,7 @@ SequenceNumber DBIter::MaxVisibleSequenceNumber() {
 static const std::string seek_metric_name = "dbiter_seek";
 void DBIter::Seek(const Slice& target) {
   LatencyHistGuard guard(db_impl_ == nullptr
-                             ? nullptr
+                             ? DummyHistReporterHandle()
                              : (db_impl_->seek_qps_reporter().AddCount(1),
                                 &db_impl_->seek_latency_reporter()));
 
@@ -1247,7 +1247,7 @@ void DBIter::Seek(const Slice& target) {
 static const std::string seekforprev_metric_name = "dbiter_seekforprev";
 void DBIter::SeekForPrev(const Slice& target) {
   LatencyHistGuard guard(
-      db_impl_ == nullptr ? nullptr
+      db_impl_ == nullptr ? DummyHistReporterHandle()
                           : (db_impl_->seekforprev_qps_reporter().AddCount(1),
                              &db_impl_->seekforprev_latency_reporter()));
 
@@ -1309,7 +1309,7 @@ void DBIter::SeekForPrev(const Slice& target) {
 
 void DBIter::SeekToFirst() {
   LatencyHistGuard guard(db_impl_ == nullptr
-                             ? nullptr
+                             ? DummyHistReporterHandle()
                              : (db_impl_->seek_qps_reporter().AddCount(1),
                                 &db_impl_->seek_latency_reporter()));
   if (iterate_lower_bound_ != nullptr) {
@@ -1357,7 +1357,7 @@ void DBIter::SeekToFirst() {
 
 void DBIter::SeekToLast() {
   LatencyHistGuard guard(
-      db_impl_ == nullptr ? nullptr
+      db_impl_ == nullptr ? DummyHistReporterHandle()
                           : (db_impl_->seekforprev_qps_reporter().AddCount(1),
                              &db_impl_->seek_latency_reporter()));
   if (iterate_upper_bound_ != nullptr) {
