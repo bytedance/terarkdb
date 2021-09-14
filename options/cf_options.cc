@@ -162,8 +162,7 @@ void MutableCFOptions::RefreshDerivedOptions(
   if (ioptions.ttl_extractor_factory != nullptr) {
     int_tbl_prop_collector_factories->emplace_back(
         NewTtlIntTblPropCollectorFactory(ioptions.ttl_extractor_factory,
-                                         ioptions.env, ttl_gc_ratio,
-                                         ttl_max_scan_gap));
+                                         ttl_gc_ratio, ttl_max_scan_gap));
   }
 }
 
@@ -333,7 +332,7 @@ MutableCFOptions::MutableCFOptions(const ColumnFamilyOptions& options, Env* env)
   if (options.ttl_extractor_factory != nullptr) {
     int_tbl_prop_collector_factories->emplace_back(
         NewTtlIntTblPropCollectorFactory(options.ttl_extractor_factory.get(),
-                                         env, ttl_gc_ratio, ttl_max_scan_gap));
+                                         ttl_gc_ratio, ttl_max_scan_gap));
   }
 }
 

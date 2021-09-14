@@ -154,7 +154,7 @@ class UserKeyTablePropertiesCollectorFactory
 };
 
 extern IntTblPropCollectorFactory* NewTtlIntTblPropCollectorFactory(
-    const TtlExtractorFactory* ttl_extractor_factory, Env* env,
-    double ttl_gc_ratio, size_t ttl_max_scan_cap);
+    const TtlExtractorFactory* ttl_extractor_factory, double ttl_gc_ratio,
+    size_t ttl_max_scan_cap);
 
 }  // namespace TERARKDB_NAMESPACE

@@ -4,8 +4,8 @@
 #include "db/table_properties_collector.h"
 #include "rocksdb/terark_namespace.h"
 #include "table/block_based_table_builder.h"
-#include "util/string_util.h"
 #include "util/coding.h"
+#include "util/string_util.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
@@ -72,7 +72,6 @@ INSTANTIATE_TEST_CASE_P(CorrectnessTest, BlockBasedTableBuilderTest,
                         testing::ValuesIn(ttl_param));
 
 TEST_F(BlockBasedTableBuilderTest, FunctionTest) {
-
   BlockBasedTableOptions blockbasedtableoptions;
   BlockBasedTableFactory factory(blockbasedtableoptions);
   test::StringSink sink;
@@ -164,7 +163,7 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
   auto n = GetParam();
   options.ttl_gc_ratio = n.ttl_ratio;
   options.ttl_max_scan_gap = n.ttl_scan;
-  options.ttl_extractor_factory.reset(new test::TestTtlExtractorFactory());
+  options.ttl_extractor_factory.reset(new test::TestTtlExtractorFactory(env));
   Status s = DB::Open(options, dbname, &db);
   ASSERT_OK(s);
   ASSERT_TRUE(db != nullptr);
@@ -178,9 +177,9 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
       int_tbl_prop_collector_factories;
 
   int_tbl_prop_collector_factories.emplace_back(
-      NewTtlIntTblPropCollectorFactory(
-          options.ttl_extractor_factory.get(), env,
-          moptions.ttl_gc_ratio, moptions.ttl_max_scan_gap));
+      NewTtlIntTblPropCollectorFactory(options.ttl_extractor_factory.get(),
+                                       moptions.ttl_gc_ratio,
+                                       moptions.ttl_max_scan_gap));
   std::string column_family_name;
   int unknown_level = -1;
   std::unique_ptr<TableBuilder> builder(factory.NewTableBuilder(
@@ -191,13 +190,13 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
                           unknown_level, 0 /* compaction_load */),
       TablePropertiesCollectorFactory::Context::kUnknownColumnFamily,
       file_writer.get()));
-
+  uint64_t nowseconds = env->NowMicros() / 1000000ul;
   std::vector<int> key_ttl(26, 0);
   for (int i = 0; i < 26; i++) {
-    key_ttl[i] = i + 1;
+    key_ttl[i] = i + 1 + nowseconds;
   }
   int min_ttl = *std::min_element(key_ttl.begin(), key_ttl.end());
-  uint64_t nowseconds = env->NowMicros() / 1000000ul;
+
   std::random_device rd;
   std::mt19937 g(rd());
   std::shuffle(key_ttl.begin(), key_ttl.end(), g);
@@ -249,7 +248,7 @@ TEST_P(BlockBasedTableBuilderTest, BoundaryTest) {
 
     if (n.ttl_ratio <= 0.0) {
       // EXPECT_EQ(nowseconds + min_ttl, props->ratio_expire_time);
-      ASSERT_EQ(act_answer1, nowseconds + min_ttl);
+      ASSERT_EQ(act_answer1, min_ttl);
     } else {
       std::cout << "[==========]  ratio_ttl:";
       // std::cout << props->ratio_expire_time - nowseconds << "s" << std::endl;
