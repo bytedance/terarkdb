@@ -431,41 +431,66 @@ size_t WriteThread::EnterAsBatchGroupLeader(Writer* leader,
   // Tricky. Iteration start (leader) is exclusive and finish
   // (newest_writer) is inclusive. Iteration goes from old to new.
   Writer* w = leader;
+  auto move_writer = [](Writer* w, Writer* newest_writer) {
+    if (w == newest_writer) {
+      return w;
+    }
+    Writer* pre = w->link_older;
+    Writer* next = w->link_newer;
+    pre->link_newer = next;
+    next->link_older = pre;
+
+    w->link_newer = newest_writer;
+    w->link_older = newest_writer->link_older;
+    newest_writer->link_older->link_newer = w;
+    newest_writer->link_older = w;
+    return pre;
+  };
   while (w != newest_writer) {
     w = w->link_newer;
 
     if (w->sync && !leader->sync) {
       // Do not include a sync write into a batch handled by a non-sync write.
-      break;
+      w = move_writer(w, newest_writer);
+      continue;
     }
 
     if (w->no_slowdown != leader->no_slowdown) {
       // Do not mix writes that are ok with delays with the ones that
       // request fail on delays.
-      break;
+      w = move_writer(w, newest_writer);
+      continue;
     }
 
     if (!w->disable_wal && leader->disable_wal) {
       // Do not include a write that needs WAL into a batch that has
       // WAL disabled.
-      break;
+      w = move_writer(w, newest_writer);
+      continue;
+    }
+    if (w->disable_wal && !leader->disable_wal) {
+      w = move_writer(w, newest_writer);
+      continue;
     }
 
     if (w->batch == nullptr) {
       // Do not include those writes with nullptr batch. Those are not writes,
       // those are something else. They want to be alone
-      break;
+      w = move_writer(w, newest_writer);
+      continue;
     }
 
     if (w->callback != nullptr && !w->callback->AllowWriteBatching()) {
       // dont batch writes that don't want to be batched
-      break;
+      w = move_writer(w, newest_writer);
+      continue;
     }
 
     auto batch_size = WriteBatchInternal::ByteSize(w->batch);
     if (size + batch_size > max_size) {
       // Do not make batch too big
-      break;
+      w = move_writer(w, newest_writer);
+      continue;
     }
 
     w->write_group = write_group;
