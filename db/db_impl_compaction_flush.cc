@@ -2131,6 +2131,12 @@ Status DBImpl::BackgroundFlush(bool* made_progress, JobContext* job_context,
       delete cfd;
     }
   };
+  // When need_force_flush(cfd) return true, the reason maybe
+  // TryInstallMemtableFlushResults returns kInstallTimeout.
+  auto need_force_flush = [](ColumnFamilyData* cfd) {
+    return cfd->ioptions()->atomic_flush_group == nullptr &&
+           cfd->imm()->HasFlushRequested();
+  };
 
   autovector<BGFlushArg> bg_flush_args;
   std::vector<SuperVersionContext>& superversion_contexts =
@@ -2141,18 +2147,20 @@ Status DBImpl::BackgroundFlush(bool* made_progress, JobContext* job_context,
     superversion_contexts.clear();
     superversion_contexts.reserve(flush_req.size());
 
-    bool has_pending = false;
+    bool need_flush = false;
     for (auto& pair : flush_req) {
       ColumnFamilyData* cfd = pair.first;
-      if (!cfd->IsDropped() && cfd->imm()->IsFlushPending()) {
-        has_pending = true;
+      if (!cfd->IsDropped() &&
+          (cfd->imm()->IsFlushPending() || need_force_flush(cfd))) {
+        need_flush = true;
         break;
       }
     }
-    if (has_pending) {
+    if (need_flush) {
       for (auto& pair : flush_req) {
         ColumnFamilyData* cfd = pair.first;
-        if (cfd->IsDropped() || cfd->imm()->NumNotFlushed() == 0) {
+        if (cfd->IsDropped() ||
+            (cfd->imm()->NumNotFlushed() == 0 && !need_force_flush(cfd))) {
           unref_cfd(cfd);
         } else {
           superversion_contexts.emplace_back(SuperVersionContext(true));
