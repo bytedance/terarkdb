@@ -67,7 +67,6 @@ if (WITH_WINDOWS_UTF8_FILENAMES)
 endif()
 
 if(WITH_ZENFS)
-  add_definitions(-DLIBZBD)
   add_compile_definitions(ROCKSDB_NAMESPACE=${WITH_TERARKDB_NAMESPACE})
 endif()
 

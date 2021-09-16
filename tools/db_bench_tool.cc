@@ -82,10 +82,6 @@
 #include <io.h>  // open/close
 #endif
 
-#ifndef WITH_ZENFS
-#undef LIBZBD
-#endif
-
 #ifdef LIBZBD
 #include "env/env_zenfs.h"
 #include "env/zbd_zenfs.h"
