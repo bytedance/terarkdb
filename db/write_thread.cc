@@ -431,7 +431,10 @@ size_t WriteThread::EnterAsBatchGroupLeader(Writer* leader,
   // Tricky. Iteration start (leader) is exclusive and finish
   // (newest_writer) is inclusive. Iteration goes from old to new.
   Writer* w = leader;
-  auto move_writer = [](Writer* w, Writer* newest_writer) {
+  Writer* next_leader = nullptr;
+
+  auto move_writer = [](Writer* w, Writer* newest_writer,
+                        Writer** next_leader) {
     if (w == newest_writer) {
       return w;
     }
@@ -444,21 +447,30 @@ size_t WriteThread::EnterAsBatchGroupLeader(Writer* leader,
     w->link_older = newest_writer->link_older;
     newest_writer->link_older->link_newer = w;
     newest_writer->link_older = w;
+
+    if (*next_leader == nullptr) {
+      *next_leader = w;
+    }
+
     return pre;
   };
   while (w != newest_writer) {
     w = w->link_newer;
 
+    if (next_leader && w == next_leader) {
+      break;
+    }
+
     if (w->sync && !leader->sync) {
       // Do not include a sync write into a batch handled by a non-sync write.
-      w = move_writer(w, newest_writer);
+      w = move_writer(w, newest_writer, &next_leader);
       continue;
     }
 
     if (w->no_slowdown != leader->no_slowdown) {
       // Do not mix writes that are ok with delays with the ones that
       // request fail on delays.
-      w = move_writer(w, newest_writer);
+      w = move_writer(w, newest_writer, &next_leader);
       continue;
     }
 
@@ -467,27 +479,27 @@ size_t WriteThread::EnterAsBatchGroupLeader(Writer* leader,
       // WAL disabled.
       // Do not include a write that WAL disabled into a batch that has
       // need WAL.
-      w = move_writer(w, newest_writer);
+      w = move_writer(w, newest_writer, &next_leader);
       continue;
     }
 
     if (w->batch == nullptr) {
       // Do not include those writes with nullptr batch. Those are not writes,
       // those are something else. They want to be alone
-      w = move_writer(w, newest_writer);
+      w = move_writer(w, newest_writer, &next_leader);
       continue;
     }
 
     if (w->callback != nullptr && !w->callback->AllowWriteBatching()) {
       // dont batch writes that don't want to be batched
-      w = move_writer(w, newest_writer);
+      w = move_writer(w, newest_writer, &next_leader);
       continue;
     }
 
     auto batch_size = WriteBatchInternal::ByteSize(w->batch);
     if (size + batch_size > max_size) {
       // Do not make batch too big
-      w = move_writer(w, newest_writer);
+      w = move_writer(w, newest_writer, &next_leader);
       continue;
     }
 
