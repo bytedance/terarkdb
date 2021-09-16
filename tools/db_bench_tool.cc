@@ -82,6 +82,10 @@
 #include <io.h>  // open/close
 #endif
 
+#ifndef WITH_ZENFS
+#undef LIBZBD
+#endif
+
 #ifdef LIBZBD
 #include "env/env_zenfs.h"
 #include "env/zbd_zenfs.h"
@@ -5844,11 +5848,13 @@ int db_bench_tool(int argc, char** argv) {
       exit(1);
     }
   } else if (!FLAGS_fs_uri.empty()) {
+#ifdef WITH_ZENFS
     Status s = NewZenEnv(&FLAGS_env, FLAGS_fs_uri);
     if (!s.ok()) {
       fprintf(stderr, "Error: %s\n", s.ToString().c_str());
       exit(1);
     }
+#endif
   }
 #endif  // ROCKSDB_LITE
   if (!FLAGS_hdfs.empty()) {
