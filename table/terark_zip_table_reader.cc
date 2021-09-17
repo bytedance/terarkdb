@@ -873,28 +873,10 @@ void TerarkZipSubReader::InitUsePread(int minPreadLen) {
   estimateUnzipCap_ = size_t(avgUnzipSize * 1.62);  // a bit larger than 1.618
 }
 
-static const byte_t* FsPread(void* vself, size_t offset, size_t len,
-                             valvec<byte_t>* buf) {
-  TerarkZipSubReader* self = (TerarkZipSubReader*)vself;
-  buf->resize_no_init(len);
-  Slice unused;
-  Status s = self->storeFileObj_->FsRead(offset, len, &unused, buf->data());
-  if (terark_unlikely(!s.ok())) {
-    // to be catched by TerarkZipSubReader::Get()
-    throw std::logic_error(s.ToString());
-  }
-  return buf->data();
-}
-
 void TerarkZipSubReader::GetRecordAppend(size_t recId,
                                          valvec<byte_t>* tbuf) const {
   if (storeUsePread_) {
-    auto cache = cache_;
-    if (cache)
-      store_->pread_record_append(cache, storeFD_, storeOffset_, recId, tbuf);
-    else
-      store_->fspread_record_append(&FsPread, (void*)this, storeOffset_, recId,
-                                    tbuf);
+    store_->pread_record_append(cache_, storeFD_, storeOffset_, recId, tbuf);
   } else {
     store_->get_record_append(recId, tbuf);
   }
@@ -903,13 +885,8 @@ void TerarkZipSubReader::GetRecordAppend(size_t recId,
 void TerarkZipSubReader::GetRecordAppend(
     size_t recId, terark::BlobStore::CacheOffsets* co) const {
   if (storeUsePread_) {
-    auto cache = cache_;
-    if (cache)
-      store_->pread_record_append(cache, storeFD_, storeOffset_, recId,
-                                  &co->recData);
-    else
-      store_->fspread_record_append(&FsPread, (void*)this, storeOffset_, recId,
-                                    &co->recData);
+    store_->pread_record_append(cache_, storeFD_, storeOffset_, recId,
+                                &co->recData);
   } else
     store_->get_record_append(recId, co);
 }
@@ -1182,7 +1159,7 @@ Status TerarkZipTableReader::Open(RandomAccessFileReader* file,
         (byte_t*)file_data.data() + indexSize + storeSize, recNum);
   }
   subReader_.subIndex_ = 0;
-  subReader_.storeFD_ = file_->file()->FileDescriptor();
+  // subReader_.storeFD_ = file_->file()->FileDescriptor();
   subReader_.storeFileObj_ = file_->file();
   subReader_.storeOffset_ = indexSize;
   subReader_.InitUsePread(tzto_.minPreadLen);

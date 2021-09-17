@@ -503,18 +503,6 @@ Status PosixMmapReadableFile::Read(uint64_t offset, size_t n, Slice* result,
   return s;
 }
 
-// Now FsRead is only used by TerarkDB
-// Now FsRead is also used by RandomAccessFileReader
-// There are 2 purpose of FsRead:
-// 1. Preventing link page cache to process's address space
-// 2. Implement network fs by client lib(faster than fuse...)
-Status PosixMmapReadableFile::FsRead(uint64_t offset, size_t len, Slice* result,
-                                     void* buf) const {
-  bool use_direct_io = false;
-  return PosixFsRead(offset, len, result, (char*)buf, fd_, filename_,
-                     use_aio_reads_, use_direct_io, 0);
-}
-
 Status PosixMmapReadableFile::InvalidateCache(size_t offset, size_t length) {
   size_t upper_offset = ((offset + 4095) & ~4095);
   size_t lower_length = ((offset + length) & ~4095) - upper_offset;
@@ -1115,41 +1103,4 @@ Status PosixDirectory::Fsync() {
   return Status::OK();
 }
 }  // namespace TERARKDB_NAMESPACE
-
-#ifdef ZENFS_READY
-static FactoryFunc<FileSystem> zenfs_filesystem_reg =
-    ObjectLibrary::Default()->Register<FileSystem>(
-        "zenfs://.*", [](const std::string& uri, std::unique_ptr<FileSystem>* f,
-                         std::string* errmsg) {
-          std::string devID = uri;
-          FileSystem* fs = nullptr;
-          Status s;
-
-          devID.replace(0, strlen("zenfs://"), "");
-          if (devID.rfind("dev:") == 0) {
-            devID.replace(0, strlen("dev:"), "");
-            s = NewZenFS(&fs, devID);
-            if (!s.ok()) {
-              *errmsg = s.ToString();
-            }
-          } else if (devID.rfind("uuid:") == 0) {
-            std::map<std::string, std::string> zenFileSystems =
-                ListZenFileSystems();
-            devID.replace(0, strlen("uuid:"), "");
-
-            if (zenFileSystems.find(devID) == zenFileSystems.end()) {
-              *errmsg = "UUID not found";
-            } else {
-              s = NewZenFS(&fs, zenFileSystems[devID]);
-              if (!s.ok()) {
-                *errmsg = s.ToString();
-              }
-            }
-          } else {
-            *errmsg = "Malformed URI";
-          }
-          f->reset(fs);
-          return f->get();
-        });
-#endif
 #endif

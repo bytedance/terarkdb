@@ -13,17 +13,566 @@
 
 #include "options/db_options.h"
 #include "port/port.h"
-#include "port/sys_time.h"
+#include "rocksdb/file_system.h"
+#include "rocksdb/io_status.h"
 #include "rocksdb/options.h"
 #include "rocksdb/terark_namespace.h"
+#include "rocksdb/utilities/object_registry.h"
 #include "util/arena.h"
 #include "util/autovector.h"
-#include "utilities/util/factory.h"
-#include "utilities/util/function.hpp"
 
 namespace TERARKDB_NAMESPACE {
+namespace {
+class LegacySequentialFileWrapper : public FSSequentialFile {
+ public:
+  explicit LegacySequentialFileWrapper(
+      std::unique_ptr<SequentialFile>&& _target)
+      : target_(std::move(_target)) {}
+
+  IOStatus Read(size_t n, const IOOptions& /*options*/, Slice* result,
+                char* scratch, IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->Read(n, result, scratch));
+  }
+  IOStatus Skip(uint64_t n) override {
+    return status_to_io_status(target_->Skip(n));
+  }
+  bool use_direct_io() const override { return target_->use_direct_io(); }
+  size_t GetRequiredBufferAlignment() const override {
+    return target_->GetRequiredBufferAlignment();
+  }
+  IOStatus InvalidateCache(size_t offset, size_t length) override {
+    return status_to_io_status(target_->InvalidateCache(offset, length));
+  }
+  IOStatus PositionedRead(uint64_t offset, size_t n,
+                          const IOOptions& /*options*/, Slice* result,
+                          char* scratch, IODebugContext* /*dbg*/) override {
+    return status_to_io_status(
+        target_->PositionedRead(offset, n, result, scratch));
+  }
+
+ private:
+  std::unique_ptr<SequentialFile> target_;
+};
+
+class LegacyRandomAccessFileWrapper : public FSRandomAccessFile {
+ public:
+  explicit LegacyRandomAccessFileWrapper(
+      std::unique_ptr<RandomAccessFile>&& target)
+      : target_(std::move(target)) {}
+
+  IOStatus Read(uint64_t offset, size_t n, const IOOptions& /*options*/,
+                Slice* result, char* scratch,
+                IODebugContext* /*dbg*/) const override {
+    return status_to_io_status(target_->Read(offset, n, result, scratch));
+  }
+
+  IOStatus MultiRead(FSReadRequest* fs_reqs, size_t num_reqs,
+                     const IOOptions& /*options*/,
+                     IODebugContext* /*dbg*/) override {
+    std::vector<FSReadRequest> reqs;
+    Status status;
+
+    reqs.reserve(num_reqs);
+    for (size_t i = 0; i < num_reqs; ++i) {
+      FSReadRequest req;
+
+      req.offset = fs_reqs[i].offset;
+      req.len = fs_reqs[i].len;
+      req.scratch = fs_reqs[i].scratch;
+      req.status = Status::OK();
+
+      reqs.emplace_back(req);
+    }
+    status = target_->MultiRead(reqs.data(), num_reqs);
+    for (size_t i = 0; i < num_reqs; ++i) {
+      fs_reqs[i].result = reqs[i].result;
+      fs_reqs[i].status = status_to_io_status(std::move(reqs[i].status));
+    }
+    return status_to_io_status(std::move(status));
+  }
+
+  IOStatus Prefetch(uint64_t offset, size_t n, const IOOptions& /*options*/,
+                    IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->Prefetch(offset, n));
+  }
+  size_t GetUniqueId(char* id, size_t max_size) const override {
+    return target_->GetUniqueId(id, max_size);
+  }
+  void Hint(AccessPattern pattern) override {
+    target_->Hint((RandomAccessFile::AccessPattern)pattern);
+  }
+  bool use_direct_io() const override { return target_->use_direct_io(); }
+  size_t GetRequiredBufferAlignment() const override {
+    return target_->GetRequiredBufferAlignment();
+  }
+  IOStatus InvalidateCache(size_t offset, size_t length) override {
+    return status_to_io_status(target_->InvalidateCache(offset, length));
+  }
+
+ private:
+  std::unique_ptr<RandomAccessFile> target_;
+};
+
+class LegacyRandomRWFileWrapper : public FSRandomRWFile {
+ public:
+  explicit LegacyRandomRWFileWrapper(std::unique_ptr<RandomRWFile>&& target)
+      : target_(std::move(target)) {}
+
+  bool use_direct_io() const override { return target_->use_direct_io(); }
+  size_t GetRequiredBufferAlignment() const override {
+    return target_->GetRequiredBufferAlignment();
+  }
+  IOStatus Write(uint64_t offset, const Slice& data,
+                 const IOOptions& /*options*/,
+                 IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->Write(offset, data));
+  }
+  IOStatus Read(uint64_t offset, size_t n, const IOOptions& /*options*/,
+                Slice* result, char* scratch,
+                IODebugContext* /*dbg*/) const override {
+    return status_to_io_status(target_->Read(offset, n, result, scratch));
+  }
+  IOStatus Flush(const IOOptions& /*options*/,
+                 IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->Flush());
+  }
+  IOStatus Sync(const IOOptions& /*options*/,
+                IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->Sync());
+  }
+  IOStatus Fsync(const IOOptions& /*options*/,
+                 IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->Fsync());
+  }
+  IOStatus Close(const IOOptions& /*options*/,
+                 IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->Close());
+  }
+
+ private:
+  std::unique_ptr<RandomRWFile> target_;
+};
+
+class LegacyWritableFileWrapper : public FSWritableFile {
+ public:
+  explicit LegacyWritableFileWrapper(std::unique_ptr<WritableFile>&& _target)
+      : target_(std::move(_target)) {}
+
+  IOStatus Append(const Slice& data, const IOOptions& /*options*/,
+                  IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->Append(data));
+  }
+  IOStatus Append(const Slice& data, const IOOptions& /*options*/,
+                  const DataVerificationInfo& /*verification_info*/,
+                  IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->Append(data));
+  }
+  IOStatus PositionedAppend(const Slice& data, uint64_t offset,
+                            const IOOptions& /*options*/,
+                            IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->PositionedAppend(data, offset));
+  }
+  IOStatus PositionedAppend(const Slice& data, uint64_t offset,
+                            const IOOptions& /*options*/,
+                            const DataVerificationInfo& /*verification_info*/,
+                            IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->PositionedAppend(data, offset));
+  }
+  IOStatus Truncate(uint64_t size, const IOOptions& /*options*/,
+                    IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->Truncate(size));
+  }
+  IOStatus Close(const IOOptions& /*options*/,
+                 IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->Close());
+  }
+  IOStatus Flush(const IOOptions& /*options*/,
+                 IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->Flush());
+  }
+  IOStatus Sync(const IOOptions& /*options*/,
+                IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->Sync());
+  }
+  IOStatus Fsync(const IOOptions& /*options*/,
+                 IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->Fsync());
+  }
+  bool IsSyncThreadSafe() const override { return target_->IsSyncThreadSafe(); }
+
+  bool use_direct_io() const override { return target_->use_direct_io(); }
+
+  size_t GetRequiredBufferAlignment() const override {
+    return target_->GetRequiredBufferAlignment();
+  }
+
+  void SetWriteLifeTimeHint(Env::WriteLifeTimeHint hint) override {
+    target_->SetWriteLifeTimeHint(hint);
+  }
+
+  Env::WriteLifeTimeHint GetWriteLifeTimeHint() override {
+    return target_->GetWriteLifeTimeHint();
+  }
+
+  uint64_t GetFileSize(const IOOptions& /*options*/,
+                       IODebugContext* /*dbg*/) override {
+    return target_->GetFileSize();
+  }
+
+  void SetPreallocationBlockSize(size_t size) override {
+    target_->SetPreallocationBlockSize(size);
+  }
+
+  void GetPreallocationStatus(size_t* block_size,
+                              size_t* last_allocated_block) override {
+    target_->GetPreallocationStatus(block_size, last_allocated_block);
+  }
+
+  size_t GetUniqueId(char* id, size_t max_size) const override {
+    return target_->GetUniqueId(id, max_size);
+  }
+
+  IOStatus InvalidateCache(size_t offset, size_t length) override {
+    return status_to_io_status(target_->InvalidateCache(offset, length));
+  }
+
+  IOStatus RangeSync(uint64_t offset, uint64_t nbytes,
+                     const IOOptions& /*options*/,
+                     IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->RangeSync(offset, nbytes));
+  }
+
+  void PrepareWrite(size_t offset, size_t len, const IOOptions& /*options*/,
+                    IODebugContext* /*dbg*/) override {
+    target_->PrepareWrite(offset, len);
+  }
+
+  IOStatus Allocate(uint64_t offset, uint64_t len, const IOOptions& /*options*/,
+                    IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->Allocate(offset, len));
+  }
+
+ private:
+  std::unique_ptr<WritableFile> target_;
+};
+
+class LegacyDirectoryWrapper : public FSDirectory {
+ public:
+  explicit LegacyDirectoryWrapper(std::unique_ptr<Directory>&& target)
+      : target_(std::move(target)) {}
+
+  IOStatus Fsync(const IOOptions& /*options*/,
+                 IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->Fsync());
+  }
+  size_t GetUniqueId(char* id, size_t max_size) const override {
+    return target_->GetUniqueId(id, max_size);
+  }
+
+ private:
+  std::unique_ptr<Directory> target_;
+};
+
+}  // end anonymous namespace
+
+class LegacyFileSystemWrapper : public FileSystem {
+ public:
+  // Initialize an EnvWrapper that delegates all calls to *t
+  explicit LegacyFileSystemWrapper(Env* t) : target_(t) {}
+  ~LegacyFileSystemWrapper() override {}
+
+  const char* Name() const override { return "Legacy File System"; }
+
+  // Return the target to which this Env forwards all calls
+  Env* target() const { return target_; }
+
+  // The following text is boilerplate that forwards all methods to target()
+  IOStatus NewSequentialFile(const std::string& f, const FileOptions& file_opts,
+                             std::unique_ptr<FSSequentialFile>* r,
+                             IODebugContext* /*dbg*/) override {
+    std::unique_ptr<SequentialFile> file;
+    Status s = target_->NewSequentialFile(f, &file, file_opts);
+    if (s.ok()) {
+      r->reset(new LegacySequentialFileWrapper(std::move(file)));
+    }
+    return status_to_io_status(std::move(s));
+  }
+  IOStatus NewRandomAccessFile(const std::string& f,
+                               const FileOptions& file_opts,
+                               std::unique_ptr<FSRandomAccessFile>* r,
+                               IODebugContext* /*dbg*/) override {
+    std::unique_ptr<RandomAccessFile> file;
+    Status s = target_->NewRandomAccessFile(f, &file, file_opts);
+    if (s.ok()) {
+      r->reset(new LegacyRandomAccessFileWrapper(std::move(file)));
+    }
+    return status_to_io_status(std::move(s));
+  }
+  IOStatus NewWritableFile(const std::string& f, const FileOptions& file_opts,
+                           std::unique_ptr<FSWritableFile>* r,
+                           IODebugContext* /*dbg*/) override {
+    std::unique_ptr<WritableFile> file;
+    Status s = target_->NewWritableFile(f, &file, file_opts);
+    if (s.ok()) {
+      r->reset(new LegacyWritableFileWrapper(std::move(file)));
+    }
+    return status_to_io_status(std::move(s));
+  }
+  IOStatus ReopenWritableFile(const std::string& fname,
+                              const FileOptions& file_opts,
+                              std::unique_ptr<FSWritableFile>* result,
+                              IODebugContext* /*dbg*/) override {
+    std::unique_ptr<WritableFile> file;
+    Status s = target_->ReopenWritableFile(fname, &file, file_opts);
+    if (s.ok()) {
+      result->reset(new LegacyWritableFileWrapper(std::move(file)));
+    }
+    return status_to_io_status(std::move(s));
+  }
+  IOStatus ReuseWritableFile(const std::string& fname,
+                             const std::string& old_fname,
+                             const FileOptions& file_opts,
+                             std::unique_ptr<FSWritableFile>* r,
+                             IODebugContext* /*dbg*/) override {
+    std::unique_ptr<WritableFile> file;
+    Status s = target_->ReuseWritableFile(fname, old_fname, &file, file_opts);
+    if (s.ok()) {
+      r->reset(new LegacyWritableFileWrapper(std::move(file)));
+    }
+    return status_to_io_status(std::move(s));
+  }
+  IOStatus NewRandomRWFile(const std::string& fname,
+                           const FileOptions& file_opts,
+                           std::unique_ptr<FSRandomRWFile>* result,
+                           IODebugContext* /*dbg*/) override {
+    std::unique_ptr<RandomRWFile> file;
+    Status s = target_->NewRandomRWFile(fname, &file, file_opts);
+    if (s.ok()) {
+      result->reset(new LegacyRandomRWFileWrapper(std::move(file)));
+    }
+    return status_to_io_status(std::move(s));
+  }
+  IOStatus NewMemoryMappedFileBuffer(
+      const std::string& fname,
+      std::unique_ptr<MemoryMappedFileBuffer>* result) override {
+    return status_to_io_status(
+        target_->NewMemoryMappedFileBuffer(fname, result));
+  }
+  IOStatus NewDirectory(const std::string& name, const IOOptions& /*io_opts*/,
+                        std::unique_ptr<FSDirectory>* result,
+                        IODebugContext* /*dbg*/) override {
+    std::unique_ptr<Directory> dir;
+    Status s = target_->NewDirectory(name, &dir);
+    if (s.ok()) {
+      result->reset(new LegacyDirectoryWrapper(std::move(dir)));
+    }
+    return status_to_io_status(std::move(s));
+  }
+  IOStatus FileExists(const std::string& f, const IOOptions& /*io_opts*/,
+                      IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->FileExists(f));
+  }
+  IOStatus GetChildren(const std::string& dir, const IOOptions& /*io_opts*/,
+                       std::vector<std::string>* r,
+                       IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->GetChildren(dir, r));
+  }
+  IOStatus GetChildrenFileAttributes(const std::string& dir,
+                                     const IOOptions& /*options*/,
+                                     std::vector<FileAttributes>* result,
+                                     IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->GetChildrenFileAttributes(dir, result));
+  }
+  IOStatus DeleteFile(const std::string& f, const IOOptions& /*options*/,
+                      IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->DeleteFile(f));
+  }
+  IOStatus Truncate(const std::string& fname, size_t size,
+                    const IOOptions& /*options*/,
+                    IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->Truncate(fname, size));
+  }
+  IOStatus CreateDir(const std::string& d, const IOOptions& /*options*/,
+                     IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->CreateDir(d));
+  }
+  IOStatus CreateDirIfMissing(const std::string& d,
+                              const IOOptions& /*options*/,
+                              IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->CreateDirIfMissing(d));
+  }
+  IOStatus DeleteDir(const std::string& d, const IOOptions& /*options*/,
+                     IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->DeleteDir(d));
+  }
+  IOStatus GetFileSize(const std::string& f, const IOOptions& /*options*/,
+                       uint64_t* s, IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->GetFileSize(f, s));
+  }
+
+  IOStatus GetFileModificationTime(const std::string& fname,
+                                   const IOOptions& /*options*/,
+                                   uint64_t* file_mtime,
+                                   IODebugContext* /*dbg*/) override {
+    return status_to_io_status(
+        target_->GetFileModificationTime(fname, file_mtime));
+  }
+
+  IOStatus GetAbsolutePath(const std::string& db_path,
+                           const IOOptions& /*options*/,
+                           std::string* output_path,
+                           IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->GetAbsolutePath(db_path, output_path));
+  }
+
+  IOStatus RenameFile(const std::string& s, const std::string& t,
+                      const IOOptions& /*options*/,
+                      IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->RenameFile(s, t));
+  }
+
+  IOStatus LinkFile(const std::string& s, const std::string& t,
+                    const IOOptions& /*options*/,
+                    IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->LinkFile(s, t));
+  }
+
+  IOStatus NumFileLinks(const std::string& fname, const IOOptions& /*options*/,
+                        uint64_t* count, IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->NumFileLinks(fname, count));
+  }
+
+  IOStatus AreFilesSame(const std::string& first, const std::string& second,
+                        const IOOptions& /*options*/, bool* res,
+                        IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->AreFilesSame(first, second, res));
+  }
+
+  IOStatus LockFile(const std::string& f, const IOOptions& /*options*/,
+                    FileLock** l, IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->LockFile(f, l));
+  }
+
+  IOStatus UnlockFile(FileLock* l, const IOOptions& /*options*/,
+                      IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->UnlockFile(l));
+  }
+
+  IOStatus GetTestDirectory(const IOOptions& /*options*/, std::string* path,
+                            IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->GetTestDirectory(path));
+  }
+  IOStatus NewLogger(const std::string& fname, const IOOptions& /*options*/,
+                     std::shared_ptr<Logger>* result,
+                     IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->NewLogger(fname, result));
+  }
+
+  void SanitizeFileOptions(FileOptions* opts) const override {
+    target_->SanitizeEnvOptions(opts);
+  }
+
+  FileOptions OptimizeForLogRead(
+      const FileOptions& file_options) const override {
+    return target_->OptimizeForLogRead(file_options);
+  }
+  FileOptions OptimizeForManifestRead(
+      const FileOptions& file_options) const override {
+    return target_->OptimizeForManifestRead(file_options);
+  }
+  FileOptions OptimizeForLogWrite(const FileOptions& file_options,
+                                  const DBOptions& db_options) const override {
+    return target_->OptimizeForLogWrite(file_options, db_options);
+  }
+  FileOptions OptimizeForManifestWrite(
+      const FileOptions& file_options) const override {
+    return target_->OptimizeForManifestWrite(file_options);
+  }
+  FileOptions OptimizeForCompactionTableWrite(
+      const FileOptions& file_options,
+      const ImmutableDBOptions& immutable_ops) const override {
+    return target_->OptimizeForCompactionTableWrite(file_options,
+                                                    immutable_ops);
+  }
+  FileOptions OptimizeForCompactionTableRead(
+      const FileOptions& file_options,
+      const ImmutableDBOptions& db_options) const override {
+    return target_->OptimizeForCompactionTableRead(file_options, db_options);
+  }
+  FileOptions OptimizeForBlobFileRead(
+      const FileOptions& file_options,
+      const ImmutableDBOptions& db_options) const override {
+    return target_->OptimizeForBlobFileRead(file_options, db_options);
+  }
+
+#ifdef GetFreeSpace
+#undef GetFreeSpace
+#endif
+  IOStatus GetFreeSpace(const std::string& path, const IOOptions& /*options*/,
+                        uint64_t* diskfree, IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->GetFreeSpace(path, diskfree));
+  }
+  IOStatus IsDirectory(const std::string& path, const IOOptions& /*options*/,
+                       bool* is_dir, IODebugContext* /*dbg*/) override {
+    return status_to_io_status(target_->IsDirectory(path, is_dir));
+  }
+
+ private:
+  Env* target_;
+};
+
+Env::Env() : thread_status_updater_(nullptr) {
+  file_system_ = std::make_shared<LegacyFileSystemWrapper>(this);
+}
+
+Env::Env(const std::shared_ptr<FileSystem>& fs)
+    : thread_status_updater_(nullptr), file_system_(fs) {}
 
 Env::~Env() {}
+
+Status Env::LoadEnv(const std::string& value, Env** result) {
+  Env* env = *result;
+  Status s;
+#ifndef ROCKSDB_LITE
+  s = ObjectRegistry::NewInstance()->NewStaticObject<Env>(value, &env);
+#else
+  s = Status::NotSupported("Cannot load environment in LITE mode", value);
+#endif
+  if (s.ok()) {
+    *result = env;
+  }
+  return s;
+}
+
+Status Env::LoadEnv(const std::string& value, Env** result,
+                    std::shared_ptr<Env>* guard) {
+  assert(result);
+  Status s;
+#ifndef ROCKSDB_LITE
+  Env* env = nullptr;
+  std::unique_ptr<Env> uniq_guard;
+  std::string err_msg;
+  assert(guard != nullptr);
+  env = ObjectRegistry::NewInstance()->NewObject<Env>(value, &uniq_guard,
+                                                      &err_msg);
+  if (!env) {
+    s = Status::NotFound(std::string("Cannot load ") + Env::Type() + ": " +
+                         value);
+    env = Env::Default();
+  }
+  if (s.ok() && uniq_guard) {
+    guard->reset(uniq_guard.release());
+    *result = guard->get();
+  } else {
+    *result = env;
+  }
+#else
+  (void)result;
+  (void)guard;
+  s = Status::NotSupported("Cannot load environment in LITE mode", value);
+#endif
+  return s;
+}
 
 std::string Env::PriorityToString(Env::Priority priority) {
   switch (priority) {
@@ -33,6 +582,8 @@ std::string Env::PriorityToString(Env::Priority priority) {
       return "Low";
     case Env::Priority::HIGH:
       return "High";
+    case Env::Priority::USER:
+      return "User";
     case Env::Priority::TOTAL:
       assert(false);
   }
@@ -81,14 +632,19 @@ Status Env::GetChildrenFileAttributes(const std::string& dir,
   return Status::OK();
 }
 
+Status Env::GetHostNameString(std::string* result) {
+  std::array<char, kMaxHostNameLen> hostname_buf;
+  Status s = GetHostName(hostname_buf.data(), hostname_buf.size());
+  if (s.ok()) {
+    hostname_buf[hostname_buf.size() - 1] = '\0';
+    result->assign(hostname_buf.data());
+  }
+  return s;
+}
+
 SequentialFile::~SequentialFile() {}
 
 RandomAccessFile::~RandomAccessFile() {}
-
-Status RandomAccessFile::FsRead(uint64_t offset, size_t len, Slice* res,
-                                void* buf) const {
-  return Read(offset, len, res, (char*)buf);
-}
 
 WritableFile::~WritableFile() {}
 
@@ -143,11 +699,21 @@ void Logger::Logv(const InfoLogLevel log_level, const char* format,
     // are INFO level. We don't want to add extra costs to those existing
     // logging.
     Logv(format, ap);
+  } else if (log_level == InfoLogLevel::HEADER_LEVEL) {
+    LogHeader(format, ap);
   } else {
     char new_format[500];
     snprintf(new_format, sizeof(new_format) - 1, "[%s] %s",
              kInfoLogLevelNames[log_level], format);
     Logv(new_format, ap);
+  }
+
+  if (log_level >= InfoLogLevel::WARN_LEVEL &&
+      log_level != InfoLogLevel::HEADER_LEVEL) {
+    // Log messages with severity of warning or higher should be rare and are
+    // sometimes followed by an unclean crash. We want to be sure important
+    // messages are not lost in an application buffer when that happens.
+    Flush();
   }
 }
 
@@ -311,45 +877,13 @@ void Log(const std::shared_ptr<Logger>& info_log, const char* format, ...) {
 
 Status WriteStringToFile(Env* env, const Slice& data, const std::string& fname,
                          bool should_sync) {
-  std::unique_ptr<WritableFile> file;
-  EnvOptions soptions;
-  Status s = env->NewWritableFile(fname, &file, soptions);
-  if (!s.ok()) {
-    return s;
-  }
-  s = file->Append(data);
-  if (s.ok() && should_sync) {
-    s = file->Sync();
-  }
-  if (!s.ok()) {
-    env->DeleteFile(fname);
-  }
-  return s;
+  const auto& fs = env->GetFileSystem();
+  return WriteStringToFile(fs.get(), data, fname, should_sync);
 }
 
 Status ReadFileToString(Env* env, const std::string& fname, std::string* data) {
-  EnvOptions soptions;
-  data->clear();
-  std::unique_ptr<SequentialFile> file;
-  Status s = env->NewSequentialFile(fname, &file, soptions);
-  if (!s.ok()) {
-    return s;
-  }
-  static const int kBufferSize = 8192;
-  char* space = new char[kBufferSize];
-  while (true) {
-    Slice fragment;
-    s = file->Read(kBufferSize, &fragment, space);
-    if (!s.ok()) {
-      break;
-    }
-    data->append(fragment.data(), fragment.size());
-    if (fragment.empty()) {
-      break;
-    }
-  }
-  delete[] space;
-  return s;
+  const auto& fs = env->GetFileSystem();
+  return ReadFileToString(fs.get(), fname, data);
 }
 
 EnvWrapper::~EnvWrapper() {}
@@ -370,6 +904,7 @@ void AssignEnvOptions(EnvOptions* env_options, const DBOptions& options) {
   env_options->writable_file_max_buffer_size =
       options.writable_file_max_buffer_size;
   env_options->allow_fallocate = options.allow_fallocate;
+  options.env->SanitizeEnvOptions(env_options);
 }
 
 }  // namespace
@@ -413,6 +948,12 @@ EnvOptions Env::OptimizeForCompactionTableRead(
   optimized_env_options.use_direct_reads = db_options.use_direct_reads;
   return optimized_env_options;
 }
+EnvOptions Env::OptimizeForBlobFileRead(
+    const EnvOptions& env_options, const ImmutableDBOptions& db_options) const {
+  EnvOptions optimized_env_options(env_options);
+  optimized_env_options.use_direct_reads = db_options.use_direct_reads;
+  return optimized_env_options;
+}
 
 EnvOptions::EnvOptions(const DBOptions& options) {
   AssignEnvOptions(this, options);
@@ -423,16 +964,15 @@ EnvOptions::EnvOptions() {
   AssignEnvOptions(this, options);
 }
 
-#define FROM_ENV_bool(field) \
-  (field = terark::getEnvBool("EnvOptions_" TERARK_PP_STR(field), field))
+const std::shared_ptr<FileSystem>& Env::GetFileSystem() const {
+  return file_system_;
+}
 
-void EnvOptions::InitFromEnvVar() {
-  FROM_ENV_bool(use_aio_reads);
-  FROM_ENV_bool(use_mmap_reads);
-  FROM_ENV_bool(use_mmap_writes);
-  FROM_ENV_bool(use_direct_reads);
-  FROM_ENV_bool(use_direct_writes);
-  FROM_ENV_bool(use_aio_reads);
+std::shared_ptr<FileSystem> FileSystem::Default() {
+  static LegacyFileSystemWrapper default_fs(Env::Default());
+  static std::shared_ptr<LegacyFileSystemWrapper> default_fs_ptr(
+      &default_fs, [](LegacyFileSystemWrapper*) {});
+  return default_fs_ptr;
 }
 
 }  // namespace TERARKDB_NAMESPACE

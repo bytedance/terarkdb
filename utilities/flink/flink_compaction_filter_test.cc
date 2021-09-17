@@ -103,7 +103,7 @@ void Init(
       logger);
   auto config = new FlinkCompactionFilter::Config{
       state_type, timestamp_offset, ttl, QUERY_TIME_AFTER_NUM_ENTRIES,
-      unique_ptr<FlinkCompactionFilter::ListElementFilterFactory>(
+      std::unique_ptr<FlinkCompactionFilter::ListElementFilterFactory>(
           fixed_len_filter_factory)};
   EXPECT_EQ(decide(), KKEEP);  // test disabled config
   EXPECT_TRUE(config_holder->Configure(config));

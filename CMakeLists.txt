@@ -66,10 +66,6 @@ if (WITH_WINDOWS_UTF8_FILENAMES)
   add_definitions(-DROCKSDB_WINDOWS_UTF8_FILENAMES)
 endif()
 
-if(WITH_ZENFS)
-  add_compile_definitions(ROCKSDB_NAMESPACE=${WITH_TERARKDB_NAMESPACE})
-endif()
-
 IF(FORCE_TERARKDB_RELEASE_BUILD)
   SET(CMAKE_BUILD_TYPE "Release")
 ENDIF()
@@ -612,6 +608,7 @@ set(SOURCES
         env/env_encryption.cc
         env/env_hdfs.cc
         env/env_io_prof.cc
+        env/file_system.cc
         env/mock_env.cc
         memtable/alloc_tracker.cc
         memtable/concurrent_hashduallist_rep.cc
@@ -742,6 +739,7 @@ set(SOURCES
         utilities/merge_operators/string_append/stringappend.cc
         utilities/merge_operators/string_append/stringappend2.cc
         utilities/merge_operators/uint64add.cc
+        utilities/object_registry.cc
         utilities/option_change_migration/option_change_migration.cc
         utilities/options/options_util.cc
         utilities/persistent_cache/block_cache_tier.cc
@@ -839,11 +837,10 @@ if(WIN32)
 
     if(WITH_ZENFS)
       list(APPEND SOURCES
+        env/env_zenfs.cc
         third-party/zenfs/fs/fs_zenfs.cc
         third-party/zenfs/fs/io_zenfs.cc
-        third-party/zenfs/fs/zbd_zenfs.cc
-        third-party/zenfs/util/zenfs.cc
-        tools/zenfs_tool.cc)
+        third-party/zenfs/fs/zbd_zenfs.cc)
     endif()
 endif()
 
@@ -1202,10 +1199,11 @@ if(WITH_TOOLS)
       $<TARGET_OBJECTS:testharness>)
   target_link_libraries(db_bench${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
 
-  add_executable(zenfs${ARTIFACT_SUFFIX} tools/zenfs.cc
-      tools/zenfs_tool.cc
-      $<TARGET_OBJECTS:testharness>)
-  target_link_libraries(zenfs${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
+  if(WITH_ZENFS)
+    add_executable(zenfs${ARTIFACT_SUFFIX} third-party/zenfs/util/zenfs.cc
+        $<TARGET_OBJECTS:testharness>)
+    target_link_libraries(zenfs${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
+  endif()
 
   if(WITH_TERARK_ZIP)
     add_subdirectory(terark-tools/terark-test)

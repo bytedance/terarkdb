@@ -26,6 +26,7 @@ THREADS = 16
 DB_DIR = ""
 BENCH_TYPE = "fillseq"
 BENCH_ARGS = []
+ZBD_PATH = ""
 
 # collected result log
 LOG_RESULT_FNAME = "log.txt"
@@ -41,14 +42,16 @@ def bench(records, key_size, value_size, engine, db_dir, exist_db):
                          --use_terark_table=false
                          --blob_size=128
                       """
-
     if BENCH_TYPE == 'readrandomwriterandom':
         extra_flags += """
                          --readwritepercent=%s
                        """ % BENCH_ARGS[0]
+    if ZBD_PATH != '':
+        extra_flags += """
+                         --zbd_path=%s
+                       """ % ZBD_PATH
     cmd = """
            {db_bench} \
-           --fs_uri=/dev/nvme3n2
            --benchmarks={bench_type}
 	   --use_existing_db={exist_db}
            --sync=1

@@ -130,7 +130,7 @@ CompactionFilter::Decision FlinkCompactionFilter::FilterV2(
   Debug(logger_.get(),
         "Call FlinkCompactionFilter::FilterV2 - Key: %s, Data: %s, Value type: "
         "%d, "
-        "State type: %d, TTL: %d ms, timestamp_offset: %d",
+        "State type: %d, TTL: %ld ms, timestamp_offset: %ld",
         key.ToString().c_str(), existing_value.ToString(true).c_str(),
         value_type, config_cached_->state_type_, config_cached_->ttl_,
         config_cached_->timestamp_offset_);
@@ -189,11 +189,12 @@ std::size_t FlinkCompactionFilter::ListNextUnexpiredOffset(
   std::size_t new_offset = list_element_filter_->NextUnexpiredOffset(
       existing_value, ttl, current_timestamp_);
   if (new_offset >= JAVA_MAX_SIZE || new_offset < offset) {
-    Error(logger_.get(), "Wrong next offset in list filter: %d -> %d", offset,
+    Error(logger_.get(), "Wrong next offset in list filter: %ld -> %ld", offset,
           new_offset);
     new_offset = JAVA_MAX_SIZE;
   } else {
-    Debug(logger_.get(), "Next unexpired offset: %d -> %d", offset, new_offset);
+    Debug(logger_.get(), "Next unexpired offset: %ld -> %ld", offset,
+          new_offset);
   }
   return new_offset;
 }

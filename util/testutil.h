@@ -235,6 +235,10 @@ class StringSink : public WritableFile {
     contents_.append(slice.data(), slice.size());
     return Status::OK();
   }
+  virtual Status Append(const Slice& data,
+                        const DataVerificationInfo& /* verification_info */) {
+    return Append(data);
+  }
   void Drop(size_t bytes) {
     if (reader_contents_ != nullptr) {
       contents_.resize(contents_.size() - bytes);
@@ -391,6 +395,10 @@ class OverwritingStringSink : public WritableFile {
   virtual Status Append(const Slice& slice) override {
     contents_.append(slice.data(), slice.size());
     return Status::OK();
+  }
+  virtual Status Append(const Slice& data,
+                        const DataVerificationInfo& /* verification_info */) {
+    return Append(data);
   }
   void Drop(size_t bytes) {
     contents_.resize(contents_.size() - bytes);
@@ -622,6 +630,10 @@ class StringEnv : public EnvWrapper {
     virtual Status Append(const Slice& slice) override {
       contents_->append(slice.data(), slice.size());
       return Status::OK();
+    }
+    virtual Status Append(const Slice& data,
+                          const DataVerificationInfo& /* verification_info */) {
+      return Append(data);
     }
 
    private:
