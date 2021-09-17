@@ -488,11 +488,13 @@ Status TerarkZipTableFactory::SanitizeOptions(
   auto& tzto = *reinterpret_cast<const TerarkZipTableOptions*>(
       table_factory->GetOptions());
   try {
-    terark::TempFileDeleteOnClose test;
-    test.path = tzto.localTempDir + "/Terark-XXXXXX";
-    test.open_temp();
-    test.writer << "Terark";
-    test.complete_write();
+    if (tzto.terarkZipMinLevel != -2) {
+      terark::TempFileDeleteOnClose test;
+      test.path = tzto.localTempDir + "/Terark-XXXXXX";
+      test.open_temp();
+      test.writer << "Terark";
+      test.complete_write();
+    }
   } catch (...) {
     std::string msg = "ERROR: bad localTempDir : " + tzto.localTempDir;
     fprintf(stderr, "%s\n", msg.c_str());
