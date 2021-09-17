@@ -7,14 +7,6 @@ BASE=$PWD
 OUTPUT=output
 mkdir -p $OUTPUT
 
-if [ "$WITH_TESTS" = "1" ];then
-  WITH_TESTS=ON
-else
-  WITH_TESTS=OFF
-fi
-
-echo "build $BUILD_TYPE, with_tests = $WITH_TESTS"
-
 if test -n "$BUILD_BRANCH"; then
     # this script is run in SCM auto build
     git checkout "$BUILD_BRANCH"
