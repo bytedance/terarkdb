@@ -149,8 +149,8 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
       compaction_dispatcher ? compaction_dispatcher->Name() : "None");
   ROCKS_LOG_HEADER(log, "        Options.memtable_factory: %s",
                    memtable_factory->Name());
-  ROCKS_LOG_HEADER(log, "      Options.atomic_flush_group: %012X",
-                   atomic_flush_group.get());
+  ROCKS_LOG_HEADER(log, "      Options.atomic_flush_group: %012" PRIXPTR,
+                   uintptr_t(atomic_flush_group.get()));
   ROCKS_LOG_HEADER(log, "           Options.table_factory: %s",
                    table_factory->Name());
   ROCKS_LOG_HEADER(log, "           table_factory options: %s",
@@ -197,17 +197,13 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
       log, "              Options.bottommost_compression_opts.strategy: %d",
       bottommost_compression_opts.strategy);
   ROCKS_LOG_HEADER(
-      log,
-      "        Options.bottommost_compression_opts.max_dict_bytes: "
-      "%" ROCKSDB_PRIszt,
+      log, "        Options.bottommost_compression_opts.max_dict_bytes: %u",
       bottommost_compression_opts.max_dict_bytes);
   ROCKS_LOG_HEADER(
-      log,
-      "  Options.bottommost_compression_opts.zstd_max_train_bytes: "
-      "%" ROCKSDB_PRIszt,
+      log, "  Options.bottommost_compression_opts.zstd_max_train_bytes: %u",
       bottommost_compression_opts.zstd_max_train_bytes);
   ROCKS_LOG_HEADER(
-      log, "                 Options.bottommost_compression_opts.enabled: %s",
+      log, "               Options.bottommost_compression_opts.enabled: %s",
       bottommost_compression_opts.enabled ? "true" : "false");
   ROCKS_LOG_HEADER(log, "           Options.compression_opts.window_bits: %d",
                    compression_opts.window_bits);
@@ -215,12 +211,10 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
                    compression_opts.level);
   ROCKS_LOG_HEADER(log, "              Options.compression_opts.strategy: %d",
                    compression_opts.strategy);
-  ROCKS_LOG_HEADER(
-      log, "        Options.compression_opts.max_dict_bytes: %" ROCKSDB_PRIszt,
-      compression_opts.max_dict_bytes);
-  ROCKS_LOG_HEADER(
-      log, "  Options.compression_opts.zstd_max_train_bytes: %" ROCKSDB_PRIszt,
-      compression_opts.zstd_max_train_bytes);
+  ROCKS_LOG_HEADER(log, "        Options.compression_opts.max_dict_bytes: %u",
+                   compression_opts.max_dict_bytes);
+  ROCKS_LOG_HEADER(log, "  Options.compression_opts.zstd_max_train_bytes: %u",
+                   compression_opts.zstd_max_train_bytes);
   ROCKS_LOG_HEADER(log, "               Options.compression_opts.enabled: %s",
                    compression_opts.enabled ? "true" : "false");
   ROCKS_LOG_HEADER(log, "     Options.level0_file_num_compaction_trigger: %d",

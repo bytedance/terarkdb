@@ -729,16 +729,18 @@ Status DBImpl::PreprocessWrite(const WriteOptions& write_options,
     status = SwitchWAL(write_context);
   }
 
-  if (UNLIKELY(status.ok() &&
-               ((!single_column_family_mode_ &&
-                 alive_log_files_.back().size > GetMaxWalSize()) ||
-                write_buffer_manager_->ShouldFlush()))) {
+  if (UNLIKELY(status.ok() && write_buffer_manager_->ShouldFlush())) {
     // Before a new memtable is added in SwitchMemtable(),
     // write_buffer_manager_->ShouldFlush() will keep returning true. If another
     // thread is writing to another DB with the same write buffer, they may also
     // be flushed. We may end up with flushing much more DBs than needed. It's
     // suboptimal but still correct.
     status = HandleWriteBufferFull(write_context);
+  }
+
+  if (UNLIKELY(status.ok() && !single_column_family_mode_ &&
+               alive_log_files_.back().size > GetMaxWalSize())) {
+    status = HandleMaxWalSize(write_context);
   }
 
   if (UNLIKELY(status.ok() && !flush_scheduler_.Empty())) {
@@ -1041,6 +1043,7 @@ Status DBImpl::SwitchWAL(WriteContext* write_context) {
   }
 
   auto oldest_alive_log = alive_log_files_.begin()->number;
+  auto oldest_alive_log_seq = alive_log_files_.begin()->seq;
   bool flush_wont_release_oldest_log = false;
   if (allow_2pc()) {
     auto oldest_log_with_uncommited_prep =
@@ -1076,34 +1079,62 @@ Status DBImpl::SwitchWAL(WriteContext* write_context) {
   // no need to refcount because drop is happening in write thread, so can't
   // happen while we're in the write thread
   autovector<ColumnFamilyData*> cfds;
+  autovector<ColumnFamilyData*> cfds_flush_only;
   for (auto cfd : *versions_->GetColumnFamilySet()) {
     if (cfd->IsDropped()) {
       continue;
     }
-    if (cfd->OldestLogToKeep() <= oldest_alive_log) {
+    if (cfd->mem()->GetCreationSeq() <= oldest_alive_log_seq) {
+      // Need switch memtable & flush.
+      // ProcessAtomicFlushGroup will make atomic_flush_group happy.
       cfds.push_back(cfd);
+    } else if (cfd->ioptions()->atomic_flush_group != nullptr) {
+      if (cfd->imm()->GetEarliestCreationSeqNotFlushInProgress() <=
+          oldest_alive_log_seq) {
+        // Only happens on min_write_buffer_number_to_merge > 1.
+        // Need switch memtable & flush all cfs in same atomic_flush_group.
+        cfds.push_back(cfd);
+      }
+    } else if (!cfd->imm()->HasFlushRequested() &&
+               cfd->imm()->NumNotFlushed() > 0 &&
+               cfd->imm()->GetEarliestCreationSeqNotFlushInProgress() <=
+                   oldest_alive_log_seq) {
+      // Happens on min_write_buffer_number_to_merge > 1.
+      // Flush only is OK.
+      cfds_flush_only.push_back(cfd);
     }
   }
   FlushRequestVec flush_req_vec;
   ProcessAtomicFlushGroup(&cfds, &flush_req_vec);
-  uint64_t total_log_size = total_log_size_.load();
-  uint64_t max_total_wal_size = GetMaxTotalWalSize();
   for (const auto cfd : cfds) {
-    ROCKS_LOG_BUFFER(
-        &write_context->info_buffer,
-        "Flushing column family [%s] with data in WAL number %" PRIu64
-        ". Total log size is %" PRIu64 " while max_total_wal_size is %" PRIu64,
-        cfd->GetName().c_str(), oldest_alive_log, total_log_size,
-        max_total_wal_size);
-
     cfd->Ref();
     status = SwitchMemtable(cfd, write_context);
     cfd->Unref();
     if (!status.ok()) {
       break;
     }
+    assert(std::find(cfds_flush_only.begin(), cfds_flush_only.end(), cfd) ==
+           cfds_flush_only.end());
   }
   if (status.ok()) {
+    for (auto cfd : cfds_flush_only) {
+      assert(cfd->ioptions()->atomic_flush_group == nullptr);
+      cfds.push_back(cfd);
+      flush_req_vec.emplace_back();
+      auto& flush_req = flush_req_vec.back();
+      flush_req.emplace_back(cfd, 0);
+    }
+    uint64_t total_log_size = total_log_size_.load();
+    uint64_t max_total_wal_size = GetMaxTotalWalSize();
+    for (const auto cfd : cfds) {
+      ROCKS_LOG_BUFFER(
+          &write_context->info_buffer,
+          "Flushing column family [%s] with data in WAL number %" PRIu64
+          ". Total log size is %" PRIu64
+          " while max_total_wal_size is %" PRIu64,
+          cfd->GetName().c_str(), oldest_alive_log, total_log_size,
+          max_total_wal_size);
+    }
     PrepareFlushReqVec(flush_req_vec, true /* force_flush */);
     SchedulePendingFlush(flush_req_vec, FlushReason::kWriteBufferManager);
     MaybeScheduleFlushOrCompaction();
@@ -1122,15 +1153,6 @@ Status DBImpl::HandleWriteBufferFull(WriteContext* write_context) {
   // be flushed. We may end up with flushing much more DBs than needed. It's
   // suboptimal but still correct.
   WriteBufferFlushPri flush_pri = immutable_db_options_.write_buffer_flush_pri;
-  FlushReason flush_reason;
-  uint64_t alive_log_files_back_size = alive_log_files_.back().size;
-  uint64_t max_wal_size = GetMaxWalSize();
-  if (alive_log_files_back_size > max_wal_size) {
-    flush_pri = kFlushOldest;
-    flush_reason = FlushReason::kWriteBufferManager;
-  } else {
-    flush_reason = FlushReason::kWriteBufferFull;
-  }
   // no need to refcount because drop is happening in write thread, so can't
   // happen while we're in the write thread
   autovector<ColumnFamilyData*> cfds;
@@ -1166,30 +1188,20 @@ Status DBImpl::HandleWriteBufferFull(WriteContext* write_context) {
     cfds.push_back(cfd_picked);
   }
   ProcessAtomicFlushGroup(&cfds, &flush_req_vec);
-  if (flush_reason == FlushReason::kWriteBufferManager) {
-    for (auto cfd : cfds) {
-      ROCKS_LOG_BUFFER(
-          &write_context->info_buffer,
-          "Flushing column family [%s] with oldest sequence number. Latest log "
-          "size is %" PRIu64 " while max_wal_size is %" PRIu64,
-          cfd->GetName().c_str(), alive_log_files_back_size, max_wal_size);
-    }
-  } else {
-    uint64_t memory_usage = write_buffer_manager_->memory_usage();
-    uint64_t buffer_size = write_buffer_manager_->buffer_size();
-    for (auto cfd : cfds) {
-      ROCKS_LOG_BUFFER(
-          &write_context->info_buffer,
-          "Flushing column family [%s] with %s. Write buffer is using %" PRIu64
-          " bytes out of a total of %" PRIu64 ".",
-          cfd->GetName().c_str(),
-          flush_pri == kFlushLargest ? "largest mem table size"
-                                     : "oldest sequence number",
-          memory_usage, buffer_size);
-    }
+  uint64_t memory_usage = write_buffer_manager_->memory_usage();
+  uint64_t buffer_size = write_buffer_manager_->buffer_size();
+  for (auto cfd : cfds) {
+    ROCKS_LOG_BUFFER(
+        &write_context->info_buffer,
+        "Flushing column family [%s] with %s. Write buffer is using %" PRIu64
+        " bytes out of a total of %" PRIu64 ".",
+        cfd->GetName().c_str(),
+        flush_pri == kFlushLargest ? "largest mem table size"
+                                   : "oldest sequence number",
+        memory_usage, buffer_size);
   }
 
-  for (const auto cfd : cfds) {
+  for (auto cfd : cfds) {
     if (cfd->mem()->IsEmpty()) {
       continue;
     }
@@ -1202,10 +1214,44 @@ Status DBImpl::HandleWriteBufferFull(WriteContext* write_context) {
   }
   if (status.ok()) {
     PrepareFlushReqVec(flush_req_vec, true /* force_flush */);
-    SchedulePendingFlush(flush_req_vec, flush_reason);
+    SchedulePendingFlush(flush_req_vec, FlushReason::kWriteBufferManager);
     MaybeScheduleFlushOrCompaction();
   }
   return status;
+}
+
+Status DBImpl::HandleMaxWalSize(WriteContext* write_context) {
+  mutex_.AssertHeld();
+  assert(write_context != nullptr);
+
+  ColumnFamilyData* cfd_picked = nullptr;
+  SequenceNumber seq_num_for_cf_picked = kMaxSequenceNumber;
+
+  for (auto cfd : *versions_->GetColumnFamilySet()) {
+    if (cfd->IsDropped()) {
+      continue;
+    }
+    if (!cfd->mem()->IsEmpty()) {
+      // For multi cf mode, we chose the oldest memtable to flush for reduce
+      // SwitchWAL calls
+      uint64_t seq = cfd->mem()->GetCreationSeq();
+      if (cfd_picked == nullptr || seq < seq_num_for_cf_picked) {
+        cfd_picked = cfd;
+        seq_num_for_cf_picked = seq;
+      }
+    }
+  }
+  if (cfd_picked != nullptr) {
+    uint64_t alive_log_files_back_size = alive_log_files_.back().size;
+    uint64_t max_wal_size = GetMaxWalSize();
+    ROCKS_LOG_BUFFER(
+        &write_context->info_buffer,
+        "Switch memtable on column family [%s] with oldest sequence number. "
+        "Latest log size is %" PRIu64 " while max_wal_size is %" PRIu64,
+        cfd_picked->GetName().c_str(), alive_log_files_back_size, max_wal_size);
+    flush_scheduler_.ScheduleFlush(cfd_picked);
+  }
+  return Status::OK();
 }
 
 uint64_t DBImpl::GetMaxWalSize() const {
@@ -1341,12 +1387,13 @@ Status DBImpl::ScheduleFlushes(WriteContext* context) {
   FlushRequestVec flush_req_vec;
   ProcessAtomicFlushGroup(&cfds, &flush_req_vec);
   Status status;
-  for (auto& cfd : cfds) {
-    if (!cfd->mem()->IsEmpty()) {
-      status = SwitchMemtable(cfd, context);
-      if (!status.ok()) {
-        break;
-      }
+  for (auto cfd : cfds) {
+    if (cfd->mem()->IsEmpty()) {
+      continue;
+    }
+    status = SwitchMemtable(cfd, context);
+    if (!status.ok()) {
+      break;
     }
   }
   for (auto& cfd : tmp_cfds) {
@@ -1633,7 +1680,8 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
                      alive_log_file_count, cur_log_writer->get_log_number());
     }
     logs_.emplace_back(logfile_number_, new_log);
-    alive_log_files_.push_back(LogFileNumberSize(logfile_number_));
+    alive_log_files_.push_back(
+        LogFileNumberSize(logfile_number_, versions_->LastSequence()));
     log_write_mutex_.Unlock();
   }
 

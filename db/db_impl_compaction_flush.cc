@@ -1360,10 +1360,13 @@ Status DBImpl::Flush(const FlushOptions& flush_options,
                    cfhi->GetName().c_str());
     cfds.emplace_back(cfhi->cfd());
   }
+  ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                 "=====End of column families list=====");
   Status s = FlushMemTable(cfds, flush_options, FlushReason::kManualFlush);
   ROCKS_LOG_INFO(immutable_db_options_.info_log,
-                 "Manual flush finished, status: %s\n",
-                 "=====Column families:=====", s.ToString().c_str());
+                 "Manual flush finished, status: %s\n"
+                 "=====Column families:=====",
+                 s.ToString().c_str());
   for (auto cfh : column_families) {
     auto cfhi = static_cast<ColumnFamilyHandleImpl*>(cfh);
     ROCKS_LOG_INFO(immutable_db_options_.info_log, "%s",
@@ -1605,7 +1608,9 @@ Status DBImpl::FlushMemTable(
     ProcessAtomicFlushGroup(&cfds, &flush_req_vec);
     for (auto cfd : cfds) {
       if (!cfd->mem()->IsEmpty() || !cached_recoverable_state_empty_.load()) {
+        cfd->Ref();
         s = SwitchMemtable(cfd, &context);
+        cfd->Unref();
       }
       if (!s.ok()) {
         break;

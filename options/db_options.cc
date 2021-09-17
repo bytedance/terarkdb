@@ -206,7 +206,7 @@ void ImmutableDBOptions::Dump(Logger* log) const {
       log, "    Options.sst_file_manager.rate_bytes_per_sec: %" PRIi64,
       sst_file_manager ? sst_file_manager->GetDeleteRateBytesPerSecond() : 0);
   ROCKS_LOG_HEADER(log, "                      Options.wal_recovery_mode: %d",
-                   wal_recovery_mode);
+                   int(wal_recovery_mode));
   ROCKS_LOG_HEADER(log, "                 Options.enable_thread_tracking: %d",
                    enable_thread_tracking);
   ROCKS_LOG_HEADER(log, "                 Options.enable_pipelined_write: %d",
@@ -222,9 +222,9 @@ void ImmutableDBOptions::Dump(Logger* log) const {
                    "           Options.write_thread_slow_yield_usec: %" PRIu64,
                    write_thread_slow_yield_usec);
   if (row_cache) {
-    ROCKS_LOG_HEADER(
-        log, "                              Options.row_cache: %" PRIu64,
-        row_cache->GetCapacity());
+    ROCKS_LOG_HEADER(log,
+                     "                              Options.row_cache: %zu",
+                     row_cache->GetCapacity());
   } else {
     ROCKS_LOG_HEADER(log,
                      "                              Options.row_cache: None");
@@ -320,7 +320,7 @@ void MutableDBOptions::Dump(Logger* log) const {
                    stats_dump_period_sec);
   ROCKS_LOG_HEADER(log, "               Options.stats_persist_period_sec: %d",
                    stats_persist_period_sec);
-  ROCKS_LOG_HEADER(log, "              Options.stats_history_buffer_size: %d",
+  ROCKS_LOG_HEADER(log, "              Options.stats_history_buffer_size: %zu",
                    stats_history_buffer_size);
   ROCKS_LOG_HEADER(log, "                         Options.max_open_files: %d",
                    max_open_files);
