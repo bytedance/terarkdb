@@ -109,12 +109,15 @@ class CacheTest : public testing::TestWithParam<std::string> {
     return r;
   }
 
-  void Insert(std::shared_ptr<Cache> cache, int key, int value, int charge = 1) {
+  void Insert(std::shared_ptr<Cache> cache, int key, int value,
+              int charge = 1) {
     cache->Insert(EncodeKey(key), EncodeValue(value), charge,
                   &CacheTest::Deleter);
   }
 
-  void Erase(std::shared_ptr<Cache> cache, int key) { cache->Erase(EncodeKey(key)); }
+  void Erase(std::shared_ptr<Cache> cache, int key) {
+    cache->Erase(EncodeKey(key));
+  }
 
   int Lookup(int key) { return Lookup(cache_, key); }
 

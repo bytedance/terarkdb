@@ -5,8 +5,8 @@
 
 #include "rocksdb/utilities/object_registry.h"
 
-#include "util/logging.h"
 #include "rocksdb/env.h"
+#include "util/logging.h"
 
 namespace TERARKDB_NAMESPACE {
 #ifndef ROCKSDB_LITE

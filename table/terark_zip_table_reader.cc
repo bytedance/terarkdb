@@ -873,7 +873,6 @@ void TerarkZipSubReader::InitUsePread(int minPreadLen) {
   estimateUnzipCap_ = size_t(avgUnzipSize * 1.62);  // a bit larger than 1.618
 }
 
-
 void TerarkZipSubReader::GetRecordAppend(size_t recId,
                                          valvec<byte_t>* tbuf) const {
   if (storeUsePread_) {

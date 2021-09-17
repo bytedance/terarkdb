@@ -835,10 +835,8 @@ DEFINE_string(hdfs, "",
               "Name of hdfs environment. Mutually exclusive with"
               " --env_uri and --fs_uri");
 #ifdef WITH_ZENFS
-DEFINE_string(zbd_path, "",
-              "Path of zone block device.");
-DEFINE_string(aux_path, "",
-              "Aux path for zenfs.");
+DEFINE_string(zbd_path, "", "Path of zone block device.");
+DEFINE_string(aux_path, "", "Aux path for zenfs.");
 #endif
 
 static std::shared_ptr<TERARKDB_NAMESPACE::Env> env_guard;
@@ -1308,8 +1306,9 @@ class ReportFileOpEnv : public EnvWrapper {
                                             std::memory_order_relaxed);
         return rv;
       }
-      virtual Status Append(const Slice& data,
-                        const DataVerificationInfo& /* verification_info */) {
+      virtual Status Append(
+          const Slice& data,
+          const DataVerificationInfo& /* verification_info */) {
         return Append(data);
       }
       Status Truncate(uint64_t size) override {
@@ -1391,7 +1390,7 @@ struct DBWithColumnFamilies {
   DB* db;
 #ifndef ROCKSDB_LITE
   OptimisticTransactionDB* opt_txn_db;
-#endif  // ROCKSDB_LITE
+#endif                              // ROCKSDB_LITE
   std::atomic<size_t> num_created;  // Need to be updated after all the
                                     // new entries in cfh are set.
   size_t num_hot;  // Number of column families to be queried at each moment.
@@ -4045,7 +4044,8 @@ class Benchmark {
         }
       }
       if (!s.ok()) {
-        fprintf(stderr, "try recovering from put error: %s\n", s.ToString().c_str());
+        fprintf(stderr, "try recovering from put error: %s\n",
+                s.ToString().c_str());
         s = listener_->WaitForRecovery(600000000) ? Status::OK() : s;
       }
 
@@ -5849,16 +5849,17 @@ int db_bench_tool(int argc, char** argv) {
       fprintf(stderr, "No Env registered for URI: %s\n", FLAGS_env_uri.c_str());
       exit(1);
     }
-  } 
-  #ifdef WITH_ZENFS
-    else if (!FLAGS_zbd_path.empty()) {
-      Status s = NewZenfsEnv(&FLAGS_env, FLAGS_zbd_path);
-      if (!s.ok()) {
-        fprintf(stderr, "Error: Init zenfs env failed.\nStatus : %s\n", s.ToString().c_str());
-        exit(1);
-      }
+  }
+#ifdef WITH_ZENFS
+  else if (!FLAGS_zbd_path.empty()) {
+    Status s = NewZenfsEnv(&FLAGS_env, FLAGS_zbd_path);
+    if (!s.ok()) {
+      fprintf(stderr, "Error: Init zenfs env failed.\nStatus : %s\n",
+              s.ToString().c_str());
+      exit(1);
     }
-  #endif
+  }
+#endif
 #endif  // ROCKSDB_LITE
   if (!FLAGS_hdfs.empty()) {
     FLAGS_env = new TERARKDB_NAMESPACE::HdfsEnv(FLAGS_hdfs);

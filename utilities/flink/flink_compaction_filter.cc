@@ -193,7 +193,8 @@ std::size_t FlinkCompactionFilter::ListNextUnexpiredOffset(
           new_offset);
     new_offset = JAVA_MAX_SIZE;
   } else {
-    Debug(logger_.get(), "Next unexpired offset: %ld -> %ld", offset, new_offset);
+    Debug(logger_.get(), "Next unexpired offset: %ld -> %ld", offset,
+          new_offset);
   }
   return new_offset;
 }

@@ -635,6 +635,7 @@ class StringEnv : public EnvWrapper {
                           const DataVerificationInfo& /* verification_info */) {
       return Append(data);
     }
+
    private:
     std::string* contents_;
   };

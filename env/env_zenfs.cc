@@ -156,9 +156,7 @@ class ZenfsDirectory : public Directory {
   explicit ZenfsDirectory(std::unique_ptr<FSDirectory>&& target)
       : target_(std::move(target)) {}
 
-  Status Fsync() override {
-    return target_->Fsync(IOOptions(), nullptr);
-  }
+  Status Fsync() override { return target_->Fsync(IOOptions(), nullptr); }
   size_t GetUniqueId(char* id, size_t max_size) const override {
     return target_->GetUniqueId(id, max_size);
   }
@@ -455,7 +453,8 @@ class ZenfsEnv : public EnvWrapper {
     target_->SanitizeEnvOptions(env_opts);
   }
 
-  Status GetZbdDiskSpaceInfo(uint64_t &total_size, uint64_t &avail_size, uint64_t &used_size) {
+  Status GetZbdDiskSpaceInfo(uint64_t& total_size, uint64_t& avail_size,
+                             uint64_t& used_size) {
     auto zbd = dynamic_cast<ZenFS*>(fs_)->GetZonedBlockDevice();
     used_size = zbd->GetUsedSpace();
     avail_size = zbd->GetFreeSpace() + zbd->GetReclaimableSpace();
@@ -476,8 +475,10 @@ Status NewZenfsEnv(Env** zenfs_env, const std::string& zdb_path) {
   return s;
 }
 
-Status GetZbdDiskSpaceInfo(Env* env, uint64_t &total_size, uint64_t &avail_size, uint64_t &used_size) {
-  return dynamic_cast<ZenfsEnv*>(env)->GetZbdDiskSpaceInfo(total_size, avail_size, used_size);
+Status GetZbdDiskSpaceInfo(Env* env, uint64_t& total_size, uint64_t& avail_size,
+                           uint64_t& used_size) {
+  return dynamic_cast<ZenfsEnv*>(env)->GetZbdDiskSpaceInfo(
+      total_size, avail_size, used_size);
 }
 
 }  // namespace TERARKDB_NAMESPACE
@@ -491,11 +492,11 @@ Status NewZenfsEnv(Env** zenfs_env, const std::string& zdb_path) {
   return Status::NotSupported("ZenFSEnv is not implemented.");
 }
 
-Status GetZbdDiskSpaceInfo(Env* env, uint64_t &total_size, uint64_t &avail_size, uint64_t &used_size) {
+Status GetZbdDiskSpaceInfo(Env* env, uint64_t& total_size, uint64_t& avail_size,
+                           uint64_t& used_size) {
   return Status::NotSupported("GetZbdDiskSpaceInfo is not implemented.");
 }
 
 }  // namespace TERARKDB_NAMESPACE
 
 #endif
-

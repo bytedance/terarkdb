@@ -14,11 +14,13 @@
 #pragma once
 
 #include <string>
+
 #include "rocksdb/slice.h"
 #ifdef OS_WIN
 #include <string.h>
 #endif
 #include <cstring>
+
 #include "status.h"
 
 namespace TERARKDB_NAMESPACE {
@@ -266,4 +268,4 @@ inline IOStatus status_to_io_status(Status&& status) {
   }
 }
 
-}  // namespace ROCKSDB_NAMESPACE
+}  // namespace TERARKDB_NAMESPACE
