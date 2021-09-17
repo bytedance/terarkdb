@@ -373,7 +373,7 @@ TableBuilder* TerarkZipTableFactory::NewTableBuilder(
       if (keyPrefixLen != table_options_.keyPrefixLen) {
         WARN(table_builder_options.ioptions.info_log,
              "TerarkZipTableFactory::NewTableBuilder() found non best config , "
-             "keyPrefixLen = %zd , prefix_extractor = %zd\n",
+             "keyPrefixLen = %u , prefix_extractor = %u\n",
              table_options_.keyPrefixLen, keyPrefixLen);
       }
       keyPrefixLen =

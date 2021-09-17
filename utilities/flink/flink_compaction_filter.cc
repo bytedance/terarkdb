@@ -156,7 +156,7 @@ CompactionFilter::Decision FlinkCompactionFilter::FilterV2(
                                     config_cached_->timestamp_offset_,
                                     current_timestamp_, logger_);
   }
-  Debug(logger_.get(), "Decision: %d", decision);
+  Debug(logger_.get(), "Decision: %d", int(decision));
   return decision;
 }
 

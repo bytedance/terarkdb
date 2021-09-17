@@ -686,7 +686,11 @@ Status DBImpl::RecoverLogFiles(const std::vector<uint64_t>& log_numbers,
   bool stop_replay_for_corruption = false;
   bool flushed = false;
   uint64_t corrupted_log_number = kMaxSequenceNumber;
-  for (auto log_number : log_numbers) {
+  std::vector<SequenceNumber> log_seqs;
+  log_seqs.resize(log_numbers.size(), kMaxSequenceNumber);
+  for (size_t log_it = 0; log_it < log_numbers.size(); ++log_it) {
+    uint64_t log_number = log_numbers[log_it];
+    uint64_t& log_seq = log_seqs[log_it];
     if (log_number < versions_->min_log_number_to_keep_2pc()) {
       ROCKS_LOG_INFO(immutable_db_options_.info_log,
                      "Skipping log #%" PRIu64
@@ -772,6 +776,11 @@ Status DBImpl::RecoverLogFiles(const std::vector<uint64_t>& log_numbers,
       }
       WriteBatchInternal::SetContents(&batch, record);
       SequenceNumber sequence = WriteBatchInternal::Sequence(&batch);
+
+      if (log_seq == kMaxSequenceNumber) {
+        assert(sequence > 0);
+        log_seq = std::max<SequenceNumber>(sequence, 1) - 1;
+      }
 
       if (immutable_db_options_.wal_recovery_mode ==
           WALRecoveryMode::kPointInTimeRecovery) {
@@ -955,7 +964,7 @@ Status DBImpl::RecoverLogFiles(const std::vector<uint64_t>& log_numbers,
   // the corrupted log number, which means CF contains data beyond the point of
   // corruption. This could during PIT recovery when the WAL is corrupted and
   // some (but not all) CFs are flushed
-  if (stop_replay_for_corruption == true &&
+  if (stop_replay_for_corruption &&
       (immutable_db_options_.wal_recovery_mode ==
            WALRecoveryMode::kPointInTimeRecovery ||
        immutable_db_options_.wal_recovery_mode ==
@@ -1037,7 +1046,7 @@ Status DBImpl::RecoverLogFiles(const std::vector<uint64_t>& log_numbers,
   }
 
   if (status.ok() && data_seen && !flushed) {
-    status = RestoreAliveLogFiles(log_numbers);
+    status = RestoreAliveLogFiles(log_numbers, log_seqs);
   }
 
   event_logger_.Log() << "job" << job_id << "event"
@@ -1046,7 +1055,10 @@ Status DBImpl::RecoverLogFiles(const std::vector<uint64_t>& log_numbers,
   return status;
 }
 
-Status DBImpl::RestoreAliveLogFiles(const std::vector<uint64_t>& log_numbers) {
+Status DBImpl::RestoreAliveLogFiles(
+    const std::vector<uint64_t>& log_numbers,
+    const std::vector<SequenceNumber>& log_seqs) {
+  assert(log_numbers.size() == log_seqs.size());
   if (log_numbers.empty()) {
     return Status::OK();
   }
@@ -1060,8 +1072,10 @@ Status DBImpl::RestoreAliveLogFiles(const std::vector<uint64_t>& log_numbers) {
   // FindObsoleteFiles()
   total_log_size_ = 0;
   log_empty_ = false;
-  for (auto log_number : log_numbers) {
-    LogFileNumberSize log(log_number);
+  for (size_t log_it = 0; log_it < log_numbers.size(); ++log_it) {
+    uint64_t log_number = log_numbers[log_it];
+    uint64_t log_seq = log_seqs[log_it];
+    LogFileNumberSize log(log_number, log_seq);
     std::string fname = LogFileName(immutable_db_options_.wal_dir, log_number);
     // This gets the appear size of the logs, not including preallocated space.
     s = env_->GetFileSize(fname, &log.size);
@@ -1405,8 +1419,8 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
       if (impl->two_write_queues_) {
         impl->log_write_mutex_.Lock();
       }
-      impl->alive_log_files_.push_back(
-          DBImpl::LogFileNumberSize(impl->logfile_number_));
+      impl->alive_log_files_.push_back(DBImpl::LogFileNumberSize(
+          impl->logfile_number_, impl->versions_->LastSequence()));
       if (impl->two_write_queues_) {
         impl->log_write_mutex_.Unlock();
       }

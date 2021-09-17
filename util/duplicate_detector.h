@@ -13,6 +13,7 @@
 
 #include "rocksdb/terark_namespace.h"
 #include "util/set_comparator.h"
+#include "util/string_util.h"
 
 namespace TERARKDB_NAMESPACE {
 // During recovery if the memtable is flushed we cannot rely on its help on
@@ -29,11 +30,11 @@ class DuplicateDetector {
     }
     batch_seq_ = seq;
     CFKeys& cf_keys = keys_[cf];
-    if (cf_keys.size() == 0) {  // just inserted
+    if (cf_keys.empty()) {  // just inserted
       InitWithComp(cf);
     }
     auto it = cf_keys.insert(key);
-    if (it.second == false) {  // second is false if a element already existed.
+    if (!it.second) {  // second is false if a element already existed.
       keys_.clear();
       InitWithComp(cf);
       keys_[cf].insert(key);
@@ -56,13 +57,15 @@ class DuplicateDetector {
       ROCKS_LOG_FATAL(
           db_->immutable_db_options().info_log,
           "Recovering an entry from the dropped column family %" PRIu32
-          ". WAL must must have been emptied before dropping the column "
-          "family");
+          ". WAL must must have been emptied before dropping the column family",
+          cf);
 #ifndef ROCKSDB_LITE
-      throw std::runtime_error(
-          "Recovering an entry from the dropped column family %" PRIu32
-          ". WAL must must have been flushed before dropping the column "
-          "family");
+      std::string error_str;
+      error_str += "Recovering an entry from the dropped column family ";
+      error_str += ToString(cf);
+      error_str +=
+          ". WAL must must have been flushed before dropping the column family";
+      throw std::runtime_error(error_str);
 #endif
       return;
     }

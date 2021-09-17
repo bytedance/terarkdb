@@ -1115,7 +1115,8 @@ class DBImpl : public DB {
   // It needs to run only when there's no flush during recovery
   // (e.g. avoid_flush_during_recovery=true). May also trigger flush
   // in case total_log_size > max_total_wal_size.
-  Status RestoreAliveLogFiles(const std::vector<uint64_t>& log_numbers);
+  Status RestoreAliveLogFiles(const std::vector<uint64_t>& log_numbers,
+                              const std::vector<SequenceNumber>& log_seqs);
 
   // num_bytes: for slowdown case, delay time is calculated based on
   //            `num_bytes` going through.
@@ -1166,6 +1167,9 @@ class DBImpl : public DB {
 
   // REQUIRES: mutex locked
   Status HandleWriteBufferFull(WriteContext* write_context);
+
+  // REQUIRES: mutex locked
+  Status HandleMaxWalSize(WriteContext* write_context);
 
   // REQUIRES: mutex locked
   Status PreprocessWrite(const WriteOptions& write_options, bool* need_log_sync,
@@ -1370,9 +1374,11 @@ class DBImpl : public DB {
   InternalStats* default_cf_internal_stats_;
   std::unique_ptr<ColumnFamilyMemTablesImpl> column_family_memtables_;
   struct LogFileNumberSize {
-    explicit LogFileNumberSize(uint64_t _number) : number(_number) {}
+    LogFileNumberSize(uint64_t _number, SequenceNumber _seq)
+        : number(_number), seq(_seq) {}
     void AddSize(uint64_t new_size) { size += new_size; }
     uint64_t number;
+    SequenceNumber seq;
     uint64_t size = 0;
     bool getting_flushed = false;
   };

@@ -276,6 +276,19 @@ class MemTableList {
     return memlist.front()->GetID();
   }
 
+  SequenceNumber GetEarliestCreationSeqNotFlushInProgress() const {
+    auto& memlist = current_->memlist_;
+    // Scan the memtable list from old to new
+    for (auto it = memlist.rbegin(); it != memlist.rend(); ++it) {
+      MemTable* mem = *it;
+      if (!mem->flush_in_progress_ &&
+          mem->atomic_flush_seqno_ == kMaxSequenceNumber) {
+        return mem->GetCreationSeq();
+      }
+    }
+    return kMaxSequenceNumber;
+  }
+
   void AssignAtomicFlushSeq(const SequenceNumber& seq) {
     const auto& memlist = current_->memlist_;
     // Scan the memtable list from new to old
