@@ -131,15 +131,7 @@ class PosixWritableFile : public WritableFile {
   virtual Status Truncate(uint64_t size) override;
   virtual Status Close() override;
   virtual Status Append(const Slice& data) override;
-  virtual Status Append(const Slice& data,
-                        const DataVerificationInfo& /* verification_info */) override {
-    return Append(data);
-  }
   virtual Status PositionedAppend(const Slice& data, uint64_t offset) override;
-  virtual Status PositionedAppend(const Slice& data, uint64_t offset,
-                                  const DataVerificationInfo& /* verification_info */) override {
-    return PositionedAppend(data, offset);
-  }
   virtual Status Flush() override;
   virtual Status Sync() override;
   virtual Status Fsync() override;
@@ -221,10 +213,6 @@ class PosixMmapFile : public WritableFile {
   virtual Status Truncate(uint64_t /*size*/) override { return Status::OK(); }
   virtual Status Close() override;
   virtual Status Append(const Slice& data) override;
-  virtual Status Append(const Slice& data,
-                        const DataVerificationInfo& /* verification_info */) override {
-    return Append(data);
-  }
   virtual Status Flush() override;
   virtual Status Sync() override;
   virtual Status Fsync() override;

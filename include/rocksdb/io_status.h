@@ -21,7 +21,7 @@
 #include <cstring>
 #include "status.h"
 
-namespace ROCKSDB_NAMESPACE {
+namespace TERARKDB_NAMESPACE {
 
 class IOStatus : public Status {
  public:

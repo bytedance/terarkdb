@@ -452,12 +452,12 @@ TEST_F(AutoRollLoggerTest, LogHeaderTest) {
     if (test_num == 0) {
       // Log some headers explicitly using Header()
       for (size_t i = 0; i < MAX_HEADERS; i++) {
-        Header(&logger, "%s %d", HEADER_STR.c_str(), i);
+        Header(&logger, "%s %ld", HEADER_STR.c_str(), i);
       }
     } else if (test_num == 1) {
       // HEADER_LEVEL should make this behave like calling Header()
       for (size_t i = 0; i < MAX_HEADERS; i++) {
-        ROCKS_LOG_HEADER(&logger, "%s %d", HEADER_STR.c_str(), i);
+        ROCKS_LOG_HEADER(&logger, "%s %ld", HEADER_STR.c_str(), i);
       }
     }
 
@@ -467,7 +467,7 @@ TEST_F(AutoRollLoggerTest, LogHeaderTest) {
     int i = 0;
     for (size_t iter = 0; iter < 2; iter++) {
       while (logger.GetLogFileSize() < LOG_MAX_SIZE) {
-        Info(&logger, (kSampleMessage + ":LogHeaderTest line %d").c_str(), i);
+        Info(&logger, (kSampleMessage + ":LogHeaderTest line %ld").c_str(), i);
         ++i;
       }
 

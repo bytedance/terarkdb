@@ -82,18 +82,8 @@ class ZenfsWritableFile : public WritableFile {
   Status Append(const Slice& data) override {
     return target_->Append(data, IOOptions(), nullptr);
   }
-  Status Append(const Slice& data,
-                const DataVerificationInfo& verification_info) override {
-    return target_->Append(data, IOOptions(), verification_info, nullptr);
-  }
   Status PositionedAppend(const Slice& data, uint64_t offset) override {
     return target_->PositionedAppend(data, offset, IOOptions(), nullptr);
-  }
-  Status PositionedAppend(
-      const Slice& data, uint64_t offset,
-      const DataVerificationInfo& verification_info) override {
-    return target_->PositionedAppend(data, offset, IOOptions(),
-                                     verification_info, nullptr);
   }
   Status Truncate(uint64_t size) override {
     return target_->Truncate(size, IOOptions(), nullptr);
@@ -408,10 +398,6 @@ class ZenfsEnv : public EnvWrapper {
 
   void LowerThreadPoolCPUPriority(Priority pool) override {
     target_->LowerThreadPoolCPUPriority(pool);
-  }
-
-  Status LowerThreadPoolCPUPriority(Priority pool, CpuPriority pri) override {
-    return target_->LowerThreadPoolCPUPriority(pool, pri);
   }
 
   std::string TimeToString(uint64_t time) override {
