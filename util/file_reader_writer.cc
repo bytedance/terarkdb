@@ -353,6 +353,11 @@ Status WritableFileWriter::Close() {
   return s;
 }
 
+Status WritableFileWriter::Frozen() {
+  auto s = writable_file_->Frozen();
+  return s;
+}
+
 // write out the cached data to the OS cache or storage if direct I/O
 // enabled
 Status WritableFileWriter::Flush() {

@@ -83,7 +83,10 @@ class Writer {
   WritableFileWriter* file() { return dest_.get(); }
   const WritableFileWriter* file() const { return dest_.get(); }
 
-  void Close();
+  // Notify underlaying filesystem that this file wil not be written again.
+  // We didn't close it yet becasue some filesystem may uses page cache and thus
+  // may still have data un-synced if we close it immedately.
+  void Frozen();
 
   uint64_t get_log_number() const { return log_number_; }
 
