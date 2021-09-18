@@ -218,6 +218,12 @@ class WritableFileWriter {
 
   Status Close();
 
+  // Notify low-level filesystem that we will not write shi file again. But
+  // there may be some inflight data (e.g. some filesystem uses page cache).
+  // If target filesystem do not use a cache layer it can safely close the file
+  // in low-level implementation.
+  Status Frozen();
+
   Status Sync(bool use_fsync);
 
   // Sync only the data that was already Flush()ed. Safe to call concurrently

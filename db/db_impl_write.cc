@@ -1664,9 +1664,12 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
                          cfd->GetName().c_str(),
                          cur_log_writer->get_log_number(), new_log_number);
       }
-      // Dirty trick for limited active zones.
-      // TODO(Changlong Chen) Revert it when using lavafs.
-      cur_log_writer->Close();
+      // We frozen a file to let low-level filesystem knows we don't need to write
+      // to this file anymore.
+      // For ext4 with page cache, this function call will do nothing and take no
+      // effect to the page cache thus RocksDB still be able to sync & close this
+      // file again.
+      cur_log_writer->Frozen();
       size_t alive_log_file_count = 0;
       // Output alive logger number for debug.
       for (auto& l : logs_) {

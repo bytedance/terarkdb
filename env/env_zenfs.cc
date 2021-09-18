@@ -89,6 +89,17 @@ class ZenfsWritableFile : public WritableFile {
   Status Truncate(uint64_t size) override {
     return target_->Truncate(size, IOOptions(), nullptr);
   }
+  // RocksDB may sync data after a file was closed (page cache enabled).
+  // But for ZenFS, it will release active zone resource and reject any
+  // futher writes.
+  //
+  // To address this problem we added a `Frozen` API which can notify ZenFS
+  // it doesn't need this file again, so ZenFS could safely close it and since
+  // ZenFS doesn't have page cache so later data sync would take no effect.
+  //
+  // For other filesystems(e.g. ext4) the logic is still reminds since Frozen()
+  // will do nothing on page cache enabled filesystems.
+  Status Frozen() override { return target_->Close(IOOptions(), nullptr); }
   Status Close() override { return target_->Close(IOOptions(), nullptr); }
   Status Flush() override { return target_->Flush(IOOptions(), nullptr); }
   Status Sync() override { return target_->Sync(IOOptions(), nullptr); }

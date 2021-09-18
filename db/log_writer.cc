@@ -33,12 +33,15 @@ Writer::Writer(std::unique_ptr<WritableFileWriter>&& dest, uint64_t log_number,
   }
 }
 
-Writer::~Writer() { Close(); }
+Writer::~Writer() {
+  WriteBuffer();
+  dest_->Close();
+}
 
-void Writer::Close() {
+void Writer::Frozen() {
   if (dest_) {
     dest_->Flush();
-    dest_->Close();
+    dest_->Frozen();
   }
 }
 

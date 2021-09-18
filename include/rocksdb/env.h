@@ -819,6 +819,7 @@ class WritableFile {
   // with other writes to follow.
   virtual Status Truncate(uint64_t /*size*/) { return Status::OK(); }
   virtual Status Close() = 0;
+  virtual Status Frozen() { return Status::OK();}
   virtual Status Flush() = 0;
   virtual Status Sync() = 0;  // sync data
 
@@ -1532,6 +1533,7 @@ class WritableFileWrapper : public WritableFile {
     return target_->PositionedAppend(data, offset);
   }
   Status Truncate(uint64_t size) override { return target_->Truncate(size); }
+  Status Frozen() override { return target_->Frozen(); }
   Status Close() override { return target_->Close(); }
   Status Flush() override { return target_->Flush(); }
   Status Sync() override { return target_->Sync(); }
