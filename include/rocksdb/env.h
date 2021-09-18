@@ -818,8 +818,8 @@ class WritableFile {
   // size due to whole pages writes. The behavior is undefined if called
   // with other writes to follow.
   virtual Status Truncate(uint64_t /*size*/) { return Status::OK(); }
+  virtual Status Frozen() { return Status::OK(); }
   virtual Status Close() = 0;
-  virtual Status Frozen() { return Status::OK();}
   virtual Status Flush() = 0;
   virtual Status Sync() = 0;  // sync data
 

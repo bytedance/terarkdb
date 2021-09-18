@@ -1074,8 +1074,7 @@ Status DBImpl::RestoreAliveLogFiles(
   log_empty_ = false;
   for (size_t log_it = 0; log_it < log_numbers.size(); ++log_it) {
     uint64_t log_number = log_numbers[log_it];
-    uint64_t log_seq = log_seqs[log_it];
-    LogFileNumberSize log(log_number, log_seq);
+    LogFileNumberSize log(log_number, log_seqs[log_it]);
     std::string fname = LogFileName(immutable_db_options_.wal_dir, log_number);
     // This gets the appear size of the logs, not including preallocated space.
     s = env_->GetFileSize(fname, &log.size);
@@ -1419,8 +1418,8 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
       if (impl->two_write_queues_) {
         impl->log_write_mutex_.Lock();
       }
-      impl->alive_log_files_.push_back(DBImpl::LogFileNumberSize(
-          impl->logfile_number_, impl->versions_->LastSequence()));
+      impl->alive_log_files_.emplace_back(impl->logfile_number_,
+                                          impl->versions_->LastSequence());
       if (impl->two_write_queues_) {
         impl->log_write_mutex_.Unlock();
       }

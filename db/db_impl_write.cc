@@ -1657,34 +1657,35 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
       // Alway flush the buffer of the last log before switching to a new one
       log::Writer* cur_log_writer = logs_.back().writer;
       s = cur_log_writer->WriteBuffer();
-      if (!s.ok()) {
+      if (s.ok()) {
+        // We frozen a file to let low-level filesystem knows we don't need to
+        // write to this file anymore.
+        // For ext4 with page cache, this function call will do nothing and take
+        // no effect to the page cache thus RocksDB still be able to sync &
+        // close this file again.
+        s = cur_log_writer->Frozen();
+      }
+      if (s.ok()) {
+        size_t alive_log_file_count = std::count_if(
+            logs_.begin(), logs_.end(), [](const LogWriterNumber& l) {
+              return l.writer->file() != nullptr;
+            });
+        // Output alive logger number for debug.
+        ROCKS_LOG_BUFFER(&context->warn_buffer,
+                         "Current Log count : %" PRIu64
+                         ", when close log writer: %" PRIu64 ".",
+                         alive_log_file_count,
+                         cur_log_writer->get_log_number());
+      } else {
         ROCKS_LOG_BUFFER(&context->warn_buffer,
                          "[%s] Failed to switch from #%" PRIu64 " to #%" PRIu64
                          "  WAL file -- %s\n",
                          cfd->GetName().c_str(),
                          cur_log_writer->get_log_number(), new_log_number);
       }
-      // We frozen a file to let low-level filesystem knows we don't need to write
-      // to this file anymore.
-      // For ext4 with page cache, this function call will do nothing and take no
-      // effect to the page cache thus RocksDB still be able to sync & close this
-      // file again.
-      cur_log_writer->Frozen();
-      size_t alive_log_file_count = 0;
-      // Output alive logger number for debug.
-      for (auto& l : logs_) {
-        if ((l.writer)->file() != nullptr) {
-          alive_log_file_count++;
-        }
-      }
-      ROCKS_LOG_WARN(immutable_db_options_.info_log,
-                     "Current Log count : %" PRIu64
-                     ", when close log writer: %" PRIu64 ".",
-                     alive_log_file_count, cur_log_writer->get_log_number());
     }
     logs_.emplace_back(logfile_number_, new_log);
-    alive_log_files_.push_back(
-        LogFileNumberSize(logfile_number_, versions_->LastSequence()));
+    alive_log_files_.emplace_back(logfile_number_, versions_->LastSequence());
     log_write_mutex_.Unlock();
   }
 
