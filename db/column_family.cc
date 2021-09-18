@@ -1283,6 +1283,9 @@ Env::WriteLifeTimeHint ColumnFamilyData::CalculateSSTWriteHint(int level) {
   if (level - base_level >= 2) {
     return Env::WLTH_EXTREME;
   }
+
+  int hint = level - base_level + static_cast<int>(Env::WLTH_MEDIUM);
+  if (hint < 0) return Env::WLTH_NOT_SET;
   return static_cast<Env::WriteLifeTimeHint>(
       level - base_level + static_cast<int>(Env::WLTH_MEDIUM));
 }

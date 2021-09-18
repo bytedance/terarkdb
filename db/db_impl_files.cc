@@ -532,6 +532,22 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
               to_delete;
     }
 
+    // TODO: Workaround for ZNS and Windows.
+    // In TerarkDB, when a WAL is not needed, it is first deleted, and then
+    // closed. This means that the underlying FS must support deferred delete.
+    // In this case, we delete the writer before issuing delete to FS.
+    if (type == kLogFile) {
+      auto it = std::find_if(
+          state.logs_to_free.begin(), state.logs_to_free.end(),
+          [number](log::Writer* writer) {
+            return writer != nullptr && writer->get_log_number() == number;
+          });
+      if (it != state.logs_to_free.end()) {
+        delete *it;
+        *it = nullptr;
+      }
+    }
+
 #ifndef ROCKSDB_LITE
     if (type == kLogFile && (immutable_db_options_.wal_ttl_seconds > 0 ||
                              immutable_db_options_.wal_size_limit_mb > 0)) {

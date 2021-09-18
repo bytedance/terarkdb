@@ -45,6 +45,13 @@ void PeriodicWorkScheduler::Register(DBImpl* dbi,
              initial_delay.fetch_add(1) % kDefaultScheduleGCTTLPeriodSec *
                  kMicrosInSecond,
              kDefaultScheduleGCTTLPeriodSec * kMicrosInSecond);
+#ifdef WITH_ZENFS
+  timer->Add([dbi]() { dbi->ScheduleZNSGC(); },
+             GetTaskName(dbi, "schedule_gc_zns"),
+             initial_delay.fetch_add(1) % kDefaultScheduleZNSTTLPeriodSec *
+                 kMicrosInSecond,
+             kDefaultScheduleZNSTTLPeriodSec * kMicrosInSecond);
+#endif
 }
 
 void PeriodicWorkScheduler::Unregister(DBImpl* dbi) {
@@ -53,6 +60,9 @@ void PeriodicWorkScheduler::Unregister(DBImpl* dbi) {
   timer->Cancel(GetTaskName(dbi, "pst_st"));
   timer->Cancel(GetTaskName(dbi, "flush_info_log"));
   timer->Cancel(GetTaskName(dbi, "schedule_gc_ttl"));
+#ifdef WITH_ZENFS
+  timer->Cancel(GetTaskName(dbi, "schedule_gc_zns"));
+#endif
   if (!timer->HasPendingTask()) {
     timer->Shutdown();
   }

@@ -93,6 +93,7 @@ ImmutableDBOptions::ImmutableDBOptions(const DBOptions& options)
       two_write_queues(options.two_write_queues),
       manual_wal_flush(options.manual_wal_flush),
       avoid_unnecessary_blocking_io(options.avoid_unnecessary_blocking_io),
+      zenfs_gc_ratio(options.zenfs_gc_ratio),
       persist_stats_to_disk(options.persist_stats_to_disk) {
 }
 
@@ -245,6 +246,8 @@ void ImmutableDBOptions::Dump(Logger* log) const {
                    manual_wal_flush);
   ROCKS_LOG_HEADER(log, "          Options.avoid_unnecessary_blocking_io: %d",
                    avoid_unnecessary_blocking_io);
+  ROCKS_LOG_HEADER(log, "                         Options.zenfs_gc_ratio: %lf",
+                   zenfs_gc_ratio);
   ROCKS_LOG_HEADER(log, "                Options.persist_stats_to_disk: %u",
                    persist_stats_to_disk);
 }

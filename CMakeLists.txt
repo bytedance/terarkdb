@@ -1200,6 +1200,7 @@ if(WITH_TOOLS)
   target_link_libraries(db_bench${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
 
   if(WITH_ZENFS)
+    include_directories(third-party/zenfs)
     add_executable(zenfs${ARTIFACT_SUFFIX} third-party/zenfs/util/zenfs.cc
         $<TARGET_OBJECTS:testharness>)
     target_link_libraries(zenfs${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})

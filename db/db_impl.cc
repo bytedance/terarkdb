@@ -85,6 +85,10 @@
 #include "util/sync_point.h"
 #include "utilities/trace/bytedance_metrics_reporter.h"
 
+#ifdef WITH_ZENFS
+#include "third-party/zenfs/fs/zbd_stat.h"
+#endif
+
 #if !defined(_MSC_VER) && !defined(__APPLE__)
 #include <sys/unistd.h>
 
@@ -976,6 +980,166 @@ void DBImpl::ScheduleTtlGC() {
   log_buffer_info.FlushBufferToLog();
   log_buffer_debug.FlushBufferToLog();
 }
+
+#ifdef WITH_ZENFS
+// Implemented inside `zenfs/fs/fs_zenfs.cc`
+std::vector<ZoneStat> GetStat(Env* env);
+
+void DBImpl::ScheduleZNSGC() {
+  TEST_SYNC_POINT("DBImpl:ScheduleZNSGC");
+  uint64_t nowSeconds = env_->NowMicros() / 1000U / 1000U;
+  LogBuffer log_buffer_info(InfoLogLevel::INFO_LEVEL,
+                            immutable_db_options_.info_log.get());
+  LogBuffer log_buffer_debug(InfoLogLevel::DEBUG_LEVEL,
+                             immutable_db_options_.info_log.get());
+
+  chash_set<uint64_t> mark_for_gc;
+
+  if (initial_db_options_.zenfs_gc_ratio <= 0.0 ||
+      initial_db_options_.zenfs_gc_ratio >= 1.0) {
+    // GC is not enabled
+    return;
+  }
+
+  // Pick files for GC
+  auto stat = GetStat(env_);
+
+  uint64_t number;
+  FileType type;
+
+  // Merge db paths and column family paths together
+  chash_set<std::string> db_paths;
+
+  // Get column family paths
+  mutex_.Lock();
+  for (auto cfd : *versions_->GetColumnFamilySet()) {
+    for (const auto& path : cfd->ioptions()->db_paths) {
+      db_paths.emplace(path.path);
+    }
+  }
+  mutex_.Unlock();
+
+  // Get database paths
+  for (const auto& path : immutable_db_options_.db_paths) {
+    db_paths.emplace(path.path);
+  }
+
+  std::string strip_filename;
+
+  for (const auto& zone : stat) {
+    std::vector<uint64_t> sst_in_zone;
+    uint64_t written_data = zone.write_position - zone.start_position;
+    // zone is full
+    if (written_data == zone.total_capacity) {
+      uint64_t total_size = 0;
+      bool ignore_zone = false;
+      for (const auto& file : zone.files) {
+        strip_filename.clear();
+
+        for (const auto& path : db_paths) {
+          if (Slice(file.filename).starts_with(path)) {
+            strip_filename.assign(file.filename, path.length(),
+                                  file.filename.length() - path.length());
+            break;
+          }
+        }
+
+        if (strip_filename.empty()) {
+          // This file is not in DB folder.
+          ignore_zone = true;
+          break;
+        }
+
+        if (ParseFileName(strip_filename, &number, Slice(), &type)) {
+          // Is SST file, and is of current TerarkDB instance.
+          if (type == kTableFile) {
+            total_size += file.size_in_zone;
+            sst_in_zone.push_back(number);
+          } else {
+            // This zone contains file other than SSTs or files from other
+            // databases. We ignore the zone for now. When other files (like
+            // logs) have been deleted, we will come back and recycle this zone.
+            ignore_zone = true;
+            break;
+          }
+        } else {
+          // This file is not recognized by TerarkDB (or RocksDB). Even if we
+          // move the file, the zone may not be reset. Therefore, we simply
+          // ignore this zone.
+          ignore_zone = true;
+          break;
+        }
+      }
+
+      if (ignore_zone) {
+        continue;
+      }
+
+      // if data in zone <= (1 - ratio) * total_capacity, recycle the zone
+      if (total_size <=
+          (1.0 - initial_db_options_.zenfs_gc_ratio) * written_data) {
+        for (auto&& file_id : sst_in_zone) {
+          mark_for_gc.insert(file_id);
+        }
+      }
+    }
+  }
+
+  mutex_.Lock();
+  for (auto cfd : *versions_->GetColumnFamilySet()) {
+    uint64_t new_mark_count = 0;
+    uint64_t old_mark_count = 0;
+    uint64_t total_count = 0;
+    if (!cfd->initialized() || cfd->IsDropped()) {
+      continue;
+    }
+    VersionStorageInfo* vstorage = cfd->current()->storage_info();
+    // Level -1 contains SSTs inside lazy compaction SST index.
+    // By iterating level -1, we could collect that kind of garbage.
+    // But we still recommend using ZNS GC without lazy compaction
+    // enabled.
+    for (int l = -1; l < vstorage->num_non_empty_levels(); l++) {
+      for (auto meta : vstorage->LevelFiles(l)) {
+        if (meta->being_compacted) {
+          continue;
+        }
+        ++total_count;
+        old_mark_count += meta->marked_for_compaction;
+        TEST_SYNC_POINT("DBImpl:Exist-SST");
+        if (!meta->marked_for_compaction &&
+            mark_for_gc.count(meta->fd.GetNumber()) > 0) {
+          meta->marked_for_compaction = true;
+        }
+        if (meta->marked_for_compaction) {
+          new_mark_count++;
+          TEST_SYNC_POINT("DBImpl:ScheduleZNSGC-mark");
+        }
+      }
+    }
+    if (new_mark_count > old_mark_count) {
+      vstorage->ComputeCompactionScore(*cfd->ioptions(),
+                                       *cfd->GetLatestMutableCFOptions());
+      if (!cfd->queued_for_compaction()) {
+        AddToCompactionQueue(cfd);
+        unscheduled_compactions_++;
+      }
+    }
+    if (old_mark_count != 0 && new_mark_count != 0) {
+      ROCKS_LOG_BUFFER(&log_buffer_info,
+                       "[%s] ZNS GC: SSTs total marked = %" PRIu64
+                       ", new marked = %" PRIu64 ", file count: %" PRIu64,
+                       cfd->GetName().c_str(), old_mark_count, new_mark_count,
+                       total_count);
+    }
+  }
+  if (unscheduled_compactions_ > 0) {
+    MaybeScheduleFlushOrCompaction();
+  }
+  mutex_.Unlock();
+  log_buffer_info.FlushBufferToLog();
+  log_buffer_debug.FlushBufferToLog();
+}
+#endif
 
 void DBImpl::DumpStats() {
   TEST_SYNC_POINT("DBImpl::DumpStats:1");
