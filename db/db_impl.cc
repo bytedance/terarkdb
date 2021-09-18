@@ -68,7 +68,6 @@
 #include "table/block_based_table_factory.h"
 #include "table/merging_iterator.h"
 #include "table/two_level_iterator.h"
-#include "third-party/zenfs/fs/zbd_stat.h"
 #include "util/autovector.h"
 #include "util/build_version.h"
 #include "util/c_style_callback.h"
@@ -85,6 +84,10 @@
 #include "util/string_util.h"
 #include "util/sync_point.h"
 #include "utilities/trace/bytedance_metrics_reporter.h"
+
+#ifdef WITH_ZENFS
+#include "third-party/zenfs/fs/zbd_stat.h"
+#endif
 
 #if !defined(_MSC_VER) && !defined(__APPLE__)
 #include <sys/unistd.h>

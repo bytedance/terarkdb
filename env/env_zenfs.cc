@@ -2,7 +2,7 @@
 #include "rocksdb/file_system.h"
 #include "rocksdb/terark_namespace.h"
 
-#ifdef LIBZBD
+#ifdef WITH_ZENFS
 #include "third-party/zenfs/fs/fs_zenfs.h"
 #include "third-party/zenfs/fs/zbd_stat.h"
 #include "third-party/zenfs/fs/zbd_zenfs.h"
