@@ -5864,18 +5864,20 @@ int db_bench_tool(int argc, char** argv) {
       exit(1);
     }
   } 
-  #ifdef WITH_ZENFS
-    else if (!FLAGS_zbd_path.empty()) {
-      if (metrics_reporter_factory == nullptr)
-        metrics_reporter_factory = std::make_shared<ByteDanceMetricsReporterFactory>();
-      Status s = NewZenfsEnv(&FLAGS_env, FLAGS_zbd_path, "dbname=noname_zenfs", metrics_reporter_factory);
-      if (!s.ok()) {
+#ifdef WITH_ZENFS
+  else if (!FLAGS_zbd_path.empty()) {
+    if (metrics_reporter_factory == nullptr) {
+      metrics_reporter_factory = std::make_shared<ByteDanceMetricsReporterFactory>();
+    }
+
+    Status s = NewZenfsEnv(&FLAGS_env, FLAGS_zbd_path, "db_bench", metrics_reporter_factory);
+    if (!s.ok()) {
         fprintf(stderr, "Error: Init zenfs env failed.\nStatus : %s\n", s.ToString().c_str());
         exit(1);
-      }
     }
   }
-#endif
+
+#endif // WITH_ZENFS
 #endif  // ROCKSDB_LITE
   if (!FLAGS_hdfs.empty()) {
     FLAGS_env = new TERARKDB_NAMESPACE::HdfsEnv(FLAGS_hdfs);

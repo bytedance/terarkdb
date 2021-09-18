@@ -114,8 +114,6 @@
 
 namespace TERARKDB_NAMESPACE {
 
-std::vector<ZoneStat> GetStat(Env* env);
-
 const std::string kDefaultColumnFamilyName("default");
 const uint64_t kDumpStatsWaitMicroseconds = 10000;
 const std::string kPersistentStatsColumnFamilyName(
@@ -980,7 +978,10 @@ void DBImpl::ScheduleTtlGC() {
   log_buffer_debug.FlushBufferToLog();
 }
 
-#ifdef LIBZBD
+#ifdef WITH_ZENFS
+// Implemented inside `zenfs/fs/fs_zenfs.cc`
+std::vector<ZoneStat> GetStat(Env* env);
+
 void DBImpl::ScheduleZNSGC() {
   TEST_SYNC_POINT("DBImpl:ScheduleZNSGC");
   uint64_t nowSeconds = env_->NowMicros() / 1000U / 1000U;

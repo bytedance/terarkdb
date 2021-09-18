@@ -807,7 +807,7 @@ class DBImpl : public DB {
 
   void ScheduleTtlGC();
 
-#ifdef LIBZBD
+#ifdef WITH_ZENFS
   // schedule GC by polling ZNS zone status
   void ScheduleZNSGC();
 #endif
