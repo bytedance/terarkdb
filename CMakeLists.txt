@@ -1209,6 +1209,12 @@ if(WITH_TOOLS)
   target_link_libraries(db_bench${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
 
   if(WITH_ZENFS)
+    # WITH_ZENFS_REFACTOR is an experimental feature for async metazone rolloever
+    option(WITH_ZENFS_REFACTOR "build with zenfs refactor" OFF)
+    if(WITH_ZENFS_REFACTOR)
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DWITH_ZENFS_REFACTOR")
+    endif()
+
     include_directories(third-party/zenfs)
     add_executable(zenfs${ARTIFACT_SUFFIX} third-party/zenfs/util/zenfs.cc
             $<TARGET_OBJECTS:testharness>)
