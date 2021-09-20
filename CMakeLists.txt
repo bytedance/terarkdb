@@ -1211,8 +1211,17 @@ if(WITH_TOOLS)
   if(WITH_ZENFS)
     include_directories(third-party/zenfs)
     add_executable(zenfs${ARTIFACT_SUFFIX} third-party/zenfs/util/zenfs.cc
-        $<TARGET_OBJECTS:testharness>)
+            $<TARGET_OBJECTS:testharness>)
     target_link_libraries(zenfs${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
+
+    FILE(GLOB ZENFS_TESTS third-party/zenfs/test/*_test.cc)
+    foreach(sourcefile ${ZENFS_TESTS})
+      get_filename_component(exename ${sourcefile} NAME_WE)
+      add_executable(${exename}${ARTIFACT_SUFFIX} ${sourcefile}
+              $<TARGET_OBJECTS:testharness>)
+      target_link_libraries(${exename}${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
+    endforeach(sourcefile ${BENCHMARKS})
+
   endif()
 
   if(WITH_TERARK_ZIP)
