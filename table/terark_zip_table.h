@@ -16,6 +16,8 @@
 
 namespace TERARKDB_NAMESPACE {
 
+static const int kTerarkZipMinLevelForDisabled = -2;
+
 struct TerarkZipTableOptions {
   // copy of DictZipBlobStore::Options::EntropyAlgo
   enum EntropyAlgo : uint32_t {

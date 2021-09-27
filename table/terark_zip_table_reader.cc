@@ -215,8 +215,8 @@ Status ReadMetaBlockAdapte(RandomAccessFileReader* file, uint64_t file_size,
                            const ImmutableCFOptions& ioptions,
                            const std::string& meta_block_name,
                            BlockContents* contents) {
-  return ReadMetaBlock(file, TERARK_ROCKSDB_5007(nullptr, ) file_size,
-                       table_magic_number, ioptions, meta_block_name, contents);
+  return ReadMetaBlock(file, nullptr, file_size, table_magic_number, ioptions,
+                       meta_block_name, contents);
 }
 
 using terark::AbstractBlobStore;
