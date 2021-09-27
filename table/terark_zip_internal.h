@@ -27,18 +27,6 @@
 
 //#define DEBUG_TWO_PASS_ITER
 
-#if ROCKSDB_MAJOR * 1000 + ROCKSDB_MINOR >= 5008
-#define TERARK_ROCKSDB_5008(...) __VA_ARGS__
-#else
-#define TERARK_ROCKSDB_5008(...)
-#endif
-
-#if ROCKSDB_MAJOR * 1000 + ROCKSDB_MINOR >= 5007
-#define TERARK_ROCKSDB_5007(...) __VA_ARGS__
-#else
-#define TERARK_ROCKSDB_5007(...)
-#endif
-
 void PrintVersion(TERARKDB_NAMESPACE::Logger* info_log);
 
 namespace TERARKDB_NAMESPACE {
@@ -187,15 +175,26 @@ class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
 
   void* GetOptions() override { return &table_options_; }
 
-  bool IsDeleteRangeSupported() const override { return true; }
+  bool IsDeleteRangeSupported() const override {
+    if (table_options_.terarkZipMinLevel != kTerarkZipMinLevelForDisabled) {
+      return true;
+    }
+    assert(fallback_factory_ != nullptr);
+    return fallback_factory_->IsDeleteRangeSupported();
+  }
 
-  bool IsBuilderNeedSecondPass() const override { return true; }
+  bool IsBuilderNeedSecondPass() const override {
+    if (table_options_.terarkZipMinLevel != kTerarkZipMinLevelForDisabled) {
+      return true;
+    }
+    assert(fallback_factory_ != nullptr);
+    return fallback_factory_->IsBuilderNeedSecondPass();
+  }
 
   LruReadonlyCache* cache() const { return cache_.get(); }
 
   Status GetOptionString(std::string* opt_string,
-                         const std::string& delimiter) const
-      TERARK_ROCKSDB_5008(override);
+                         const std::string& delimiter) const override;
 
  private:
   TerarkZipTableOptions table_options_;

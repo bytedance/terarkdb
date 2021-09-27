@@ -253,8 +253,7 @@ Status TerarkZipTableFactory::NewTableReader(
         "user comparator must be 'leveldb.BytewiseComparator'");
   }
   Footer footer;
-  Status s = ReadFooterFromFile(
-      file.get(), TERARK_ROCKSDB_5007(nullptr, ) file_size, &footer);
+  Status s = ReadFooterFromFile(file.get(), nullptr, file_size, &footer);
   if (!s.ok()) {
     return s;
   }
@@ -347,7 +346,7 @@ TableBuilder* TerarkZipTableFactory::NewTableBuilder(
               "TerarkZipTableFactory::NewTableBuilder(): "
               "user comparator must be 'leveldb.BytewiseComparator'");
   }
-  if (table_options_.terarkZipMinLevel == -2) {
+  if (table_options_.terarkZipMinLevel == kTerarkZipMinLevelForDisabled) {
     if (!fallback_factory_) {
       THROW_STD(invalid_argument,
                 "TerarkZipTableFactory::NewTableBuilder(): "
@@ -355,7 +354,7 @@ TableBuilder* TerarkZipTableFactory::NewTableBuilder(
     }
     return fallback_factory_->NewTableBuilder(table_builder_options,
                                               column_family_id, file);
-  } else if (table_options_.terarkZipMinLevel < -2) {
+  } else if (table_options_.terarkZipMinLevel < kTerarkZipMinLevelForDisabled) {
     THROW_STD(invalid_argument,
               "TerarkZipTableFactory::NewTableBuilder(): "
               "bad terarkZipMinLevel");
@@ -488,7 +487,7 @@ Status TerarkZipTableFactory::SanitizeOptions(
   auto& tzto = *reinterpret_cast<const TerarkZipTableOptions*>(
       table_factory->GetOptions());
   try {
-    if (tzto.terarkZipMinLevel != -2) {
+    if (tzto.terarkZipMinLevel != kTerarkZipMinLevelForDisabled) {
       terark::TempFileDeleteOnClose test;
       test.path = tzto.localTempDir + "/Terark-XXXXXX";
       test.open_temp();
