@@ -149,6 +149,16 @@ class MemTable {
                                                 std::memory_order_relaxed);
   }
 
+  bool SwitchFlushScheduled() {
+    auto state = flush_state_.load(std::memory_order_relaxed);
+    if (state == FLUSH_NOT_REQUESTED) {
+      flush_state_.compare_exchange_strong(state, FLUSH_REQUESTED,
+                                           std::memory_order_relaxed,
+                                           std::memory_order_relaxed);
+    }
+    return MarkFlushScheduled();
+  }
+
   // Return an iterator that yields the contents of the memtable.
   //
   // The caller must ensure that the underlying MemTable remains live

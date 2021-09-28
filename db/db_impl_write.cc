@@ -1241,7 +1241,7 @@ Status DBImpl::HandleMaxWalSize(WriteContext* write_context) {
       }
     }
   }
-  if (cfd_picked != nullptr) {
+  if (cfd_picked != nullptr && cfd_picked->mem()->SwitchFlushScheduled()) {
     uint64_t alive_log_files_back_size = alive_log_files_.back().size;
     uint64_t max_wal_size = GetMaxWalSize();
     ROCKS_LOG_BUFFER(
