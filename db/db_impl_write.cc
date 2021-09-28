@@ -1160,23 +1160,33 @@ Status DBImpl::HandleWriteBufferFull(WriteContext* write_context) {
   ColumnFamilyData* cfd_picked = nullptr;
   SequenceNumber seq_num_for_cf_picked = kMaxSequenceNumber;
   size_t largest_cfd_size = 0;
+  int num_cf_queued_for_flush = 0;
 
   for (auto cfd : *versions_->GetColumnFamilySet()) {
     if (cfd->IsDropped()) {
       continue;
     }
+    num_cf_queued_for_flush += cfd->get_queued_for_flush();
+    if (num_cf_queued_for_flush >=
+        immutable_db_options_.max_background_flushes) {
+      // prevent flush spike caused by write_buffer_manager full
+      cfd_picked = nullptr;
+      break;
+    }
     if (!cfd->mem()->IsEmpty()) {
-      // We only consider active mem table, hoping immutable memtable is already
-      // in the process of flushing.
       if (flush_pri == kFlushOldest) {
+        // We only consider active mem table, hoping immutable memtable is
+        // already in the process of flushing.
         uint64_t seq = cfd->mem()->GetCreationSeq();
         if (cfd_picked == nullptr || seq < seq_num_for_cf_picked) {
           cfd_picked = cfd;
           seq_num_for_cf_picked = seq;
         }
       } else if (!cfd->queued_for_flush()) {
+        // We consider active memtable and immutable
         assert(flush_pri == kFlushLargest);
-        size_t cfd_size = cfd->mem()->ApproximateMemoryUsage();
+        size_t cfd_size = cfd->mem()->ApproximateMemoryUsage() +
+                          cfd->imm()->ApproximateMemoryUsage();
         if (cfd_picked == nullptr || cfd_size > largest_cfd_size) {
           cfd_picked = cfd;
           largest_cfd_size = cfd_size;
@@ -1191,18 +1201,28 @@ Status DBImpl::HandleWriteBufferFull(WriteContext* write_context) {
   uint64_t memory_usage = write_buffer_manager_->memory_usage();
   uint64_t buffer_size = write_buffer_manager_->buffer_size();
   for (auto cfd : cfds) {
+    uint64_t approx_free_mem_size = cfd->mem()->ApproximateMemoryUsage();
+    uint64_t approx_free_imm_size = cfd->imm()->ApproximateMemoryUsage();
     ROCKS_LOG_BUFFER(
         &write_context->info_buffer,
         "Flushing column family [%s] with %s. Write buffer is using %" PRIu64
-        " bytes out of a total of %" PRIu64 ".",
+        " bytes out of a total of %" PRIu64 " , approximate free %" PRIu64
+        " memory from memtable, approximate free %" PRIu64
+        " memory form immutable",
         cfd->GetName().c_str(),
         flush_pri == kFlushLargest ? "largest mem table size"
                                    : "oldest sequence number",
-        memory_usage, buffer_size);
+        memory_usage, buffer_size, approx_free_mem_size, approx_free_imm_size);
   }
 
   for (auto cfd : cfds) {
-    if (cfd->mem()->IsEmpty()) {
+    // Not switch empty memtable
+    // To prevent write stalling not switch memtable at CF which not config
+    // atomic-flush-group and has any immutable not flushed
+    if (cfd->mem()->IsEmpty() ||
+        (flush_pri == kFlushLargest &&
+         cfd->ioptions()->atomic_flush_group == nullptr &&
+         cfd->imm()->NumNotFlushed() > 0)) {
       continue;
     }
     cfd->Ref();

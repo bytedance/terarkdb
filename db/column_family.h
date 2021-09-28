@@ -377,6 +377,7 @@ class ColumnFamilyData {
   void set_queued_for_garbage_collection(bool value) {
     queued_for_garbage_collection_ = value;
   }
+  int get_queued_for_flush() { return queued_for_flush_; }
   bool queued_for_flush() { return queued_for_flush_ > 0; }
   bool queued_for_compaction() { return queued_for_compaction_; }
   bool queued_for_garbage_collection() {
