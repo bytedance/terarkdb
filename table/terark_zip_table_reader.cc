@@ -1159,7 +1159,7 @@ Status TerarkZipTableReader::Open(RandomAccessFileReader* file,
         (byte_t*)file_data.data() + indexSize + storeSize, recNum);
   }
   subReader_.subIndex_ = 0;
-  // subReader_.storeFD_ = file_->file()->FileDescriptor();
+  subReader_.storeFD_ = file_->file()->FileDescriptor();
   subReader_.storeFileObj_ = file_->file();
   subReader_.storeOffset_ = indexSize;
   subReader_.InitUsePread(tzto_.minPreadLen);

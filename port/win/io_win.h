@@ -132,6 +132,8 @@ class WinMmapReadableFile : private WinFileData, public RandomAccessFile {
 
   ~WinMmapReadableFile();
 
+  bool is_mmap_open() const final { return true; }
+
   WinMmapReadableFile(const WinMmapReadableFile&) = delete;
   WinMmapReadableFile& operator=(const WinMmapReadableFile&) = delete;
 
