@@ -1160,30 +1160,28 @@ Status DBImpl::HandleWriteBufferFull(WriteContext* write_context) {
   ColumnFamilyData* cfd_picked = nullptr;
   SequenceNumber seq_num_for_cf_picked = kMaxSequenceNumber;
   size_t largest_cfd_size = 0;
-  int num_cf_queued_for_flush = 0;
 
   for (auto cfd : *versions_->GetColumnFamilySet()) {
-    if (cfd->IsDropped()) {
-      continue;
-    }
-    num_cf_queued_for_flush += cfd->get_queued_for_flush();
-    if (num_cf_queued_for_flush >=
-        immutable_db_options_.max_background_flushes) {
+    if (flush_queue_.size() >= GetBGJobLimits().max_flushes) {
       // prevent flush spike caused by write_buffer_manager full
+      // Early exit handlewriteBufferFull
       cfd_picked = nullptr;
       break;
     }
-    if (!cfd->mem()->IsEmpty()) {
+    if (cfd->IsDropped()) {
+      continue;
+    }
+    // We consider active memtable and immutable
+    if (!cfd->queued_for_flush()) {
       if (flush_pri == kFlushOldest) {
-        // We only consider active mem table, hoping immutable memtable is
-        // already in the process of flushing.
-        uint64_t seq = cfd->mem()->GetCreationSeq();
+        uint64_t seq =
+            std::min(cfd->mem()->GetCreationSeq(),
+                     cfd->imm()->GetEarliestCreationSeqNotFlushInProgress());
         if (cfd_picked == nullptr || seq < seq_num_for_cf_picked) {
           cfd_picked = cfd;
           seq_num_for_cf_picked = seq;
         }
-      } else if (!cfd->queued_for_flush()) {
-        // We consider active memtable and immutable
+      } else {
         assert(flush_pri == kFlushLargest);
         size_t cfd_size = cfd->mem()->ApproximateMemoryUsage() +
                           cfd->imm()->ApproximateMemoryUsage();
