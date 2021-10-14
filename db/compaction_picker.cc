@@ -156,6 +156,7 @@ void AssignUserKey(std::string& key, const Slice& ikey) {
   Slice ukey = ExtractUserKey(ikey);
   key.assign(ukey.data(), ukey.size());
 };
+
 }  // anonymous namespace
 
 bool FindIntraL0Compaction(const std::vector<FileMetaData*>& level_files,
@@ -258,6 +259,29 @@ CompactionPicker::CompactionPicker(TableCache* table_cache,
       icmp_(icmp) {}
 
 CompactionPicker::~CompactionPicker() {}
+
+CompactionReason CompactionPicker::ConvertCompactionReason(
+    uint8_t marked, CompactionReason default_reason) {
+  if (marked & FileMetaData::kMarkedFromUser) {
+    return CompactionReason::kFilesMarkedFromUser;
+  }
+  if (marked & FileMetaData::kMarkedFromTableBuilder) {
+    return CompactionReason::kFilesMarkedFromTableBuilder;
+  }
+  if (marked & FileMetaData::kMarkedFromRangeDeletion) {
+    return CompactionReason::kFilesMarkedFromRangeDeletion;
+  }
+  if (marked & FileMetaData::kMarkedFromTTL) {
+    return CompactionReason::kFilesMarkedFromTTL;
+  }
+  if (marked & FileMetaData::kMarkedFromFileSystem) {
+    return CompactionReason::kFilesMarkedFromFileSystem;
+  }
+  if (marked & FileMetaData::kMarkedFromUpdateBlob) {
+    return CompactionReason::kFilesMarkedFromUpdateBlob;
+  }
+  return default_reason;
+}
 
 double CompactionPicker::GetQ(std::vector<double>::const_iterator b,
                               std::vector<double>::const_iterator e, size_t g) {
@@ -2030,8 +2054,12 @@ void CompactionPicker::PickFilesMarkedForCompaction(
     // files as being_compacted, but didn't call ComputeCompactionScore()
     assert(!level_file.second->being_compacted);
     *start_level = level_file.first;
-    *output_level =
-        (*start_level == 0) ? vstorage->base_level() : *start_level + 1;
+    if (level_file.second->is_output_to_parent_level()) {
+      *output_level =
+          (*start_level == 0) ? vstorage->base_level() : *start_level + 1;
+    } else {
+      *output_level = level_file.first;
+    }
 
     if (*start_level == 0 && !level0_compactions_in_progress()->empty()) {
       return false;
@@ -2229,7 +2257,9 @@ void LevelCompactionBuilder::SetupInitialFiles() {
         cf_name_, vstorage_, &start_level_, &output_level_,
         &start_level_inputs_);
     if (!start_level_inputs_.empty()) {
-      compaction_reason_ = CompactionReason::kFilesMarkedForCompaction;
+      compaction_reason_ = CompactionPicker::ConvertCompactionReason(
+          start_level_inputs_.files.front()->marked_for_compaction,
+          CompactionReason::kUnknown);
       return;
     }
 
@@ -2252,7 +2282,9 @@ void LevelCompactionBuilder::SetupInitialFiles() {
       start_level_inputs_.clear();
     } else {
       assert(!start_level_inputs_.empty());
-      compaction_reason_ = CompactionReason::kBottommostFiles;
+      compaction_reason_ = CompactionPicker::ConvertCompactionReason(
+          start_level_inputs_.files.front()->marked_for_compaction,
+          CompactionReason::kBottommostFiles);
       return;
     }
 

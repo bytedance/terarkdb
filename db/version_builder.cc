@@ -391,6 +391,7 @@ class VersionBuilder::Rep {
                   item.f = f;
                 }
                 item.f->gc_status = FileMetaData::kGarbageCollectionPermitted;
+                item.f->marked_for_compaction &= FileMetaData::kMarkedFromUser;
               }
               break;
             case FileMetaData::kGarbageCollectionCandidate:
@@ -421,7 +422,8 @@ class VersionBuilder::Rep {
         old_file_queue.pop();
       }
       while (!old_file_queue.empty()) {
-        dependence_map[old_file_queue.top()].f->marked_for_compaction = true;
+        dependence_map[old_file_queue.top()].f->marked_for_compaction |=
+            FileMetaData::kMarkedFromUpdateBlob;
         old_file_queue.pop();
       }
     }

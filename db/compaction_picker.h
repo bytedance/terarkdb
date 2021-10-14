@@ -80,6 +80,9 @@ class CompactionPicker {
     bool skip_composite;
   };
 
+  static CompactionReason ConvertCompactionReason(
+      uint8_t marked, CompactionReason default_reason);
+
   static double GetQ(std::vector<double>::const_iterator b,
                      std::vector<double>::const_iterator e, size_t g);
 

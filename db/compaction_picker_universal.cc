@@ -1097,6 +1097,7 @@ Compaction* UniversalCompactionPicker::PickDeleteTriggeredCompaction(
   CompactionInputFiles start_level_inputs;
   int output_level;
   std::vector<CompactionInputFiles> inputs;
+  uint8_t marked = 0;
 
   if (vstorage->num_levels() == 1) {
     // This is single level universal. Since we're basically trying to reclaim
@@ -1111,6 +1112,7 @@ Compaction* UniversalCompactionPicker::PickDeleteTriggeredCompaction(
     for (FileMetaData* f : vstorage->LevelFiles(0)) {
       if (f->marked_for_compaction && !f->being_compacted) {
         compact = true;
+        marked = f->marked_for_compaction;
       }
       if (compact) {
         start_level_inputs.files.push_back(f);
@@ -1132,6 +1134,7 @@ Compaction* UniversalCompactionPicker::PickDeleteTriggeredCompaction(
     if (start_level_inputs.empty()) {
       return nullptr;
     }
+    marked = start_level_inputs.files.front()->marked_for_compaction;
 
     // Pick the first non-empty level after the start_level
     for (output_level = start_level + 1; output_level < vstorage->num_levels();
@@ -1216,7 +1219,8 @@ Compaction* UniversalCompactionPicker::PickDeleteTriggeredCompaction(
   params.manual_compaction = true;
   params.score = score;
   params.compaction_type = compaction_type;
-  params.compaction_reason = CompactionReason::kFilesMarkedForCompaction;
+  params.compaction_reason =
+      ConvertCompactionReason(marked, CompactionReason::kUnknown);
 
   return new Compaction(std::move(params));
 }
