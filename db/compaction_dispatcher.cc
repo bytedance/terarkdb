@@ -931,7 +931,8 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
       }
     }
     if (s.ok()) {
-      meta.marked_for_compaction = builder->NeedCompact();
+      meta.marked_for_compaction =
+          builder->NeedCompact() ? FileMetaData::kMarkedFromTableBuilder : 0;
       meta.prop.num_entries = builder->NumEntries();
       for (auto& pair : dependence) {
         meta.prop.dependence.emplace_back(Dependence{pair.first, pair.second});
@@ -976,7 +977,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
       file_info.smallest_seqno = meta.fd.smallest_seqno;
       file_info.largest_seqno = meta.fd.largest_seqno;
       file_info.file_size = meta.fd.file_size;
-      file_info.marked_for_compaction |= builder->NeedCompact();
+      file_info.marked_for_compaction = meta.marked_for_compaction;
       result.files.emplace_back(file_info);
     }
     meta = FileMetaData();

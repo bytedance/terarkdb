@@ -135,7 +135,7 @@ struct RangeWithDepend {
     include[0] = true;
     include[1] = true;
     has_delete_range = false;
-    marked_for_compaction = f->marked_for_compaction;
+    marked_for_compaction = !!f->marked_for_compaction;
     stable = false;
     dependence.emplace_back(MapSstElement::LinkTarget{f->fd.GetNumber(), 0});
   }

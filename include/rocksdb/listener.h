@@ -80,7 +80,17 @@ enum class CompactionReason : int {
   // Manual compaction
   kManualCompaction,
   // DB::SuggestCompactRange() marked files for compaction
-  kFilesMarkedForCompaction,
+  kFilesMarkedFromUser,
+  // TableBuilder::NeedCompact() marked files for compaction
+  kFilesMarkedFromTableBuilder,
+  // CFOptions::optimize_range_deletion marked files for compaction
+  kFilesMarkedFromRangeDeletion,
+  // DBImpl::ScheduleTtlGC() marked files for compaction
+  kFilesMarkedFromTTL,
+  // DBImpl::ScheduleZNSGC() marked files for compaction
+  kFilesMarkedFromFileSystem,
+  // Reclam blob file number marked files for compaction
+  kFilesMarkedFromUpdateBlob,
   // [Level] Automatic compaction within bottommost level to cleanup duplicate
   // versions of same user key, usually due to a released snapshot.
   kBottommostFiles,

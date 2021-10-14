@@ -209,7 +209,6 @@ Status BuildTable(
       blob_meta->prop.purpose = kEssenceSst;
       blob_meta->prop.flags |= TablePropertyCache::kNoRangeDeletions;
       status = blob_builder->Finish(&blob_meta->prop, nullptr);
-      blob_meta->marked_for_compaction = blob_builder->NeedCompact();
       TableProperties& tp = *separate_helper.current_prop;
       if (status.ok()) {
         blob_meta->fd.file_size = blob_builder->FileSize();
@@ -422,7 +421,8 @@ Status BuildTable(
     if (s.ok() && !empty) {
       uint64_t file_size = builder->FileSize();
       sst_meta()->fd.file_size = file_size;
-      sst_meta()->marked_for_compaction = builder->NeedCompact();
+      sst_meta()->marked_for_compaction =
+          builder->NeedCompact() ? FileMetaData::kMarkedFromTableBuilder : 0;
       sst_meta()->prop.num_entries = builder->NumEntries();
       assert(sst_meta()->fd.GetFileSize() > 0);
       // refresh now that builder is finished

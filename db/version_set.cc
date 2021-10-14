@@ -341,20 +341,39 @@ class FilePicker {
     return false;
   }
 };
-struct FileNumberComp {
+
+struct BottommostMarkedFilesComp {
   bool operator()(const std::pair<int, FileMetaData*>& l,
                   const std::pair<int, FileMetaData*>& r) const noexcept {
+    uint8_t lm = l.second->marked_for_compaction;
+    uint8_t rm = l.second->marked_for_compaction;
+    if (lm != rm) {
+      return lm > rm;
+    }
     return l.second->fd.GetNumber() < r.second->fd.GetNumber();
   }
 };
-struct LevelAndFileNumberComp {
+struct MarkedFilesComp {
   bool operator()(const std::pair<int, FileMetaData*>& l,
                   const std::pair<int, FileMetaData*>& r) const noexcept {
-    if (l.first == r.first) {
-      return l.second->fd.GetNumber() < r.second->fd.GetNumber();
-    } else {
-      return l.first < r.first;
+    uint8_t lp = l.second->is_output_to_parent_level();
+    uint8_t rp = l.second->is_output_to_parent_level();
+    if (lp != rp) {
+      return lp > rp;
     }
+    if (l.first != r.first) {
+      if (lp) {
+        return l.first < r.first;
+      } else {
+        return l.first > r.first;
+      }
+    }
+    uint8_t lm = l.second->marked_for_compaction;
+    uint8_t rm = l.second->marked_for_compaction;
+    if (lm != rm) {
+      return lm > rm;
+    }
+    return l.second->fd.GetNumber() < r.second->fd.GetNumber();
   }
 };
 
@@ -1863,7 +1882,7 @@ void VersionStorageInfo::ComputeFilesMarkedForCompaction() {
     }
   }
   std::sort(files_marked_for_compaction_.begin(),
-            files_marked_for_compaction_.end(), LevelAndFileNumberComp());
+            files_marked_for_compaction_.end(), MarkedFilesComp());
 }
 
 namespace {
@@ -2213,7 +2232,8 @@ void VersionStorageInfo::ComputeBottommostFilesMarkedForCompaction() {
     }
   }
   std::sort(bottommost_files_marked_for_compaction_.begin(),
-            bottommost_files_marked_for_compaction_.end(), FileNumberComp());
+            bottommost_files_marked_for_compaction_.end(),
+            BottommostMarkedFilesComp());
 }
 
 void Version::Ref() { ++refs_; }

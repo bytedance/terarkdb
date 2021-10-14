@@ -108,8 +108,18 @@ const char* GetCompactionReasonString(CompactionReason compaction_reason) {
       return "FIFOTtl";
     case CompactionReason::kManualCompaction:
       return "ManualCompaction";
-    case CompactionReason::kFilesMarkedForCompaction:
-      return "FilesMarkedForCompaction";
+    case CompactionReason::kFilesMarkedFromUser:
+      return "FilesMarkedFromUser";
+    case CompactionReason::kFilesMarkedFromTableBuilder:
+      return "FilesMarkedFromTableBuilder";
+    case CompactionReason::kFilesMarkedFromRangeDeletion:
+      return "FilesMarkedFromRangeDeletion";
+    case CompactionReason::kFilesMarkedFromTTL:
+      return "FilesMarkedFromTTL";
+    case CompactionReason::kFilesMarkedFromFileSystem:
+      return "FilesMarkedFromFileSystem";
+    case CompactionReason::kFilesMarkedFromUpdateBlob:
+      return "FilesMarkedFromUpdateBlob";
     case CompactionReason::kBottommostFiles:
       return "BottommostFiles";
     case CompactionReason::kFlush:
@@ -2428,7 +2438,9 @@ Status CompactionJob::FinishCompactionOutputFile(
     }
   }
   if (s.ok()) {
-    meta->marked_for_compaction = sub_compact->builder->NeedCompact();
+    meta->marked_for_compaction = sub_compact->builder->NeedCompact()
+                                      ? FileMetaData::kMarkedFromTableBuilder
+                                      : 0;
     meta->prop.num_entries = sub_compact->builder->NumEntries();
     for (auto& pair : dependence) {
       meta->prop.dependence.emplace_back(Dependence{pair.first, pair.second});
@@ -2558,7 +2570,6 @@ Status CompactionJob::FinishCompactionOutputBlob(
   auto meta = &sub_compact->current_blob_output()->meta;
   assert(meta != nullptr);
   if (s.ok()) {
-    meta->marked_for_compaction = sub_compact->blob_builder->NeedCompact();
     meta->prop.num_entries = sub_compact->blob_builder->NumEntries();
     meta->prop.inheritance = InheritanceTreeToSet(inheritance_tree);
     assert(std::is_sorted(meta->prop.inheritance.begin(),

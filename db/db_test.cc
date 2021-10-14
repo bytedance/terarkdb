@@ -4871,7 +4871,7 @@ TEST_F(DBTest, SuggestCompactRangeTest) {
       "Compaction::Compaction::Start", [&](void* arg) {
         Compaction* c = (Compaction*)arg;
         ASSERT_EQ(c->compaction_reason(),
-                  CompactionReason::kFilesMarkedForCompaction);
+                  CompactionReason::kFilesMarkedFromUser);
         ASSERT_FALSE(c->is_manual_compaction());
       });
   // disable trival move make current test happy

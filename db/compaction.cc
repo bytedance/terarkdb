@@ -196,7 +196,7 @@ void ProcessFileMetaData(const char* job_info, FileMetaData* meta,
 
   if (tp->num_range_deletions > 0 && mopt->optimize_range_deletion &&
       !iopt->enable_lazy_compaction) {
-    meta->marked_for_compaction = true;
+    meta->marked_for_compaction |= FileMetaData::kMarkedFromRangeDeletion;
   }
   if (iopt->ttl_extractor_factory != nullptr) {
     GetCompactionTimePoint(tp->user_collected_properties,

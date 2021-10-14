@@ -47,7 +47,7 @@ Status DBImpl::SuggestCompactRange(ColumnFamilyHandle* column_family,
           level, begin == nullptr ? nullptr : &start_key,
           end == nullptr ? nullptr : &end_key, &inputs);
       for (auto f : inputs) {
-        f->marked_for_compaction = true;
+        f->marked_for_compaction |= FileMetaData::kMarkedFromUser;
       }
     }
     // Since we have some more files to compact, we should also recompute
@@ -68,7 +68,7 @@ Status DBImpl::SuggestCompactColumnFamily(ColumnFamilyHandle* column_family) {
     auto vstorage = cfd->current()->storage_info();
     for (int level = -1; level < vstorage->num_non_empty_levels(); ++level) {
       for (auto f : vstorage->LevelFiles(level)) {
-        f->marked_for_compaction = true;
+        f->marked_for_compaction |= FileMetaData::kMarkedFromUser;
       }
     }
     // Since we have some more files to compact, we should also recompute
