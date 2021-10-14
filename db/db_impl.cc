@@ -949,15 +949,18 @@ void DBImpl::ScheduleTtlGC() {
           continue;
         }
         ++total_count;
-        old_mark_count += meta->marked_for_compaction;
+        bool marked =
+            !!(meta->marked_for_compaction & FileMetaData::kMarkedFromTTL);
+        old_mark_count += marked;
         TEST_SYNC_POINT("DBImpl:Exist-SST");
-        if (!meta->marked_for_compaction &&
+        if (!marked &&
             should_marked_for_compacted(
                 l, meta->fd.GetNumber(), meta->prop.earliest_time_begin_compact,
                 meta->prop.latest_time_end_compact, nowSeconds)) {
-          meta->marked_for_compaction = true;
+          meta->marked_for_compaction |= FileMetaData::kMarkedFromTTL;
+          marked = true;
         }
-        if (meta->marked_for_compaction) {
+        if (marked) {
           new_mark_count++;
           TEST_SYNC_POINT("DBImpl:ScheduleTtlGC-mark");
         }

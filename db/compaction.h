@@ -181,7 +181,7 @@ struct CompactionWorkerResult {
 
     // use UserProperties["User.Collected.Transient.Stat"] to reduce complexity
     // std::string stat_one;
-    bool marked_for_compaction;
+    uint8_t marked_for_compaction;
   };
   std::vector<FileInfo> files;
   std::string stat_all;

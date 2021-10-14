@@ -17,6 +17,28 @@
 #include "util/string_util.h"
 #include "util/sync_point.h"
 
+namespace {
+uint8_t reverse_byte(uint8_t v) {
+  // normal
+  // return static_cast<uint8_t>(((v & (1 << 0)) << 7) | ((v & (1 << 1)) << 6) |
+  //                             ((v & (1 << 2)) << 5) | ((v & (1 << 3)) << 4) |
+  //                             ((v & (1 << 4)) << 3) | ((v & (1 << 5)) << 2) |
+  //                             ((v & (1 << 6)) << 1) | ((v & (1 << 7)) << 0));
+
+  // hack
+  // return ((v * 0x0802LU & 0x22110LU) | (v * 0x8020LU & 0x88440LU)) *
+  //            0x10101LU >>
+  //        16;
+
+  // lookup table
+  constexpr static uint8_t lookup[16] = {
+      0x0, 0x8, 0x4, 0xc, 0x2, 0xa, 0x6, 0xe,
+      0x1, 0x9, 0x5, 0xd, 0x3, 0xb, 0x7, 0xf,
+  };
+  return (lookup[v & 0b1111] << 4) | lookup[v >> 4];
+}
+}  // namespace
+
 namespace TERARKDB_NAMESPACE {
 
 // Tag numbers for serialized VersionEdit.  These numbers are written to
@@ -174,7 +196,7 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
     }
     if (f.marked_for_compaction) {
       PutVarint32(dst, CustomTag::kNeedCompaction);
-      char p = static_cast<char>(1);
+      char p = static_cast<char>(reverse_byte(f.marked_for_compaction));
       PutLengthPrefixedSlice(dst, Slice(&p, 1));
     }
     if (has_min_log_number_to_keep_ && !min_log_num_written) {
@@ -305,7 +327,8 @@ const char* VersionEdit::DecodeNewFile4From(Slice* input) {
           if (field.size() != 1) {
             return "need_compaction field wrong size";
           }
-          f.marked_for_compaction = (field[0] == 1);
+          f.marked_for_compaction =
+              reverse_byte(static_cast<uint8_t>(field[0]));
           break;
         case kMinLogNumberToKeepHack:
           // This is a hack to encode kMinLogNumberToKeep in a

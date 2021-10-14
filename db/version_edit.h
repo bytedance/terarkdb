@@ -114,6 +114,14 @@ struct TablePropertyCache {
 };
 
 struct FileMetaData {
+  enum : uint8_t {
+    kMarkedFromUser = 1 << 7,
+    kMarkedFromRangeDeletion = 1 << 6,
+    kMarkedFromTableBuilder = 1 << 5,
+    kMarkedFromTTL = 1 << 2,
+    kMarkedFromFileSystem = 1 << 1,
+    kMarkedFromUpdateBlob = 1 << 0,
+  };
   FileDescriptor fd;
   InternalKey smallest;  // Smallest internal key served by table
   InternalKey largest;   // Largest internal key served by table
@@ -137,10 +145,10 @@ struct FileMetaData {
 
   bool being_compacted;  // Is this file undergoing compaction ?
 
-  bool marked_for_compaction;  // True if client asked us nicely to compact this
-                               // file.
-
   bool need_upgrade;  // this sst from origin rocksdb
+
+  // None-zero if client asked us nicely to compact this file.
+  uint8_t marked_for_compaction;
 
   uint8_t gc_status;  // for gc picker
 
@@ -152,8 +160,8 @@ struct FileMetaData {
         num_antiquation(0),
         refs(0),
         being_compacted(false),
-        marked_for_compaction(false),
         need_upgrade(false),
+        marked_for_compaction(0),
         gc_status(kGarbageCollectionForbidden) {}
 
   void Ref() {
@@ -201,6 +209,12 @@ struct FileMetaData {
     kGarbageCollectionCandidate = 1,
     kGarbageCollectionPermitted = 2,
   };
+
+  bool is_output_to_parent_level() const {
+    constexpr uint8_t kFlag =
+        kMarkedFromUser | kMarkedFromRangeDeletion | kMarkedFromTableBuilder;
+    return (marked_for_compaction & kFlag) != 0;
+  }
 
   bool is_gc_forbidden() const {
     return gc_status == kGarbageCollectionForbidden;
@@ -302,8 +316,8 @@ class VersionEdit {
   void AddFile(int level, uint64_t file, uint32_t file_path_id,
                uint64_t file_size, const InternalKey& smallest,
                const InternalKey& largest, const SequenceNumber& smallest_seqno,
-               const SequenceNumber& largest_seqno, bool marked_for_compaction,
-               const TablePropertyCache& prop) {
+               const SequenceNumber& largest_seqno,
+               uint8_t marked_for_compaction, const TablePropertyCache& prop) {
     assert(smallest_seqno <= largest_seqno);
     FileMetaData f;
     f.fd = FileDescriptor(file, file_path_id, file_size, smallest_seqno,

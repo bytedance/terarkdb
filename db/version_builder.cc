@@ -377,8 +377,10 @@ class VersionBuilder::Rep {
           switch (item.f->gc_status) {
             case FileMetaData::kGarbageCollectionForbidden:
               if (item.gc_forbidden_version == dependence_version) {
+                // sst status
                 push_old_file(item.f);
               } else {
+                // sst -> blob , switch mark status
                 if (item.f->refs > 1) {
                   // if item.f in other versions, that assigning
                   // item.f->gc_status to permitted might let this item
@@ -392,6 +394,7 @@ class VersionBuilder::Rep {
                   item.f = f;
                 }
                 item.f->gc_status = FileMetaData::kGarbageCollectionPermitted;
+                item.f->marked_for_compaction &= FileMetaData::kMarkedFromUser;
               }
               break;
             case FileMetaData::kGarbageCollectionCandidate:
@@ -422,7 +425,8 @@ class VersionBuilder::Rep {
         old_file_queue.pop();
       }
       while (!old_file_queue.empty()) {
-        dependence_map[old_file_queue.top()].f->marked_for_compaction = true;
+        dependence_map[old_file_queue.top()].f->marked_for_compaction |=
+            FileMetaData::kMarkedFromUpdateBlob;
         old_file_queue.pop();
       }
     }

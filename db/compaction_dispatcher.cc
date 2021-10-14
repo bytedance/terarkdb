@@ -931,7 +931,8 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
       }
     }
     if (s.ok()) {
-      meta.marked_for_compaction = builder->NeedCompact();
+      meta.marked_for_compaction =
+          builder->NeedCompact() ? FileMetaData::kMarkedFromTableBuilder : 0;
       meta.prop.num_entries = builder->NumEntries();
       for (auto& pair : dependence) {
         meta.prop.dependence.emplace_back(Dependence{pair.first, pair.second});
@@ -956,14 +957,8 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
     TableProperties tp;
     if (s.ok()) {
       tp = builder->GetTableProperties();
-      meta.prop.num_deletions = tp.num_deletions;
-      meta.prop.raw_key_size = tp.raw_key_size;
-      meta.prop.raw_value_size = tp.raw_value_size;
-      meta.prop.flags |= tp.num_range_deletions > 0
-                             ? 0
-                             : TablePropertyCache::kNoRangeDeletions;
-      meta.prop.flags |=
-          tp.snapshots.empty() ? 0 : TablePropertyCache::kHasSnapshots;
+      ProcessFileMetaData("CompactionWorkerOutput", &meta, &tp,
+                          &immutable_cf_options, &mutable_cf_options);
     }
     if (s.ok()) {
       if (next_key != nullptr) {
@@ -982,7 +977,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
       file_info.smallest_seqno = meta.fd.smallest_seqno;
       file_info.largest_seqno = meta.fd.largest_seqno;
       file_info.file_size = meta.fd.file_size;
-      file_info.marked_for_compaction = builder->NeedCompact();
+      file_info.marked_for_compaction = meta.marked_for_compaction;
       result.files.emplace_back(file_info);
     }
     meta = FileMetaData();
