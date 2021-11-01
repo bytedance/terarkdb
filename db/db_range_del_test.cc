@@ -1505,12 +1505,14 @@ TEST_F(DBRangeDelTest, RangeTombstoneWrittenToMinimalSsts) {
   ASSERT_EQ("c" + Key(1), l1_metadata[1].smallestkey);
   ASSERT_EQ("d", l1_metadata[1].largestkey);
 
-  TablePropertiesCollection all_table_props;
-  ASSERT_OK(db_->GetPropertiesOfAllTables(&all_table_props));
+  std::unique_ptr<TERARKDB_NAMESPACE::TablePropertiesCollectionIterator>
+      all_tables_props_iter(db_->NewPropertiesOfAllTablesIterator());
+  ASSERT_OK(all_tables_props_iter->status());
   int64_t num_range_deletions = 0;
-  for (const auto& name_and_table_props : all_table_props) {
-    const auto& name = name_and_table_props.first;
-    const auto& table_props = name_and_table_props.second;
+  for (all_tables_props_iter->SeekToFirst(); all_tables_props_iter->Valid();
+       all_tables_props_iter->Next()) {
+    const auto& name = all_tables_props_iter->filename();
+    const auto& table_props = all_tables_props_iter->properties();
     // The range tombstone should only be output to the second L1 SST.
     if (name.size() >= l1_metadata[1].name.size() &&
         name.substr(name.size() - l1_metadata[1].name.size())

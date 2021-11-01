@@ -20,6 +20,34 @@ namespace TERARKDB_NAMESPACE {
 typedef std::unordered_map<std::string, std::shared_ptr<const TableProperties>>
     TablePropertiesCollection;
 
+#ifndef ROCKSDB_LITE
+
+class TablePropertiesCollectionIterator {
+ public:
+  TablePropertiesCollectionIterator() = default;
+  virtual ~TablePropertiesCollectionIterator() = default;
+
+  virtual void SeekToFirst() = 0;
+  virtual void Next() = 0;
+
+  virtual size_t size() const = 0;
+
+  virtual const std::string& filename() const = 0;
+  virtual const std::shared_ptr<const TableProperties>& properties() const = 0;
+
+  virtual bool Valid() const = 0;
+  virtual Status status() const = 0;
+
+ public:
+  // No copying allowed
+  TablePropertiesCollectionIterator(const TablePropertiesCollectionIterator&) =
+      delete;
+  TablePropertiesCollectionIterator& operator=(
+      const TablePropertiesCollectionIterator&) = delete;
+};
+
+#endif  // ROCKSDB_LITE
+
 class DB;
 class ColumnFamilyHandle;
 class Status;

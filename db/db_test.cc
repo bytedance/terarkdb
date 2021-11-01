@@ -2476,6 +2476,31 @@ class ModelDB : public DB {
     return Status::NotSupported("Not implemented.");
   }
 
+  using DB::NewPropertiesOfAllTablesIterator;
+  virtual TablePropertiesCollectionIterator* NewPropertiesOfAllTablesIterator(
+      ColumnFamilyHandle* /*column_family*/) override {
+    class EmptyTablePropertiesCollectionIterator
+        : public TablePropertiesCollectionIterator {
+     public:
+      void SeekToFirst() override{};
+      void Next() override{};
+
+      size_t size() const override { return 0; };
+
+      const std::string& filename() const override { assert(false); };
+      const std::shared_ptr<const TableProperties>& properties()
+          const override {
+        assert(false);
+      };
+
+      bool Valid() const override { return false; }
+      Status status() const override {
+        return Status::NotSupported("Not implemented.");
+      }
+    };
+    return new EmptyTablePropertiesCollectionIterator();
+  }
+
   using DB::GetPropertiesOfAllTables;
   virtual Status GetPropertiesOfAllTables(
       ColumnFamilyHandle* /*column_family*/,

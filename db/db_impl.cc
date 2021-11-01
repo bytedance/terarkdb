@@ -117,6 +117,94 @@
 
 namespace TERARKDB_NAMESPACE {
 
+#ifndef ROCKSDB_LITE
+
+class TablePropertiesCollectionIteratorImpl
+    : public TablePropertiesCollectionIterator {
+ public:
+  TablePropertiesCollectionIteratorImpl(DBImpl* impl, ColumnFamilyData* cfd)
+      : impl_(impl), cfd_(cfd), version_(nullptr), iter_(file_meta_.end()) {
+    impl_->mutex()->Lock();
+    cfd->Ref();
+    version_ = cfd->current();
+    version_->Ref();
+    prefix_extractor_ = cfd->GetLatestMutableCFOptions()->prefix_extractor;
+    impl_->mutex()->Unlock();
+    for (auto pair : version_->storage_info()->dependence_map()) {
+      file_meta_.emplace(pair.second);
+    }
+  }
+  virtual ~TablePropertiesCollectionIteratorImpl() {
+    JobContext job_context(0);
+    bool need_purge = false;
+    impl_->mutex()->Lock();
+    if (version_->Unref()) {
+      need_purge = true;
+    }
+    if (cfd_->Unref()) {
+      need_purge = true;
+      delete cfd_;
+    }
+    if (need_purge) {
+      impl_->FindObsoleteFiles(&job_context, false, true);
+    }
+    impl_->mutex()->Unlock();
+
+    if (job_context.HaveSomethingToDelete()) {
+      bool background_purge =
+          impl_->immutable_db_options().avoid_unnecessary_blocking_io;
+      impl_->PurgeObsoleteFiles(job_context, background_purge);
+    }
+    job_context.Clean(impl_->mutex());
+  }
+
+  void SeekToFirst() override { Update(file_meta_.begin()); }
+  void Next() override { Update(std::next(iter_)); }
+
+  size_t size() const override { return file_meta_.size(); }
+
+  const std::string& filename() const override {
+    assert(Valid());
+    return filename_;
+  }
+  const std::shared_ptr<const TableProperties>& properties() const override {
+    assert(Valid());
+    return properties_;
+  }
+
+  bool Valid() const override { return iter_ != file_meta_.end(); }
+  Status status() const override { return status_; }
+
+ private:
+  void Update(chash_set<FileMetaData*>::const_iterator where) {
+    if (where != file_meta_.end()) {
+      FileMetaData* f = *where;
+      filename_ = TableFileName(cfd_->ioptions()->cf_paths, f->fd.GetNumber(),
+                                f->fd.GetPathId());
+      status_ = cfd_->table_cache()->GetTableProperties(
+          impl_->env_options(), cfd_->internal_comparator(), *f, &properties_,
+          prefix_extractor_.get(), false);
+    }
+    if (status_.ok()) {
+      iter_ = where;
+    } else {
+      iter_ = file_meta_.end();
+    }
+  }
+
+  DBImpl* impl_;
+  ColumnFamilyData* cfd_;
+  Version* version_;
+  std::shared_ptr<const SliceTransform> prefix_extractor_;
+  chash_set<FileMetaData*> file_meta_;
+  chash_set<FileMetaData*>::const_iterator iter_;
+  Status status_;
+  std::string filename_;
+  std::shared_ptr<const TableProperties> properties_;
+};
+
+#endif  // ROCKSDB_LITE
+
 const std::string kDefaultColumnFamilyName("default");
 const uint64_t kDumpStatsWaitMicroseconds = 10000;
 const std::string kPersistentStatsColumnFamilyName(
@@ -2781,6 +2869,15 @@ void DBImpl::ReleaseSnapshot(const Snapshot* s) {
 }
 
 #ifndef ROCKSDB_LITE
+
+TablePropertiesCollectionIterator* DBImpl::NewPropertiesOfAllTablesIterator(
+    ColumnFamilyHandle* column_family) {
+  auto cfh = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family);
+  auto cfd = cfh->cfd();
+
+  return new TablePropertiesCollectionIteratorImpl(this, cfd);
+}
+
 Status DBImpl::GetPropertiesOfAllTables(ColumnFamilyHandle* column_family,
                                         TablePropertiesCollection* props) {
   auto cfh = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family);

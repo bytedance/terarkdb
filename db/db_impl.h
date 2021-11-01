@@ -557,6 +557,7 @@ class DBImpl : public DB {
   const ImmutableDBOptions& immutable_db_options() const {
     return immutable_db_options_;
   }
+  const EnvOptions& env_options() const { return env_options_; }
 
   void CancelAllBackgroundWork(bool wait);
 
@@ -1739,6 +1740,10 @@ class DBImpl : public DB {
       FlushReason flush_reason = FlushReason::kOthers);
 
 #ifndef ROCKSDB_LITE
+  using DB::NewPropertiesOfAllTablesIterator;
+  virtual TablePropertiesCollectionIterator* NewPropertiesOfAllTablesIterator(
+      ColumnFamilyHandle* column_family) override;
+
   using DB::GetPropertiesOfAllTables;
   virtual Status GetPropertiesOfAllTables(
       ColumnFamilyHandle* column_family,
