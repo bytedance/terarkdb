@@ -1252,6 +1252,13 @@ class DB {
   virtual ColumnFamilyHandle* DefaultColumnFamily() const = 0;
 
 #ifndef ROCKSDB_LITE
+  virtual TablePropertiesCollectionIterator* NewPropertiesOfAllTablesIterator(
+      ColumnFamilyHandle* column_family) = 0;
+  virtual TablePropertiesCollectionIterator*
+  NewPropertiesOfAllTablesIterator() {
+    return NewPropertiesOfAllTablesIterator(DefaultColumnFamily());
+  }
+
   virtual Status GetPropertiesOfAllTables(ColumnFamilyHandle* column_family,
                                           TablePropertiesCollection* props) = 0;
   virtual Status GetPropertiesOfAllTables(TablePropertiesCollection* props) {
