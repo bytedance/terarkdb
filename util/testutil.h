@@ -854,8 +854,8 @@ class TestTtlExtractorFactory : public TtlExtractorFactory {
  private:
   using TtlContext = TtlExtractorContext;
 
-  virtual std::unique_ptr<TtlExtractor> CreateTtlExtractor(
-      const TtlContext& context) const {
+  std::unique_ptr<TtlExtractor> CreateTtlExtractor(
+      const TtlContext& context) const override {
     return std::make_unique<TestTtlExtractor>();
   }
   uint64_t Now() const override { return env_->NowMicros() / 1000U / 1000U; }
