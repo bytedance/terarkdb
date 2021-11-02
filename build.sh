@@ -23,11 +23,11 @@ if [ "$WITH_TESTS" == "1" ]; then
   echo "build $BUILD_TYPE, with_tests = $WITH_TESTS"
   echo "You are building TerarkDB with tests, so debug mode is enabled"
   cd $BASE/$OUTPUT && cmake ../ -DCMAKE_INSTALL_PREFIX=$OUTPUT -DCMAKE_BUILD_TYPE=Debug -DWITH_TESTS=${WITH_TESTS} -DWITH_TOOLS=ON -DWITH_TERARK_ZIP=ON
-  cd $BASE/$OUTPUT && make -j $(nproc) && make install
+  cd $BASE/$OUTPUT && make -j $(nproc)
   echo "You are building TerarkDB with tests, so debug mode is enabled"
 else
   WITH_TESTS=OFF
   echo "build $BUILD_TYPE, with_tests = $WITH_TESTS"
-  cd $BASE/$OUTPUT && cmake ../ -DCMAKE_INSTALL_PREFIX=$OUTPUT -DCMAKE_BUILD_TYPE=Release -DWITH_TOOLS=ON -DWITH_TERARK_ZIP=ON
-  cd $BASE/$OUTPUT && make -j $(nproc) && make install
+  cd $BASE/$OUTPUT && cmake ../ -DCMAKE_INSTALL_PREFIX=$OUTPUT -DCMAKE_BUILD_TYPE=RelWithDebInfo -DWITH_TOOLS=ON -DWITH_TERARK_ZIP=ON -DWITH_ZENFS=ON -DBYTEDANCE_METRICS_PATH="$BASE/metrics2-cmake" -DWITH_BYTEDANCE_METRICS=ON
+  cd $BASE/$OUTPUT && make -j $(nproc) &&
 fi
