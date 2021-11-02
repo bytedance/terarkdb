@@ -1588,7 +1588,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
 
   struct BuilderSeparateHelper : public SeparateHelper {
     SeparateHelper* separate_helper = nullptr;
-    std::unique_ptr<ValueExtractor> value_meta_extractor;
+    const ValueExtractor* meta_extractor;
     Status (*trans_to_separate_callback)(void* args, const Slice& key,
                                          LazyBuffer& value) = nullptr;
     void* trans_to_separate_callback_args = nullptr;
@@ -1598,7 +1598,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
                            bool is_index) override {
       return SeparateHelper::TransToSeparate(
           internal_key, value, value.file_number(), meta, is_merge, is_index,
-          value_meta_extractor.get());
+          meta_extractor);
     }
 
     Status TransToSeparate(const Slice& key, LazyBuffer& value) override {
@@ -1614,13 +1614,6 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       return separate_helper->TransToCombined(user_key, sequence, value);
     }
   } separate_helper;
-  if (compact_->compaction->immutable_cf_options()
-          ->value_meta_extractor_factory != nullptr) {
-    ValueExtractorContext context = {cfd->GetID()};
-    separate_helper.value_meta_extractor =
-        compact_->compaction->immutable_cf_options()
-            ->value_meta_extractor_factory->CreateValueExtractor(context);
-  }
 
   size_t target_blob_file_size =
       MaxBlobSize(*mutable_cf_options, cfd->ioptions()->num_levels,
@@ -1648,12 +1641,14 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       s = SeparateHelper::TransToSeparate(
           key, value, blob_meta->fd.GetNumber(), Slice(),
           GetInternalKeyType(key) == kTypeMerge, false,
-          separate_helper.value_meta_extractor.get());
+          separate_helper.meta_extractor);
     }
     return s;
   };
 
   separate_helper.separate_helper = sub_compact->compaction->input_version();
+  separate_helper.meta_extractor =
+      compact_->compaction->column_family_data()->meta_extractor();
   if (!sub_compact->compaction->immutable_cf_options()
            ->table_factory->IsBuilderNeedSecondPass()) {
     separate_helper.trans_to_separate_callback =

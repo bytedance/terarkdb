@@ -189,6 +189,31 @@ class DBIter final : public Iterator {
       return saved_key_.GetUserKey();
     }
   }
+  virtual Slice meta() const override {
+    if (cfd_ == nullptr) {
+      return Slice::Invalid();
+    }
+    if (meta_.valid()) {
+      return meta_;
+    }
+    do {
+      auto v = value();
+      if (!v.valid()) {
+        break;
+      }
+      auto s = cfd_->meta_extractor()->Extract(saved_key_.GetUserKey(), v,
+                                               &meta_buffer_);
+      if (!s.ok()) {
+        valid_ = false;
+        break;
+      }
+      meta_ = meta_buffer_;
+      return meta_;
+    } while (false);
+
+    meta_ = Slice::Invalid();
+    return meta_;
+  }
   virtual Slice value() const override {
     assert(valid_);
     auto s = value_.fetch();
@@ -279,6 +304,8 @@ class DBIter final : public Iterator {
       local_stats_.skip_count_--;
     }
     num_internal_keys_skipped_ = 0;
+    meta_ = Slice::Invalid();
+    meta_buffer_.clear();
     value_.reset();
     if (value_buffer_.capacity() > 1048576) {
       std::string().swap(value_buffer_);
@@ -303,6 +330,8 @@ class DBIter final : public Iterator {
   ParsedInternalKey ikey_;
   LazyBuffer value_;
   std::string value_buffer_;
+  mutable Slice meta_;
+  mutable std::string meta_buffer_;
   Direction direction_;
   mutable bool valid_;
   bool current_entry_is_merged_;
@@ -1445,6 +1474,7 @@ inline void ArenaWrappedDBIter::SeekForPrev(const Slice& target) {
 inline void ArenaWrappedDBIter::Next() { db_iter_->Next(); }
 inline void ArenaWrappedDBIter::Prev() { db_iter_->Prev(); }
 inline Slice ArenaWrappedDBIter::key() const { return db_iter_->key(); }
+inline Slice ArenaWrappedDBIter::meta() const { return db_iter_->meta(); }
 inline Slice ArenaWrappedDBIter::value() const { return db_iter_->value(); }
 inline Status ArenaWrappedDBIter::status() const { return db_iter_->status(); }
 inline Status ArenaWrappedDBIter::GetProperty(std::string prop_name,

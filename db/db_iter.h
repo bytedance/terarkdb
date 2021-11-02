@@ -68,6 +68,7 @@ class ArenaWrappedDBIter : public Iterator {
   virtual void Next() override;
   virtual void Prev() override;
   virtual Slice key() const override;
+  virtual Slice meta() const override;
   virtual Slice value() const override;
   virtual Status status() const override;
   virtual Status Refresh() override;

@@ -161,11 +161,15 @@ class EmptyIterator : public Iterator {
   virtual void Prev() override { assert(false); }
   Slice key() const override {
     assert(false);
-    return Slice();
+    return Slice::Invalid();
+  }
+  Slice meta() const override {
+    assert(false);
+    return Slice::Invalid();
   }
   Slice value() const override {
     assert(false);
-    return Slice();
+    return Slice::Invalid();
   }
   virtual Status status() const override { return status_; }
 

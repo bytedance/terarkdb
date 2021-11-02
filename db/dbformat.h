@@ -812,7 +812,7 @@ class SeparateHelper {
   static Status TransToSeparate(const Slice& internal_key, LazyBuffer& value,
                                 uint64_t file_number, const Slice& meta,
                                 bool is_merge, bool is_index,
-                                const ValueExtractor* value_meta_extractor);
+                                const ValueExtractor* meta_extractor);
 
   virtual Status TransToSeparate(const Slice& internal_key, LazyBuffer& value,
                                  const Slice& meta, bool is_merge,

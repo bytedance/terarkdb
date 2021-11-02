@@ -74,6 +74,12 @@ class Iterator : public Cleanable {
   // REQUIRES: Valid()
   virtual Slice key() const = 0;
 
+  // Return the meta for the current entry.  The underlying storage for
+  // the returned slice is valid only until the next modification of
+  // the iterator.
+  // REQUIRES: Valid()
+  virtual Slice meta() const = 0;
+
   // Return the value for the current entry.  The underlying storage for
   // the returned slice is valid only until the next modification of
   // the iterator.

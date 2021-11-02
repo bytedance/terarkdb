@@ -127,6 +127,8 @@ class TtlIterator : public Iterator {
                          DBWithTTLImpl::kTSLength);
   }
 
+  Slice meta() const override { return iter_->meta(); }
+
   Slice value() const override {
     // TODO: handle timestamp corruption like in general iterator semantics
     assert(DBWithTTLImpl::SanityCheckTimestamp(iter_->value()).ok());

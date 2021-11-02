@@ -80,7 +80,8 @@ Status BuildTable(
         int_tbl_prop_collector_factories,
     const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
         int_tbl_prop_collector_factories_for_blob,
-    uint32_t column_family_id, const std::string& column_family_name,
+    const ValueExtractor* meta_extractor, uint32_t column_family_id,
+    const std::string& column_family_name,
     std::vector<SequenceNumber> snapshots,
     SequenceNumber earliest_write_conflict_snapshot,
     SnapshotChecker* snapshot_checker, const CompressionType compression,
@@ -165,7 +166,7 @@ Status BuildTable(
       std::unique_ptr<TableBuilder> builder;
       FileMetaData* current_output = nullptr;
       TableProperties* current_prop = nullptr;
-      std::unique_ptr<ValueExtractor> value_meta_extractor;
+      const ValueExtractor* meta_extractor;
       Status (*trans_to_separate_callback)(void* args, const Slice& key,
                                            LazyBuffer& value) = nullptr;
       void* trans_to_separate_callback_args = nullptr;
@@ -175,7 +176,7 @@ Status BuildTable(
                              bool is_index) override {
         return SeparateHelper::TransToSeparate(
             internal_key, value, value.file_number(), meta, is_merge, is_index,
-            value_meta_extractor.get());
+            meta_extractor);
       }
 
       Status TransToSeparate(const Slice& internal_key,
@@ -194,11 +195,6 @@ Status BuildTable(
         return LazyBuffer();
       }
     } separate_helper;
-    if (ioptions.value_meta_extractor_factory != nullptr) {
-      ValueExtractorContext context = {column_family_id};
-      separate_helper.value_meta_extractor =
-          ioptions.value_meta_extractor_factory->CreateValueExtractor(context);
-    }
 
     auto finish_output_blob_sst = [&] {
       Status status;
@@ -294,7 +290,7 @@ Status BuildTable(
         status = SeparateHelper::TransToSeparate(
             key, value, blob_meta->fd.GetNumber(), Slice(),
             GetInternalKeyType(key) == kTypeMerge, false,
-            separate_helper.value_meta_extractor.get());
+            separate_helper.meta_extractor);
       }
       return status;
     };
@@ -309,6 +305,7 @@ Status BuildTable(
           c_style_callback(trans_to_separate);
       separate_helper.trans_to_separate_callback_args = &trans_to_separate;
     }
+    separate_helper.meta_extractor = meta_extractor;
 
     CompactionIterator c_iter(
         iter.get(), &separate_helper, nullptr,

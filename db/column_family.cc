@@ -103,6 +103,10 @@ const Comparator* ColumnFamilyHandleImpl::GetComparator() const {
   return cfd()->user_comparator();
 }
 
+const ValueExtractor* ColumnFamilyHandleImpl::GetMetaExtractor() const {
+  return cfd()->meta_extractor();
+}
+
 Status CheckCompressionSupported(const ColumnFamilyOptions& cf_options) {
   if (!cf_options.compression_per_level.empty()) {
     for (size_t level = 0; level < cf_options.compression_per_level.size();
@@ -480,6 +484,12 @@ ColumnFamilyData::ColumnFamilyData(
     } else {
       ROCKS_LOG_INFO(ioptions_.info_log, "\t(skipping printing options)\n");
     }
+  }
+
+  if (ioptions_.value_meta_extractor_factory) {
+    ValueExtractorContext ctx{id_};
+    meta_extractor_ =
+        ioptions_.value_meta_extractor_factory->CreateValueExtractor(ctx);
   }
 
   RecalculateWriteStallConditions(mutable_cf_options_);
@@ -1477,6 +1487,14 @@ const Comparator* GetColumnFamilyUserComparator(
     ColumnFamilyHandle* column_family) {
   if (column_family != nullptr) {
     return column_family->GetComparator();
+  }
+  return nullptr;
+}
+
+const ValueExtractor* GetColumnFamilyMetaExtractor(
+    ColumnFamilyHandle* column_family) {
+  if (column_family != nullptr) {
+    return column_family->GetMetaExtractor();
   }
   return nullptr;
 }

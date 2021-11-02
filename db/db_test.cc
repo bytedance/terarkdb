@@ -62,6 +62,29 @@
 
 namespace TERARKDB_NAMESPACE {
 
+class TestValueExtractor : public ValueExtractor {
+ public:
+  ~TestValueExtractor() override{};
+
+  // Extract a custom info from a specified key value pair. This method is
+  // called when a value will trans to separate.
+  virtual Status Extract(const Slice& /*key*/, const Slice& value,
+                         std::string* output) const override {
+    output->assign(std::to_string(value.size()));
+    return Status::OK();
+  };
+};
+class TestValueExtractorFactory : public ValueExtractorFactory {
+ public:
+  virtual std::unique_ptr<ValueExtractor> CreateValueExtractor(
+      const Context& context) const override {
+    return std::make_unique<TestValueExtractor>();
+  }
+
+  // Returns a name that identifies this value extractor factory.
+  virtual const char* Name() const override { return "TestValueExtractor"; }
+};
+
 class DBTest : public DBTestBase {
  public:
   DBTest() : DBTestBase("/db_test") {}
@@ -223,6 +246,76 @@ TEST_F(DBTest, WriteEmptyBatch) {
   // make sure we can re-open it.
   ASSERT_OK(TryReopenWithColumnFamilies({"default", "pikachu"}, options));
   ASSERT_EQ("bar", Get(1, "foo"));
+}
+
+TEST_F(DBTest, GetValueMeta) {
+  Options options = CurrentOptions();
+  options.env = env_;
+  options.write_buffer_size = 100000;
+  options.value_meta_extractor_factory =
+      std::make_shared<TestValueExtractorFactory>();
+
+  CreateAndReopenWithCF({"pikachu"}, options);
+
+  ASSERT_OK(Put(1, "k4", "123456"));
+  ASSERT_OK(Put(1, "k6", "12345678"));
+  ASSERT_OK(Put(1, "k3", "12345"));
+  ASSERT_OK(Put(1, "k1", "123"));
+  ASSERT_OK(Put(1, "k2", "1234"));
+  ASSERT_OK(Put(1, "k5", "1234567"));
+  ASSERT_OK(Put(1, "k7", "123456789"));
+  WriteBatch empty_batch;
+  ASSERT_OK(dbfull()->Write(WriteOptions(), &empty_batch));
+
+  std::unique_ptr<Iterator> db_iter(
+      dbfull()->NewIterator(ReadOptions(), dbfull()->GetColumnFamilyHandle(1)));
+  db_iter->SeekToFirst();
+  ASSERT_TRUE(db_iter->Valid());
+  ASSERT_EQ(db_iter->meta(), "3");
+  db_iter->Next();
+  ASSERT_TRUE(db_iter->Valid());
+  ASSERT_EQ(db_iter->meta(), "4");
+  db_iter->Next();
+  ASSERT_TRUE(db_iter->Valid());
+  ASSERT_EQ(db_iter->meta(), "5");
+  db_iter->Next();
+  ASSERT_TRUE(db_iter->Valid());
+  ASSERT_EQ(db_iter->meta(), "6");
+  db_iter->Next();
+  ASSERT_TRUE(db_iter->Valid());
+  ASSERT_EQ(db_iter->meta(), "7");
+  db_iter->Next();
+  ASSERT_TRUE(db_iter->Valid());
+  ASSERT_EQ(db_iter->meta(), "8");
+  db_iter->Next();
+  ASSERT_TRUE(db_iter->Valid());
+  ASSERT_EQ(db_iter->meta(), "9");
+  db_iter.reset();
+
+  ASSERT_OK(TryReopenWithColumnFamilies({"default", "pikachu"}, options));
+  db_iter.reset(
+      dbfull()->NewIterator(ReadOptions(), dbfull()->GetColumnFamilyHandle(1)));
+  db_iter->SeekToFirst();
+  ASSERT_TRUE(db_iter->Valid());
+  ASSERT_EQ(db_iter->meta(), "3");
+  db_iter->Next();
+  ASSERT_TRUE(db_iter->Valid());
+  ASSERT_EQ(db_iter->meta(), "4");
+  db_iter->Next();
+  ASSERT_TRUE(db_iter->Valid());
+  ASSERT_EQ(db_iter->meta(), "5");
+  db_iter->Next();
+  ASSERT_TRUE(db_iter->Valid());
+  ASSERT_EQ(db_iter->meta(), "6");
+  db_iter->Next();
+  ASSERT_TRUE(db_iter->Valid());
+  ASSERT_EQ(db_iter->meta(), "7");
+  db_iter->Next();
+  ASSERT_TRUE(db_iter->Valid());
+  ASSERT_EQ(db_iter->meta(), "8");
+  db_iter->Next();
+  ASSERT_TRUE(db_iter->Valid());
+  ASSERT_EQ(db_iter->meta(), "9");
 }
 
 TEST_F(DBTest, SkipDelay) {
@@ -2787,6 +2880,7 @@ class ModelDB : public DB {
 
     virtual Slice key() const override { return iter_->first; }
     virtual Slice value() const override { return iter_->second; }
+    virtual Slice meta() const override { return Slice::Invalid(); }
     virtual Status status() const override { return Status::OK(); }
 
    private:

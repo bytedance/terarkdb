@@ -19,6 +19,7 @@
 #include "rocksdb/comparator.h"
 #include "rocksdb/iterator.h"
 #include "rocksdb/terark_namespace.h"
+#include "rocksdb/value_extractor.h"
 #include "util/arena.h"
 #include "util/cast_util.h"
 #include "util/string_util.h"
@@ -35,19 +36,21 @@ namespace TERARKDB_NAMESPACE {
 class BaseDeltaIterator : public Iterator {
  public:
   BaseDeltaIterator(Iterator* base_iterator, WBWIIterator* delta_iterator,
-                    const Comparator* comparator)
+                    const Comparator* comparator,
+                    const ValueExtractor* meta_extractor)
       : forward_(true),
         current_at_base_(true),
         equal_keys_(false),
         status_(Status::OK()),
         base_iterator_(base_iterator),
         delta_iterator_(delta_iterator),
-        comparator_(comparator) {}
+        comparator_(comparator),
+        meta_extractor_(meta_extractor) {}
 
   virtual ~BaseDeltaIterator() {}
 
   bool Valid() const override {
-    return current_at_base_ ? BaseValid() : DeltaValid();
+    return status_.ok() && (current_at_base_ ? BaseValid() : DeltaValid());
   }
 
   void SeekToFirst() override {
@@ -154,6 +157,23 @@ class BaseDeltaIterator : public Iterator {
   Slice key() const override {
     return current_at_base_ ? base_iterator_->key()
                             : delta_iterator_->Entry().key;
+  }
+  virtual Slice meta() const override {
+    if (current_at_base_) {
+      return base_iterator_->meta();
+    }
+    if (!meta_extractor_) {
+      return Slice::Invalid();
+    }
+    auto s = meta_extractor_->Extract(delta_iterator_->Entry().key,
+                                      delta_iterator_->Entry().value, &meta_);
+    if (!s.ok()) {
+      if (status_.ok()) {
+        status_ = std::move(s);
+      }
+      return Slice::Invalid();
+    }
+    return meta_;
   }
 
   Slice value() const override {
@@ -324,10 +344,12 @@ class BaseDeltaIterator : public Iterator {
   bool forward_;
   bool current_at_base_;
   bool equal_keys_;
-  Status status_;
+  mutable Status status_;
   std::unique_ptr<Iterator> base_iterator_;
   std::unique_ptr<WBWIIterator> delta_iterator_;
   const Comparator* comparator_;  // not owned
+  mutable std::string meta_;
+  const ValueExtractor* meta_extractor_;
 };
 
 class WBWIIteratorImpl : public WBWIIterator {
@@ -684,7 +706,8 @@ Iterator* WriteBatchWithIndex::NewIteratorWithBase(
     return nullptr;
   }
   return new BaseDeltaIterator(base_iterator, NewIterator(column_family),
-                               GetColumnFamilyUserComparator(column_family));
+                               GetColumnFamilyUserComparator(column_family),
+                               GetColumnFamilyMetaExtractor(column_family));
 }
 
 Iterator* WriteBatchWithIndex::NewIteratorWithBase(Iterator* base_iterator) {
@@ -694,7 +717,7 @@ Iterator* WriteBatchWithIndex::NewIteratorWithBase(Iterator* base_iterator) {
   }
   // default column family's comparator
   return new BaseDeltaIterator(base_iterator, NewIterator(),
-                               rep->default_comparator);
+                               rep->default_comparator, nullptr);
 }
 
 Status WriteBatchWithIndex::Put(ColumnFamilyHandle* column_family,
