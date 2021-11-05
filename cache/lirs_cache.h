@@ -44,7 +44,7 @@ struct LIRSHandle {
   void Free() {
     assert((refs == 1 && InCache()) || (refs == 0 && !InCache()));
     if (deleter) {
-      (*deleter)(key(), value);
+      (*deleter)(key(), value, charge);
     }
     delete[] reinterpret_cast<char*>(this);
   }
@@ -96,11 +96,10 @@ class ALIGN_AS(CACHE_LINE_SIZE) LIRSCacheShard : public CacheShard {
   virtual void SetCapacity(size_t capacity) override;
   virtual void SetStrictCapacityLimit(bool strict_capacity_limit) override;
 
-  virtual Status Insert(const Slice& key, uint32_t hash, void* value,
-                        size_t charge,
-                        void (*deleter)(const Slice& key, void* value),
-                        Cache::Handle** handle,
-                        Cache::Priority priority) override;
+  virtual Status Insert(
+      const Slice& key, uint32_t hash, void* value, size_t charge,
+      void (*deleter)(const Slice& key, void* value, size_t charge),
+      Cache::Handle** handle, Cache::Priority priority) override;
 
   virtual Cache::Handle* Lookup(const Slice& key, uint32_t hash) override;
   virtual bool Ref(Cache::Handle* handle) override;

@@ -701,6 +701,10 @@ class DB {
     //      residing in block cache.
     static const std::string kBlockCacheUsage;
 
+    //  "rocksdb.block-cache-garbage" - returns the memory size for the garbage
+    //      in block cache.
+    static const std::string kBlockCacheGarbage;
+
     // "rocksdb.block-cache-pinned-usage" - returns the memory size for the
     //      entries being pinned.
     static const std::string kBlockCachePinnedUsage;
@@ -762,6 +766,7 @@ class DB {
   //  "rocksdb.is-write-stopped"
   //  "rocksdb.block-cache-capacity"
   //  "rocksdb.block-cache-usage"
+  //  "rocksdb.block-cache-garbage"
   //  "rocksdb.block-cache-pinned-usage"
   virtual bool GetIntProperty(ColumnFamilyHandle* column_family,
                               const Slice& property, uint64_t* value) = 0;

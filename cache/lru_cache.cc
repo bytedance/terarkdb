@@ -361,8 +361,8 @@ bool LRUCacheShardTemplate<CacheMonitor>::Release(Cache::Handle* handle,
 template <class CacheMonitor>
 Status LRUCacheShardTemplate<CacheMonitor>::Insert(
     const Slice& key, uint32_t hash, void* value, size_t charge,
-    void (*deleter)(const Slice& key, void* value), Cache::Handle** handle,
-    Cache::Priority priority) {
+    void (*deleter)(const Slice& key, void* value, size_t charge),
+    Cache::Handle** handle, Cache::Priority priority) {
   // Allocate the memory here outside of the mutex
   // If the cache is full, we'll have to release it
   // It shouldn't happen very often though.

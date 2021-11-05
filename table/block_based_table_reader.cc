@@ -114,8 +114,11 @@ void DeleteHeldResource(void* arg, void* /*ignored*/) {
 
 // Delete the entry resided in the cache.
 template <class Entry>
-void DeleteCachedEntry(const Slice& /*key*/, void* value) {
+void DeleteCachedEntry(const Slice& /*key*/, void* value, size_t charge) {
   auto entry = reinterpret_cast<Entry*>(value);
+#ifdef WITH_DIAGNOSE_CACHE
+  // TODO
+#endif
   delete entry;
 }
 
