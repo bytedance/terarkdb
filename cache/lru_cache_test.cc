@@ -153,7 +153,9 @@ class LRUCacheTest : public testing::Test,
 
  private:
   CacheShard* cache_ = nullptr;
+#ifdef WITH_DIAGNOSE_CACHE
   bool is_diagnose_ = false;
+#endif
 };
 
 #ifdef WITH_DIAGNOSE_CACHE

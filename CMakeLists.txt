@@ -76,6 +76,10 @@ ELSE()
   SET(BUILD_SUFFIX "d")
 ENDIF()
 
+if(WITH_DIAGNOSE_CACHE)
+  add_compile_definitions(WITH_DIAGNOSE_CACHE)
+endif()
+
 # terark-zip embedded boost, will remove the boost library in the future
 if(WITH_TERARK_ZIP)
   add_definitions(-DWITH_TERARK_ZIP=1)
