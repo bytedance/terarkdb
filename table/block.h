@@ -152,7 +152,9 @@ class Block {
                  Statistics* statistics = nullptr);
 
   ~Block();
-
+#ifdef WITH_DIAGNOSE_CACHE
+  uint64_t fileno;
+#endif
   size_t size() const { return size_; }
   const char* data() const { return data_; }
   // The additional memory space taken by the block data.

@@ -627,6 +627,7 @@ set(SOURCES
         memtable/skiplistrep.cc
         memtable/vectorrep.cc
         memtable/write_buffer_manager.cc
+        monitoring/cache_usage.cc
         monitoring/histogram.cc
         monitoring/histogram_windowing.cc
         monitoring/in_memory_stats_history.cc

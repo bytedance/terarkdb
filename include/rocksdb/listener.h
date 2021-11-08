@@ -20,8 +20,6 @@ namespace TERARKDB_NAMESPACE {
 typedef std::unordered_map<std::string, std::shared_ptr<const TableProperties>>
     TablePropertiesCollection;
 
-#ifndef ROCKSDB_LITE
-
 class TablePropertiesCollectionIterator {
  public:
   TablePropertiesCollectionIterator() = default;
@@ -45,8 +43,6 @@ class TablePropertiesCollectionIterator {
   TablePropertiesCollectionIterator& operator=(
       const TablePropertiesCollectionIterator&) = delete;
 };
-
-#endif  // ROCKSDB_LITE
 
 class DB;
 class ColumnFamilyHandle;

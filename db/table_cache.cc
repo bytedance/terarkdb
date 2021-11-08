@@ -33,7 +33,7 @@ namespace TERARKDB_NAMESPACE {
 namespace {
 
 template <class T>
-static void DeleteEntry(const Slice& /*key*/, void* value) {
+static void DeleteEntry(const Slice& /*key*/, void* value, size_t charge) {
   T* typed_value = reinterpret_cast<T*>(value);
   delete typed_value;
 }

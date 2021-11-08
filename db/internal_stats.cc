@@ -251,6 +251,7 @@ static const std::string actual_delayed_write_rate =
 static const std::string is_write_stopped = "is-write-stopped";
 static const std::string block_cache_capacity = "block-cache-capacity";
 static const std::string block_cache_usage = "block-cache-usage";
+static const std::string block_cache_garbage = "block-cache-garbage";
 static const std::string block_cache_pinned_usage = "block-cache-pinned-usage";
 static const std::string options_statistics = "options-statistics";
 
@@ -334,6 +335,8 @@ const std::string DB::Properties::kBlockCacheCapacity =
     rocksdb_prefix + block_cache_capacity;
 const std::string DB::Properties::kBlockCacheUsage =
     rocksdb_prefix + block_cache_usage;
+const std::string DB::Properties::kBlockCacheGarbage =
+    rocksdb_prefix + block_cache_garbage;
 const std::string DB::Properties::kBlockCachePinnedUsage =
     rocksdb_prefix + block_cache_pinned_usage;
 const std::string DB::Properties::kOptionsStatistics =
@@ -464,6 +467,9 @@ const std::unordered_map<std::string, DBPropertyInfo>
           nullptr}},
         {DB::Properties::kBlockCacheUsage,
          {false, nullptr, &InternalStats::HandleBlockCacheUsage, nullptr,
+          nullptr}},
+        {DB::Properties::kBlockCacheGarbage,
+         {true, nullptr, &InternalStats::HandleBlockCacheGarbage, nullptr,
           nullptr}},
         {DB::Properties::kBlockCachePinnedUsage,
          {false, nullptr, &InternalStats::HandleBlockCachePinnedUsage, nullptr,
@@ -894,6 +900,27 @@ bool InternalStats::HandleBlockCacheUsage(uint64_t* value, DBImpl* /*db*/,
   }
   *value = static_cast<uint64_t>(block_cache->GetUsage());
   return true;
+}
+
+bool InternalStats::HandleBlockCacheGarbage(uint64_t* value, DBImpl* /*db*/,
+                                            Version* version) {
+#ifdef WITH_DIAGNOSE_CACHE
+  std::vector<std::pair<uint64_t, size_t>> usage;
+  GetCacheUsage(&usage);
+  uint64_t garbage = 0;
+  auto& dependence_map = version->storage_info()->dependence_map();
+  for (auto pair : usage) {
+    auto find = dependence_map.find(pair.first);
+    if (find == dependence_map.end() ||
+        pair.first != find->second->fd.GetNumber()) {
+      garbage += pair.second;
+    }
+  }
+  *value = garbage;
+  return true;
+#else
+  return false;
+#endif
 }
 
 bool InternalStats::HandleBlockCachePinnedUsage(uint64_t* value, DBImpl* /*db*/,
