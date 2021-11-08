@@ -1043,6 +1043,7 @@ if(WITH_TESTS)
         memtable/inlineskiplist_test.cc
         memtable/skiplist_test.cc
         memtable/write_buffer_manager_test.cc
+        monitoring/cache_usage_test.cc
         monitoring/histogram_test.cc
         monitoring/iostats_context_test.cc
         monitoring/statistics_test.cc

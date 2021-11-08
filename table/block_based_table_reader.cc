@@ -15,6 +15,8 @@
 #include <utility>
 #include <vector>
 
+#include <iostream>
+
 #include "db/dbformat.h"
 #include "monitoring/perf_context_imp.h"
 #include "rocksdb/cache.h"
@@ -127,6 +129,7 @@ void DeleteCachedBlockEntry(const Slice& /*key*/, void* value, size_t charge) {
 #ifdef WITH_DIAGNOSE_CACHE
   // TODO
   CollectCacheUsage(entry->fileno, -charge);
+  // std::cout << entry->fileno << "-" << charge << std::endl;
 #endif
   delete entry;
 }
@@ -1316,6 +1319,7 @@ Status BlockBasedTable::GetDataBlockFromCache(
 #ifdef WITH_DIAGNOSE_CACHE
       block->value->fileno = rep->file_number;
       CollectCacheUsage(rep->file_number, charge);
+      // std::cout << rep->file_number << " " << charge << std::endl;
 #endif
       s = block_cache->Insert(block_cache_key, block->value, charge,
                               &DeleteCachedBlockEntry, &(block->cache_handle));
@@ -1433,6 +1437,7 @@ Status BlockBasedTable::PutDataBlockToCache(
 #ifdef WITH_DIAGNOSE_CACHE
     cached_block->value->fileno = fileno;
     CollectCacheUsage(fileno, charge);
+    // std::cout << fileno << " " << charge << std::endl;
 #endif
 
     s = block_cache->Insert(block_cache_key, cached_block->value, charge,
