@@ -65,11 +65,16 @@ class TerarkPropertiesCollectorFactory
   }
 };
 
-void VerifyTableProperties(DB* db, uint64_t expected_entries_size) {
+void VerifyTableProperties(DB* db, bool same_prop_ptr,
+                           uint64_t expected_entries_size) {
   TablePropertiesCollection props;
+  std::unique_ptr<TablePropertiesCollectionIterator> props_iter;
   ASSERT_OK(db->GetPropertiesOfAllTables(&props));
+  props_iter.reset(db->NewPropertiesOfAllTablesIterator());
+  ASSERT_OK(props_iter->status());
 
   ASSERT_EQ(4U, props.size());
+  ASSERT_EQ(props.size(), props_iter->size());
   std::unordered_set<uint64_t> unique_entries;
 
   // Indirect test
@@ -80,6 +85,24 @@ void VerifyTableProperties(DB* db, uint64_t expected_entries_size) {
   }
 
   ASSERT_EQ(props.size(), unique_entries.size());
+  ASSERT_EQ(expected_entries_size, sum);
+
+  size_t count = 0;
+  sum = 0;
+  for (props_iter->SeekToFirst(); props_iter->Valid(); props_iter->Next()) {
+    ASSERT_EQ(1, props.count(props_iter->filename()));
+    if (same_prop_ptr) {
+      ASSERT_EQ(props[props_iter->filename()].get(),
+                props_iter->properties().get());
+    } else {
+      ASSERT_EQ(props[props_iter->filename()]->num_entries,
+                props_iter->properties()->num_entries);
+    }
+    ++count;
+    sum += props_iter->properties()->num_entries;
+  }
+  ASSERT_OK(props_iter->status());
+  ASSERT_EQ(props.size(), count);
   ASSERT_EQ(expected_entries_size, sum);
 }
 }  // namespace
@@ -95,6 +118,8 @@ class DBTablePropertiesTest : public DBTestBase {
 TEST_F(DBTablePropertiesTest, GetPropertiesOfAllTablesTest) {
   Options options = CurrentOptions();
   options.level0_file_num_compaction_trigger = 8;
+  options.pin_table_properties_in_reader = true;
+  options.max_open_files = -1;
   Reopen(options);
   // Create 4 tables
   for (int table = 0; table < 4; ++table) {
@@ -106,8 +131,9 @@ TEST_F(DBTablePropertiesTest, GetPropertiesOfAllTablesTest) {
 
   // 1. Read table properties directly from file
   Reopen(options);
-  VerifyTableProperties(db_, 10 + 11 + 12 + 13);
+  VerifyTableProperties(db_, true, 10 + 11 + 12 + 13);
 
+  options.max_open_files = 1;
   // 2. Put two tables to table cache and
   Reopen(options);
   // fetch key from 1st and 2nd table, which will internally place that table to
@@ -116,8 +142,9 @@ TEST_F(DBTablePropertiesTest, GetPropertiesOfAllTablesTest) {
     Get(ToString(i * 100 + 0));
   }
 
-  VerifyTableProperties(db_, 10 + 11 + 12 + 13);
+  VerifyTableProperties(db_, false, 10 + 11 + 12 + 13);
 
+  options.pin_table_properties_in_reader = false;
   // 3. Put all tables to table cache
   Reopen(options);
   // fetch key from 1st and 2nd table, which will internally place that table to
@@ -125,7 +152,7 @@ TEST_F(DBTablePropertiesTest, GetPropertiesOfAllTablesTest) {
   for (int i = 0; i < 4; ++i) {
     Get(ToString(i * 100 + 0));
   }
-  VerifyTableProperties(db_, 10 + 11 + 12 + 13);
+  VerifyTableProperties(db_, false, 10 + 11 + 12 + 13);
 }
 
 TEST_F(DBTablePropertiesTest, GetPropertiesOfAllTablesTestKeyValueSep) {

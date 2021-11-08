@@ -343,6 +343,12 @@ class StackableDB : public DB {
   using DB::ResetStats;
   virtual Status ResetStats() override { return db_->ResetStats(); }
 
+  using DB::NewPropertiesOfAllTablesIterator;
+  virtual TablePropertiesCollectionIterator* NewPropertiesOfAllTablesIterator(
+      ColumnFamilyHandle* column_family) override {
+    return db_->NewPropertiesOfAllTablesIterator(column_family);
+  }
+
   using DB::GetPropertiesOfAllTables;
   virtual Status GetPropertiesOfAllTables(
       ColumnFamilyHandle* column_family,

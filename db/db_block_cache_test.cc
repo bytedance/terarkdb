@@ -398,7 +398,8 @@ class MockCache : public LRUCache {
   }
 
   virtual Status Insert(const Slice& key, void* value, size_t charge,
-                        void (*deleter)(const Slice& key, void* value),
+                        void (*deleter)(const Slice& key, void* value,
+                                        size_t charge),
                         Handle** handle, Priority priority) override {
     if (priority == Priority::LOW) {
       low_pri_insert_count++;

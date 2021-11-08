@@ -2222,7 +2222,8 @@ class MockCache : public LRUCache {
       : LRUCache(capacity, num_shard_bits, strict_capacity_limit,
                  high_pri_pool_ratio) {}
   virtual Status Insert(const Slice& key, void* value, size_t charge,
-                        void (*deleter)(const Slice& key, void* value),
+                        void (*deleter)(const Slice& key, void* value,
+                                        size_t charge),
                         Handle** handle = nullptr,
                         Priority priority = Priority::LOW) override {
     // Replace the deleter with our own so that we keep track of data blocks
@@ -2237,11 +2238,11 @@ class MockCache : public LRUCache {
     marked_data_in_cache_[key.ToString()] = charge;
     marked_size_ += charge;
   }
-  using DeleterFunc = void (*)(const Slice& key, void* value);
+  using DeleterFunc = void (*)(const Slice& key, void* value, size_t charge);
   static std::map<std::string, DeleterFunc> deleters_;
   static std::map<std::string, size_t> marked_data_in_cache_;
   static size_t marked_size_;
-  static void MockDeleter(const Slice& key, void* value) {
+  static void MockDeleter(const Slice& key, void* value, size_t charge) {
     // If the item was marked for being data block, decrease its usage from  the
     // total data block usage of the cache
     if (marked_data_in_cache_.find(key.ToString()) !=
@@ -2251,7 +2252,7 @@ class MockCache : public LRUCache {
     // Then call the origianl deleter
     assert(deleters_.find(key.ToString()) != deleters_.end());
     auto deleter = deleters_[key.ToString()];
-    deleter(key, value);
+    deleter(key, value, charge);
   }
 };
 

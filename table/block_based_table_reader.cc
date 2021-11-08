@@ -15,6 +15,8 @@
 #include <utility>
 #include <vector>
 
+#include <iostream>
+
 #include "db/dbformat.h"
 #include "monitoring/perf_context_imp.h"
 #include "rocksdb/cache.h"
@@ -122,8 +124,18 @@ void DeleteCachedEntry(const Slice& /*key*/, void* value, size_t charge) {
   delete entry;
 }
 
-void DeleteCachedFilterEntry(const Slice& key, void* value);
-void DeleteCachedIndexEntry(const Slice& key, void* value);
+void DeleteCachedBlockEntry(const Slice& /*key*/, void* value, size_t charge) {
+  auto entry = reinterpret_cast<Block*>(value);
+#ifdef WITH_DIAGNOSE_CACHE
+  // TODO
+  CollectCacheUsage(entry->fileno, -charge);
+  // std::cout << entry->fileno << "-" << charge << std::endl;
+#endif
+  delete entry;
+}
+
+void DeleteCachedFilterEntry(const Slice& key, void* value, size_t);
+void DeleteCachedIndexEntry(const Slice& key, void* value, size_t);
 
 // Release the cached entry and decrement its ref count.
 void ReleaseCachedEntry(void* arg, void* h) {
@@ -1304,9 +1316,13 @@ Status BlockBasedTable::GetDataBlockFromCache(
     if (block_cache != nullptr && block->value->own_bytes() &&
         read_options.fill_cache) {
       size_t charge = block->value->ApproximateMemoryUsage();
+#ifdef WITH_DIAGNOSE_CACHE
+      block->value->fileno = rep->file_number;
+      CollectCacheUsage(rep->file_number, charge);
+      // std::cout << rep->file_number << " " << charge << std::endl;
+#endif
       s = block_cache->Insert(block_cache_key, block->value, charge,
-                              &DeleteCachedEntry<Block>,
-                              &(block->cache_handle));
+                              &DeleteCachedBlockEntry, &(block->cache_handle));
 #ifndef NDEBUG
       block_cache->TEST_mark_as_data_block(block_cache_key, charge);
 #endif  // NDEBUG
@@ -1358,7 +1374,8 @@ Status BlockBasedTable::PutDataBlockToCache(
     CompressionType raw_block_comp_type, uint32_t format_version,
     const Slice& compression_dict, SequenceNumber seq_no,
     size_t read_amp_bytes_per_bit, MemoryAllocator* memory_allocator,
-    bool is_index, Cache::Priority priority, GetContext* get_context) {
+    bool is_index, Cache::Priority priority, GetContext* get_context,
+    uint64_t fileno) {
   assert(raw_block_comp_type == kNoCompression ||
          block_cache_compressed != nullptr);
 
@@ -1417,8 +1434,14 @@ Status BlockBasedTable::PutDataBlockToCache(
   // insert into uncompressed block cache
   if (block_cache != nullptr && cached_block->value->own_bytes()) {
     size_t charge = cached_block->value->ApproximateMemoryUsage();
+#ifdef WITH_DIAGNOSE_CACHE
+    cached_block->value->fileno = fileno;
+    CollectCacheUsage(fileno, charge);
+    // std::cout << fileno << " " << charge << std::endl;
+#endif
+
     s = block_cache->Insert(block_cache_key, cached_block->value, charge,
-                            &DeleteCachedEntry<Block>,
+                            &DeleteCachedBlockEntry,
                             &(cached_block->cache_handle), priority);
 #ifndef NDEBUG
     block_cache->TEST_mark_as_data_block(block_cache_key, charge);
@@ -1926,7 +1949,7 @@ Status BlockBasedTable::MaybeReadBlockAndLoadToCache(
                             .cache_index_and_filter_blocks_with_high_priority
                 ? Cache::Priority::HIGH
                 : Cache::Priority::LOW,
-            get_context);
+            get_context, rep->file_number);
       }
     }
   }
@@ -3251,7 +3274,7 @@ void BlockBasedTable::DumpKeyValue(const Slice& key, const Slice& value,
 
 namespace {
 
-void DeleteCachedFilterEntry(const Slice& /*key*/, void* value) {
+void DeleteCachedFilterEntry(const Slice& /*key*/, void* value, size_t charge) {
   FilterBlockReader* filter = reinterpret_cast<FilterBlockReader*>(value);
   if (filter->statistics() != nullptr) {
     RecordTick(filter->statistics(), BLOCK_CACHE_FILTER_BYTES_EVICT,
@@ -3260,7 +3283,7 @@ void DeleteCachedFilterEntry(const Slice& /*key*/, void* value) {
   delete filter;
 }
 
-void DeleteCachedIndexEntry(const Slice& /*key*/, void* value) {
+void DeleteCachedIndexEntry(const Slice& /*key*/, void* value, size_t charge) {
   IndexReader* index_reader = reinterpret_cast<IndexReader*>(value);
   if (index_reader->statistics() != nullptr) {
     RecordTick(index_reader->statistics(), BLOCK_CACHE_INDEX_BYTES_EVICT,

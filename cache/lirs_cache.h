@@ -11,7 +11,7 @@ namespace TERARKDB_NAMESPACE {
 
 struct LIRSHandle {
   void* value;
-  void (*deleter)(const Slice&, void* value);
+  void (*deleter)(const Slice&, void* value,size_t charge);
   LIRSHandle* next_hash;
   LIRSHandle* next_stack;
   LIRSHandle* prev_stack;

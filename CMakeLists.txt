@@ -627,6 +627,7 @@ set(SOURCES
         memtable/skiplistrep.cc
         memtable/vectorrep.cc
         memtable/write_buffer_manager.cc
+        monitoring/cache_usage.cc
         monitoring/histogram.cc
         monitoring/histogram_windowing.cc
         monitoring/in_memory_stats_history.cc
@@ -1042,6 +1043,7 @@ if(WITH_TESTS)
         memtable/inlineskiplist_test.cc
         memtable/skiplist_test.cc
         memtable/write_buffer_manager_test.cc
+        monitoring/cache_usage_test.cc
         monitoring/histogram_test.cc
         monitoring/iostats_context_test.cc
         monitoring/statistics_test.cc

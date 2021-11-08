@@ -346,12 +346,15 @@ TEST_F(CompactFilesTest, SentinelCompressionType) {
     compaction_opts.compression = CompressionType::kDisableCompressionOption;
     ASSERT_OK(db->CompactFiles(compaction_opts, l0_files, 1));
 
-    TERARKDB_NAMESPACE::TablePropertiesCollection all_tables_props;
-    ASSERT_OK(db->GetPropertiesOfAllTables(&all_tables_props));
-    for (const auto& name_and_table_props : all_tables_props) {
+    std::unique_ptr<TERARKDB_NAMESPACE::TablePropertiesCollectionIterator>
+        all_tables_props_iter(db->NewPropertiesOfAllTablesIterator());
+    ASSERT_OK(all_tables_props_iter->status());
+    for (all_tables_props_iter->SeekToFirst(); all_tables_props_iter->Valid();
+         all_tables_props_iter->Next()) {
       ASSERT_EQ(CompressionTypeToString(CompressionType::kZlibCompression),
-                name_and_table_props.second->compression_name);
+                all_tables_props_iter->properties()->compression_name);
     }
+    all_tables_props_iter.reset();
     delete db;
   }
 }

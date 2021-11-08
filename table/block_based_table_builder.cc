@@ -647,7 +647,8 @@ void BlockBasedTableBuilder::WriteRawBlock(const Slice& block_contents,
 
 Status BlockBasedTableBuilder::status() const { return rep_->status; }
 
-static void DeleteCachedBlockContents(const Slice& /*key*/, void* value) {
+static void DeleteCachedBlockContents(const Slice& /*key*/, void* value,
+                                      size_t charge) {
   BlockContents* bc = reinterpret_cast<BlockContents*>(value);
   delete bc;
 }

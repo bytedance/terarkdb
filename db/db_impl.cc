@@ -16,6 +16,8 @@
 #include <alloca.h>
 #endif
 
+#include <iostream>
+
 #include <algorithm>
 #include <cinttypes>
 #include <map>
@@ -1155,6 +1157,10 @@ void DBImpl::DumpStats() {
   const DBPropertyInfo* db_property_info =
       GetPropertyInfo(DB::Properties::kDBStats);
   assert(db_property_info != nullptr);
+
+  uint64_t value;
+  GetIntProperty(DB::Properties::kBlockCacheGarbage, &value);
+  std::cout << "block cache garbage:" << value << std::endl;
 
   if (shutdown_initiated_) {
     return;
