@@ -527,6 +527,7 @@ class InternalStats {
                                    Version* version);
   bool HandleBlockCacheCapacity(uint64_t* value, DBImpl* db, Version* version);
   bool HandleBlockCacheUsage(uint64_t* value, DBImpl* db, Version* version);
+  bool HandleBlockCacheGarbage(uint64_t* value, DBImpl* db, Version* version);
   bool HandleBlockCachePinnedUsage(uint64_t* value, DBImpl* db,
                                    Version* version);
   // Total number of background errors encountered. Every time a flush task

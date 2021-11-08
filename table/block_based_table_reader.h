@@ -328,7 +328,7 @@ class BlockBasedTable : public TableReader {
       const Slice& compression_dict, SequenceNumber seq_no,
       size_t read_amp_bytes_per_bit, MemoryAllocator* memory_allocator,
       bool is_index = false, Cache::Priority pri = Cache::Priority::LOW,
-      GetContext* get_context = nullptr);
+      GetContext* get_context = nullptr,uint64_t fileno = 0);
 
   // Calls (*handle_result)(arg, ...) repeatedly, starting with the entry found
   // after a call to Seek(key), until handle_result returns false.

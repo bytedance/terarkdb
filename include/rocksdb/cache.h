@@ -179,7 +179,8 @@ class Cache {
   // When the inserted entry is no longer needed, the key and
   // value will be passed to "deleter".
   virtual Status Insert(const Slice& key, void* value, size_t charge,
-                        void (*deleter)(const Slice& key, void* value),
+                        void (*deleter)(const Slice& key, void* value,
+                                        size_t charge),
                         Handle** handle = nullptr,
                         Priority priority = Priority::LOW) = 0;
 
@@ -289,5 +290,8 @@ class Cache {
 
   std::shared_ptr<MemoryAllocator> memory_allocator_;
 };
+
+void CollectCacheUsage(uint64_t file_number, ssize_t charge);
+void GetCacheUsage(std::vector<std::pair<uint64_t, size_t>>* usage);
 
 }  // namespace TERARKDB_NAMESPACE

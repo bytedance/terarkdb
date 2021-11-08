@@ -42,9 +42,9 @@ static int DecodeValue(void* v) {
 const std::string kLRU = "lru";
 const std::string kClock = "clock";
 
-void dumbDeleter(const Slice& /*key*/, void* /*value*/) {}
+void dumbDeleter(const Slice& /*key*/, void* /*value*/, size_t charge) {}
 
-void eraseDeleter(const Slice& /*key*/, void* value) {
+void eraseDeleter(const Slice& /*key*/, void* value, size_t charge) {
   Cache* cache = reinterpret_cast<Cache*>(value);
   cache->Erase("foo");
 }
@@ -53,7 +53,7 @@ class CacheTest : public testing::TestWithParam<std::string> {
  public:
   static CacheTest* current_;
 
-  static void Deleter(const Slice& key, void* v) {
+  static void Deleter(const Slice& key, void* v, size_t charge) {
     current_->deleted_keys_.push_back(DecodeKey(key));
     current_->deleted_values_.push_back(DecodeValue(v));
   }
@@ -462,7 +462,7 @@ class Value {
 };
 
 namespace {
-void deleter(const Slice& /*key*/, void* value) {
+void deleter(const Slice& /*key*/, void* value, size_t charge) {
   delete static_cast<Value*>(value);
 }
 }  // namespace

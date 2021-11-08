@@ -351,11 +351,10 @@ bool LIRSCacheShard::Release(Cache::Handle* handle, bool force_erase) {
   return last_reference;
 }
 
-Status LIRSCacheShard::Insert(const Slice& key, uint32_t hash, void* value,
-                              size_t charge,
-                              void (*deleter)(const Slice& key, void* value),
-                              Cache::Handle** handle,
-                              Cache::Priority /*priority*/) {
+Status LIRSCacheShard::Insert(
+    const Slice& key, uint32_t hash, void* value, size_t charge,
+    void (*deleter)(const Slice& key, void* value, size_t charge),
+    Cache::Handle** handle, Cache::Priority /*priority*/) {
   LIRSHandle* e = reinterpret_cast<LIRSHandle*>(
       new char[sizeof(LIRSHandle) - 1 + key.size()]);
   Status s;

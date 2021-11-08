@@ -53,7 +53,7 @@ namespace TERARKDB_NAMESPACE {
 
 class CacheBench;
 namespace {
-void deleter(const Slice& /*key*/, void* value) {
+void deleter(const Slice& /*key*/, void* value, size_t charge) {
   delete reinterpret_cast<char*>(value);
 }
 

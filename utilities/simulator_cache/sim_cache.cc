@@ -173,7 +173,8 @@ class SimCacheImpl : public SimCache {
   }
 
   virtual Status Insert(const Slice& key, void* value, size_t charge,
-                        void (*deleter)(const Slice& key, void* value),
+                        void (*deleter)(const Slice& key, void* value,
+                                        size_t charge),
                         Handle** handle, Priority priority) override {
     // The handle and value passed in are for real cache, so we pass nullptr
     // to key_only_cache_ for both instead. Also, the deleter function pointer
@@ -183,7 +184,8 @@ class SimCacheImpl : public SimCache {
     Handle* h = key_only_cache_->Lookup(key);
     if (h == nullptr) {
       key_only_cache_->Insert(
-          key, nullptr, charge, [](const Slice& /*k*/, void* /*v*/) {}, nullptr,
+          key, nullptr, charge,
+          [](const Slice& /*k*/, void* /*v*/, size_t /*charge*/) {}, nullptr,
           priority);
     } else {
       key_only_cache_->Release(h);
