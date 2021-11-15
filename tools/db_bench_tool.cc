@@ -1171,12 +1171,15 @@ DEFINE_bool(report_file_operations, false,
             "if report number of file "
             "operations");
 
-DEFINE_double(zenfs_gc_ratio, 0.25,
+DEFINE_double(zenfs_low_gc_ratio, 0.25,
               "When ZenFS support is enabled, a full zone with more than "
               "garbage of this ratio will be recycled. This options is "
               "not recommended to be used with lazy compaction. At the "
               "same time, zone size * gc ratio should be less than "
               "zone size minus single SST size.");
+
+DEFINE_double(zenfs_high_gc_ratio, 0.6, "");
+DEFINE_double(zenfs_force_gc_ratio, 0.9, "");
 
 static const bool FLAGS_soft_rate_limit_dummy __attribute__((__unused__)) =
     RegisterFlagValidator(&FLAGS_soft_rate_limit, &ValidateRateLimit);
@@ -3262,7 +3265,9 @@ class Benchmark {
     options.use_direct_io_for_flush_and_compaction =
         FLAGS_use_direct_io_for_flush_and_compaction;
     options.use_aio_reads = FLAGS_use_aio_reads;
-    options.zenfs_gc_ratio = FLAGS_zenfs_gc_ratio;
+    options.zenfs_low_gc_ratio = FLAGS_zenfs_low_gc_ratio;
+    options.zenfs_high_gc_ratio = FLAGS_zenfs_high_gc_ratio;
+    options.zenfs_force_gc_ratio = FLAGS_zenfs_force_gc_ratio;
     if (FLAGS_prefix_size != 0) {
       options.prefix_extractor.reset(
           NewFixedPrefixTransform(FLAGS_prefix_size));

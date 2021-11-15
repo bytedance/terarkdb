@@ -1086,8 +1086,8 @@ void DBImpl::ScheduleZNSGC() {
 
   chash_set<uint64_t> mark_for_gc;
 
-  if (initial_db_options_.zenfs_gc_ratio <= 0.0 ||
-      initial_db_options_.zenfs_gc_ratio >= 1.0) {
+  if (initial_db_options_.zenfs_low_gc_ratio <= 0.0 ||
+      initial_db_options_.zenfs_low_gc_ratio >= 1.0) {
     // GC is not enabled
     return;
   }
@@ -1168,7 +1168,7 @@ void DBImpl::ScheduleZNSGC() {
 
       // if data in zone <= (1 - ratio) * total_capacity, recycle the zone
       if (total_size <=
-          (1.0 - initial_db_options_.zenfs_gc_ratio) * written_data) {
+          (1.0 - initial_db_options_.zenfs_low_gc_ratio) * written_data) {
         for (auto&& file_id : sst_in_zone) {
           mark_for_gc.insert(file_id);
         }
