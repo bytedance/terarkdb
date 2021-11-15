@@ -8,6 +8,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #include "db/db_impl.h"
 #include <numeric>
+#include "db/version_edit.h"
 
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
@@ -1171,14 +1172,21 @@ void DBImpl::ScheduleZNSGC() {
       }
 
       // if data in zone <= (1 - ratio) * total_capacity, recycle the zone
-      if (total_size <=
-          (1.0 - initial_db_options_.zenfs_low_gc_ratio) * written_data) {
+      if (total_size <= (1.0 - low_r) * (zone.used_capacity + zone.reclaim_capacity)) {
         for (auto&& file_id : sst_in_zone) {
           mark_for_gc.insert(file_id);
         }
       }
     }
   }
+
+  if (double(free) / sum >= force_r) {
+    // TODO 
+  }
+
+  auto mark_level = (double(free) / sum >= high_r)
+                        ? FileMetaData::kMarkedHighFromFileSystem
+                        : FileMetaData::kMarkedFromFileSystem;
 
   mutex_.Lock();
   for (auto cfd : *versions_->GetColumnFamilySet()) {
@@ -1199,12 +1207,11 @@ void DBImpl::ScheduleZNSGC() {
           continue;
         }
         ++total_count;
-        bool marked = !!(meta->marked_for_compaction &
-                         FileMetaData::kMarkedFromFileSystem);
+        bool marked = meta->marked_for_compaction == mark_level;
         old_mark_count += marked;
         TEST_SYNC_POINT("DBImpl:Exist-SST");
         if (!marked && mark_for_gc.count(meta->fd.GetNumber()) > 0) {
-          meta->marked_for_compaction |= FileMetaData::kMarkedFromFileSystem;
+          meta->marked_for_compaction = mark_level;
           marked = true;
         }
         if (marked) {
