@@ -2205,8 +2205,9 @@ void LevelCompactionBuilder::SetupInitialFiles() {
   for (int i = 0; i < compaction_picker_->NumberLevels() - 1; i++) {
     start_level_score_ = vstorage_->CompactionScore(i);
     start_level_ = vstorage_->CompactionScoreLevel(i);
+    uint64_t marked_high_file_size = vstorage_->MarkedHighFileSize(i);
     assert(i == 0 || start_level_score_ <= vstorage_->CompactionScore(i - 1));
-    if (start_level_score_ >= 1) {
+    if (start_level_score_ >= 1 || marked_high_file_size > 0) {
       if (skipped_l0_to_base && start_level_ == vstorage_->base_level()) {
         // If L0->base_level compaction is pending, don't schedule further
         // compaction from base level. Otherwise L0->base_level compaction

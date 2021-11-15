@@ -1766,6 +1766,7 @@ void VersionStorageInfo::ComputeCompactionScore(
     const MutableCFOptions& mutable_cf_options) {
   for (int level = 0; level <= MaxInputLevel(); level++) {
     double score;
+    marked_high_file_size_[level] = 0;
     if (level == 0) {
       // We treat level-0 specially by bounding the number of files
       // instead of number of bytes for two reasons:
@@ -1813,6 +1814,10 @@ void VersionStorageInfo::ComputeCompactionScore(
       for (auto f : files_[level]) {
         if (!f->being_compacted) {
           level_bytes_no_compacting += f->compensated_file_size;
+          if (f->marked_for_compaction |=
+              FileMetaData::kMarkedHighFromFileSystem) {
+            marked_high_file_size_[level] += f->compensated_file_size;
+          }
         }
       }
       score = static_cast<double>(level_bytes_no_compacting) /
@@ -1826,7 +1831,8 @@ void VersionStorageInfo::ComputeCompactionScore(
   // first. Use bubble sort because the number of entries are small.
   for (int i = 0; i < num_levels() - 2; i++) {
     for (int j = i + 1; j < num_levels() - 1; j++) {
-      if (compaction_score_[i] < compaction_score_[j]) {
+      if (marked_high_file_size_[i] <= marked_high_file_size_[j] &&
+          compaction_score_[i] < compaction_score_[j]) {
         double score = compaction_score_[i];
         int level = compaction_level_[i];
         compaction_score_[i] = compaction_score_[j];
@@ -2141,10 +2147,25 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
     }
     assert(temp.size() == files.size());
 
+#ifdef WITH_ZENFS
     // initialize files_by_compaction_pri_
+    for (size_t i = 0; i < temp.size(); i++) {
+      if (temp[i].file->marked_for_compaction |=
+          FileMetaData::kMarkedHighFromFileSystem) {
+        files_by_compaction_pri.push_back(static_cast<int>(temp[i].index));
+      }
+    }
+    for (size_t i = 0; i < temp.size(); i++) {
+      if (!(temp[i].file->marked_for_compaction !=
+            FileMetaData::kMarkedHighFromFileSystem)) {
+        files_by_compaction_pri.push_back(static_cast<int>(temp[i].index));
+      }
+    }
+#else
     for (size_t i = 0; i < temp.size(); i++) {
       files_by_compaction_pri.push_back(static_cast<int>(temp[i].index));
     }
+#endif
     next_file_to_compact_by_size_[level] = 0;
     assert(files_[level].size() == files_by_compaction_pri_[level].size());
   }

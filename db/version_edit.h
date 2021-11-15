@@ -109,7 +109,6 @@ struct TablePropertyCache {
 
 struct FileMetaData {
   enum : uint8_t {
-    kMarkedForceFromFileSystem = 1 << 7,
     kMarkedHighFromFileSystem = 1 << 6,
     kMarkedFromUser = 1 << 5,
     kMarkedFromRangeDeletion = 1 << 4,
