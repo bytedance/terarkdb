@@ -7,6 +7,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #include "db/db_impl.h"
+#include <numeric>
 
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
@@ -1086,15 +1087,17 @@ void DBImpl::ScheduleZNSGC() {
 
   chash_set<uint64_t> mark_for_gc;
 
-  if (initial_db_options_.zenfs_gc_ratio <= 0.0 ||
-      initial_db_options_.zenfs_gc_ratio >= 1.0) {
-    // GC is not enabled
+  double low_r = initial_db_options_.zenfs_low_gc_ratio;
+  double high_r = initial_db_options_.zenfs_high_gc_ratio;
+  double force_r = initial_db_options_.zenfs_force_gc_ratio;
+
+  if (!(0.0 < low_r && low_r <= high_r && high_r <= force_r && force_r <= 1.0)) {
+    // Wrong parameters.
     return;
   }
 
   // Pick files for GC
   auto stat = GetStat(env_);
-
   uint64_t number;
   FileType type;
 
@@ -1116,12 +1119,13 @@ void DBImpl::ScheduleZNSGC() {
   }
 
   std::string strip_filename;
+  size_t free = 0, sum = 0;
 
   for (const auto& zone : stat) {
+    free += zone.free_capacity;
+    sum += zone.free_capacity + zone.used_capacity + zone.reclaim_capacity;
     std::vector<uint64_t> sst_in_zone;
-    uint64_t written_data = zone.write_position - zone.start_position;
-    // zone is full
-    if (written_data == zone.total_capacity) {
+    if (zone.free_capacity != 0) {
       uint64_t total_size = 0;
       bool ignore_zone = false;
       for (const auto& file : zone.files) {
@@ -1168,7 +1172,7 @@ void DBImpl::ScheduleZNSGC() {
 
       // if data in zone <= (1 - ratio) * total_capacity, recycle the zone
       if (total_size <=
-          (1.0 - initial_db_options_.zenfs_gc_ratio) * written_data) {
+          (1.0 - initial_db_options_.zenfs_low_gc_ratio) * written_data) {
         for (auto&& file_id : sst_in_zone) {
           mark_for_gc.insert(file_id);
         }
