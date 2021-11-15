@@ -1049,7 +1049,8 @@ void PosixEnv::Schedule(void (*function)(void* arg1), void* arg, Priority pri,
                         void* tag, void (*unschedFunction)(void* arg)) {
   assert(pri >= Priority::BOTTOM && pri <= Priority::FORCE);
   if (pri == Priority::FORCE) {
-    thread_pools_[pri].Schedule(function, arg, tag, unschedFunction, true);
+    // TODO, maybe should use random of [HIGH , LOW] pool
+    thread_pools_[Priority::HIGH].Schedule(function, arg, tag, unschedFunction, true);
   } else {
     thread_pools_[pri].Schedule(function, arg, tag, unschedFunction);
   }
