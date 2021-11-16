@@ -919,8 +919,9 @@ Compaction* CompactionPicker::PickGarbageCollection(
 
   // Pick Top 8(<=) score blob
   auto candidate_cmp = [](const GarbageFileInfo& l, const GarbageFileInfo& r) {
-    return l.f->marked_for_compaction < r.f->marked_for_compaction &&
-           l.score < r.score;
+    return (l.f->marked_for_compaction < r.f->marked_for_compaction) ||
+           (l.f->marked_for_compaction == r.f->marked_for_compaction &&
+            l.score < r.score);
   };
   std::make_heap(candidate_blob_vec.begin(), candidate_blob_vec.end(),
                  candidate_cmp);
