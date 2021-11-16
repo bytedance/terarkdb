@@ -277,6 +277,9 @@ CompactionReason CompactionPicker::ConvertCompactionReason(
   if (marked & FileMetaData::kMarkedFromFileSystem) {
     return CompactionReason::kFilesMarkedFromFileSystem;
   }
+  if (marked & FileMetaData::kMarkedHighFromFileSystem) {
+    return CompactionReason::kFilesMarkedHighFromFileSystem;
+  }
   if (marked & FileMetaData::kMarkedFromUpdateBlob) {
     return CompactionReason::kFilesMarkedFromUpdateBlob;
   }
