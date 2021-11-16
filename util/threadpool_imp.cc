@@ -364,7 +364,7 @@ void ThreadPoolImpl::Impl::Submit(std::function<void()>&& schedule,
     queue_.push_back(BGItem());
   }
 
-  auto& item = queue_.back();
+  auto& item = force ? queue_.front() : queue_.back();
   item.tag = tag;
   item.function = std::move(schedule);
   item.unschedFunction = std::move(unschedule);
