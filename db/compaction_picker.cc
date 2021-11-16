@@ -919,7 +919,8 @@ Compaction* CompactionPicker::PickGarbageCollection(
 
   // Pick Top 8(<=) score blob
   auto candidate_cmp = [](const GarbageFileInfo& l, const GarbageFileInfo& r) {
-    return l.score < r.score;
+    return l.f->marked_for_compaction < r.f->marked_for_compaction &&
+           l.score < r.score;
   };
   std::make_heap(candidate_blob_vec.begin(), candidate_blob_vec.end(),
                  candidate_cmp);
@@ -953,6 +954,28 @@ Compaction* CompactionPicker::PickGarbageCollection(
   params.max_subcompactions = 1;
   params.score = vstorage->total_garbage_ratio();
   params.compaction_type = kGarbageCollection;
+
+#ifdef WITH_ZENFS
+  for (auto& level : params.inputs) {
+    if (params.compaction_reason ==
+        CompactionReason::kGarbageCollectionMarkForHigh)
+      break;
+    for (auto& file : level.files) {
+      if (file->marked_for_compaction &
+          FileMetaData::kMarkedHighFromFileSystem) {
+        params.compaction_reason =
+            CompactionReason::kGarbageCollectionMarkForHigh;
+        break;
+      }
+    }
+  }
+  if (params.compaction_reason !=
+      CompactionReason::kGarbageCollectionMarkForHigh)
+    params.compaction_reason = CompactionReason::kGarbageCollection;
+#else
+  params.compaction_reason = CompactionReason::kGarbageCollection;
+#endif
+
   params.compaction_reason = CompactionReason::kGarbageCollection;
 
   Compaction* c = RegisterCompaction(new Compaction(std::move(params)));
