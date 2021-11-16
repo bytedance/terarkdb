@@ -966,7 +966,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
       break;
     for (auto& file : level.files) {
       if (file->marked_for_compaction &
-          FileMetaData::kMarkedHighFromFileSystem) {
+          FileMetaData::kMarkedFromFileSystemHigh) {
         params.compaction_reason =
             CompactionReason::kGarbageCollectionMarkForHigh;
         break;
