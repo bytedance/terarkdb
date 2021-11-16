@@ -1184,7 +1184,7 @@ void DBImpl::ScheduleZNSGC() {
     // TODO 
   }
 
-  auto mark_level = (double(free) / sum >= high_r)
+  auto mask = (double(free) / sum >= high_r)
                         ? FileMetaData::kMarkedFromFileSystemHigh
                         : FileMetaData::kMarkedFromFileSystem;
 
@@ -1207,11 +1207,11 @@ void DBImpl::ScheduleZNSGC() {
           continue;
         }
         ++total_count;
-        bool marked = meta->marked_for_compaction == mark_level;
+        bool marked = !!(meta->marked_for_compaction & mask);
         old_mark_count += marked;
         TEST_SYNC_POINT("DBImpl:Exist-SST");
         if (!marked && mark_for_gc.count(meta->fd.GetNumber()) > 0) {
-          meta->marked_for_compaction = mark_level;
+          meta->marked_for_compaction |= mask;
           marked = true;
         }
         if (marked) {
@@ -1231,9 +1231,10 @@ void DBImpl::ScheduleZNSGC() {
     if (old_mark_count != 0 && new_mark_count != 0) {
       ROCKS_LOG_BUFFER(&log_buffer_info,
                        "[%s] ZNS GC: SSTs total marked = %" PRIu64
-                       ", new marked = %" PRIu64 ", file count: %" PRIu64,
+                       ", new marked = %" PRIu64 ", file count: %" PRIu64
+                       ", free size = %" PRIu64 ", total size = %" PRIu64,
                        cfd->GetName().c_str(), old_mark_count, new_mark_count,
-                       total_count);
+                       total_count, free, sum);
     }
   }
   if (unscheduled_compactions_ > 0) {
