@@ -262,6 +262,9 @@ CompactionPicker::~CompactionPicker() {}
 
 CompactionReason CompactionPicker::ConvertCompactionReason(
     uint8_t marked, CompactionReason default_reason) {
+  if (marked & FileMetaData::kMarkedFromFileSystemHigh) {
+    return CompactionReason::kFilesMarkedFromFileSystemHigh;
+  }
   if (marked & FileMetaData::kMarkedFromUser) {
     return CompactionReason::kFilesMarkedFromUser;
   }
@@ -276,9 +279,6 @@ CompactionReason CompactionPicker::ConvertCompactionReason(
   }
   if (marked & FileMetaData::kMarkedFromFileSystem) {
     return CompactionReason::kFilesMarkedFromFileSystem;
-  }
-  if (marked & FileMetaData::kMarkedFromFileSystemHigh) {
-    return CompactionReason::kFilesMarkedFromFileSystemHigh;
   }
   if (marked & FileMetaData::kMarkedFromUpdateBlob) {
     return CompactionReason::kFilesMarkedFromUpdateBlob;
