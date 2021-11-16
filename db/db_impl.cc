@@ -1185,7 +1185,7 @@ void DBImpl::ScheduleZNSGC() {
   }
 
   auto mark_level = (double(free) / sum >= high_r)
-                        ? FileMetaData::kMarkedHighFromFileSystem
+                        ? FileMetaData::kMarkedFromFileSystemHigh
                         : FileMetaData::kMarkedFromFileSystem;
 
   mutex_.Lock();

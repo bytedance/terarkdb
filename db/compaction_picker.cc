@@ -277,8 +277,8 @@ CompactionReason CompactionPicker::ConvertCompactionReason(
   if (marked & FileMetaData::kMarkedFromFileSystem) {
     return CompactionReason::kFilesMarkedFromFileSystem;
   }
-  if (marked & FileMetaData::kMarkedHighFromFileSystem) {
-    return CompactionReason::kFilesMarkedHighFromFileSystem;
+  if (marked & FileMetaData::kMarkedFromFileSystemHigh) {
+    return CompactionReason::kFilesMarkedFromFileSystemHigh;
   }
   if (marked & FileMetaData::kMarkedFromUpdateBlob) {
     return CompactionReason::kFilesMarkedFromUpdateBlob;
@@ -2253,19 +2253,19 @@ void LevelCompactionBuilder::SetupInitialFiles() {
         else if (marked_high_file_size > 0) {
           for (auto input : compaction_inputs_) {
             if (compaction_reason_ ==
-                CompactionReason::kFilesMarkedHighFromFileSystem)
+                CompactionReason::kFilesMarkedFromFileSystemHigh)
               break;
             for (auto* file : input.files) {
               if (file->marked_for_compaction &
-                  FileMetaData::kMarkedHighFromFileSystem) {
+                  FileMetaData::kMarkedFromFileSystemHigh) {
                 compaction_reason_ =
-                    CompactionReason::kFilesMarkedHighFromFileSystem;
+                    CompactionReason::kFilesMarkedFromFileSystemHigh;
                 break;
               }
             }
           }
           if (compaction_reason_ !=
-              CompactionReason::kFilesMarkedHighFromFileSystem)
+              CompactionReason::kFilesMarkedFromFileSystemHigh)
             compaction_reason_ = CompactionReason::kLevelMaxLevelSize;
         }
 #endif
