@@ -2221,7 +2221,28 @@ void LevelCompactionBuilder::SetupInitialFiles() {
         if (start_level_ == 0) {
           // L0 score = `num L0 files` / `level0_file_num_compaction_trigger`
           compaction_reason_ = CompactionReason::kLevelL0FilesNum;
-        } else {
+        }
+#ifdef WITH_ZENFS
+        else if (marked_high_file_size > 0) {
+          for (auto input : compaction_inputs_) {
+            if (compaction_reason_ ==
+                CompactionReason::kFilesMarkedHighFromFileSystem)
+              break;
+            for (auto* file : input.files) {
+              if (file->marked_for_compaction &
+                  FileMetaData::kMarkedHighFromFileSystem) {
+                compaction_reason_ =
+                    CompactionReason::kFilesMarkedHighFromFileSystem;
+                break;
+              }
+            }
+          }
+          if (compaction_reason_ !=
+              CompactionReason::kFilesMarkedHighFromFileSystem)
+            compaction_reason_ = CompactionReason::kLevelMaxLevelSize;
+        }
+#endif
+        else {
           // L1+ score = `Level files size` / `MaxBytesForLevel`
           compaction_reason_ = CompactionReason::kLevelMaxLevelSize;
         }

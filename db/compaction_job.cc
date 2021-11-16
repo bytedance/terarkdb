@@ -116,6 +116,8 @@ const char* GetCompactionReasonString(CompactionReason compaction_reason) {
       return "FilesMarkedFromRangeDeletion";
     case CompactionReason::kFilesMarkedFromTTL:
       return "FilesMarkedFromTTL";
+    case CompactionReason::kFilesMarkedHighFromFileSystem:
+      return "FilesMarkedHighFromFileSystem";
     case CompactionReason::kFilesMarkedFromFileSystem:
       return "FilesMarkedFromFileSystem";
     case CompactionReason::kFilesMarkedFromUpdateBlob:
