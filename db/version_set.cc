@@ -1815,7 +1815,7 @@ void VersionStorageInfo::ComputeCompactionScore(
       for (auto f : files_[level]) {
         if (!f->being_compacted) {
           level_bytes_no_compacting += f->compensated_file_size;
-          if (f->marked_for_compaction &=
+          if (f->marked_for_compaction &
               FileMetaData::kMarkedFromFileSystemHigh) {
             marked_high_file_size_[level] += f->compensated_file_size;
           }
@@ -2151,13 +2151,13 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
 #ifdef WITH_ZENFS
     // initialize files_by_compaction_pri_
     for (size_t i = 0; i < temp.size(); i++) {
-      if (temp[i].file->marked_for_compaction &=
+      if (temp[i].file->marked_for_compaction &
           FileMetaData::kMarkedFromFileSystemHigh) {
         files_by_compaction_pri.push_back(static_cast<int>(temp[i].index));
       }
     }
     for (size_t i = 0; i < temp.size(); i++) {
-      if (!(temp[i].file->marked_for_compaction &=
+      if (!(temp[i].file->marked_for_compaction &
             FileMetaData::kMarkedFromFileSystemHigh)) {
         files_by_compaction_pri.push_back(static_cast<int>(temp[i].index));
       }
