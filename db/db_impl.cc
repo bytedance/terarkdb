@@ -1120,11 +1120,12 @@ void DBImpl::ScheduleZNSGC() {
   }
 
   std::string strip_filename;
-  size_t free = 0, sum = 0;
+  size_t free = 0, used = 0, reclaim = 0;
 
   for (const auto& zone : stat) {
     free += zone.free_capacity;
-    sum += zone.free_capacity + zone.used_capacity + zone.reclaim_capacity;
+    used += zone.used_capacity;
+    reclaim += zone.reclaim_capacity;
     std::vector<uint64_t> sst_in_zone;
     if (zone.free_capacity != 0) {
       uint64_t total_size = 0;
@@ -1180,11 +1181,11 @@ void DBImpl::ScheduleZNSGC() {
     }
   }
 
-  if (double(free) / sum >= force_r) {
+  if (double(free) / (used + reclaim) < 1.0 - force_r) {
     // TODO 
   }
 
-  auto mask = (double(free) / sum >= high_r)
+  auto mask = (double(free) / (used + reclaim) < 1.0 - high_r)
                         ? FileMetaData::kMarkedFromFileSystemHigh
                         : FileMetaData::kMarkedFromFileSystem;
 
@@ -1232,9 +1233,10 @@ void DBImpl::ScheduleZNSGC() {
       ROCKS_LOG_BUFFER(&log_buffer_info,
                        "[%s] ZNS GC: SSTs total marked = %" PRIu64
                        ", new marked = %" PRIu64 ", file count: %" PRIu64
-                       ", free size = %" PRIu64 ", total size = %" PRIu64,
+                       ", free size = %" PRIu64 ", used size = %" PRIu64
+                       ", reclaim size = %" PRIu64 ", total size = %" PRIu64,
                        cfd->GetName().c_str(), old_mark_count, new_mark_count,
-                       total_count, free, sum);
+                       total_count, free, used, reclaim, used + reclaim);
     }
   }
   if (unscheduled_compactions_ > 0) {
