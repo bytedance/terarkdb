@@ -1121,11 +1121,24 @@ void DBImpl::ScheduleZNSGC() {
 
   std::string strip_filename;
   size_t free = 0, used = 0, reclaim = 0;
-
   for (const auto& zone : stat) {
     free += zone.free_capacity;
     used += zone.used_capacity;
     reclaim += zone.reclaim_capacity;
+  }
+
+  // Overall free capacity ratio of disk. 
+  double free_r = double(free) / (used + reclaim);
+
+  // Overall trash capacity ratio of disk.
+  double trash_r = 1.0 - double(free) / (used + reclaim);
+
+  // Variable target free space ratio threshold for single zone,
+  // Recycle the zone when valid data in zone <= target_r * total_capacity.
+  double target_r = (1.0 - force_r) + 0.5 * free_r;
+
+  // Scan the disk in order to find files which needs to be marked.
+  for (const auto& zone : stat) {
     std::vector<uint64_t> sst_in_zone;
     if (zone.free_capacity != 0) {
       uint64_t total_size = 0;
@@ -1172,22 +1185,21 @@ void DBImpl::ScheduleZNSGC() {
         continue;
       }
 
-      // if data in zone <= (1 - ratio) * total_capacity, recycle the zone
-      if (total_size <= (1.0 - low_r) * (zone.used_capacity + zone.reclaim_capacity)) {
+      // if data in zone <= target_r * total_capacity, recycle the zone
+      if (total_size <= target_r * (zone.used_capacity + zone.reclaim_capacity)) {
         for (auto&& file_id : sst_in_zone) {
           mark_for_gc.insert(file_id);
         }
       }
     }
-  }
-
-  if (double(free) / (used + reclaim) < 1.0 - force_r) {
+  } 
+  
+  if (trash_r >= force_r) {
     // TODO 
   }
 
-  auto mask = (double(free) / (used + reclaim) < 1.0 - high_r)
-                        ? FileMetaData::kMarkedFromFileSystemHigh
-                        : FileMetaData::kMarkedFromFileSystem;
+  auto mask = trash_r >= high_r ? FileMetaData::kMarkedFromFileSystemHigh
+                                : FileMetaData::kMarkedFromFileSystem;
 
   mutex_.Lock();
   for (auto cfd : *versions_->GetColumnFamilySet()) {
