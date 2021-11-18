@@ -833,6 +833,12 @@ Compaction* CompactionPicker::PickGarbageCollection(
   if (fragment_size == 0) {
     fragment_size = target_blob_file_size / 8;
   }
+  // Preferentially select files marked by high priority
+  auto candidate_cmp = [](const GarbageFileInfo& l, const GarbageFileInfo& r) {
+    return (l.f->marked_for_compaction < r.f->marked_for_compaction) ||
+           (l.f->marked_for_compaction == r.f->marked_for_compaction &&
+            l.score < r.score);
+  };
 
   auto& hidden_files = vstorage->LevelFiles(-1);
   uint64_t idx = 0;
@@ -845,7 +851,8 @@ Compaction* CompactionPicker::PickGarbageCollection(
       continue;
     }
     GarbageFileInfo info{f};
-    if (info.score > dirtiest_blob.score) {
+    // candidate_cmp is less comparator
+    if (candidate_cmp(dirtiest_blob, info)) {
       dirtiest_blob = info;
     }
   }
@@ -920,12 +927,6 @@ Compaction* CompactionPicker::PickGarbageCollection(
                 push_candidate);
   std::for_each(overlapping.begin(), overlapping.end(), push_candidate);
 
-  // Pick Top 8(<=) score blob
-  auto candidate_cmp = [](const GarbageFileInfo& l, const GarbageFileInfo& r) {
-    return (l.f->marked_for_compaction < r.f->marked_for_compaction) ||
-           (l.f->marked_for_compaction == r.f->marked_for_compaction &&
-            l.score < r.score);
-  };
   std::make_heap(candidate_blob_vec.begin(), candidate_blob_vec.end(),
                  candidate_cmp);
   while (!candidate_blob_vec.empty() && input.files.size() < 8) {
@@ -2232,9 +2233,8 @@ void LevelCompactionBuilder::SetupInitialFiles() {
   for (int i = 0; i < compaction_picker_->NumberLevels() - 1; i++) {
     start_level_score_ = vstorage_->CompactionScore(i);
     start_level_ = vstorage_->CompactionScoreLevel(i);
-    uint64_t marked_high_file_size = vstorage_->MarkedHighFileSize(i);
     assert(i == 0 || start_level_score_ <= vstorage_->CompactionScore(i - 1));
-    if (start_level_score_ >= 1 || marked_high_file_size > 0) {
+    if (start_level_score_ >= 1) {
       if (skipped_l0_to_base && start_level_ == vstorage_->base_level()) {
         // If L0->base_level compaction is pending, don't schedule further
         // compaction from base level. Otherwise L0->base_level compaction
@@ -2249,9 +2249,12 @@ void LevelCompactionBuilder::SetupInitialFiles() {
           // L0 score = `num L0 files` / `level0_file_num_compaction_trigger`
           compaction_reason_ = CompactionReason::kLevelL0FilesNum;
         }
+        else {
+          // L1+ score = `Level files size` / `MaxBytesForLevel`
+          compaction_reason_ = CompactionReason::kLevelMaxLevelSize;
+        }
 #ifdef WITH_ZENFS
-        else if (marked_high_file_size > 0) {
-          for (auto input : compaction_inputs_) {
+        for (auto input : compaction_inputs_) {
             if (compaction_reason_ ==
                 CompactionReason::kFilesMarkedFromFileSystemHigh)
               break;
@@ -2264,15 +2267,7 @@ void LevelCompactionBuilder::SetupInitialFiles() {
               }
             }
           }
-          if (compaction_reason_ !=
-              CompactionReason::kFilesMarkedFromFileSystemHigh)
-            compaction_reason_ = CompactionReason::kLevelMaxLevelSize;
-        }
 #endif
-        else {
-          // L1+ score = `Level files size` / `MaxBytesForLevel`
-          compaction_reason_ = CompactionReason::kLevelMaxLevelSize;
-        }
         break;
       } else {
         // didn't find the compaction, clear the inputs

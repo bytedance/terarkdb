@@ -183,9 +183,6 @@ class VersionStorageInfo {
   // Return level number that has idx'th highest score
   int CompactionScoreLevel(int idx) const { return compaction_level_[idx]; }
 
-  uint64_t MarkedHighFileSize(int idx) const {
-    return marked_high_file_size_[idx];
-  }
 
   // Return idx'th highest score
   double CompactionScore(int idx) const { return compaction_score_[idx]; }
@@ -586,7 +583,6 @@ class VersionStorageInfo {
   // These are used to pick the best compaction level
   std::vector<double> compaction_score_;
   std::vector<int> compaction_level_;
-  std::vector<uint64_t> marked_high_file_size_;
 
   enum {
     kHasMapSst = 1ULL << 0,

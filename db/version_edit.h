@@ -109,8 +109,9 @@ struct TablePropertyCache {
 
 struct FileMetaData {
   enum : uint8_t {
+    // Notice: The highest bit is used for backward compatible
+    kMarkedFromUser = 1 << 7,
     kMarkedFromFileSystemHigh = 1 << 6,
-    kMarkedFromUser = 1 << 5,
     kMarkedFromRangeDeletion = 1 << 4,
     kMarkedFromTableBuilder = 1 << 3,
     kMarkedFromTTL = 1 << 2,
