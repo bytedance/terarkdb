@@ -835,6 +835,8 @@ Compaction* CompactionPicker::PickGarbageCollection(
   }
   // Preferentially select files marked by high priority
   auto candidate_cmp = [](const GarbageFileInfo& l, const GarbageFileInfo& r) {
+    assert(l.f != nullptr);
+    assert(r.f != nullptr);
     return (l.f->marked_for_compaction < r.f->marked_for_compaction) ||
            (l.f->marked_for_compaction == r.f->marked_for_compaction &&
             l.score < r.score);
@@ -844,6 +846,10 @@ Compaction* CompactionPicker::PickGarbageCollection(
   uint64_t idx = 0;
   // Find largest score blob
   GarbageFileInfo dirtiest_blob{nullptr};
+  if (hidden_files.size() > 0) {
+    GarbageFileInfo info{hidden_files[0]};
+    dirtiest_blob = info;
+  }
   for (; idx < hidden_files.size() && !hidden_files[idx]->is_gc_forbidden();
        ++idx) {
     FileMetaData* f = hidden_files[idx];
@@ -2248,25 +2254,24 @@ void LevelCompactionBuilder::SetupInitialFiles() {
         if (start_level_ == 0) {
           // L0 score = `num L0 files` / `level0_file_num_compaction_trigger`
           compaction_reason_ = CompactionReason::kLevelL0FilesNum;
-        }
-        else {
+        } else {
           // L1+ score = `Level files size` / `MaxBytesForLevel`
           compaction_reason_ = CompactionReason::kLevelMaxLevelSize;
         }
 #ifdef WITH_ZENFS
         for (auto input : compaction_inputs_) {
-            if (compaction_reason_ ==
-                CompactionReason::kFilesMarkedFromFileSystemHigh)
+          if (compaction_reason_ ==
+              CompactionReason::kFilesMarkedFromFileSystemHigh)
+            break;
+          for (auto* file : input.files) {
+            if (file->marked_for_compaction &
+                FileMetaData::kMarkedFromFileSystemHigh) {
+              compaction_reason_ =
+                  CompactionReason::kFilesMarkedFromFileSystemHigh;
               break;
-            for (auto* file : input.files) {
-              if (file->marked_for_compaction &
-                  FileMetaData::kMarkedFromFileSystemHigh) {
-                compaction_reason_ =
-                    CompactionReason::kFilesMarkedFromFileSystemHigh;
-                break;
-              }
             }
           }
+        }
 #endif
         break;
       } else {
