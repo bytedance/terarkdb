@@ -1190,13 +1190,14 @@ void DBImpl::ScheduleZNSGC() {
         for (auto&& file_id : sst_in_zone) {
           mark_for_gc.insert(file_id);
         }
+        if (trash_r >= force_r) {
+          // Vector stat is sorted by trash rate.
+          // Recycle first zone in the vector by force once trash is overwhelming.
+          break;
+        }
       }
     }
   } 
-  
-  if (trash_r >= force_r) {
-    // TODO 
-  }
 
   auto mask = trash_r >= high_r ? FileMetaData::kMarkedFromFileSystemHigh
                                 : FileMetaData::kMarkedFromFileSystem;
@@ -1223,9 +1224,22 @@ void DBImpl::ScheduleZNSGC() {
         bool marked = !!(meta->marked_for_compaction & mask);
         old_mark_count += marked;
         TEST_SYNC_POINT("DBImpl:Exist-SST");
-        if (!marked && mark_for_gc.count(meta->fd.GetNumber()) > 0) {
-          meta->marked_for_compaction |= mask;
-          marked = true;
+        if (mark_for_gc.count(meta->fd.GetNumber()) > 0) {
+          if (!marked) {
+            meta->marked_for_compaction |= mask;
+            marked = true;
+          }
+          if (trash_r >= force_r) {
+            // Generate a compaction and schedule at once.
+            std::vector<CompactionInputFiles> inputs(1);
+            inputs[0].level = l;
+            inputs[0].files.push_back(meta);
+            auto pc = new PrepickedCompaction;
+            pc->compaction = cfd->compaction_picker()->CompactFiles(
+                CompactionOptions(), inputs, l, vstorage,
+                *cfd->GetLatestMutableCFOptions(), meta->fd.GetPathId());
+            BackgroundCallCompaction(pc,  Env::Priority::FORCE);
+          }
         }
         if (marked) {
           new_mark_count++;
