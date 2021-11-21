@@ -22,10 +22,8 @@ jobs:
     - uses: actions/checkout@v2
     - name: Create Build Environment
       run: |
-        sudo apt-get update
-        sudo apt-get install -f libaio-dev
-        sudo apt-get install -f cmake
-        sudo apt-get install -f autoconf
+        sudo apt-get update -yy
+        sudo apt-get install -f libaio-dev cmake autoconf -yy
         git submodule update --init --recursive
 
     - name: Create Build Directory
@@ -37,4 +35,4 @@ jobs:
 
     - name: Build
       working-directory: build
-      run: make -j
+      run: make -j $(nproc)
