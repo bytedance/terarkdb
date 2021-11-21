@@ -28,13 +28,6 @@ jobs:
         sudo apt-get install -f autoconf
         git submodule update --init --recursive
 
-    - uses: actions/cache@v2
-      name: Recover from cache
-      with:
-        path: |
-          build/
-        key: ${{ runner.os }}-cmake-${{ hashFiles('CMakeLists.txt') }}
-    
     - name: Create Build Directory
       run: cmake -E make_directory build || true
         
