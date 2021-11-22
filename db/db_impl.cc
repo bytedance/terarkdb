@@ -1135,7 +1135,7 @@ void DBImpl::ScheduleZNSGC() {
 
   // Variable target free space ratio threshold for single zone,
   // Recycle the zone when valid data in zone <= target_r * total_capacity.
-  double target_r = (1.0 - force_r) + 0.5 * free_r;
+  double target_r = 0.1 + 0.5 * free_r;
 
   // Scan the disk in order to find files which needs to be marked.
   for (const auto& zone : stat) {
@@ -1264,12 +1264,19 @@ void DBImpl::ScheduleZNSGC() {
     }
     if (old_mark_count != 0 && new_mark_count != 0) {
       ROCKS_LOG_BUFFER(&log_buffer_info,
-                       "[%s] ZNS GC: SSTs total marked = %" PRIu64
-                       ", new marked = %" PRIu64 ", file count: %" PRIu64
-                       ", free size = %" PRIu64 ", used size = %" PRIu64
-                       ", reclaim size = %" PRIu64 ", total size = %" PRIu64,
-                       cfd->GetName().c_str(), old_mark_count, new_mark_count,
-                       total_count, free, used, reclaim, used + reclaim);
+                       "[%s] ZNS GC : [SST marked]\n"
+                       "\tExisted\tNewly\tTotal\n"
+                       "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\n"
+                       "\t[Sizes]\n"
+                       "\tFree\tUsed\tReclaim\tTotal\n"
+                       "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\n"
+                       "\t[Ratio]\n"
+                       "\tFree\tTrash\tTarget\n"
+                       "\t%.3f\t%.3f\t%.3f\n",
+                       cfd->GetName().c_str(),
+                       old_mark_count, new_mark_count, total_count,
+                       free, used, reclaim, used + reclaim,
+                       free_r, trash_r, target_r);
     }
   }
   if (unscheduled_compactions_ > 0) {
