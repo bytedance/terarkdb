@@ -615,6 +615,10 @@ Compaction* CompactionPicker::CompactFiles(
   params.max_subcompactions = compact_options.max_subcompactions;
   params.manual_compaction = true;
 
+  if (output_level == -1) {
+    params.compaction_type = kGarbageCollection;
+  }
+
   return RegisterCompaction(new Compaction(std::move(params)));
 }
 
