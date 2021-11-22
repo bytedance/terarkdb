@@ -669,13 +669,13 @@ class DBImpl : public DB {
 
   const std::string& bytedance_tags() const { return bytedance_tags_; }
 
-  using QPSReporter = CountReporterHandle&;
+  using QPSReporter = CountReporterHandle*;
   QPSReporter seek_qps_reporter() { return seek_qps_reporter_; }
   QPSReporter seekforprev_qps_reporter() { return seekforprev_qps_reporter_; }
   QPSReporter next_qps_reporter() { return next_qps_reporter_; }
   QPSReporter prev_qps_reporter() { return prev_qps_reporter_; }
 
-  using LatencyReporter = HistReporterHandle&;
+  using LatencyReporter = HistReporterHandle*;
   LatencyReporter seek_latency_reporter() { return seek_latency_reporter_; }
   LatencyReporter seekforprev_latency_reporter() {
     return seekforprev_latency_reporter_;
@@ -683,8 +683,8 @@ class DBImpl : public DB {
   LatencyReporter next_latency_reporter() { return next_latency_reporter_; }
   LatencyReporter prev_latency_reporter() { return prev_latency_reporter_; }
 
-  using ThroughputReporter = CountReporterHandle&;
-  using DistributionReporter = HistReporterHandle&;
+  using ThroughputReporter = CountReporterHandle*;
+  using DistributionReporter = HistReporterHandle*;
 
   std::unordered_map<std::string, RecoveredTransaction*>
   recovered_transactions() {
@@ -1836,9 +1836,9 @@ class DBImpl : public DB {
   // installed to MANIFEST first.
   InstrumentedCondVar atomic_flush_install_cv_;
 
+  cheapis::ServerRunner console_runner_;
   std::string bytedance_tags_;
   std::shared_ptr<MetricsReporterFactory> metrics_reporter_factory_;
-  cheapis::ServerRunner console_runner_;
 
   QPSReporter write_qps_reporter_;
   QPSReporter read_qps_reporter_;
