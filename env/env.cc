@@ -9,6 +9,7 @@
 
 #include "rocksdb/env.h"
 
+#include <array>
 #include <thread>
 
 #include "options/db_options.h"

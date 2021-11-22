@@ -1836,10 +1836,9 @@ class DBImpl : public DB {
   // installed to MANIFEST first.
   InstrumentedCondVar atomic_flush_install_cv_;
 
+  std::shared_ptr<MetricsReporterFactory> metrics_reporter_factory_;
   cheapis::ServerRunner console_runner_;
   std::string bytedance_tags_;
-  std::shared_ptr<MetricsReporterFactory> metrics_reporter_factory_;
-
   QPSReporter write_qps_reporter_;
   QPSReporter read_qps_reporter_;
   QPSReporter newiterator_qps_reporter_;

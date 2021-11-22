@@ -364,68 +364,66 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       closed_(false),
       error_handler_(this, immutable_db_options_, &mutex_),
       atomic_flush_install_cv_(&mutex_),
-      bytedance_tags_("dbname=" + dbname),
       metrics_reporter_factory_(
           options.metrics_reporter_factory == nullptr
               ? std::make_shared<ByteDanceMetricsReporterFactory>()
               : options.metrics_reporter_factory),
-      console_runner_(this, dbname, env_, immutable_db_options_.info_log.get()),
-
-      write_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
-          write_qps_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get(), env_)),
-      read_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
-          read_qps_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get(), env_)),
-      newiterator_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
-          newiterator_qps_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get(), env_)),
-      seek_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
-          seek_qps_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get(), env_)),
-      next_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
-          next_qps_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get(), env_)),
-      seekforprev_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
-          seekforprev_qps_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get(), env_)),
-      prev_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
-          prev_qps_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get(), env_)),
-
-      write_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
-          write_latency_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get(), env_)),
-      read_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
-          read_latency_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get(), env_)),
-      newiterator_latency_reporter_(
-          *metrics_reporter_factory_->BuildHistReporter(
-              newiterator_latency_metric_name, bytedance_tags_,
-              immutable_db_options_.info_log.get(), env_)),
-      seek_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
-          seek_latency_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get(), env_)),
-      next_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
-          next_latency_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get(), env_)),
-      seekforprev_latency_reporter_(
-          *metrics_reporter_factory_->BuildHistReporter(
-              seekforprev_latency_metric_name, bytedance_tags_,
-              immutable_db_options_.info_log.get(), env_)),
-      prev_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
-          prev_latency_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get(), env_)),
-      write_throughput_reporter_(*metrics_reporter_factory_->BuildCountReporter(
-          write_throughput_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get(), env_)),
-      write_batch_size_reporter_(*metrics_reporter_factory_->BuildHistReporter(
-          write_batch_size_metric_name, bytedance_tags_,
-          immutable_db_options_.info_log.get(), env_)) {
+      console_runner_(this, dbname, env_,
+                      immutable_db_options_.info_log.get()) {
   // !batch_per_trx_ implies seq_per_batch_ because it is only unset for
   // WriteUnprepared, which should use seq_per_batch_.
   assert(batch_per_txn_ || seq_per_batch_);
   env_->GetAbsolutePath(dbname, &db_absolute_path_);
+  bytedance_tags_ = "dbname=" + dbname + db_absolute_path_;
+  write_qps_reporter_ = metrics_reporter_factory_->BuildCountReporter(
+      write_qps_metric_name, bytedance_tags_,
+      immutable_db_options_.info_log.get(), env_);
+  read_qps_reporter_ = metrics_reporter_factory_->BuildCountReporter(
+      read_qps_metric_name, bytedance_tags_,
+      immutable_db_options_.info_log.get(), env_);
+  newiterator_qps_reporter_ = metrics_reporter_factory_->BuildCountReporter(
+      newiterator_qps_metric_name, bytedance_tags_,
+      immutable_db_options_.info_log.get(), env_);
+  seek_qps_reporter_ = metrics_reporter_factory_->BuildCountReporter(
+      seek_qps_metric_name, bytedance_tags_,
+      immutable_db_options_.info_log.get(), env_);
+  next_qps_reporter_ = metrics_reporter_factory_->BuildCountReporter(
+      next_qps_metric_name, bytedance_tags_,
+      immutable_db_options_.info_log.get(), env_);
+  seekforprev_qps_reporter_ = metrics_reporter_factory_->BuildCountReporter(
+      seekforprev_qps_metric_name, bytedance_tags_,
+      immutable_db_options_.info_log.get(), env_);
+  prev_qps_reporter_ = metrics_reporter_factory_->BuildCountReporter(
+      prev_qps_metric_name, bytedance_tags_,
+      immutable_db_options_.info_log.get(), env_);
+
+  write_latency_reporter_ = metrics_reporter_factory_->BuildHistReporter(
+      write_latency_metric_name, bytedance_tags_,
+      immutable_db_options_.info_log.get(), env_);
+  read_latency_reporter_ = metrics_reporter_factory_->BuildHistReporter(
+      read_latency_metric_name, bytedance_tags_,
+      immutable_db_options_.info_log.get(), env_);
+  newiterator_latency_reporter_ = metrics_reporter_factory_->BuildHistReporter(
+      newiterator_latency_metric_name, bytedance_tags_,
+      immutable_db_options_.info_log.get(), env_);
+  seek_latency_reporter_ = metrics_reporter_factory_->BuildHistReporter(
+      seek_latency_metric_name, bytedance_tags_,
+      immutable_db_options_.info_log.get(), env_);
+  next_latency_reporter_ = metrics_reporter_factory_->BuildHistReporter(
+      next_latency_metric_name, bytedance_tags_,
+      immutable_db_options_.info_log.get(), env_);
+  seekforprev_latency_reporter_ = metrics_reporter_factory_->BuildHistReporter(
+      seekforprev_latency_metric_name, bytedance_tags_,
+      immutable_db_options_.info_log.get(), env_);
+  prev_latency_reporter_ = metrics_reporter_factory_->BuildHistReporter(
+      prev_latency_metric_name, bytedance_tags_,
+      immutable_db_options_.info_log.get(), env_);
+  write_throughput_reporter_ = metrics_reporter_factory_->BuildCountReporter(
+      write_throughput_metric_name, bytedance_tags_,
+      immutable_db_options_.info_log.get(), env_);
+  write_batch_size_reporter_ = metrics_reporter_factory_->BuildHistReporter(
+      write_batch_size_metric_name, bytedance_tags_,
+      immutable_db_options_.info_log.get(), env_);
 
   // Reserve ten files or so for other uses and give the rest to TableCache.
   // Give a large number for setting of "infinite" open files.
@@ -801,6 +799,25 @@ Status DBImpl::CloseHelper() {
       ret = s;
     }
   }
+
+  delete write_qps_reporter_;
+  delete read_qps_reporter_;
+  delete newiterator_qps_reporter_;
+  delete seek_qps_reporter_;
+  delete next_qps_reporter_;
+  delete seekforprev_qps_reporter_;
+  delete prev_qps_reporter_;
+
+  delete write_latency_reporter_;
+  delete read_latency_reporter_;
+  delete newiterator_latency_reporter_;
+  delete seek_latency_reporter_;
+  delete next_latency_reporter_;
+  delete seekforprev_latency_reporter_;
+  delete prev_latency_reporter_;
+
+  delete write_throughput_reporter_;
+  delete write_batch_size_reporter_;
   return ret;
 }
 
@@ -1894,8 +1911,8 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
                        ColumnFamilyHandle* column_family, const Slice& key,
                        LazyBuffer* lazy_val, bool* value_found,
                        ReadCallback* callback) {
-  LatencyHistGuard guard(&read_latency_reporter_);
-  read_qps_reporter_.AddCount(1);
+  LatencyHistGuard guard(read_latency_reporter_);
+  read_qps_reporter_->AddCount(1);
 
   StopWatch sw(env_, stats_, DB_GET);
   PERF_TIMER_GUARD(get_snapshot_time);
@@ -2106,8 +2123,8 @@ std::vector<Status> DBImpl::MultiGet(
     const ReadOptions& read_options,
     const std::vector<ColumnFamilyHandle*>& column_family,
     const std::vector<Slice>& keys, std::vector<std::string>* values) {
-  LatencyHistGuard guard(&read_latency_reporter_);
-  read_qps_reporter_.AddCount(keys.size());
+  LatencyHistGuard guard(read_latency_reporter_);
+  read_qps_reporter_->AddCount(keys.size());
   StopWatch sw(env_, stats_, DB_MULTIGET);
   PERF_TIMER_GUARD(get_snapshot_time);
 
@@ -2651,8 +2668,8 @@ bool DBImpl::KeyMayExist(const ReadOptions& read_options,
 
 Iterator* DBImpl::NewIterator(const ReadOptions& read_options,
                               ColumnFamilyHandle* column_family) {
-  LatencyHistGuard guard(&newiterator_latency_reporter_);
-  newiterator_qps_reporter_.AddCount(1);
+  LatencyHistGuard guard(newiterator_latency_reporter_);
+  newiterator_qps_reporter_->AddCount(1);
 
   if (read_options.managed) {
     return NewErrorIterator(
@@ -2775,8 +2792,8 @@ Status DBImpl::NewIterators(
     return Status::NotSupported(
         "ReadTier::kPersistedData is not yet supported in iterators.");
   }
-  LatencyHistGuard guard(&newiterator_latency_reporter_);
-  newiterator_qps_reporter_.AddCount(column_families.size());
+  LatencyHistGuard guard(newiterator_latency_reporter_);
+  newiterator_qps_reporter_->AddCount(column_families.size());
 
   ReadCallback* read_callback = nullptr;  // No read callback provided.
   iterators->clear();
