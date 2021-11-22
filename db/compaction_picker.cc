@@ -839,8 +839,8 @@ Compaction* CompactionPicker::PickGarbageCollection(
   }
   // Preferentially select files marked by high priority
   auto candidate_cmp = [](const GarbageFileInfo& l, const GarbageFileInfo& r) {
-    assert(l.f != nullptr);
-    assert(r.f != nullptr);
+    assert(l.f != nullptr && !l.f->being_compacted);
+    assert(r.f != nullptr && !l.f->being_compacted);
     return (l.f->marked_for_compaction < r.f->marked_for_compaction) ||
            (l.f->marked_for_compaction == r.f->marked_for_compaction &&
             l.score < r.score);
@@ -850,10 +850,6 @@ Compaction* CompactionPicker::PickGarbageCollection(
   uint64_t idx = 0;
   // Find largest score blob
   GarbageFileInfo dirtiest_blob{nullptr};
-  if (hidden_files.size() > 0) {
-    GarbageFileInfo info{hidden_files[0]};
-    dirtiest_blob = info;
-  }
   for (; idx < hidden_files.size() && !hidden_files[idx]->is_gc_forbidden();
        ++idx) {
     FileMetaData* f = hidden_files[idx];
@@ -862,7 +858,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
     }
     GarbageFileInfo info{f};
     // candidate_cmp is less comparator
-    if (candidate_cmp(dirtiest_blob, info)) {
+    if (dirtiest_blob.f == nullptr || candidate_cmp(dirtiest_blob, info)) {
       dirtiest_blob = info;
     }
   }
