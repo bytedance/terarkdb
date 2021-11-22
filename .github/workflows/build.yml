@@ -22,19 +22,10 @@ jobs:
     - uses: actions/checkout@v2
     - name: Create Build Environment
       run: |
-        sudo apt-get update
-        sudo apt-get install -f libaio-dev
-        sudo apt-get install -f cmake
-        sudo apt-get install -f autoconf
+        sudo apt-get update -yy
+        sudo apt-get install -f libaio-dev cmake autoconf -yy
         git submodule update --init --recursive
 
-    - uses: actions/cache@v2
-      name: Recover from cache
-      with:
-        path: |
-          build/
-        key: ${{ runner.os }}-cmake-${{ hashFiles('CMakeLists.txt') }}
-    
     - name: Create Build Directory
       run: cmake -E make_directory build || true
         
@@ -44,4 +35,4 @@ jobs:
 
     - name: Build
       working-directory: build
-      run: make -j
+      run: make -j $(nproc)
