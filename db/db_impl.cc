@@ -1231,14 +1231,19 @@ void DBImpl::ScheduleZNSGC() {
           }
           if (trash_r >= force_r) {
             // Generate a compaction and schedule at once.
+            auto ca = new CompactionArg;
+            ca->db = this;
+            ca->prepicked_compaction = new PrepickedCompaction;
+            ca->prepicked_compaction->manual_compaction_state = nullptr;
             std::vector<CompactionInputFiles> inputs(1);
             inputs[0].level = l;
             inputs[0].files.push_back(meta);
-            auto pc = new PrepickedCompaction;
-            pc->compaction = cfd->compaction_picker()->CompactFiles(
-                CompactionOptions(), inputs, l, vstorage,
-                *cfd->GetLatestMutableCFOptions(), meta->fd.GetPathId());
-            BackgroundCallCompaction(pc,  Env::Priority::FORCE);
+            ca->prepicked_compaction->compaction =
+                cfd->compaction_picker()->CompactFiles(
+                    CompactionOptions(), inputs, l, vstorage,
+                    *cfd->GetLatestMutableCFOptions(), meta->fd.GetPathId());
+            env_->Schedule(&DBImpl::BGWorkCompaction, ca, Env::Priority::FORCE,
+                           this, &DBImpl::UnscheduleCallback);
           }
         }
         if (marked) {
