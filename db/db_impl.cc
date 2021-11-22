@@ -1217,10 +1217,10 @@ void DBImpl::ScheduleZNSGC() {
     // enabled.
     for (int l = -1; l < vstorage->num_non_empty_levels(); l++) {
       for (auto meta : vstorage->LevelFiles(l)) {
+        ++total_count;
         if (meta->being_compacted) {
           continue;
         }
-        ++total_count;
         bool marked = !!(meta->marked_for_compaction & mask);
         old_mark_count += marked;
         TEST_SYNC_POINT("DBImpl:Exist-SST");
@@ -1242,6 +1242,8 @@ void DBImpl::ScheduleZNSGC() {
                 cfd->compaction_picker()->CompactFiles(
                     CompactionOptions(), inputs, l, vstorage,
                     *cfd->GetLatestMutableCFOptions(), meta->fd.GetPathId());
+            ca->prepicked_compaction->compaction->SetInputVersion(cfd->current());
+            bg_compaction_scheduled_++;
             env_->Schedule(&DBImpl::BGWorkCompaction, ca, Env::Priority::FORCE,
                            this, &DBImpl::UnscheduleCallback);
           }
