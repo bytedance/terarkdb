@@ -1211,7 +1211,8 @@ static const bool FLAGS_table_cache_numshardbits_dummy
 
 namespace TERARKDB_NAMESPACE {
 
-static std::shared_ptr<ByteDanceMetricsReporterFactory> metrics_reporter_factory = nullptr;
+static std::shared_ptr<ByteDanceMetricsReporterFactory>
+    metrics_reporter_factory = nullptr;
 
 namespace {
 struct ReportFileOpCounters {
@@ -1403,7 +1404,7 @@ struct DBWithColumnFamilies {
   DB* db;
 #ifndef ROCKSDB_LITE
   OptimisticTransactionDB* opt_txn_db;
-#endif                              // ROCKSDB_LITE
+#endif  // ROCKSDB_LITE
   std::atomic<size_t> num_created;  // Need to be updated after all the
                                     // new entries in cfh are set.
   size_t num_hot;  // Number of column families to be queried at each moment.
@@ -3240,7 +3241,8 @@ class Benchmark {
     assert(db_.db == nullptr);
 
     if (metrics_reporter_factory == nullptr)
-      metrics_reporter_factory = std::make_shared<ByteDanceMetricsReporterFactory>();
+      metrics_reporter_factory =
+          std::make_shared<ByteDanceMetricsReporterFactory>();
     options.metrics_reporter_factory = metrics_reporter_factory;
     options.max_open_files = FLAGS_open_files;
     if (FLAGS_cost_write_buffer_to_cache || FLAGS_db_write_buffer_size != 0) {
@@ -5858,6 +5860,17 @@ int db_bench_tool(int argc, char** argv) {
             "Error: --hdfs, --env_uri and --fs_uri are mutually exclusive\n");
     exit(1);
   }
+  // Choose a location for the test database if none given with --db=<path>
+  if (FLAGS_db.empty()) {
+    std::string default_db_path;
+    TERARKDB_NAMESPACE::Env::Default()->GetTestDirectory(&default_db_path);
+    default_db_path += "/dbbench";
+    FLAGS_db = default_db_path;
+  }
+#ifdef WITH_ZENFS
+  FLAGS_db = FLAGS_db +":" + FLAGS_zbd_path;
+#endif
+
   std::unique_ptr<Env> custom_env_guard;
   if (!FLAGS_hdfs.empty() && !FLAGS_env_uri.empty()) {
     fprintf(stderr, "Cannot provide both --hdfs and --env_uri.\n");
@@ -5868,22 +5881,24 @@ int db_bench_tool(int argc, char** argv) {
       fprintf(stderr, "No Env registered for URI: %s\n", FLAGS_env_uri.c_str());
       exit(1);
     }
-  } 
+  }
 #ifdef WITH_ZENFS
   else if (!FLAGS_zbd_path.empty()) {
     if (metrics_reporter_factory == nullptr) {
-      metrics_reporter_factory = std::make_shared<ByteDanceMetricsReporterFactory>();
+      metrics_reporter_factory =
+          std::make_shared<ByteDanceMetricsReporterFactory>();
     }
 
-    auto dbname = "dbname=" + FLAGS_zbd_path;
-    Status s = NewZenfsEnv(&FLAGS_env, FLAGS_zbd_path, dbname, metrics_reporter_factory);
+    Status s = NewZenfsEnv(&FLAGS_env, FLAGS_zbd_path, "dbname=" + FLAGS_db,
+                           metrics_reporter_factory);
     if (!s.ok()) {
-        fprintf(stderr, "Error: Init zenfs env failed.\nStatus : %s\n", s.ToString().c_str());
-        exit(1);
+      fprintf(stderr, "Error: Init zenfs env failed.\nStatus : %s\n",
+              s.ToString().c_str());
+      exit(1);
     }
   }
 
-#endif // WITH_ZENFS
+#endif  // WITH_ZENFS
 #endif  // ROCKSDB_LITE
   if (!FLAGS_hdfs.empty()) {
     FLAGS_env = new TERARKDB_NAMESPACE::HdfsEnv(FLAGS_hdfs);
@@ -5912,14 +5927,6 @@ int db_bench_tool(int argc, char** argv) {
                                   TERARKDB_NAMESPACE::Env::Priority::BOTTOM);
   FLAGS_env->SetBackgroundThreads(FLAGS_num_low_pri_threads,
                                   TERARKDB_NAMESPACE::Env::Priority::LOW);
-
-  // Choose a location for the test database if none given with --db=<path>
-  if (FLAGS_db.empty()) {
-    std::string default_db_path;
-    TERARKDB_NAMESPACE::Env::Default()->GetTestDirectory(&default_db_path);
-    default_db_path += "/dbbench";
-    FLAGS_db = default_db_path;
-  }
 
   if (FLAGS_stats_interval_seconds > 0) {
     // When both are set then FLAGS_stats_interval determines the frequency
