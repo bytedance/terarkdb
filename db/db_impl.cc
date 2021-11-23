@@ -1130,8 +1130,11 @@ void DBImpl::ScheduleZNSGC() {
   // Overall free capacity ratio of disk. 
   double free_r = double(free) / (used + reclaim);
 
+  // Overall used capacity ratio of disk.
+  double used_r = 1.0 - free_r;
+
   // Overall trash capacity ratio of disk.
-  double trash_r = 1.0 - double(free) / (used + reclaim);
+  double trash_r = double(reclaim) / (used + reclaim);
 
   // Variable target free space ratio threshold for single zone,
   // Recycle the zone when valid data in zone <= target_r * total_capacity.
@@ -1191,30 +1194,21 @@ void DBImpl::ScheduleZNSGC() {
         for (auto&& file_id : sst_in_zone) {
           mark_for_gc.insert(file_id);
         }
-        if (trash_r >= force_r) {
-          // Vector stat is sorted by trash rate.
-          // Recycle first zone in the vector by force once trash is overwhelming.
-          ROCKS_LOG_BUFFER(&log_buffer_info,
-                           "ZNS GC : [Force recycle selection]\n"
-                           "Free Capacity : %" PRIu64 "\n"
-                           "Used Capacity : %" PRIu64 "\n"
-                           "Reclaim Capacity : %" PRIu64 "\n",
-                           zone.free_capacity, zone.used_capacity,
-                           zone.reclaim_capacity);
-          break;
-        }
       }
     }
   } 
 
-  auto mask = trash_r >= high_r ? FileMetaData::kMarkedFromFileSystemHigh
-                                : FileMetaData::kMarkedFromFileSystem;
+  auto mask = free_r < high_r ? FileMetaData::kMarkedFromFileSystemHigh
+                              : FileMetaData::kMarkedFromFileSystem;
+
+  uint64_t total_count = 0;
+  uint64_t total_new_mark_count = 0;
+  uint64_t total_old_mark_count = 0;
 
   mutex_.Lock();
   for (auto cfd : *versions_->GetColumnFamilySet()) {
     uint64_t new_mark_count = 0;
     uint64_t old_mark_count = 0;
-    uint64_t total_count = 0;
     if (!cfd->initialized() || cfd->IsDropped()) {
       continue;
     }
@@ -1262,6 +1256,8 @@ void DBImpl::ScheduleZNSGC() {
         }
       }
     }
+    total_new_mark_count += new_mark_count;
+    total_old_mark_count += old_mark_count;
     if (new_mark_count > old_mark_count) {
       vstorage->ComputeCompactionScore(*cfd->ioptions(),
                                        *cfd->GetLatestMutableCFOptions());
@@ -1270,27 +1266,25 @@ void DBImpl::ScheduleZNSGC() {
         unscheduled_compactions_++;
       }
     }
-    if (old_mark_count != 0 && new_mark_count != 0) {
-      ROCKS_LOG_BUFFER(&log_buffer_info,
-                       "[%s] ZNS GC : [SST marked]\n"
-                       "\tExisted\tNewly\tTotal\n"
-                       "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\n"
-                       "\t[Sizes]\n"
-                       "\tFree\tUsed\tReclaim\tTotal\n"
-                       "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\n"
-                       "\t[Ratio]\n"
-                       "\tFree\tTrash\tTarget\n"
-                       "\t%.3f\t%.3f\t%.3f\n",
-                       cfd->GetName().c_str(),
-                       old_mark_count, new_mark_count, total_count,
-                       free, used, reclaim, used + reclaim,
-                       free_r, trash_r, target_r);
-    }
   }
   if (unscheduled_compactions_ > 0) {
     MaybeScheduleFlushOrCompaction();
   }
   mutex_.Unlock();
+  ROCKS_LOG_BUFFER(&log_buffer_info,
+                   "ZNS GC :\n"
+                   "\t[SSTable]\n"
+                   "\tExisted\tNewly\tTotal\n"
+                   "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\n"
+                   "\t[Sizes]\n"
+                   "\tFree\tUsed\tReclaim\tTotal in (GB)\n"
+                   "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\n"
+                   "\t[Ratio]\n"
+                   "\tFree\tUsed\tTrash\tTarget\n"
+                   "\t%.3f\t%.3f\t%.3f\n",
+                   total_old_mark_count, total_new_mark_count, total_count,
+                   free >> 30, used >> 30, reclaim >> 30, (used + reclaim) >> 30,
+                   free_r, used_r, trash_r, target_r);
   log_buffer_info.FlushBufferToLog();
   log_buffer_debug.FlushBufferToLog();
 }
