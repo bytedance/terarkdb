@@ -7,7 +7,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #include "db/db_impl.h"
+
 #include <numeric>
+
 #include "db/version_edit.h"
 
 #ifndef __STDC_FORMAT_MACROS
@@ -271,6 +273,9 @@ static std::string prev_latency_metric_name = "dbiter_prev_latency";
 
 static std::string write_throughput_metric_name = "dbimpl_writeimpl_throughput";
 static std::string write_batch_size_metric_name = "dbimpl_writeimpl_batch_size";
+#ifdef WITH_ZENFS
+std::string MetricsTag(Env* env);
+#endif
 
 DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
                const bool seq_per_batch, const bool batch_per_txn)
@@ -366,7 +371,12 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       closed_(false),
       error_handler_(this, immutable_db_options_, &mutex_),
       atomic_flush_install_cv_(&mutex_),
+#ifdef WITH_ZENFS
+      bytedance_tags_("dbname=" + MetricsTag(env_) + "/" + dbname),
+#else
       bytedance_tags_("dbname=" + dbname),
+#endif
+
       metrics_reporter_factory_(
           options.metrics_reporter_factory == nullptr
               ? std::make_shared<ByteDanceMetricsReporterFactory>()
@@ -1127,7 +1137,7 @@ void DBImpl::ScheduleZNSGC() {
     reclaim += zone.reclaim_capacity;
   }
 
-  // Overall free capacity ratio of disk. 
+  // Overall free capacity ratio of disk.
   double free_r = double(free) / (used + reclaim);
 
   // Overall used capacity ratio of disk.
@@ -1196,7 +1206,7 @@ void DBImpl::ScheduleZNSGC() {
         }
       }
     }
-  } 
+  }
 
   auto mask = free_r < high_r ? FileMetaData::kMarkedFromFileSystemHigh
                               : FileMetaData::kMarkedFromFileSystem;

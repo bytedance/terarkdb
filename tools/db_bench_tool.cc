@@ -5860,16 +5860,6 @@ int db_bench_tool(int argc, char** argv) {
             "Error: --hdfs, --env_uri and --fs_uri are mutually exclusive\n");
     exit(1);
   }
-  // Choose a location for the test database if none given with --db=<path>
-  if (FLAGS_db.empty()) {
-    std::string default_db_path;
-    TERARKDB_NAMESPACE::Env::Default()->GetTestDirectory(&default_db_path);
-    default_db_path += "/dbbench";
-    FLAGS_db = default_db_path;
-  }
-#ifdef WITH_ZENFS
-  FLAGS_db = FLAGS_db +":" + FLAGS_zbd_path;
-#endif
 
   std::unique_ptr<Env> custom_env_guard;
   if (!FLAGS_hdfs.empty() && !FLAGS_env_uri.empty()) {
@@ -5889,11 +5879,10 @@ int db_bench_tool(int argc, char** argv) {
           std::make_shared<ByteDanceMetricsReporterFactory>();
     }
 
-    Status s = NewZenfsEnv(&FLAGS_env, FLAGS_zbd_path, "dbname=" + FLAGS_db,
+    Status s = NewZenfsEnv(&FLAGS_env, FLAGS_zbd_path, "dbname=" + FLAGS_zbd_path,
                            metrics_reporter_factory);
     if (!s.ok()) {
-      fprintf(stderr, "Error: Init zenfs env failed.\nStatus : %s\n",
-              s.ToString().c_str());
+      fprintf(stderr, "Error: Init zenfs env failed.\nStatus : %s\n", s.ToString().c_str());
       exit(1);
     }
   }
@@ -5927,6 +5916,13 @@ int db_bench_tool(int argc, char** argv) {
                                   TERARKDB_NAMESPACE::Env::Priority::BOTTOM);
   FLAGS_env->SetBackgroundThreads(FLAGS_num_low_pri_threads,
                                   TERARKDB_NAMESPACE::Env::Priority::LOW);
+  // Choose a location for the test database if none given with --db=<path>
+  if (FLAGS_db.empty()) {
+    std::string default_db_path;
+    TERARKDB_NAMESPACE::Env::Default()->GetTestDirectory(&default_db_path);
+    default_db_path += "/dbbench";
+    FLAGS_db = default_db_path;
+  }
 
   if (FLAGS_stats_interval_seconds > 0) {
     // When both are set then FLAGS_stats_interval determines the frequency
