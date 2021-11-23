@@ -1140,7 +1140,8 @@ void DBImpl::ScheduleZNSGC() {
   // Scan the disk in order to find files which needs to be marked.
   for (const auto& zone : stat) {
     std::vector<uint64_t> sst_in_zone;
-    if (zone.free_capacity != 0) {
+    // Skip unfinished zones.
+    if (zone.free_capacity == 0) {
       uint64_t total_size = 0;
       bool ignore_zone = false;
       for (const auto& file : zone.files) {
@@ -1193,6 +1194,13 @@ void DBImpl::ScheduleZNSGC() {
         if (trash_r >= force_r) {
           // Vector stat is sorted by trash rate.
           // Recycle first zone in the vector by force once trash is overwhelming.
+          ROCKS_LOG_BUFFER(&log_buffer_info,
+                           "ZNS GC : [Force recycle selection]\n"
+                           "Free Capacity : %" PRIu64 "\n"
+                           "Used Capacity : %" PRIu64 "\n"
+                           "Reclaim Capacity : %" PRIu64 "\n",
+                           zone.free_capacity, zone.used_capacity,
+                           zone.reclaim_capacity);
           break;
         }
       }
