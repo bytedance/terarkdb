@@ -2341,6 +2341,23 @@ Compaction* LevelCompactionBuilder::PickCompaction() {
   // Pick up the first file to start compaction. It may have been extended
   // to a clean cut.
   SetupInitialFiles();
+
+  // Limiting one thread to execute low priority compaction job such as
+  // kMarkedFromUpdateBlob
+  if (start_level_inputs_.files.front()->marked_for_compaction ==
+      FileMetaData::kMarkedFromUpdateBlob) {
+    for (int i = 0; i < vstorage_->num_levels() && !start_level_inputs_.empty();
+         i++) {
+      for (auto file : vstorage_->LevelFiles(i)) {
+        if (file->being_compacted && file->marked_for_compaction ==
+                                         FileMetaData::kMarkedFromUpdateBlob) {
+          start_level_inputs_.clear();
+          break;
+        }
+      }
+    }
+  }
+
   if (start_level_inputs_.empty()) {
     return nullptr;
   }
