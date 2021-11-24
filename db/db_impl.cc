@@ -1130,25 +1130,28 @@ void DBImpl::ScheduleZNSGC() {
   }
 
   std::string strip_filename;
-  size_t free = 0, used = 0, reclaim = 0;
+  size_t free = 0, used = 0, reclaim = 0, total = 0;
   for (const auto& zone : stat) {
     free += zone.free_capacity;
     used += zone.used_capacity;
-    reclaim += zone.reclaim_capacity;
+    total += zone.used_capacity + zone.reclaim_capacity;
+    if (zone.free_capacity == 0) {
+      reclaim += zone.reclaim_capacity;
+    }
   }
 
   // Overall free capacity ratio of disk.
-  double free_r = double(free) / (used + reclaim);
+  double free_r = double(free) / total;
 
   // Overall used capacity ratio of disk.
   double used_r = 1.0 - free_r;
 
   // Overall trash capacity ratio of disk.
-  double trash_r = double(reclaim) / (used + reclaim);
+  double trash_r = double(reclaim) / total;
 
   // Variable target free space ratio threshold for single zone,
   // Recycle the zone when valid data in zone <= target_r * total_capacity.
-  double target_r = 0.1 + 0.5 * free_r;
+  double target_r = 0.95 - force_r * free_r;
 
   // Scan the disk in order to find files which needs to be marked.
   for (const auto& zone : stat) {
@@ -1203,6 +1206,10 @@ void DBImpl::ScheduleZNSGC() {
       if (total_size <= target_r * (zone.used_capacity + zone.reclaim_capacity)) {
         for (auto&& file_id : sst_in_zone) {
           mark_for_gc.insert(file_id);
+        }
+        if (used_r >= force_r) {
+          // Only one zone forcely recycled
+          break;
         }
       }
     }
@@ -1293,7 +1300,7 @@ void DBImpl::ScheduleZNSGC() {
                    "\tFree\tUsed\tTrash\tTarget\n"
                    "\t%.3f\t%.3f\t%.3f\t%.3f\n",
                    total_old_mark_count, total_new_mark_count, total_count,
-                   free >> 30, used >> 30, reclaim >> 30, (used + reclaim) >> 30,
+                   free >> 30, used >> 30, reclaim >> 30, total >> 30,
                    free_r, used_r, trash_r, target_r);
   log_buffer_info.FlushBufferToLog();
   log_buffer_debug.FlushBufferToLog();
