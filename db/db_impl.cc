@@ -1241,7 +1241,7 @@ void DBImpl::ScheduleZNSGC() {
             meta->marked_for_compaction |= mask;
             marked = true;
           }
-          if (trash_r >= force_r) {
+          if (used_r >= force_r) {
             // Generate a compaction and schedule at once.
             auto ca = new CompactionArg;
             ca->db = this;
@@ -1291,7 +1291,7 @@ void DBImpl::ScheduleZNSGC() {
                    "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\n"
                    "\t[Ratio]\n"
                    "\tFree\tUsed\tTrash\tTarget\n"
-                   "\t%.3f\t%.3f\t%.3f\n",
+                   "\t%.3f\t%.3f\t%.3f\t%.3f\n",
                    total_old_mark_count, total_new_mark_count, total_count,
                    free >> 30, used >> 30, reclaim >> 30, (used + reclaim) >> 30,
                    free_r, used_r, trash_r, target_r);
