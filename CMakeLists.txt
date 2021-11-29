@@ -46,7 +46,7 @@ endif()
 MESSAGE(STATUS "terarkdb namespace: " ${WITH_TERARKDB_NAMESPACE})
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/rocksdb/terark_namespace.h.in ${CMAKE_CURRENT_SOURCE_DIR}/include/rocksdb/terark_namespace.h)
 
-option(BUILD_SUFFIX "library sufix" "d")
+option(BUILD_SUFFIX "library suffix" "d")
 option(FORCE_TERARKDB_RELEASE_BUILD "ignore outside cmake_build_type" OFF)
 
 SET(CMAKE_THREAD_PREFER_PTHREAD TRUE)

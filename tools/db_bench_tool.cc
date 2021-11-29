@@ -973,6 +973,8 @@ DEFINE_uint64(max_blob_files, 0, "Num total blob file count limits");
 
 DEFINE_uint64(max_dependence_blob_overlap, 0, "Max dependence blob overlap");
 
+DEFINE_uint64(maintainer_job_ratio, 0.1, "Maintainer job ratio");
+
 DEFINE_uint64(wal_ttl_seconds, 0, "Set the TTL for the WAL Files in seconds.");
 DEFINE_uint64(wal_size_limit_MB, 0,
               "Set the size limit for the WAL Files"
@@ -3535,6 +3537,7 @@ class Benchmark {
     options.blob_file_defragment_size = FLAGS_blob_file_defragment_size;
     options.max_blob_files = FLAGS_max_blob_files;
     options.max_dependence_blob_overlap = FLAGS_max_dependence_blob_overlap;
+    options.maintainer_job_ratio = FLAGS_maintainer_job_ratio;
     options.optimize_filters_for_hits = FLAGS_optimize_filters_for_hits;
     options.optimize_range_deletion = FLAGS_optimize_range_deletion;
 

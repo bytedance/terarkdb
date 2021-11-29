@@ -198,6 +198,8 @@ void MutableCFOptions::Dump(Logger* log) const {
                  max_blob_files);
   ROCKS_LOG_INFO(log, "                            blob_gc_ratio: %zu",
                  max_dependence_blob_overlap);
+  ROCKS_LOG_INFO(log, "                     maintainer_job_ratio: %f",
+                 maintainer_job_ratio);
   ROCKS_LOG_INFO(log, "      soft_pending_compaction_bytes_limit: %" PRIu64,
                  soft_pending_compaction_bytes_limit);
   ROCKS_LOG_INFO(log, "      hard_pending_compaction_bytes_limit: %" PRIu64,
@@ -285,6 +287,7 @@ MutableCFOptions::MutableCFOptions(const ColumnFamilyOptions& options, Env* env)
       blob_file_defragment_size(options.blob_file_defragment_size),
       max_blob_files(options.max_blob_files),
       max_dependence_blob_overlap(options.max_dependence_blob_overlap),
+      maintainer_job_ratio(options.maintainer_job_ratio),
       soft_pending_compaction_bytes_limit(
           options.soft_pending_compaction_bytes_limit),
       hard_pending_compaction_bytes_limit(

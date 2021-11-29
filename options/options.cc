@@ -180,17 +180,13 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
       log, "              Options.bottommost_compression_opts.strategy: %d",
       bottommost_compression_opts.strategy);
   ROCKS_LOG_HEADER(
-      log,
-      "        Options.bottommost_compression_opts.max_dict_bytes: "
-      "%" ROCKSDB_PRIszt,
+      log, "        Options.bottommost_compression_opts.max_dict_bytes: %u",
       bottommost_compression_opts.max_dict_bytes);
   ROCKS_LOG_HEADER(
-      log,
-      "  Options.bottommost_compression_opts.zstd_max_train_bytes: "
-      "%" ROCKSDB_PRIszt,
+      log, "  Options.bottommost_compression_opts.zstd_max_train_bytes: %u",
       bottommost_compression_opts.zstd_max_train_bytes);
   ROCKS_LOG_HEADER(
-      log, "                 Options.bottommost_compression_opts.enabled: %s",
+      log, "               Options.bottommost_compression_opts.enabled: %s",
       bottommost_compression_opts.enabled ? "true" : "false");
   ROCKS_LOG_HEADER(log, "           Options.compression_opts.window_bits: %d",
                    compression_opts.window_bits);
@@ -198,12 +194,10 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
                    compression_opts.level);
   ROCKS_LOG_HEADER(log, "              Options.compression_opts.strategy: %d",
                    compression_opts.strategy);
-  ROCKS_LOG_HEADER(
-      log, "        Options.compression_opts.max_dict_bytes: %" ROCKSDB_PRIszt,
-      compression_opts.max_dict_bytes);
-  ROCKS_LOG_HEADER(
-      log, "  Options.compression_opts.zstd_max_train_bytes: %" ROCKSDB_PRIszt,
-      compression_opts.zstd_max_train_bytes);
+  ROCKS_LOG_HEADER(log, "        Options.compression_opts.max_dict_bytes: %u",
+                   compression_opts.max_dict_bytes);
+  ROCKS_LOG_HEADER(log, "  Options.compression_opts.zstd_max_train_bytes: %u",
+                   compression_opts.zstd_max_train_bytes);
   ROCKS_LOG_HEADER(log, "               Options.compression_opts.enabled: %s",
                    compression_opts.enabled ? "true" : "false");
   ROCKS_LOG_HEADER(log, "     Options.level0_file_num_compaction_trigger: %d",
@@ -258,6 +252,20 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
                    blob_large_key_ratio);
   ROCKS_LOG_HEADER(log, "                          Options.blob_gc_ratio: %f",
                    blob_gc_ratio);
+  ROCKS_LOG_HEADER(log,
+                   "                  Options.target_blob_file_size: %" PRIu64,
+                   target_blob_file_size);
+  ROCKS_LOG_HEADER(log,
+                   "              Options.blob_file_defragment_size: %" PRIu64,
+                   blob_file_defragment_size);
+  ROCKS_LOG_HEADER(log, "            Options.max_dependence_blob_overlap: %zu",
+                   max_dependence_blob_overlap);
+  ROCKS_LOG_HEADER(log, "                   Options.maintainer_job_ratio: %f",
+                   maintainer_job_ratio);
+  ROCKS_LOG_HEADER(log, "                           Options.ttl_gc_ratio: %f",
+                   ttl_gc_ratio);
+  ROCKS_LOG_HEADER(log, "                       Options.ttl_max_scan_gap: %zd",
+                   ttl_max_scan_gap);
 
   const auto& it_compaction_style =
       compaction_style_to_string.find(compaction_style);

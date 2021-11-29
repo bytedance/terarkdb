@@ -1,4 +1,4 @@
-Cmake_minimum_required(VERSION 2.8)
+Cmake_minimum_required(VERSION 3.0)
 project(rocksdb_test)
 
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -DROCKSDB_PLATFORM_POSIX -DOS_MACOSX -DDebugBreak=__builtin_debugtrap -O3 -g3")
