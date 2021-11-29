@@ -12,7 +12,7 @@
 
 namespace ROCKSDB_NAMESPACE {
   
-enum ZenFSMetricsHistograms : uint32_t {
+enum BDZenFSMetricsHistograms : uint32_t {
   ZENFS_HISTOGRAM_ENUM_MIN, 
 
   ZENFS_FG_WRITE_LATENCY,
