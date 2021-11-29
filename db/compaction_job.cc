@@ -1342,10 +1342,12 @@ Status CompactionJob::VerifyFiles() {
       // will regard this verification as user reads since the goal is to cache
       // it here for further user reads
       auto output_level = compact_->compaction->output_level();
+      ReadOptions ro;
+      ro.fill_cache = false;
       InternalIterator* iter = cfd->table_cache()->NewIterator(
-          ReadOptions(), env_options_, cfd->internal_comparator(),
-          *files_meta[file_idx], empty_dependence_map,
-          nullptr /* range_del_agg */, prefix_extractor, nullptr,
+          ro, env_options_, cfd->internal_comparator(), *files_meta[file_idx],
+          empty_dependence_map, nullptr /* range_del_agg */, prefix_extractor,
+          nullptr,
           output_level == -1
               ? nullptr
               : cfd->internal_stats()->GetFileReadHist(output_level),
@@ -2709,9 +2711,11 @@ Status CompactionJob::InstallCompactionResults(
       for (auto& o : output) {
         // test map sst
         DependenceMap empty_dependence_map;
+        ReadOptions ro;
+        ro.fill_cache = false;
         InternalIterator* iter = cfd->table_cache()->NewIterator(
-            ReadOptions(), env_options_, cfd->internal_comparator(),
-            o.file_meta, empty_dependence_map, nullptr /* range_del_agg */,
+            ro, env_options_, cfd->internal_comparator(), o.file_meta,
+            empty_dependence_map, nullptr /* range_del_agg */,
             mutable_cf_options.prefix_extractor.get(), nullptr,
             cfd->internal_stats()->GetFileReadHist(compaction->output_level()),
             false, nullptr /* arena */, false /* skip_filters */,
@@ -2790,8 +2794,10 @@ Status CompactionJob::InstallCompactionResults(
     if (s.ok() && file_meta.fd.file_size > 0) {
       // test map sst
       DependenceMap empty_dependence_map;
+      ReadOptions ro;
+      ro.fill_cache = false;
       InternalIterator* iter = cfd->table_cache()->NewIterator(
-          ReadOptions(), env_options_, cfd->internal_comparator(), file_meta,
+          ro, env_options_, cfd->internal_comparator(), file_meta,
           empty_dependence_map, nullptr /* range_del_agg */,
           mutable_cf_options.prefix_extractor.get(), nullptr,
           cfd->internal_stats()->GetFileReadHist(compaction->output_level()),
