@@ -741,11 +741,12 @@ class BaseReferencedVersionBuilder {
     versions->LogAndApplyHelper(version_->cfd(), version_builder_, version_,
                                 edit, mu, false);
   }
-  void DoApplyAndSaveTo(VersionStorageInfo* vstorage) {
+  void DoApplyAndSaveTo(VersionStorageInfo* vstorage,
+                        double maintainer_job_ratio) {
     for (auto edit : edit_list_) {
       version_builder_->Apply(edit);
     }
-    version_builder_->SaveTo(vstorage);
+    version_builder_->SaveTo(vstorage, maintainer_job_ratio);
   }
 
  private:
@@ -3189,7 +3190,9 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
       for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
         assert(!builder_guards.empty() &&
                builder_guards.size() == versions.size());
-        builder_guards[i]->DoApplyAndSaveTo(versions[i]->storage_info());
+        builder_guards[i]->DoApplyAndSaveTo(
+            versions[i]->storage_info(),
+            mutable_cf_options_ptrs[i]->maintainer_job_ratio);
       }
     }
 
@@ -3926,7 +3929,7 @@ Status VersionSet::Recover(
       Version* v = new Version(cfd, this, env_options_,
                                *cfd->GetLatestMutableCFOptions(),
                                current_version_number_++);
-      builder->SaveTo(v->storage_info());
+      builder->SaveTo(v->storage_info(), 0);
 
       // Install recovered version
       v->PrepareApply(*cfd->GetLatestMutableCFOptions());
@@ -4296,7 +4299,7 @@ Status VersionSet::DumpManifest(Options& options, std::string& dscname,
       Version* v = new Version(cfd, this, env_options_,
                                *cfd->GetLatestMutableCFOptions(),
                                current_version_number_++);
-      builder->SaveTo(v->storage_info());
+      builder->SaveTo(v->storage_info(), 0);
       v->PrepareApply(*cfd->GetLatestMutableCFOptions());
 
       printf("--------------- Column family \"%s\"  (ID %u) --------------\n",

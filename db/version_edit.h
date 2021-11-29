@@ -204,6 +204,10 @@ struct FileMetaData {
     kGarbageCollectionPermitted = 2,
   };
 
+  bool has_marked_for_compaction(uint8_t flag) {
+    return (marked_for_compaction & flag) != 0;
+  }
+
   bool is_output_to_parent_level() const {
     constexpr uint8_t kFlag =
         kMarkedFromUser | kMarkedFromRangeDeletion | kMarkedFromTableBuilder;
