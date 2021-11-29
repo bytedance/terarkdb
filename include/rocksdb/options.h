@@ -328,6 +328,10 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // 0 to unlimited
   size_t max_dependence_blob_overlap = 1024;
 
+  // Maintainer job ratio
+  // 0 to 1
+  double maintainer_job_ratio = 0.1;
+
   // This is a factory that provides TableFactory objects.
   // Default: a block-based table factory that provides a default
   // implementation of TableBuilder and TableReader with default

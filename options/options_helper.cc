@@ -174,6 +174,7 @@ ColumnFamilyOptions BuildColumnFamilyOptions(
       mutable_cf_options.blob_file_defragment_size;
   cf_opts.max_dependence_blob_overlap =
       mutable_cf_options.max_dependence_blob_overlap;
+  cf_opts.maintainer_job_ratio = mutable_cf_options.maintainer_job_ratio;
   cf_opts.optimize_filters_for_hits =
       mutable_cf_options.optimize_filters_for_hits;
   cf_opts.optimize_range_deletion = mutable_cf_options.optimize_range_deletion;
@@ -1780,8 +1781,8 @@ std::unordered_map<std::string, OptionTypeInfo>
           OptionType::kBoolean, OptionVerificationType::kNormal, false,
           offsetof(struct ImmutableDBOptions, avoid_unnecessary_blocking_io)}},
         {"zenfs_gc_ratio",
-         {offsetof(struct DBOptions, zenfs_gc_ratio),
-          OptionType::kDouble, OptionVerificationType::kNormal, false,
+         {offsetof(struct DBOptions, zenfs_gc_ratio), OptionType::kDouble,
+          OptionVerificationType::kNormal, false,
           offsetof(struct ImmutableDBOptions, zenfs_gc_ratio)}}};
 
 std::unordered_map<std::string, BlockBasedTableOptions::IndexType>
@@ -1936,6 +1937,10 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offset_of(&ColumnFamilyOptions::max_dependence_blob_overlap),
           OptionType::kSizeT, OptionVerificationType::kNormal, true,
           offsetof(struct MutableCFOptions, max_dependence_blob_overlap)}},
+        {"maintainer_job_ratio",
+         {offset_of(&ColumnFamilyOptions::maintainer_job_ratio),
+          OptionType::kDouble, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, maintainer_job_ratio)}},
         {"filter_deletes",
          {0, OptionType::kBoolean, OptionVerificationType::kDeprecated, true,
           0}},

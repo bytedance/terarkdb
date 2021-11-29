@@ -107,7 +107,8 @@ struct VersionBuilderContextImpl : VersionBuilder::Context {
       : table_cache(nullptr),
         levels(nullptr),
         dependence_version(0),
-        new_deleted_files(0) {}
+        new_deleted_files(0),
+        maintainer_job_limit(0) {}
 
   ~VersionBuilderContextImpl() {
     for (auto& pair : dependence_map) {
@@ -148,6 +149,7 @@ struct VersionBuilderContextImpl : VersionBuilder::Context {
   chash_map<uint64_t, FileMetaData*>* levels;
   size_t dependence_version;
   size_t new_deleted_files;
+  uint64_t maintainer_job_limit;
   chash_map<uint64_t, DependenceItem> dependence_map;
   chash_map<uint64_t, InheritanceItem> inheritance_counter;
 };
@@ -322,7 +324,8 @@ class VersionBuilder::Rep {
     }
   }
 
-  void CalculateDependence(bool finish, bool is_open_db = false) {
+  void CalculateDependence(bool finish, bool is_open_db,
+                           double maintainer_job_ratio) {
     if (!finish && (!is_open_db || context_->new_deleted_files < 65536)) {
       return;
     }
@@ -348,7 +351,9 @@ class VersionBuilder::Rep {
     std::priority_queue<uint64_t> old_file_queue;
     constexpr size_t max_queue_size = 8;
     auto push_old_file = [&](FileMetaData* f) {
-      if (!f->prop.is_map_sst() && !f->prop.dependence.empty()) {
+      if (!f->being_compacted && !f->prop.is_map_sst() &&
+          !f->prop.dependence.empty() &&
+          !f->has_marked_for_compaction(FileMetaData::kMarkedFromUpdateBlob)) {
         for (auto& dependence : f->prop.dependence) {
           if (TransFileNumber(dependence.file_number)->file_number !=
               dependence.file_number) {
@@ -409,6 +414,8 @@ class VersionBuilder::Rep {
         }
         ++it;
       } else {
+        context_->maintainer_job_limit +=
+            uint64_t(item.f->fd.GetFileSize() * maintainer_job_ratio);
         DelInheritance(item.f);
         context_->UnrefFile(item.f);
         it = dependence_map.erase(it);
@@ -421,9 +428,12 @@ class VersionBuilder::Rep {
       while (old_file_queue.size() > old_file_count) {
         old_file_queue.pop();
       }
-      while (!old_file_queue.empty()) {
-        dependence_map[old_file_queue.top()].f->marked_for_compaction |=
-            FileMetaData::kMarkedFromUpdateBlob;
+      FileMetaData* f;
+      while (!old_file_queue.empty() &&
+             (f = dependence_map[old_file_queue.top()].f)->fd.GetFileSize() <
+                 context_->maintainer_job_limit) {
+        context_->maintainer_job_limit -= f->fd.GetFileSize();
+        f->marked_for_compaction |= FileMetaData::kMarkedFromUpdateBlob;
         old_file_queue.pop();
       }
     }
@@ -666,15 +676,15 @@ class VersionBuilder::Rep {
     }
 
     // shrink files
-    CalculateDependence(false, edit->is_open_db());
+    CalculateDependence(false, edit->is_open_db(), 0);
   }
 
   // Save the current state in *v.
   // WARNING: this func will call out of mutex
-  void SaveTo(VersionStorageInfo* vstorage) {
+  void SaveTo(VersionStorageInfo* vstorage, double maintainer_job_ratio) {
     Init();
     CheckConsistency(vstorage, true);
-    CalculateDependence(true);
+    CalculateDependence(true, false, maintainer_job_ratio);
     auto exists = [&](uint64_t file_number) {
       auto find = context_->inheritance_counter.find(file_number);
       assert(find != context_->inheritance_counter.end());
@@ -867,8 +877,9 @@ bool VersionBuilder::CheckConsistencyForNumLevels() {
 
 void VersionBuilder::Apply(VersionEdit* edit) { rep_->Apply(edit); }
 
-void VersionBuilder::SaveTo(VersionStorageInfo* vstorage) {
-  rep_->SaveTo(vstorage);
+void VersionBuilder::SaveTo(VersionStorageInfo* vstorage,
+                            double maintainer_job_ratio) {
+  rep_->SaveTo(vstorage, maintainer_job_ratio);
 }
 
 void VersionBuilder::LoadTableHandlers(InternalStats* internal_stats,
@@ -978,7 +989,7 @@ void VersionBuilderDebugger::Verify(VersionBuilder::Rep* rep,
         vstorage->InternalComparator(),
         vstorage->InternalComparator()->user_comparator(),
         vstorage->num_levels(), kCompactionStyleNone, true);
-    rep_0.SaveTo(&vstorage_1);
+    rep_0.SaveTo(&vstorage_1, 0);
     VersionBuilder::Rep rep_1(rep->env_options_, rep->info_log_,
                               rep->table_cache, &vstorage_1);
     for (size_t j = i; j < pos.size() - 1; ++j) {
@@ -986,7 +997,7 @@ void VersionBuilderDebugger::Verify(VersionBuilder::Rep* rep,
       get_edit(j, &edit);
       rep_1.Apply(&edit);
     }
-    rep_1.SaveTo(&vstorage_0);
+    rep_1.SaveTo(&vstorage_0, 0);
     auto err = verify(vstorage, &vstorage_0);
     if (!err.empty()) {
       has_err = true;

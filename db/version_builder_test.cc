@@ -155,7 +155,7 @@ TEST_F(VersionBuilderTest, ApplyAndSaveTo) {
   VersionStorageInfo new_vstorage(&icmp_, ucmp_, options_.num_levels,
                                   kCompactionStyleLevel, false);
   version_builder.Apply(&version_edit);
-  version_builder.SaveTo(&new_vstorage);
+  version_builder.SaveTo(&new_vstorage, 0);
 
   ASSERT_EQ(400U, new_vstorage.NumLevelBytes(2));
   ASSERT_EQ(300U, new_vstorage.NumLevelBytes(3));
@@ -193,7 +193,7 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic) {
   VersionStorageInfo new_vstorage(&icmp_, ucmp_, options_.num_levels,
                                   kCompactionStyleLevel, false);
   version_builder.Apply(&version_edit);
-  version_builder.SaveTo(&new_vstorage);
+  version_builder.SaveTo(&new_vstorage, 0);
 
   ASSERT_EQ(0U, new_vstorage.NumLevelBytes(0));
   ASSERT_EQ(100U, new_vstorage.NumLevelBytes(3));
@@ -243,7 +243,7 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic2) {
   VersionStorageInfo new_vstorage(&icmp_, ucmp_, options_.num_levels,
                                   kCompactionStyleLevel, false);
   version_builder.Apply(&version_edit);
-  version_builder.SaveTo(&new_vstorage);
+  version_builder.SaveTo(&new_vstorage, 0);
 
   ASSERT_EQ(0U, new_vstorage.NumLevelBytes(0));
   ASSERT_EQ(200U, new_vstorage.NumLevelBytes(4));
@@ -320,7 +320,7 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic3) {
 
   VersionStorageInfo new_vstorage(&icmp_, ucmp_, options_.num_levels,
                                   kCompactionStyleLevel, false);
-  version_builder.SaveTo(&new_vstorage);
+  version_builder.SaveTo(&new_vstorage, 0);
 
   ASSERT_EQ(0U, new_vstorage.NumLevelBytes(1));
   ASSERT_EQ(150U, new_vstorage.NumLevelBytes(2));
@@ -351,7 +351,7 @@ TEST_F(VersionBuilderTest, ApplyMultipleAndSaveTo) {
   VersionStorageInfo new_vstorage(&icmp_, ucmp_, options_.num_levels,
                                   kCompactionStyleLevel, false);
   version_builder.Apply(&version_edit);
-  version_builder.SaveTo(&new_vstorage);
+  version_builder.SaveTo(&new_vstorage, 0);
 
   ASSERT_EQ(500U, new_vstorage.NumLevelBytes(2));
   ASSERT_TRUE(VerifyDependFiles(&new_vstorage, {666, 676, 636, 616, 606}));
@@ -389,7 +389,7 @@ TEST_F(VersionBuilderTest, ApplyDeleteAndSaveTo) {
                        GetInternalKey("850"), 200, 200, false, {});
   version_builder.Apply(&version_edit2);
 
-  version_builder.SaveTo(&new_vstorage);
+  version_builder.SaveTo(&new_vstorage, 0);
 
   ASSERT_EQ(300U, new_vstorage.NumLevelBytes(2));
   ASSERT_TRUE(VerifyDependFiles(&new_vstorage, {666, 676, 606}));
@@ -489,7 +489,7 @@ TEST_F(VersionBuilderTest, HugeLSM) {
 
   version_builder.Apply(&version_edit);
 
-  version_builder.SaveTo(&new_vstorage);
+  version_builder.SaveTo(&new_vstorage, 0);
 
   UnrefFilesInVersion(&new_vstorage);
 }
