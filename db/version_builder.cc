@@ -18,7 +18,6 @@
 #include <algorithm>
 #include <atomic>
 #include <functional>
-#include <queue>
 #include <utility>
 #include <vector>
 
@@ -348,7 +347,7 @@ class VersionBuilder::Rep {
       }
     }
 
-    std::priority_queue<uint64_t> old_file_queue;
+    std::vector<uint64_t> old_file_queue;
     constexpr size_t max_queue_size = 8;
     auto push_old_file = [&](FileMetaData* f) {
       if (!f->being_compacted && !f->prop.is_map_sst() &&
@@ -358,9 +357,11 @@ class VersionBuilder::Rep {
           if (TransFileNumber(dependence.file_number)->file_number !=
               dependence.file_number) {
             // item maybe invalid pointer, don't access it
-            old_file_queue.push(f->fd.GetNumber());
+            old_file_queue.push_back(f->fd.GetNumber());
+            std::push_heap(old_file_queue.begin(), old_file_queue.end());
             if (old_file_queue.size() > max_queue_size) {
-              old_file_queue.pop();
+              std::pop_heap(old_file_queue.begin(), old_file_queue.end());
+              old_file_queue.pop_back();
             }
             break;
           }
@@ -414,8 +415,11 @@ class VersionBuilder::Rep {
         }
         ++it;
       } else {
-        context_->maintainer_job_limit +=
-            uint64_t(item.f->fd.GetFileSize() * maintainer_job_ratio);
+        if (!item.f->has_marked_for_compaction(
+                FileMetaData::kMarkedFromUpdateBlob)) {
+          context_->maintainer_job_limit +=
+              uint64_t(item.f->fd.GetFileSize() * maintainer_job_ratio);
+        }
         DelInheritance(item.f);
         context_->UnrefFile(item.f);
         it = dependence_map.erase(it);
@@ -423,18 +427,14 @@ class VersionBuilder::Rep {
     }
 
     if (finish) {
-      size_t old_file_count = std::max<size_t>(
-          1, std::min(dependence_map.size() / 128, old_file_queue.size()));
-      while (old_file_queue.size() > old_file_count) {
-        old_file_queue.pop();
-      }
-      FileMetaData* f;
-      while (!old_file_queue.empty() &&
-             (f = dependence_map[old_file_queue.top()].f)->fd.GetFileSize() <
-                 context_->maintainer_job_limit) {
+      std::sort(old_file_queue.begin(), old_file_queue.end());
+      for (uint64_t fn : old_file_queue) {
+        FileMetaData* f = dependence_map[fn].f;
+        if (f->fd.GetFileSize() > context_->maintainer_job_limit) {
+          break;
+        }
         context_->maintainer_job_limit -= f->fd.GetFileSize();
         f->marked_for_compaction |= FileMetaData::kMarkedFromUpdateBlob;
-        old_file_queue.pop();
       }
     }
 
