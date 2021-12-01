@@ -337,6 +337,12 @@ ColumnFamilyOptions SanitizeOptions(const ImmutableDBOptions& db_options,
   if (result.blob_gc_ratio < 0) {
     result.blob_gc_ratio = 0;
   }
+  if (result.maintainer_job_ratio < 0) {
+    result.maintainer_job_ratio = 0;
+  }
+  if (result.maintainer_job_ratio > 1) {
+    result.maintainer_job_ratio = 1;
+  }
 
   return result;
 }
