@@ -63,9 +63,9 @@ extern "C" {
 #endif
 
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdbool.h>
 
 /* Exported types */
 
@@ -931,6 +931,8 @@ extern ROCKSDB_LIBRARY_API void rocksdb_options_set_blob_file_defragment_size(
     rocksdb_options_t*, uint64_t);
 extern ROCKSDB_LIBRARY_API void rocksdb_options_set_max_dependence_blob_overlap(
     rocksdb_options_t*, size_t);
+extern ROCKSDB_LIBRARY_API void rocksdb_options_set_maintainer_job_ratio(
+    rocksdb_options_t*, double);
 extern ROCKSDB_LIBRARY_API void rocksdb_options_set_optimize_filters_for_hits(
     rocksdb_options_t*, bool);
 extern ROCKSDB_LIBRARY_API void rocksdb_options_set_optimize_range_deletion(

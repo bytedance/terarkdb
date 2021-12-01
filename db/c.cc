@@ -2472,18 +2472,24 @@ void rocksdb_options_set_blob_gc_ratio(rocksdb_options_t* opt, double v) {
   opt->rep.blob_gc_ratio = v;
 }
 
-void rocksdb_options_target_blob_file_size(rocksdb_options_t* opt, uint64_t v) {
+void rocksdb_options_set_target_blob_file_size(rocksdb_options_t* opt,
+                                               uint64_t v) {
   opt->rep.target_blob_file_size = v;
 }
 
-void rocksdb_options_blob_file_defragment_size(rocksdb_options_t* opt,
-                                               uint64_t v) {
+void rocksdb_options_set_blob_file_defragment_size(rocksdb_options_t* opt,
+                                                   uint64_t v) {
   opt->rep.blob_file_defragment_size = v;
 }
 
-void rocksdb_options_max_dependence_blob_overlap(rocksdb_options_t* opt,
-                                                 size_t v) {
+void rocksdb_options_set_max_dependence_blob_overlap(rocksdb_options_t* opt,
+                                                     size_t v) {
   opt->rep.max_dependence_blob_overlap = v;
+}
+
+void rocksdb_options_set_maintainer_job_ratio(rocksdb_options_t* opt,
+                                              double v) {
+  opt->rep.maintainer_job_ratio = v;
 }
 
 void rocksdb_options_set_optimize_filters_for_hits(rocksdb_options_t* opt,

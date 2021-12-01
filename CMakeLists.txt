@@ -59,7 +59,7 @@ if(NOT WITH_TERARKDB_NAMESPACE)
 endif()
 MESSAGE(STATUS "terarkdb namespace: " ${WITH_TERARKDB_NAMESPACE})
 
-option(BUILD_SUFFIX "library sufix" "d")
+option(BUILD_SUFFIX "library suffix" "d")
 option(FORCE_TERARKDB_RELEASE_BUILD "ignore outside cmake_build_type" OFF)
 
 SET(CMAKE_THREAD_PREFER_PTHREAD TRUE)
