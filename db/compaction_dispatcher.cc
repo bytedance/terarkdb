@@ -26,6 +26,7 @@
 #include <terark/util/process.hpp>
 #endif
 
+#include "db/compaction.h"
 #include "db/compaction_iterator.h"
 #include "db/map_builder.h"
 #include "db/merge_helper.h"
