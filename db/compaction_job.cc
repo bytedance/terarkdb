@@ -1474,7 +1474,7 @@ Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
 
   stream << "lsm_state";
   stream.StartArray();
-  for (int level = 0; level < vstorage->num_levels(); ++level) {
+  for (int level = -1; level < vstorage->num_levels(); ++level) {
     if (vstorage->LevelFiles(level).size() == 1 &&
         vstorage->LevelFiles(level).front()->prop.is_map_sst()) {
       stream << std::to_string(
