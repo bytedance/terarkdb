@@ -4849,5 +4849,14 @@ uint64_t VersionSet::GetTotalSstFilesSize(Version* dummy_versions) {
   }
   return total_files_size;
 }
+void VersionStorageInfo::CalculateEdge() {
+  for (int i = 0; i < num_levels_; i++) {
+    uint64_t cnt = 0;
+    for (auto f : LevelFiles(i)) {
+      cnt += f->prop.dependence.size();
+    }
+    edge_cnt_levels_.push_back(cnt);
+  }
+}
 
 }  // namespace TERARKDB_NAMESPACE
