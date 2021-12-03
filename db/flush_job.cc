@@ -275,6 +275,13 @@ Status FlushJob::Run(LogsWithPrepTracker* prep_tracker) {
     }
   }
   stream.EndArray();
+  stream.StartArray();
+  for (auto& cnt : vstorage->edge_cnt_levels()) {
+    stream << cnt;
+  }
+  stream.EndArray();
+  stream << vstorage->NumLevelFiles(-1);
+
   stream << "immutable_memtables" << cfd_->imm()->NumNotFlushed();
 
   if (measure_io_stats_) {
