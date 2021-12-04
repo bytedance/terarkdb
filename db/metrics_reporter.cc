@@ -10,9 +10,11 @@
 #include "util/logging.h"
 
 #ifdef WITH_BOOSTLIB
+#if defined(OS_LINUX)
 #define REPORT_DEBUG_STACKTRACE 1
 #if REPORT_DEBUG_STACKTRACE
 #include <boost/stacktrace.hpp>
+#endif
 #endif
 #endif
 
