@@ -519,6 +519,10 @@ class VersionStorageInfo {
   // in increasing order of keys
   std::vector<FileMetaData*>* files_;
 
+  // Record sum of dependence each level
+  // We Change it when new version is build
+  std::vector<uint64_t> edge_cnt_;
+
   // Dependence files both in files[-1] and dependence_map
   DependenceMap dependence_map_;
 
