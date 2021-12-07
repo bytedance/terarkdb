@@ -12,6 +12,9 @@
 #ifdef WITH_BOOSTLIB
 #define REPORT_DEBUG_STACKTRACE 1
 #if REPORT_DEBUG_STACKTRACE
+#if defined(__APPLE__)
+#define _GNU_SOURCE
+#endif
 #include <boost/stacktrace.hpp>
 #endif
 #endif

@@ -2,6 +2,15 @@ cmake_minimum_required(VERSION 3.6)
 
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 
+if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+  SET(CPDIR_FLAGS "-r")
+elseif(CMAKE_SYSTEM_NAME MATCHES "Windows")
+  MESSAGE(FATAL_ERROR "Comming soon ...")
+else()
+  SET(CPDIR_FLAGS "-rT")
+endif()
+
+
 PROJECT(terarkdb-third-party)
 #SET(CMAKE_VERBOSE_MAKEFILE ON)
 
@@ -121,7 +130,7 @@ IF(WITH_ZSTD)
     MESSAGE("[terarkdb/third-party] zstd target not exist, let's build it!")
     ExternalProject_Add(zstd-project
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/zstd
-        CONFIGURE_COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/zstd/ .
+        CONFIGURE_COMMAND cp ${CPDIR_FLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/zstd/ .
         BUILD_IN_SOURCE 0
         BUILD_COMMAND $(MAKE) "CXXFLAGS=-fPIC -O2" "CFLAGS=-fPIC -O2"
         INSTALL_COMMAND PREFIX=${CMAKE_BINARY_DIR} $(MAKE) install
@@ -144,7 +153,7 @@ IF(WITH_LZ4)
     MESSAGE("[terarkdb/third-party] lz4 target not exist, let's build it!")
     ExternalProject_Add(lz4-project
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lz4
-        CONFIGURE_COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/lz4/ .
+        CONFIGURE_COMMAND cp ${CPDIR_FLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/lz4/ .
         BUILD_IN_SOURCE 0
         BUILD_COMMAND $(MAKE) "CXXFLAGS=-fPIC -O2" "CFLAGS=-fPIC -O2"
         INSTALL_COMMAND prefix=${CMAKE_BINARY_DIR} $(MAKE) install)
@@ -166,7 +175,7 @@ IF(WITH_BZ2)
     MESSAGE("[terarkdb/third-party] bzip2 target not exist, let's build it!")
     ExternalProject_Add(bzip2-project
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/bzip2
-        CONFIGURE_COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/bzip2/ .
+        CONFIGURE_COMMAND cp ${CPDIR_FLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/bzip2/ .
         BUILD_IN_SOURCE 0
         BUILD_COMMAND $(MAKE) "CXXFLAGS=-fPIC -O2" "CFLAGS=-fPIC -O2"
         INSTALL_COMMAND $(MAKE) install PREFIX=${CMAKE_BINARY_DIR})
@@ -179,7 +188,7 @@ IF(WITH_BZ2)
     )
   ENDIF()
 ENDIF()
- 
+
 # Jemalloc
 IF(WITH_JEMALLOC)
   if(TARGET jemalloc)
@@ -188,7 +197,7 @@ IF(WITH_JEMALLOC)
     MESSAGE("[terarkdb/third-party] jemalloc target not exist, let's build it!")
     ExternalProject_Add(jemalloc-project
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/jemalloc
-        CONFIGURE_COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/jemalloc/ . && bash autogen.sh && "CFLAGS=-fPIC" "CXXFLAGS=-fPIC" "LDFLAGS=-fPIC" ./configure --prefix=${CMAKE_BINARY_DIR} --enable-prof
+        CONFIGURE_COMMAND cp ${CPDIR_FLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/jemalloc/ . && bash autogen.sh && "CFLAGS=-fPIC" "CXXFLAGS=-fPIC" "LDFLAGS=-fPIC" ./configure --prefix=${CMAKE_BINARY_DIR} --enable-prof
         BUILD_IN_SOURCE 0
         BUILD_COMMAND $(MAKE)
         INSTALL_COMMAND $(MAKE) install PREFIX=${CMAKE_BINARY_DIR}
