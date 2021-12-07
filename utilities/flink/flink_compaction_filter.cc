@@ -5,6 +5,8 @@
 
 #include "utilities/flink/flink_compaction_filter.h"
 
+#include <inttypes.h>
+
 #include <algorithm>
 #include <iostream>
 
@@ -30,8 +32,9 @@ CompactionFilter::Decision Decide(const char* ts_bytes, const int64_t ttl,
   const int64_t ttlWithoutOverflow =
       timestamp > 0 ? std::min(JAVA_MAX_LONG - timestamp, ttl) : ttl;
   Debug(logger.get(),
-        "Last access timestamp: %ld ms, ttlWithoutOverflow: %ld ms, Current "
-        "timestamp: %ld ms",
+        "Last access timestamp: %" PRIi64 " ms, ttlWithoutOverflow: %" PRIi64
+        " ms, Current "
+        "timestamp: %" PRIi64 " ms",
         timestamp, ttlWithoutOverflow, current_timestamp);
   return timestamp + ttlWithoutOverflow <= current_timestamp
              ? CompactionFilter::Decision::kRemove
@@ -130,7 +133,7 @@ CompactionFilter::Decision FlinkCompactionFilter::FilterV2(
   Debug(logger_.get(),
         "Call FlinkCompactionFilter::FilterV2 - Key: %s, Data: %s, Value type: "
         "%d, "
-        "State type: %d, TTL: %ld ms, timestamp_offset: %ld",
+        "State type: %d, TTL: %" PRIi64 " ms, timestamp_offset: %zd",
         key.ToString().c_str(), existing_value.ToString(true).c_str(),
         value_type, config_cached_->state_type_, config_cached_->ttl_,
         config_cached_->timestamp_offset_);
