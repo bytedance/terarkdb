@@ -498,6 +498,8 @@ class VersionStorageInfo {
   std::unordered_map<uint64_t, uint64_t>& blob_overlap_scores() {
     return blob_overlap_scores_;
   }
+  void CalculateEdge();
+  std::vector<uint64_t> edge_cnt_levels() const { return edge_cnt_levels_; }
 
  private:
   const InternalKeyComparator* internal_comparator_;
@@ -521,7 +523,7 @@ class VersionStorageInfo {
 
   // Record sum of dependence each level
   // We Change it when new version is build
-  std::vector<uint64_t> edge_cnt_;
+  std::vector<uint64_t> edge_cnt_levels_;
 
   // Dependence files both in files[-1] and dependence_map
   DependenceMap dependence_map_;

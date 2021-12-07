@@ -265,7 +265,7 @@ Status FlushJob::Run(LogsWithPrepTracker* prep_tracker) {
          << "lsm_state";
   stream.StartArray();
   auto vstorage = cfd_->current()->storage_info();
-  for (int level = -1; level < vstorage->num_levels(); ++level) {
+  for (int level = 0; level < vstorage->num_levels(); ++level) {
     if (vstorage->LevelFiles(level).size() == 1 &&
         vstorage->LevelFiles(level).front()->prop.is_map_sst()) {
       stream << std::to_string(
@@ -275,6 +275,13 @@ Status FlushJob::Run(LogsWithPrepTracker* prep_tracker) {
     }
   }
   stream.EndArray();
+  stream.StartArray();
+  for (auto& cnt : vstorage->edge_cnt_levels()) {
+    stream << cnt;
+  }
+  stream.EndArray();
+  stream << vstorage->NumLevelFiles(-1);
+
   stream << "immutable_memtables" << cfd_->imm()->NumNotFlushed();
 
   if (measure_io_stats_) {
