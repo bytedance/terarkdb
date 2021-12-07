@@ -186,10 +186,10 @@ bool SstFileManagerImpl::EnoughRoomForCompaction(
     needed_headroom -= in_progress_files_size_;
     if (free_space < needed_headroom + size_added_by_compaction) {
       // We hit the condition of not enough disk space
-      ROCKS_LOG_ERROR(
-          logger_,
-          "free space [%ld bytes] is less than needed headroom [%ld bytes]\n",
-          free_space, needed_headroom);
+      ROCKS_LOG_ERROR(logger_,
+                      "free space [%" PRIu64
+                      " bytes] is less than needed headroom [%zd bytes]\n",
+                      free_space, needed_headroom);
       return false;
     }
   }
@@ -274,8 +274,9 @@ void SstFileManagerImpl::ClearError() {
       if (bg_err_.severity() == Status::Severity::kHardError) {
         if (free_space < reserved_disk_buffer_) {
           ROCKS_LOG_ERROR(logger_,
-                          "free space [%ld bytes] is less than required disk "
-                          "buffer [%ld bytes]\n",
+                          "free space [%" PRIu64
+                          " bytes] is less than required disk "
+                          "buffer [%" PRIu64 "  bytes]\n",
                           free_space, reserved_disk_buffer_);
           ROCKS_LOG_ERROR(logger_, "Cannot clear hard error\n");
           s = Status::NoSpace();
@@ -283,8 +284,9 @@ void SstFileManagerImpl::ClearError() {
       } else if (bg_err_.severity() == Status::Severity::kSoftError) {
         if (free_space < free_space_trigger_) {
           ROCKS_LOG_WARN(logger_,
-                         "free space [%ld bytes] is less than free space for "
-                         "compaction trigger [%ld bytes]\n",
+                         "free space [%" PRIu64
+                         " bytes] is less than free space for "
+                         "compaction trigger [%" PRIu64 " bytes]\n",
                          free_space, free_space_trigger_);
           ROCKS_LOG_WARN(logger_, "Cannot clear soft error\n");
           s = Status::NoSpace();
