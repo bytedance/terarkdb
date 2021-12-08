@@ -547,13 +547,6 @@ struct AdvancedColumnFamilyOptions {
   // SetOptions("compaction_options_universal", "{size_ratio=2;}")
   CompactionOptionsUniversal compaction_options_universal;
 
-  // The options for FIFO compaction style
-  //
-  // Dynamically changeable through SetOptions() API
-  // Dynamic change example:
-  // SetOptions("compaction_options_fifo", "{max_table_files_size=100;ttl=2;}")
-  CompactionOptionsFIFO compaction_options_fifo;
-
   // An iteration->Next() sequentially skips over keys with the same
   // user-key unless this option is set. This number specifies the number
   // of keys (with the same userkey) that will be sequentially

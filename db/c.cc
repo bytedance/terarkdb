@@ -2598,11 +2598,6 @@ char* rocksdb_options_statistics_get_string(rocksdb_options_t* opt) {
   return nullptr;
 }
 
-void rocksdb_options_set_fifo_compaction_options(rocksdb_options_t* opt,
-                                                 rocksdb_fifo_compaction_options_t* fifo) {
-  opt->rep.compaction_options_fifo = fifo->rep;
-}
-
 void rocksdb_options_set_ratelimiter(rocksdb_options_t* opt,
                                      rocksdb_ratelimiter_t* limiter) {
   if (limiter) {
