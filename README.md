@@ -3,7 +3,7 @@ TerarkDB is a RocksDB replacement with optimized tail latency, throughput and co
 drawbacks.
 
 - [All-in-one Docs](https://bytedance.feishu.cn/docs/doccnZmYFqHBm06BbvYgjsHHcKc#)
-- [Slack Channel](https://join.slack.com/t/terarkdb/shared_invite/zt-tncbshtt-W0~rC8bKSovAxVCvIzJPMw)
+- [Slack Channel](https://join.slack.com/t/terarkdb/shared_invite/zt-zxo71hwl-j_K4OIQ~p5_SsT4RrFesxg)
 
 **NOTES**
 - TerarkDB was only tested and production ready under Linux platform
