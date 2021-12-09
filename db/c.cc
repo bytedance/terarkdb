@@ -2566,6 +2566,11 @@ void rocksdb_options_set_bloom_locality(rocksdb_options_t* opt, uint32_t v) {
   opt->rep.bloom_locality = v;
 }
 
+void rocksdb_options_set_inplace_update_support(rocksdb_options_t* opt,
+                                                unsigned char v) {
+  opt->rep.inplace_update_support = v;
+}
+
 void rocksdb_options_set_inplace_update_num_locks(rocksdb_options_t* opt,
                                                   size_t v) {
   opt->rep.inplace_update_num_locks = v;
