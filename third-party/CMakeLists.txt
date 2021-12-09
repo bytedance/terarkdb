@@ -145,6 +145,37 @@ IF(WITH_ZSTD)
   ENDIF()
 ENDIF()
 
+# LAVAFS
+IF(WITH_LAVAFS)
+  IF(TARGET lavafs)
+    MESSAGE("[terarkdb/third-party] lavafs target existed, re-use it!")
+  ELSE()
+    MESSAGE("[terarkdb/third-party] lavafs target not exist, let's build it!")
+    execute_process(
+      COMMAND mkdir -p ${CMAKE_CURRENT_SOURCE_DIR}/lavafs/build
+      )
+    ExternalProject_Add(lavafs-project
+        SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lavafs
+	BINARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lavafs/build
+	CONFIGURE_COMMAND cmake ${CMAKE_CURRENT_SOURCE_DIR}/lavafs -DCMAKE_BUILD_TYPE=Release
+        BUILD_IN_SOURCE 0
+        BUILD_COMMAND $(MAKE) "lava-bluefs"
+        INSTALL_COMMAND ""
+    )
+    ADD_LIBRARY(lavafs STATIC IMPORTED GLOBAL)
+    ADD_DEPENDENCIES(lavafs lavafs-project)
+    set(LAVAFS_LIBS
+        "${CMAKE_CURRENT_SOURCE_DIR}/lavafs/build/src/os/liblava-bluefs.a"
+        "${CMAKE_CURRENT_SOURCE_DIR}/lavafs/build/lib/libceph-common.so.2"
+    )
+    SET_TARGET_PROPERTIES(lavafs PROPERTIES
+        IMPORTED_LOCATION "${LAVAFS_LIBS}"
+        INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/lavafs/src/os/bluestore
+        POSITION_INDEPENDENT_CODE ON
+    )
+  ENDIF()
+ENDIF()
+
 # LZ4
 IF(WITH_LZ4)
   IF(TARGET lz4)
