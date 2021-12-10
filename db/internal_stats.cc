@@ -1114,7 +1114,7 @@ void InternalStats::DumpCFMapStats(
                           static_cast<double>(vstorage->NumLevelBytes(l)),
                           -1, w_amp, comp_stats_[level]);
       }
-      (*levels_stats)[level] = level_stats;
+      (*levels_stats)[l] = level_stats;
     }
   }
   delete[] files_being_compacted;
