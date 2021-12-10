@@ -2591,7 +2591,7 @@ void VersionStorageInfo::ExtendFileRangeWithinInterval(
 }
 
 uint64_t VersionStorageInfo::NumLevelBytes(int level) const {
-  assert(level >= 0);
+  assert(level >= -1);
   assert(level < num_levels());
   return TotalFileSize(files_[level]);
 }
