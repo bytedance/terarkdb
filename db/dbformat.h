@@ -67,6 +67,13 @@ enum ValueType : unsigned char {
   kMaxValue = 0x7F                // Not used for storing records.
 };
 
+// Sst purpose
+enum SstPurpose {
+  kEssenceSst,  // Actual data storage sst
+  kLogSst,      // Log as sst
+  kMapSst,      // Dummy sst
+};
+
 // Defined in dbformat.cc
 extern const ValueType kValueTypeForSeek;
 extern const ValueType kValueTypeForSeekForPrev;

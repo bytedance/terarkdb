@@ -121,8 +121,6 @@ const std::vector<std::pair<Tickers, std::string>> TickersNameMap = {
     {NUMBER_BLOCK_NOT_COMPRESSED, "rocksdb.number.block.not_compressed"},
     {MERGE_OPERATION_TOTAL_TIME, "rocksdb.merge.operation.time.nanos"},
     {FILTER_OPERATION_TOTAL_TIME, "rocksdb.filter.operation.time.nanos"},
-    {ROW_CACHE_HIT, "rocksdb.row.cache.hit"},
-    {ROW_CACHE_MISS, "rocksdb.row.cache.miss"},
     {READ_AMP_ESTIMATE_USEFUL_BYTES, "rocksdb.read.amp.estimate.useful.bytes"},
     {READ_AMP_TOTAL_READ_BYTES, "rocksdb.read.amp.total.read.bytes"},
     {NUMBER_RATE_LIMITER_DRAINS, "rocksdb.number.rate_limiter.drains"},

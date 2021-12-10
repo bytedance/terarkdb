@@ -49,7 +49,7 @@ class WalManagerTest : public testing::Test {
     db_options_.wal_dir = dbname_;
     db_options_.env = env_.get();
 
-    versions_.reset(new VersionSet(dbname_, &db_options_, env_options_,
+    versions_.reset(new VersionSet(dbname_, &db_options_, &env_options_,
                                    /* seq_per_batch */ false,
                                    table_cache_.get(), &write_buffer_manager_,
                                    &write_controller_));

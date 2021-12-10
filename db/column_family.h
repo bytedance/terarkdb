@@ -213,7 +213,9 @@ class ColumnFamilyData {
   FlushReason GetFlushReason() const { return flush_reason_; }
   // thread-safe
   const EnvOptions* soptions() const;
-  const ImmutableCFOptions* ioptions() const { return &ioptions_; }
+  const ImmutableCFOptions* ioptions() const {
+    return &table_cache_->ioptions();
+  }
   // REQUIRES: DB mutex held
   // This returns the MutableCFOptions used by current SuperVersion
   // You should use this API to reference MutableCFOptions most of the time.
@@ -268,6 +270,7 @@ class ColumnFamilyData {
                          bool needs_dup_key_check, SequenceNumber earliest_seq);
 
   TableCache* table_cache() const { return table_cache_.get(); }
+  std::shared_ptr<TableCache>& table_cache_ptr() { return table_cache_; }
 
   // See documentation in compaction_picker.h
   // REQUIRES: DB mutex held
@@ -409,8 +412,8 @@ class ColumnFamilyData {
 
   bool initialized() const { return initialized_.load(); }
 
-  const ColumnFamilyOptions& initial_cf_options() {
-    return initial_cf_options_;
+  const ColumnFamilyOptions& initial_cf_options() const {
+    return table_cache_->initial_cf_options();
   }
 
   Env::WriteLifeTimeHint CalculateSSTWriteHint(int level);
@@ -426,7 +429,7 @@ class ColumnFamilyData {
                    WriteBufferManager* write_buffer_manager,
                    const ColumnFamilyOptions& options,
                    const ImmutableDBOptions& db_options,
-                   const EnvOptions& env_options,
+                   const EnvOptions* env_options,
                    ColumnFamilySet* column_family_set);
 
   uint32_t id_;
@@ -440,13 +443,11 @@ class ColumnFamilyData {
   std::atomic<bool> optimize_filters_for_hits_;  // for read output mutex
 
   const InternalKeyComparator internal_comparator_;
-  const ColumnFamilyOptions initial_cf_options_;
-  const ImmutableCFOptions ioptions_;
+  std::shared_ptr<TableCache> table_cache_;
+  const ImmutableCFOptions& ioptions_;
   MutableCFOptions mutable_cf_options_;
 
   const bool is_delete_range_supported_;
-
-  std::unique_ptr<TableCache> table_cache_;
 
   std::unique_ptr<InternalStats> internal_stats_;
 
@@ -552,7 +553,7 @@ class ColumnFamilySet {
 
   ColumnFamilySet(const std::string& dbname,
                   const ImmutableDBOptions* db_options,
-                  const EnvOptions& env_options, Cache* table_cache,
+                  const EnvOptions* env_options, Cache* table_cache,
                   WriteBufferManager* write_buffer_manager,
                   WriteController* write_controller);
   ~ColumnFamilySet();

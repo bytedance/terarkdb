@@ -116,6 +116,7 @@ struct MutableDBOptions {
   double zenfs_low_gc_ratio;
   double zenfs_high_gc_ratio;
   double zenfs_force_gc_ratio;
+  TableEvictType table_evict_type;
 };
 
 }  // namespace TERARKDB_NAMESPACE

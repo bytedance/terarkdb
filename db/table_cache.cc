@@ -90,7 +90,7 @@ class LazyCreateIterator : public Snapshot {
   TableCache* table_cache_;
   ReadOptions options_;  // deep copy
   SequenceNumber snapshot_;
-  const EnvOptions& env_options_;
+  EnvOptions env_options_;
   RangeDelAggregator* range_del_agg_;
   const SliceTransform* prefix_extractor_;
   bool for_compaction_;
@@ -137,10 +137,12 @@ class LazyCreateIterator : public Snapshot {
 
 }  // namespace
 
-TableCache::TableCache(const ImmutableCFOptions& ioptions,
-                       const EnvOptions& env_options, Cache* const cache)
-    : ioptions_(ioptions),
-      env_options_(env_options),
+TableCache::TableCache(const ColumnFamilyOptions& initial_cf_options,
+                       const ImmutableDBOptions& db_options,
+                       const EnvOptions* env_options, Cache* const cache)
+    : initial_cf_options_(initial_cf_options),
+      ioptions_(db_options, initial_cf_options_),
+      env_options_(*env_options),
       cache_(cache),
       immortal_tables_(false) {}
 
@@ -648,6 +650,27 @@ size_t TableCache::GetMemoryUsageByTableReader(
 
 void TableCache::Evict(Cache* cache, uint64_t file_number) {
   cache->Erase(GetSliceForFileNumber(&file_number));
+}
+
+void TableCache::ForceEvict(uint64_t file_number,
+                            const FileMetaData* file_meta) {
+  std::unique_ptr<TableReader> reader_holder;
+  TableReader* reader = nullptr;
+  Slice key = GetSliceForFileNumber(&file_number);
+  auto handle = cache_->Lookup(key);
+  if (handle != nullptr) {
+    reader = GetTableReaderFromHandle(handle);
+  } else if (file_meta != nullptr) {
+    auto s = GetTableReader(env_options_, file_meta->fd, false, 0, 0, nullptr,
+                            &reader_holder);
+    if (s.ok()) {
+      reader = reader_holder.get();
+    }
+  }
+  if (reader != nullptr) {
+    reader->ForceEvict();
+  }
+  Evict(cache_, file_number);
 }
 
 void TableCache::TEST_AddMockTableReader(TableReader* table_reader,

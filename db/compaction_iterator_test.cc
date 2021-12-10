@@ -171,7 +171,7 @@ class FakeCompaction : public CompactionIterator::CompactionProxy {
       std::vector<size_t>* /*level_ptrs*/) const override {
     return is_bottommost_level || key_not_exists_beyond_output_level;
   }
-  virtual SeparationType separation_type() const {
+  virtual SeparationType separation_type() const override {
     return kCompactionIgnoreSeparate;
   }
   virtual bool need_rebuild(uint64_t fn) { return false; }

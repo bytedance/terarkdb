@@ -37,8 +37,9 @@ class HistogramImpl;
 
 class TableCache {
  public:
-  TableCache(const ImmutableCFOptions& ioptions,
-             const EnvOptions& storage_options, Cache* cache);
+  TableCache(const ColumnFamilyOptions& initial_cf_options,
+             const ImmutableDBOptions& db_options,
+             const EnvOptions* storage_options, Cache* cache);
   ~TableCache();
 
   // Return an iterator for the specified file number (the corresponding
@@ -78,6 +79,10 @@ class TableCache {
 
   // Evict any entry for the specified file number
   static void Evict(Cache* cache, uint64_t file_number);
+
+  // Evict any entry for the specified file number
+  void ForceEvict(uint64_t file_number,
+                  const FileMetaData* file_meta = nullptr);
 
   // Clean table handle and erase it from the table cache
   // Used in DB close, or the file is not live anymore.
@@ -131,6 +136,12 @@ class TableCache {
     }
   }
 
+  const ColumnFamilyOptions& initial_cf_options() const {
+    return initial_cf_options_;
+  }
+
+  const ImmutableCFOptions& ioptions() const { return ioptions_; }
+
   void TEST_AddMockTableReader(TableReader* table_reader, FileDescriptor fd);
 
  private:
@@ -153,7 +164,8 @@ class TableCache {
                             bool prefetch_index_and_filter_in_cache,
                             bool for_compaction, bool force_memory);
 
-  const ImmutableCFOptions& ioptions_;
+  const ColumnFamilyOptions initial_cf_options_;
+  const ImmutableCFOptions ioptions_;
   const EnvOptions& env_options_;
   Cache* const cache_;
   bool immortal_tables_;

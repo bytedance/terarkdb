@@ -76,6 +76,7 @@ enum class OptionType {
   kChecksumType,
   kEncodingType,
   kWALRecoveryMode,
+  kTableEviceType,
   kAccessHint,
   kInfoLogLevel,
   kLRUCacheOptions,
@@ -184,6 +185,8 @@ struct OptionsHelper {
       write_buffer_flush_pri_string_map;
   static std::unordered_map<std::string, WALRecoveryMode>
       wal_recovery_mode_string_map;
+  static std::unordered_map<std::string, TableEvictType>
+      table_evict_type_string_map;
   static std::unordered_map<std::string, DBOptions::AccessHint>
       access_hint_string_map;
   static std::unordered_map<std::string, InfoLogLevel>
@@ -229,6 +232,8 @@ static auto& write_buffer_flush_pri_string_map =
     OptionsHelper::write_buffer_flush_pri_string_map;
 static auto& wal_recovery_mode_string_map =
     OptionsHelper::wal_recovery_mode_string_map;
+static auto& table_evict_type_string_map =
+    OptionsHelper::table_evict_type_string_map;
 static auto& access_hint_string_map = OptionsHelper::access_hint_string_map;
 static auto& info_log_level_string_map =
     OptionsHelper::info_log_level_string_map;

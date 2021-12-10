@@ -399,8 +399,9 @@ Version::~Version() {
         assert(cfd_ != nullptr);
         uint32_t path_id = f->fd.GetPathId();
         assert(path_id < cfd_->ioptions()->cf_paths.size());
-        vset_->obsolete_files_.push_back(
-            ObsoleteFileInfo(f, cfd_->ioptions()->cf_paths[path_id].path));
+        vset_->obsolete_files_.emplace_back(
+            f, cfd_->ioptions()->cf_paths[path_id].path,
+            cfd_->table_cache_ptr());
       }
     }
   }
@@ -2961,7 +2962,7 @@ struct VersionSet::ManifestWriter {
 
 VersionSet::VersionSet(const std::string& dbname,
                        const ImmutableDBOptions* _db_options,
-                       const EnvOptions& storage_options, bool seq_per_batch,
+                       const EnvOptions* storage_options, bool seq_per_batch,
                        Cache* table_cache,
                        WriteBufferManager* write_buffer_manager,
                        WriteController* write_controller)
@@ -2983,7 +2984,7 @@ VersionSet::VersionSet(const std::string& dbname,
       manifest_file_size_(0),
       manifest_edit_count_(0),
       seq_per_batch_(seq_per_batch),
-      env_options_(storage_options) {}
+      env_options_(*storage_options) {}
 
 void CloseTables(void* ptr, size_t) {
   TableReader* table_reader = reinterpret_cast<TableReader*>(ptr);
@@ -4092,8 +4093,8 @@ Status VersionSet::ReduceNumberOfLevels(const std::string& dbname,
   WriteController wc(options->delayed_write_rate);
   WriteBufferManager wb(options->db_write_buffer_size);
   const bool seq_per_batch = false;
-  VersionSet versions(dbname, &db_options, env_options, seq_per_batch, tc.get(),
-                      &wb, &wc);
+  VersionSet versions(dbname, &db_options, &env_options, seq_per_batch,
+                      tc.get(), &wb, &wc);
   Status status;
 
   std::vector<ColumnFamilyDescriptor> dummy;
@@ -4809,7 +4810,7 @@ void VersionSet::GetLiveFilesMetaData(std::vector<LiveFileMetaData>* metadata) {
   }
 }
 
-void VersionSet::GetObsoleteFiles(std::vector<ObsoleteFileInfo>* files,
+void VersionSet::GetObsoleteFiles(chash_map<uint64_t, ObsoleteFileInfo>* files,
                                   std::vector<std::string>* manifest_filenames,
                                   uint64_t min_pending_output) {
   assert(manifest_filenames->empty());
@@ -4817,7 +4818,7 @@ void VersionSet::GetObsoleteFiles(std::vector<ObsoleteFileInfo>* files,
   std::vector<ObsoleteFileInfo> pending_files;
   for (auto& f : obsolete_files_) {
     if (f.metadata->fd.GetNumber() < min_pending_output) {
-      files->push_back(std::move(f));
+      files->emplace(f.metadata->fd.GetNumber(), std::move(f));
     } else {
       pending_files.push_back(std::move(f));
     }

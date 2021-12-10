@@ -528,6 +528,8 @@ DEFINE_bool(new_table_reader_for_compaction_inputs, true,
 
 DEFINE_int32(compaction_readahead_size, 0, "Compaction readahead size");
 
+DEFINE_int32(table_evict_type, 0, "Table evict type");
+
 DEFINE_int32(random_access_max_buffer_size, 1024 * 1024,
              "Maximum windows randomaccess buffer size");
 
@@ -3299,6 +3301,8 @@ class Benchmark {
     options.new_table_reader_for_compaction_inputs =
         FLAGS_new_table_reader_for_compaction_inputs;
     options.compaction_readahead_size = FLAGS_compaction_readahead_size;
+    options.table_evict_type =
+        static_cast<TableEvictType>(FLAGS_table_evict_type);
     options.random_access_max_buffer_size = FLAGS_random_access_max_buffer_size;
     options.writable_file_max_buffer_size = FLAGS_writable_file_max_buffer_size;
     options.use_fsync = FLAGS_use_fsync;
@@ -5885,7 +5889,7 @@ int db_bench_tool(int argc, char** argv) {
 
     Status s =
         NewZenfsEnv(&FLAGS_env, FLAGS_zbd_path, "dbname=" + FLAGS_zbd_path,
-                    metrics_reporter_factory);
+                           metrics_reporter_factory);
     if (!s.ok()) {
       fprintf(stderr, "Error: Init zenfs env failed.\nStatus : %s\n",
               s.ToString().c_str());
