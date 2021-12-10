@@ -126,7 +126,7 @@ class InternalStats {
       : db_stats_{},
         cf_stats_value_{},
         cf_stats_count_{},
-        comp_stats_(num_levels),
+        comp_stats_(num_levels + 1),
         file_read_latency_(num_levels),
         bg_error_count_(0),
         number_levels_(num_levels),
