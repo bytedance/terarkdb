@@ -1391,10 +1391,8 @@ Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
   db_mutex_->AssertHeld();
   Status status = compact_->status;
   ColumnFamilyData* cfd = compact_->compaction->column_family_data();
-  if (compact_->compaction->output_level() != -1) {
-    cfd->internal_stats()->AddCompactionStats(
-        compact_->compaction->output_level(), compaction_stats_);
-  }
+  cfd->internal_stats()->AddCompactionStats(
+      compact_->compaction->output_level(), compaction_stats_);
 
   if (status.ok()) {
     status = InstallCompactionResults(mutable_cf_options);

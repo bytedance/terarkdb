@@ -1034,7 +1034,7 @@ void InternalStats::DumpCFMapStats(
   DumpCFMapStats(&levels_stats, &compaction_stats_sum);
   for (auto const& level_ent : levels_stats) {
     auto level_str =
-        level_ent.first == -1 ? "Sum" : "L" + ToString(level_ent.first);
+        level_ent.first == -2 ? "Sum" : "L" + ToString(level_ent.first);
     for (auto const& stat_ent : level_ent.second) {
       auto stat_type = stat_ent.first;
       auto key_str =
@@ -1077,7 +1077,7 @@ void InternalStats::DumpCFMapStats(
   uint64_t flush_ingest = cf_stats_value_[BYTES_FLUSHED];
   uint64_t add_file_ingest = cf_stats_value_[BYTES_INGESTED_ADD_FILE];
   uint64_t curr_ingest = flush_ingest + add_file_ingest;
-  for (int level = 0; level < number_levels_; level++) {
+  for (int level = -1; level < number_levels_; level++) {
     int files = vstorage->NumLevelFiles(level);
     total_files += files;
     total_files_being_compacted += files_being_compacted[level];
@@ -1109,7 +1109,7 @@ void InternalStats::DumpCFMapStats(
   std::map<LevelStatType, double> sum_stats;
   PrepareLevelStats(&sum_stats, total_files, total_files_being_compacted,
                     total_file_size, 0, w_amp, *compaction_stats_sum);
-  (*levels_stats)[-1] = sum_stats;  //  -1 is for the Sum level
+  (*levels_stats)[-2] = sum_stats;  //  -2 is for the Sum level
 }
 
 void InternalStats::DumpCFMapStatsIOStalls(
@@ -1159,7 +1159,7 @@ void InternalStats::DumpCFStatsNoFileHistogram(std::string* value) {
   std::map<int, std::map<LevelStatType, double>> levels_stats;
   CompactionStats compaction_stats_sum;
   DumpCFMapStats(&levels_stats, &compaction_stats_sum);
-  for (int l = 0; l < number_levels_; ++l) {
+  for (int l = -1; l < number_levels_; ++l) {
     if (levels_stats.find(l) != levels_stats.end()) {
       PrintLevelStats(buf, sizeof(buf), "L" + ToString(l), levels_stats[l]);
       value->append(buf);
@@ -1167,7 +1167,7 @@ void InternalStats::DumpCFStatsNoFileHistogram(std::string* value) {
   }
 
   // Print sum of level stats
-  PrintLevelStats(buf, sizeof(buf), "Sum", levels_stats[-1]);
+  PrintLevelStats(buf, sizeof(buf), "Sum", levels_stats[-2]);
   value->append(buf);
 
   uint64_t flush_ingest = cf_stats_value_[BYTES_FLUSHED];
