@@ -41,7 +41,7 @@ const std::map<LevelStatType, LevelStat> InternalStats::compaction_level_stats =
         {LevelStatType::RN_GB, LevelStat{"RnGB", "Rn(GB)"}},
         {LevelStatType::RNP1_GB, LevelStat{"Rnp1GB", "Rnp1(GB)"}},
         {LevelStatType::WRITE_GB, LevelStat{"WriteGB", "Write(GB)"}},
-        {LevelStatType::WRITE_BLOB_GB, LevelStat{"WriteBlobGB", "Write(GB)"}},
+        {LevelStatType::WRITE_BLOB_GB, LevelStat{"WriteBlobGB", "WriteBlob(GB)"}},
         {LevelStatType::W_NEW_GB, LevelStat{"WnewGB", "Wnew(GB)"}},
         {LevelStatType::MOVED_GB, LevelStat{"MovedGB", "Moved(GB)"}},
         {LevelStatType::WRITE_AMP, LevelStat{"WriteAmp", "W-Amp"}},
