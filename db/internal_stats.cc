@@ -1107,11 +1107,11 @@ void InternalStats::DumpCFMapStats(
       std::map<LevelStatType, double> level_stats;
       if (level != -1) {
         PrepareLevelStats(&level_stats, files, files_being_compacted[level],
-                          static_cast<double>(vstorage->NumLevelBytes(level)),
+                          static_cast<double>(vstorage->NumLevelBytes(l)),
                           compaction_score[level], w_amp, comp_stats_[level]);
       } else {
         PrepareLevelStats(&level_stats, files, files_being_compacted[level],
-                          static_cast<double>(vstorage->NumLevelBytes(level)),
+                          static_cast<double>(vstorage->NumLevelBytes(l)),
                           -1, w_amp, comp_stats_[level]);
       }
       (*levels_stats)[level] = level_stats;
