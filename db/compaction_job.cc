@@ -1482,11 +1482,13 @@ Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
     }
   }
   stream.EndArray();
+  stream << "dependence_state";
   stream.StartArray();
   for (auto& cnt : vstorage->edge_cnt_levels()) {
     stream << cnt;
   }
   stream.EndArray();
+  stream << "blob_number";
   stream << vstorage->NumLevelFiles(-1);
 
   CleanupCompaction();
