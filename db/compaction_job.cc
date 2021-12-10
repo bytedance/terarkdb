@@ -3129,7 +3129,7 @@ void CompactionJob::UpdateCompactionStats() {
   Compaction* compaction = compact_->compaction;
   compaction_stats_.num_input_files_in_non_output_levels = 0;
   compaction_stats_.num_input_files_in_output_level = 0;
-  for (int input_level = 0;
+  for (int input_level = -1;
        input_level < static_cast<int>(compaction->num_input_levels());
        ++input_level) {
     if (compaction->level(input_level) != compaction->output_level()) {
@@ -3157,7 +3157,7 @@ void CompactionJob::UpdateCompactionStats() {
       compaction_stats_.bytes_written += out.meta.fd.file_size;
     }
     for (const auto& out : sub_compact.blob_outputs) {
-      compaction_stats_.bytes_written += out.meta.fd.file_size;
+      compaction_stats_.bytes_blob_written += out.meta.fd.file_size;
     }
     if (sub_compact.num_input_records > sub_compact.num_output_records) {
       compaction_stats_.num_dropped_records +=
