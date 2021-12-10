@@ -275,11 +275,13 @@ Status FlushJob::Run(LogsWithPrepTracker* prep_tracker) {
     }
   }
   stream.EndArray();
+  stream << "dependence_state";
   stream.StartArray();
   for (auto& cnt : vstorage->edge_cnt_levels()) {
     stream << cnt;
   }
   stream.EndArray();
+  stream << "blob_number";
   stream << vstorage->NumLevelFiles(-1);
 
   stream << "immutable_memtables" << cfd_->imm()->NumNotFlushed();
@@ -460,10 +462,11 @@ Status FlushJob::WriteLevel0Table() {
   // Note that here we treat flush as level 0 compaction in internal stats
   InternalStats::CompactionStats stats(CompactionReason::kFlush, 1);
   stats.micros = db_options_.env->NowMicros() - start_micros;
-  for (auto& f : meta_) {
-    stats.bytes_written += f.fd.GetFileSize();
+  for(size_t i = 0; i < meta_.size(); ++i){
+    if( i == 0) stats.bytes_written += meta_[i].fd.GetFileSize();
+    else stats.bytes_blob_written += meta_[i].fd.GetFileSize();
     cfd_->internal_stats()->AddCFStats(InternalStats::BYTES_FLUSHED,
-                                       f.fd.GetFileSize());
+                                       meta_[i].fd.GetFileSize());
   }
   MeasureTime(stats_, FLUSH_TIME, stats.micros);
   cfd_->internal_stats()->AddCompactionStats(0 /* level */, stats);
