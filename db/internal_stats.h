@@ -132,9 +132,7 @@ class InternalStats {
         number_levels_(num_levels),
         env_(env),
         cfd_(cfd),
-        started_at_(env->NowMicros()) {
-    comp_stats_++;
-  }
+        started_at_(env->NowMicros()) {}
 
   // Per level compaction stats.  comp_stats_[level] stores the stats for
   // compactions that produced data for the specified "level".

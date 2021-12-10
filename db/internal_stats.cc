@@ -41,7 +41,8 @@ const std::map<LevelStatType, LevelStat> InternalStats::compaction_level_stats =
         {LevelStatType::RN_GB, LevelStat{"RnGB", "Rn(GB)"}},
         {LevelStatType::RNP1_GB, LevelStat{"Rnp1GB", "Rnp1(GB)"}},
         {LevelStatType::WRITE_GB, LevelStat{"WriteGB", "Write(GB)"}},
-        {LevelStatType::WRITE_BLOB_GB, LevelStat{"WriteBlobGB", "WriteBlob(GB)"}},
+        {LevelStatType::WRITE_BLOB_GB,
+         LevelStat{"WriteBlobGB", "WriteBlob(GB)"}},
         {LevelStatType::W_NEW_GB, LevelStat{"WnewGB", "Wnew(GB)"}},
         {LevelStatType::MOVED_GB, LevelStat{"MovedGB", "Moved(GB)"}},
         {LevelStatType::WRITE_AMP, LevelStat{"WriteAmp", "W-Amp"}},
@@ -1066,7 +1067,9 @@ void InternalStats::DumpCFMapStats(
         vstorage->CompactionScore(i);
   }
   // Count # of files being compacted for each level
-  std::vector<int> files_being_compacted(number_levels_, 0);
+  uint64_t* files_being_compacted = new uint64_t[number_levels_ + 1];
+  files_being_compacted++;
+  std::memset(files_being_compacted, 0, number_levels_ + 1);
   for (int level = -1; level < number_levels_; ++level) {
     for (auto* f : vstorage->LevelFiles(level)) {
       if (f->being_compacted) {
@@ -1081,10 +1084,12 @@ void InternalStats::DumpCFMapStats(
   uint64_t flush_ingest = cf_stats_value_[BYTES_FLUSHED];
   uint64_t add_file_ingest = cf_stats_value_[BYTES_INGESTED_ADD_FILE];
   uint64_t curr_ingest = flush_ingest + add_file_ingest;
-  for (int level = -1; level < number_levels_; level++) {
-    int files = vstorage->NumLevelFiles(level);
+  for (int l = -1; l < number_levels_; l++) {
+    int level = l;
+    if (l == -1) level = number_levels_;
+    int files = vstorage->NumLevelFiles(l);
     total_files += files;
-    total_files_being_compacted += files_being_compacted[level];
+    total_files_being_compacted += files_being_compacted[l];
     if (comp_stats_[level].micros > 0 || files > 0) {
       compaction_stats_sum->Add(comp_stats_[level]);
       total_file_size += vstorage->NumLevelBytes(level);
@@ -1112,6 +1117,7 @@ void InternalStats::DumpCFMapStats(
       (*levels_stats)[level] = level_stats;
     }
   }
+  delete[] files_being_compacted;
   // Cumulative summary
   double w_amp = compaction_stats_sum->bytes_written /
                  static_cast<double>(curr_ingest + 1);
