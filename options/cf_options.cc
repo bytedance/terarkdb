@@ -31,7 +31,7 @@ ImmutableCFOptions::ImmutableCFOptions(const ImmutableDBOptions& db_options,
     : compaction_style(cf_options.compaction_style),
       compaction_pri(cf_options.compaction_pri),
       user_comparator(cf_options.comparator),
-      internal_comparator(InternalKeyComparator(cf_options.comparator)),
+      internal_comparator(cf_options.comparator),
       merge_operator(cf_options.merge_operator.get()),
       value_meta_extractor_factory(
           cf_options.value_meta_extractor_factory.get()),

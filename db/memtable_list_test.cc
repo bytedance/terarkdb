@@ -101,7 +101,7 @@ class MemTableListTest : public testing::Test {
     WriteBufferManager write_buffer_manager(db_options.db_write_buffer_size);
     WriteController write_controller(10000000u);
 
-    VersionSet versions(dbname, &immutable_db_options, env_options, false,
+    VersionSet versions(dbname, &immutable_db_options, &env_options, false,
                         table_cache.get(), &write_buffer_manager,
                         &write_controller);
     std::vector<ColumnFamilyDescriptor> cf_descs;
@@ -145,7 +145,7 @@ class MemTableListTest : public testing::Test {
     WriteBufferManager write_buffer_manager(db_options.db_write_buffer_size);
     WriteController write_controller(10000000u);
 
-    VersionSet versions(dbname, &immutable_db_options, env_options,
+    VersionSet versions(dbname, &immutable_db_options, &env_options,
                         /* seq_per_batch */ false, table_cache.get(),
                         &write_buffer_manager, &write_controller);
     std::vector<ColumnFamilyDescriptor> cf_descs;

@@ -217,10 +217,6 @@ enum Tickers : uint32_t {
   MERGE_OPERATION_TOTAL_TIME,
   FILTER_OPERATION_TOTAL_TIME,
 
-  // Row cache.
-  ROW_CACHE_HIT,
-  ROW_CACHE_MISS,
-
   // Read amplification statistics.
   // Read amplification can be calculated using this formula
   // (READ_AMP_TOTAL_READ_BYTES / READ_AMP_ESTIMATE_USEFUL_BYTES)

@@ -81,7 +81,6 @@ ImmutableDBOptions::ImmutableDBOptions(const DBOptions& options)
       skip_stats_update_on_db_open(options.skip_stats_update_on_db_open),
       wal_recovery_mode(options.wal_recovery_mode),
       allow_2pc(options.allow_2pc),
-      row_cache(options.row_cache),
 #ifndef ROCKSDB_LITE
       wal_filter(options.wal_filter),
 #endif  // ROCKSDB_LITE
@@ -269,7 +268,8 @@ MutableDBOptions::MutableDBOptions()
       compaction_readahead_size(0),
       zenfs_low_gc_ratio(0.25),
       zenfs_high_gc_ratio(0.6),
-      zenfs_force_gc_ratio(0.9) {}
+      zenfs_force_gc_ratio(0.9),
+      table_evict_type(kSkipForceEvict) {}
 
 MutableDBOptions::MutableDBOptions(const DBOptions& options)
     : max_background_jobs(options.max_background_jobs),
@@ -293,7 +293,8 @@ MutableDBOptions::MutableDBOptions(const DBOptions& options)
       compaction_readahead_size(options.compaction_readahead_size),
       zenfs_low_gc_ratio(options.zenfs_low_gc_ratio),
       zenfs_high_gc_ratio(options.zenfs_high_gc_ratio),
-      zenfs_force_gc_ratio(options.zenfs_force_gc_ratio) {}
+      zenfs_force_gc_ratio(options.zenfs_force_gc_ratio),
+      table_evict_type(options.table_evict_type) {}
 
 void MutableDBOptions::Dump(Logger* log) const {
   ROCKS_LOG_HEADER(log, "                   Options.max_background_jobs: %d",
@@ -342,6 +343,8 @@ void MutableDBOptions::Dump(Logger* log) const {
                    zenfs_high_gc_ratio);
   ROCKS_LOG_HEADER(log, "                      Options.zenfs_force_ratio: %lf",
                    zenfs_force_gc_ratio);
+  ROCKS_LOG_HEADER(log, "                       Options.table_evict_type: %d",
+                   static_cast<int>(table_evict_type));
 }
 
 }  // namespace TERARKDB_NAMESPACE

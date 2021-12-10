@@ -81,14 +81,14 @@ enum CompressionType : unsigned char {
   kDisableCompressionOption = 0xff,
 };
 
-enum WriteBufferFlushPri : unsigned char { kFlushOldest, kFlushLargest };
-
-// Sst purpose
-enum SstPurpose {
-  kEssenceSst,  // Actual data storage sst
-  kLogSst,      // Log as sst
-  kMapSst,      // Dummy sst
+// TODO(zhaoming.274): what's force evict ?
+enum TableEvictType : unsigned char {
+  kSkipForceEvict = 0,
+  kForceEvictIfOpen = 1,
+  kAlwaysForceEvict = 2,
 };
+
+enum WriteBufferFlushPri : unsigned char { kFlushOldest, kFlushLargest };
 
 struct Options;
 struct DbPath;
@@ -993,11 +993,6 @@ struct DBOptions {
   // transaction is encountered in the WAL
   bool allow_2pc = false;
 
-  // A global cache for table-level rows.
-  // Default: nullptr (disabled)
-  // Not supported in ROCKSDB_LITE mode!
-  std::shared_ptr<Cache> row_cache = nullptr;
-
   std::shared_ptr<MetricsReporterFactory> metrics_reporter_factory = nullptr;
 
 #ifndef ROCKSDB_LITE
@@ -1092,6 +1087,9 @@ struct DBOptions {
   double zenfs_low_gc_ratio = 0.25;
   double zenfs_high_gc_ratio = 0.6;
   double zenfs_force_gc_ratio = 0.9;
+
+  //
+  TableEvictType table_evict_type = kSkipForceEvict;
 };
 
 // Options to control the behavior of a database (passed to DB::Open)

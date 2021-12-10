@@ -74,7 +74,7 @@ class CompactionJobTest : public testing::Test {
         mutable_cf_options_(cf_options_, env_),
         table_cache_(NewLRUCache(50000, 16)),
         write_buffer_manager_(db_options_.db_write_buffer_size),
-        versions_(new VersionSet(dbname_, &db_options_, env_options_,
+        versions_(new VersionSet(dbname_, &db_options_, &env_options_,
                                  /* seq_per_batch */ false, table_cache_.get(),
                                  &write_buffer_manager_, &write_controller_)),
         shutting_down_(false),

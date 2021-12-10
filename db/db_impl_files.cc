@@ -14,11 +14,11 @@
 #include <inttypes.h>
 
 #include <set>
-#include <unordered_set>
 
 #include "db/event_helpers.h"
 #include "db/memtable_list.h"
 #include "rocksdb/terark_namespace.h"
+#include "util/chash_set.h"
 #include "util/file_util.h"
 #include "util/sst_file_manager_impl.h"
 #include "utilities/util/valvec.hpp"
@@ -196,7 +196,7 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
   // will not add these files to candidate list for purge.
   for (const auto& sst_to_del : job_context->sst_delete_files) {
     job_context->files_grabbed_for_purge.emplace_back(
-        sst_to_del.metadata->fd.GetNumber());
+        sst_to_del.second.metadata->fd.GetNumber());
   }
   for (const auto& manifest_to_del : job_context->manifest_delete_files) {
     uint64_t number;
@@ -354,7 +354,7 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
 
   // Now, convert live list to an unordered map, WITHOUT mutex held;
   // set is slow.
-  std::unordered_set<uint64_t> sst_live;
+  chash_set<uint64_t> sst_live;
   for (auto v : state.version_ref) {
     auto vstorage = v->storage_info();
     for (int i = -1; i < vstorage->num_levels(); ++i) {
@@ -363,8 +363,9 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
       }
     }
   }
-  std::unordered_set<uint64_t> log_recycle_files_set(
-      state.log_recycle_files.begin(), state.log_recycle_files.end());
+
+  chash_set<uint64_t> log_recycle_files_set(state.log_recycle_files.begin(),
+                                            state.log_recycle_files.end());
 
   auto& candidate_files = state.full_scan_candidate_files;
   candidate_files.reserve(
@@ -372,14 +373,14 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
       state.log_delete_files.size() + state.manifest_delete_files.size());
   // We may ignore the dbname when generating the file names.
   const char* kDumbDbName = "";
-  for (auto& file : state.sst_delete_files) {
+  for (auto& pair : state.sst_delete_files) {
+    auto& file = pair.second;
     candidate_files.emplace_back(JobContext::CandidateFileInfo{
         MakeTableFileName(kDumbDbName, file.metadata->fd.GetNumber()),
         state.PushPath(file.path)});
     if (file.metadata->table_reader_handle) {
       table_cache_->Release(file.metadata->table_reader_handle);
     }
-    file.DeleteMetadata();
   }
 
   for (auto file_num : state.log_delete_files) {
@@ -444,6 +445,7 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
     }
     ++i;
   }
+  int table_evict_type = table_evict_type_;
 
   for (const auto& candidate_file : candidate_files) {
     const std::string& to_delete = candidate_file.file_name;
@@ -518,18 +520,30 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
     std::string dir_to_sync;
     if (type == kTableFile) {
       // evict from cache
-      TableCache::Evict(table_cache_.get(), number);
+      auto find = state.sst_delete_files.end();
+      if (table_evict_type != kSkipForceEvict &&
+          (find = state.sst_delete_files.find(number)) !=
+              state.sst_delete_files.end() &&
+          find->second.table_cache != nullptr) {
+        find->second.table_cache->ForceEvict(
+            number, table_evict_type == kAlwaysForceEvict
+                        ? find->second.metadata
+                        : nullptr);
+      } else {
+        TableCache::Evict(table_cache_.get(), number);
+      }
+
       fname = MakeTableFileName(*candidate_file.file_path, number);
       dir_to_sync = *candidate_file.file_path;
     } else {
       dir_to_sync =
           (type == kLogFile) ? immutable_db_options_.wal_dir : dbname_;
-      fname = dir_to_sync +
-              ((!dir_to_sync.empty() && dir_to_sync.back() == '/') ||
-                       (!to_delete.empty() && to_delete.front() == '/')
-                   ? ""
-                   : "/") +
-              to_delete;
+      fname = dir_to_sync;
+      fname += ((!dir_to_sync.empty() && dir_to_sync.back() == '/') ||
+                        (!to_delete.empty() && to_delete.front() == '/')
+                    ? ""
+                    : "/");
+      fname += to_delete;
     }
 
     // TODO: Workaround for ZNS and Windows.
@@ -569,6 +583,11 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
     // After purging obsolete files, remove them from files_grabbed_for_purge_.
     InstrumentedMutexLock guard_lock(&mutex_);
     files_grabbed_for_purge_.erase(&state.files_grabbed_for_purge);
+  }
+
+  for (auto& pair : state.sst_delete_files) {
+    pair.second.DeleteMetadata();
+    pair.second.table_cache.reset();
   }
 
   // Delete old info log files.

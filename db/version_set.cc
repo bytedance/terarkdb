@@ -399,8 +399,9 @@ Version::~Version() {
         assert(cfd_ != nullptr);
         uint32_t path_id = f->fd.GetPathId();
         assert(path_id < cfd_->ioptions()->cf_paths.size());
-        vset_->obsolete_files_.push_back(
-            ObsoleteFileInfo(f, cfd_->ioptions()->cf_paths[path_id].path));
+        vset_->obsolete_files_.emplace_back(
+            f, cfd_->ioptions()->cf_paths[path_id].path,
+            cfd_->table_cache_ptr());
       }
     }
   }
@@ -577,8 +578,8 @@ class LevelIterator final : public InternalIterator, public Snapshot {
       sample_file_read_inc(file_meta.file_metadata);
     }
     return table_cache_->NewIterator(
-        read_options_, env_options_, icomparator_, *file_meta.file_metadata,
-        dependence_map_, range_del_agg_, prefix_extractor_,
+        read_options_, env_options_, *file_meta.file_metadata, dependence_map_,
+        range_del_agg_, prefix_extractor_,
         nullptr /* don't need reference to table */, file_read_hist_,
         for_compaction_, nullptr /* arena */, skip_filters_, level_);
   }
@@ -762,8 +763,8 @@ Status Version::GetTableProperties(std::shared_ptr<const TableProperties>* tp,
   auto table_cache = cfd_->table_cache();
   auto ioptions = cfd_->ioptions();
   Status s = table_cache->GetTableProperties(
-      env_options_, cfd_->internal_comparator(), *file_meta, tp,
-      mutable_cf_options_.prefix_extractor.get(), true /* no io */);
+      env_options_, *file_meta, tp, mutable_cf_options_.prefix_extractor.get(),
+      true /* no io */);
   if (s.ok()) {
     return s;
   }
@@ -928,13 +929,13 @@ size_t Version::GetMemoryUsageByTableReaders() {
   for (auto& file_level : storage_info_.level_files_brief_) {
     for (size_t i = 0; i < file_level.num_files; i++) {
       total_usage += cfd_->table_cache()->GetMemoryUsageByTableReader(
-          env_options_, cfd_->internal_comparator(), file_level.files[i].fd,
+          env_options_, file_level.files[i].fd,
           mutable_cf_options_.prefix_extractor.get());
     }
   }
   for (auto file_meta : storage_info_.LevelFiles(-1)) {
     total_usage += cfd_->table_cache()->GetMemoryUsageByTableReader(
-        env_options_, cfd_->internal_comparator(), file_meta->fd,
+        env_options_, file_meta->fd,
         mutable_cf_options_.prefix_extractor.get());
   }
   return total_usage;
@@ -1115,8 +1116,8 @@ void Version::AddIteratorsForLevel(const ReadOptions& read_options,
          i++) {
       const auto& file = storage_info_.LevelFilesBrief(level).files[i];
       merge_iter_builder->AddIterator(cfd_->table_cache()->NewIterator(
-          read_options, soptions, cfd_->internal_comparator(),
-          *file.file_metadata, storage_info_.dependence_map(), range_del_agg,
+          read_options, soptions, *file.file_metadata,
+          storage_info_.dependence_map(), range_del_agg,
           mutable_cf_options_.prefix_extractor.get(), nullptr,
           cfd_->internal_stats()->GetFileReadHist(level), false, arena,
           false /* skip_filters */, 0 /* level */));
@@ -1172,8 +1173,8 @@ Status Version::OverlapWithLevelIterator(const ReadOptions& read_options,
         continue;
       }
       ScopedArenaIterator iter(cfd_->table_cache()->NewIterator(
-          read_options, env_options, cfd_->internal_comparator(),
-          *file->file_metadata, storage_info_.dependence_map(), &range_del_agg,
+          read_options, env_options, *file->file_metadata,
+          storage_info_.dependence_map(), &range_del_agg,
           mutable_cf_options_.prefix_extractor.get(), nullptr,
           cfd_->internal_stats()->GetFileReadHist(level), false, &arena,
           false /* skip_filters */, 0 /* level */));
@@ -1294,8 +1295,8 @@ Status Version::fetch_buffer(LazyBuffer* buffer) const {
   IterKey iter_key;
   iter_key.SetInternalKey(user_key, sequence, kValueTypeForSeek);
   auto s = table_cache_->Get(
-      ReadOptions(), cfd_->internal_comparator(), *pair.second,
-      storage_info_.dependence_map(), iter_key.GetInternalKey(), &get_context,
+      ReadOptions(), *pair.second, storage_info_.dependence_map(),
+      iter_key.GetInternalKey(), &get_context,
       mutable_cf_options_.prefix_extractor.get(), nullptr, true);
   if (!s.ok()) {
     return s;
@@ -1378,9 +1379,8 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
         get_perf_context()->per_level_perf_context_enabled;
     StopWatchNano timer(env_, timer_enabled /* auto_start */);
     *status = table_cache_->Get(
-        read_options, *internal_comparator(), *f->file_metadata,
-        storage_info_.dependence_map(), ikey, &get_context,
-        mutable_cf_options_.prefix_extractor.get(),
+        read_options, *f->file_metadata, storage_info_.dependence_map(), ikey,
+        &get_context, mutable_cf_options_.prefix_extractor.get(),
         cfd_->internal_stats()->GetFileReadHist(fp.GetHitFileLevel()),
         IsFilterSkipped(static_cast<int>(fp.GetHitFileLevel()),
                         fp.IsHitFileLastInLevel()),
@@ -1474,11 +1474,10 @@ void Version::GetKey(const Slice& user_key, const Slice& ikey, Status* status,
   FdWithKeyRange* f = fp.GetNextFile();
 
   while (f != nullptr) {
-    *status =
-        table_cache_->Get(options, *internal_comparator(), *f->file_metadata,
-                          storage_info_.dependence_map(), ikey, &get_context,
-                          mutable_cf_options_.prefix_extractor.get(), nullptr,
-                          true, fp.GetCurrentLevel(), &blob);
+    *status = table_cache_->Get(
+        options, *f->file_metadata, storage_info_.dependence_map(), ikey,
+        &get_context, mutable_cf_options_.prefix_extractor.get(), nullptr, true,
+        fp.GetCurrentLevel(), &blob);
     if (!status->ok()) {
       return;
     }
@@ -2963,7 +2962,7 @@ struct VersionSet::ManifestWriter {
 
 VersionSet::VersionSet(const std::string& dbname,
                        const ImmutableDBOptions* _db_options,
-                       const EnvOptions& storage_options, bool seq_per_batch,
+                       const EnvOptions* storage_options, bool seq_per_batch,
                        Cache* table_cache,
                        WriteBufferManager* write_buffer_manager,
                        WriteController* write_controller)
@@ -2985,7 +2984,7 @@ VersionSet::VersionSet(const std::string& dbname,
       manifest_file_size_(0),
       manifest_edit_count_(0),
       seq_per_batch_(seq_per_batch),
-      env_options_(storage_options) {}
+      env_options_(*storage_options) {}
 
 void CloseTables(void* ptr, size_t) {
   TableReader* table_reader = reinterpret_cast<TableReader*>(ptr);
@@ -4094,8 +4093,8 @@ Status VersionSet::ReduceNumberOfLevels(const std::string& dbname,
   WriteController wc(options->delayed_write_rate);
   WriteBufferManager wb(options->db_write_buffer_size);
   const bool seq_per_batch = false;
-  VersionSet versions(dbname, &db_options, env_options, seq_per_batch, tc.get(),
-                      &wb, &wc);
+  VersionSet versions(dbname, &db_options, &env_options, seq_per_batch,
+                      tc.get(), &wb, &wc);
   Status status;
 
   std::vector<ColumnFamilyDescriptor> dummy;
@@ -4568,8 +4567,8 @@ uint64_t VersionSet::ApproximateSize(Version* v, const FdWithKeyRange& f,
           TableCache* table_cache = v->cfd_->table_cache();
           Cache::Handle* handle = nullptr;
           auto s = table_cache->FindTable(
-              v->env_options_, v->cfd_->internal_comparator(), file_meta->fd,
-              &handle, v->GetMutableCFOptions().prefix_extractor.get());
+              v->env_options_, file_meta->fd, &handle,
+              v->GetMutableCFOptions().prefix_extractor.get());
           if (s.ok()) {
             table_reader_ptr = table_cache->GetTableReaderFromHandle(handle);
             result = table_reader_ptr->ApproximateOffsetOf(key);
@@ -4671,7 +4670,7 @@ InternalIterator* VersionSet::MakeInputIterator(
         const LevelFilesBrief* flevel = c->input_levels(which);
         for (size_t i = 0; i < flevel->num_files; i++) {
           list[num++] = cfd->table_cache()->NewIterator(
-              read_options, env_options_compactions, cfd->internal_comparator(),
+              read_options, env_options_compactions,
               *flevel->files[i].file_metadata, dependence_map, range_del_agg,
               c->mutable_cf_options()->prefix_extractor.get(),
               nullptr /* table_reader_ptr */,
@@ -4811,7 +4810,7 @@ void VersionSet::GetLiveFilesMetaData(std::vector<LiveFileMetaData>* metadata) {
   }
 }
 
-void VersionSet::GetObsoleteFiles(std::vector<ObsoleteFileInfo>* files,
+void VersionSet::GetObsoleteFiles(chash_map<uint64_t, ObsoleteFileInfo>* files,
                                   std::vector<std::string>* manifest_filenames,
                                   uint64_t min_pending_output) {
   assert(manifest_filenames->empty());
@@ -4819,7 +4818,7 @@ void VersionSet::GetObsoleteFiles(std::vector<ObsoleteFileInfo>* files,
   std::vector<ObsoleteFileInfo> pending_files;
   for (auto& f : obsolete_files_) {
     if (f.metadata->fd.GetNumber() < min_pending_output) {
-      files->push_back(std::move(f));
+      files->emplace(f.metadata->fd.GetNumber(), std::move(f));
     } else {
       pending_files.push_back(std::move(f));
     }

@@ -6,11 +6,12 @@
 #ifndef ROCKSDB_LITE
 
 #include "rocksdb/utilities/ldb_cmd.h"
+
 #include "util/testharness.h"
 
+using std::map;
 using std::string;
 using std::vector;
-using std::map;
 
 class LdbCmdTest : public testing::Test {};
 
@@ -26,7 +27,7 @@ TEST_F(LdbCmdTest, HexToString) {
     auto actual = TERARKDB_NAMESPACE::LDBCommand::HexToString(inPair.first);
     auto expected = inPair.second;
     for (unsigned int i = 0; i < actual.length(); i++) {
-      EXPECT_EQ(expected[i], static_cast<int>((signed char) actual[i]));
+      EXPECT_EQ(expected[i], static_cast<int>((signed char)actual[i]));
     }
     auto reverse = TERARKDB_NAMESPACE::LDBCommand::StringToHex(actual);
     EXPECT_STRCASEEQ(inPair.first.c_str(), reverse.c_str());
@@ -37,7 +38,7 @@ TEST_F(LdbCmdTest, HexToStringBadInputs) {
   const vector<string> badInputs = {
       "0xZZ", "123", "0xx5", "0x111G", "0x123", "Ox12", "0xT", "0x1Q1",
   };
-  for (const auto badInput : badInputs) {
+  for (const auto& badInput : badInputs) {
     try {
       TERARKDB_NAMESPACE::LDBCommand::HexToString(badInput);
       std::cerr << "Should fail on bad hex value: " << badInput << "\n";

@@ -253,6 +253,7 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
                              "zenfs_low_gc_ratio=0.3;"
                              "zenfs_high_gc_ratio=0.33;"
                              "zenfs_force_gc_ratio=0.333;"
+                             "table_evict_type=kForceEvictIfOpen;"
                              "new_table_reader_for_compaction_inputs=false;"
                              "keep_log_file_num=4890;"
                              "skip_stats_update_on_db_open=false;"
@@ -312,6 +313,7 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
                              "zenfs_low_gc_ratio=0.25;"
                              "zenfs_high_gc_ratio=0.6;"
                              "zenfs_force_gc_ratio=0.9;",
+                             "table_evict_type=kAlwaysForceEvict;"
                              new_options));
 
   ASSERT_EQ(unset_bytes_base, NumUnsetBytes(new_options_ptr, sizeof(DBOptions),

@@ -827,6 +827,7 @@ class DBImpl : public DB {
   const DBOptions initial_db_options_;
   const ImmutableDBOptions immutable_db_options_;
   MutableDBOptions mutable_db_options_;
+  std::atomic<int> table_evict_type_;
   Statistics* stats_;
   std::unordered_map<std::string, RecoveredTransaction*>
       recovered_transactions_;

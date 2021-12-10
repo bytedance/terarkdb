@@ -15,6 +15,7 @@
 #include "db/column_family.h"
 #include "db/log_writer.h"
 #include "rocksdb/terark_namespace.h"
+#include "util/chash_map.h"
 
 namespace TERARKDB_NAMESPACE {
 
@@ -150,7 +151,7 @@ struct JobContext {
   std::vector<Version*> version_ref;
 
   // a list of sst files that we need to delete
-  std::vector<ObsoleteFileInfo> sst_delete_files;
+  chash_map<uint64_t, ObsoleteFileInfo> sst_delete_files;
 
   // a list of log files that we need to delete
   std::vector<uint64_t> log_delete_files;

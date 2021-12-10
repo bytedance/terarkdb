@@ -2555,6 +2555,67 @@ Status BlockBasedTable::Get(const ReadOptions& read_options, const Slice& key,
   return s;
 }
 
+Status BlockBasedTable::ForceEvict() {
+  if (!rep_->table_options.block_cache &&
+      !rep_->table_options.block_cache_compressed) {
+    return Status::OK();
+  }
+  char cache_key[kMaxCacheKeyPrefixSize + kMaxVarint64Length];
+  char compressed_cache_key[kMaxCacheKeyPrefixSize + kMaxVarint64Length];
+
+  // Manual inline GetCacheKey
+  assert(rep_->cache_key_prefix_size <= kMaxCacheKeyPrefixSize);
+  assert(rep_->compressed_cache_key_prefix_size <= kMaxCacheKeyPrefixSize);
+
+  memcpy(cache_key, rep_->cache_key_prefix, rep_->cache_key_prefix_size);
+  memcpy(compressed_cache_key, rep_->compressed_cache_key_prefix,
+         rep_->compressed_cache_key_prefix_size);
+
+  auto block_cache = rep_->table_options.block_cache.get();
+  auto block_cache_compressed =
+      rep_->table_options.block_cache_compressed.get();
+  auto cache_key_prefix_size = rep_->cache_key_prefix_size;
+  auto compressed_cache_key_prefix_size =
+      rep_->compressed_cache_key_prefix_size;
+
+  auto do_evict = [=, &cache_key, &compressed_cache_key](uint64_t offset) {
+    if (block_cache) {
+      char* end = EncodeVarint64(cache_key + cache_key_prefix_size, offset);
+      block_cache->Erase(
+          Slice(cache_key, static_cast<size_t>(end - cache_key)));
+    }
+    if (block_cache_compressed) {
+      char* end = EncodeVarint64(
+          compressed_cache_key + compressed_cache_key_prefix_size, offset);
+      block_cache_compressed->Erase(
+          Slice(compressed_cache_key,
+                static_cast<size_t>(end - compressed_cache_key)));
+    }
+  };
+
+  // FilterBlock
+  if (rep_->filter_policy != nullptr &&
+      !rep_->table_options.cache_index_and_filter_blocks) {
+    do_evict(rep_->filter_handle.offset());
+  }
+
+  ReadOptions read_options;
+  std::unique_ptr<InternalIteratorBase<BlockHandle>> iiter(
+      NewIndexIterator(read_options));
+
+  // DataBlock
+  for (iiter->SeekToFirst(); iiter->Valid(); iiter->Next()) {
+    do_evict(iiter->value().offset());
+  }
+
+  iiter.reset();
+
+  // IndexBlock
+  do_evict(rep_->dummy_index_reader_offset);
+
+  return Status::OK();
+}
+
 Status BlockBasedTable::Prefetch(const Slice* const begin,
                                  const Slice* const end) {
   auto& comparator = rep_->internal_comparator;

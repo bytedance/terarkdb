@@ -59,7 +59,7 @@ class MapBuilderTest : public testing::Test {
         ioptions_(db_options_, cf_options_),
         table_cache_(NewLRUCache(50000, 16)),
         write_buffer_manager_(db_options_.db_write_buffer_size),
-        versions_(new VersionSet(dbname_, &db_options_, env_options_,
+        versions_(new VersionSet(dbname_, &db_options_, &env_options_,
                                  /* seq_per_batch */ false, table_cache_.get(),
                                  &write_buffer_manager_, &write_controller_)),
         mock_table_factory_(new mock::MockTableFactory()),
@@ -201,10 +201,9 @@ class MapBuilderTest : public testing::Test {
     Status s;
     DependenceMap empty_dependence_map;
     std::unique_ptr<InternalIterator> iter(cfd_->table_cache()->NewIterator(
-        ReadOptions(), env_options_, cfd_->internal_comparator(), *f,
-        empty_dependence_map, nullptr /* range_del_agg */,
-        mutable_cf_options_.prefix_extractor.get(), nullptr, nullptr,
-        false /* for_compaction */, nullptr /* arena */,
+        ReadOptions(), env_options_, *f, empty_dependence_map,
+        nullptr /* range_del_agg */, mutable_cf_options_.prefix_extractor.get(),
+        nullptr, nullptr, false /* for_compaction */, nullptr /* arena */,
         false /* skip_filter */, 1));
     s = iter->status();
     if (!s.ok()) {

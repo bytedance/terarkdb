@@ -781,10 +781,10 @@ class VersionBuilder::Rep {
         auto file_read_hist =
             level >= 0 ? internal_stats->GetFileReadHist(level) : nullptr;
         table_cache_->FindTable(
-            env_options_, *base_vstorage_->InternalComparator(), file_meta->fd,
-            &file_meta->table_reader_handle, prefix_extractor, false /*no_io */,
-            true /* record_read_stats */, file_read_hist, false, level,
-            prefetch_index_and_filter_in_cache, file_meta->prop.is_map_sst());
+            env_options_, file_meta->fd, &file_meta->table_reader_handle,
+            prefix_extractor, false /*no_io */, true /* record_read_stats */,
+            file_read_hist, false, level, prefetch_index_and_filter_in_cache,
+            file_meta->prop.is_map_sst());
         if (file_meta->table_reader_handle != nullptr) {
           // Load table_reader
           file_meta->fd.table_reader = table_cache_->GetTableReaderFromHandle(
@@ -831,9 +831,9 @@ class VersionBuilder::Rep {
         auto* file_meta = files_meta[file_idx];
         std::shared_ptr<const TableProperties> properties;
 
-        auto s = table_cache_->GetTableProperties(
-            env_options_, *base_vstorage_->InternalComparator(), *file_meta,
-            &properties, prefix_extractor, false /*no_io */);
+        auto s = table_cache_->GetTableProperties(env_options_, *file_meta,
+                                                  &properties, prefix_extractor,
+                                                  false /*no_io */);
 
         if (s.ok() && properties) {
           file_meta->prop.num_entries = properties->num_entries;
