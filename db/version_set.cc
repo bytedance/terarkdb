@@ -2591,7 +2591,7 @@ void VersionStorageInfo::ExtendFileRangeWithinInterval(
 }
 
 uint64_t VersionStorageInfo::NumLevelBytes(int level) const {
-  assert(level >= 0);
+  assert(level >= -1);
   assert(level < num_levels());
   return TotalFileSize(files_[level]);
 }
@@ -4852,7 +4852,7 @@ uint64_t VersionSet::GetTotalSstFilesSize(Version* dummy_versions) {
 void VersionStorageInfo::CalculateEdge() {
   for (int i = 0; i < num_levels_; i++) {
     uint64_t cnt = 0;
-    for (auto f : LevelFiles(i)) {
+    for (auto& f : LevelFiles(i)) {
       cnt += f->prop.dependence.size();
     }
     edge_cnt_levels_.push_back(cnt);
