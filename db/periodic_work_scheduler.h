@@ -41,7 +41,7 @@ class PeriodicWorkScheduler {
   // log.
   static const uint64_t kDefaultFlushInfoLogPeriodSec = 10;
   static const uint64_t kDefaultScheduleGCTTLPeriodSec = 10;
-  static const uint64_t kDefaultScheduleZNSTTLPeriodSec = 10;
+  static const uint64_t kDefaultScheduleZNSTTLPeriodSec = 1;
 
  protected:
   std::unique_ptr<Timer> timer;

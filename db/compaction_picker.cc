@@ -262,6 +262,9 @@ CompactionPicker::~CompactionPicker() {}
 
 CompactionReason CompactionPicker::ConvertCompactionReason(
     uint8_t marked, CompactionReason default_reason) {
+  if (marked & FileMetaData::kMarkedFromFileSystemHigh) {
+    return CompactionReason::kFilesMarkedFromFileSystemHigh;
+  }
   if (marked & FileMetaData::kMarkedFromUser) {
     return CompactionReason::kFilesMarkedFromUser;
   }
@@ -580,7 +583,8 @@ Compaction* CompactionPicker::CompactFiles(
   // This compaction output should not overlap with a running compaction as
   // `SanitizeCompactionInputFiles` should've checked earlier and db mutex
   // shouldn't have been released since.
-  assert(!FilesRangeOverlapWithCompaction(input_files, output_level));
+  assert(output_level < 1 ||
+         !FilesRangeOverlapWithCompaction(input_files, output_level));
 
   CompressionType compression_type;
   if (compact_options.compression == kDisableCompressionOption) {
@@ -611,6 +615,10 @@ Compaction* CompactionPicker::CompactFiles(
 
   params.max_subcompactions = compact_options.max_subcompactions;
   params.manual_compaction = true;
+
+  if (output_level == -1) {
+    params.compaction_type = kGarbageCollection;
+  }
 
   return RegisterCompaction(new Compaction(std::move(params)));
 }
@@ -830,6 +838,14 @@ Compaction* CompactionPicker::PickGarbageCollection(
   if (fragment_size == 0) {
     fragment_size = target_blob_file_size / 8;
   }
+  // Preferentially select files marked by high priority
+  auto candidate_cmp = [](const GarbageFileInfo& l, const GarbageFileInfo& r) {
+    assert(l.f != nullptr && !l.f->being_compacted);
+    assert(r.f != nullptr && !l.f->being_compacted);
+    return (l.f->marked_for_compaction < r.f->marked_for_compaction) ||
+           (l.f->marked_for_compaction == r.f->marked_for_compaction &&
+            l.score < r.score);
+  };
 
   auto& hidden_files = vstorage->LevelFiles(-1);
   uint64_t idx = 0;
@@ -842,7 +858,8 @@ Compaction* CompactionPicker::PickGarbageCollection(
       continue;
     }
     GarbageFileInfo info{f};
-    if (info.score > dirtiest_blob.score) {
+    // candidate_cmp is less comparator
+    if (dirtiest_blob.f == nullptr || candidate_cmp(dirtiest_blob, info)) {
       dirtiest_blob = info;
     }
   }
@@ -917,10 +934,6 @@ Compaction* CompactionPicker::PickGarbageCollection(
                 push_candidate);
   std::for_each(overlapping.begin(), overlapping.end(), push_candidate);
 
-  // Pick Top 8(<=) score blob
-  auto candidate_cmp = [](const GarbageFileInfo& l, const GarbageFileInfo& r) {
-    return l.score < r.score;
-  };
   std::make_heap(candidate_blob_vec.begin(), candidate_blob_vec.end(),
                  candidate_cmp);
   while (!candidate_blob_vec.empty() && input.files.size() < 8) {
@@ -953,6 +966,28 @@ Compaction* CompactionPicker::PickGarbageCollection(
   params.max_subcompactions = 1;
   params.score = vstorage->total_garbage_ratio();
   params.compaction_type = kGarbageCollection;
+
+#ifdef WITH_ZENFS
+  for (auto& level : params.inputs) {
+    if (params.compaction_reason ==
+        CompactionReason::kGarbageCollectionMarkForHigh)
+      break;
+    for (auto& file : level.files) {
+      if (file->marked_for_compaction &
+          FileMetaData::kMarkedFromFileSystemHigh) {
+        params.compaction_reason =
+            CompactionReason::kGarbageCollectionMarkForHigh;
+        break;
+      }
+    }
+  }
+  if (params.compaction_reason !=
+      CompactionReason::kGarbageCollectionMarkForHigh)
+    params.compaction_reason = CompactionReason::kGarbageCollection;
+#else
+  params.compaction_reason = CompactionReason::kGarbageCollection;
+#endif
+
   params.compaction_reason = CompactionReason::kGarbageCollection;
 
   Compaction* c = RegisterCompaction(new Compaction(std::move(params)));
@@ -2224,6 +2259,21 @@ void LevelCompactionBuilder::SetupInitialFiles() {
           // L1+ score = `Level files size` / `MaxBytesForLevel`
           compaction_reason_ = CompactionReason::kLevelMaxLevelSize;
         }
+#ifdef WITH_ZENFS
+        for (auto input : compaction_inputs_) {
+          if (compaction_reason_ ==
+              CompactionReason::kFilesMarkedFromFileSystemHigh)
+            break;
+          for (auto* file : input.files) {
+            if (file->marked_for_compaction &
+                FileMetaData::kMarkedFromFileSystemHigh) {
+              compaction_reason_ =
+                  CompactionReason::kFilesMarkedFromFileSystemHigh;
+              break;
+            }
+          }
+        }
+#endif
         break;
       } else {
         // didn't find the compaction, clear the inputs
