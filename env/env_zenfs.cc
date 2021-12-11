@@ -3,10 +3,10 @@
 #include "rocksdb/terark_namespace.h"
 
 #ifdef WITH_ZENFS
-#include "third-party/zenfs/fs/fs_zenfs.h"
-#include "util/zbd_stat.h"
-#include "third-party/zenfs/fs/zbd_zenfs.h"
+#include "fs/fs_zenfs.h"
+#include "fs/zbd_zenfs.h"
 #include "utilities/trace/bytedance_metrics_histogram.h"
+#include "utilities/trace/zbd_stat.h"
 
 namespace TERARKDB_NAMESPACE {
 
@@ -492,12 +492,9 @@ class ZenfsEnv : public EnvWrapper {
     ZenFSSnapshot snapshot;
     ZenFSSnapshotOptions options;
 
-    options.zbd_.enabled_ = 0;
-    options.zone_.enabled_ = 1;
-    options.zone_file_.enabled_ = 1;
-    options.zone_extent_.enabled_ = 1;
-    options.trigger_report_ = 0;
-    options.as_lock_free_as_possible_ = 1;
+    options.zone_ = 1;
+    options.zone_file_ = 1;
+    options.log_garbage_ = 1;
 
     zen_fs->GetZenFSSnapshot(snapshot, options);
     stat.SetStat(snapshot, options);
@@ -506,6 +503,11 @@ class ZenfsEnv : public EnvWrapper {
   void GetZenFSSnapshot(ZenFSSnapshot& snapshot, const ZenFSSnapshotOptions& options) {
     auto zen_fs = dynamic_cast<ZenFS*>(fs_);
     zen_fs->GetZenFSSnapshot(snapshot, options);
+  }
+
+  void MigrateExtents(const std::vector<ZoneExtentSnapshot*>& exts, bool direct_io) {
+    auto zen_fs = dynamic_cast<ZenFS*>(fs_);
+    zen_fs->MigrateExtents(exts);
   }
   
   void Set_metrics_tag(std::string tag) { metrics_tag_ = tag; }
@@ -530,14 +532,21 @@ Status NewZenfsEnv(
 
 void GetStat(Env* env, BDZenFSStat& stat) {
   auto zen_env = dynamic_cast<ZenfsEnv*>(env);
-  if (zen_env)
+  if (zen_env) {
     zen_env->GetStat(stat);
+  }
 }
 
 void GetZenFSSnapshot(Env* env, ZenFSSnapshot& snapshot, const ZenFSSnapshotOptions& options) {
   auto zen_env = dynamic_cast<ZenfsEnv*>(env);
   if (!zen_env) return;
   zen_env->GetZenFSSnapshot(snapshot, options);
+}
+
+void MigrateExtents(Env* env, const std::vector<ZoneExtentSnapshot*>& exts, bool direct_io) {
+  auto zen_env = dynamic_cast<ZenfsEnv*>(env);
+  if (!zen_env) return;
+  zen_env->MigrateExtents(exts, direct_io);
 }
 
 std::string MetricsTag(Env* env) {
@@ -566,6 +575,7 @@ Status GetZbdDiskSpaceInfo(Env* env, uint64_t& total_size, uint64_t& avail_size,
 
 void GetStat(Env* env, BDZenFSStat& stat) {}
 void GetZenFSSnapshot(Env* env, ZenFSSnapshot& snapshot, const ZenFSSnapshotOptions& options) {}
+void MigrateExtents(Env* env, const std::vector<ZoneExtentSnapshot*>& exts, bool direct_io);
 
 }  // namespace TERARKDB_NAMESPACE
 

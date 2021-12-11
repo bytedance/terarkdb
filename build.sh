@@ -4,7 +4,7 @@
 #
 set -e
 
-git submodule update --init --recursive
+#git submodule update --init --recursive
 
 BASE=$PWD
 OUTPUT=build
@@ -25,7 +25,7 @@ if [ "$WITH_TESTS" == "ON" ]; then
   BUILD_TYPE=Debug
   echo "You are building TerarkDB with tests, so debug mode is enabled"
 else
-  BUILD_TYPE=Release
+  BUILD_TYPE=RelWithDebInfo
 fi
 
 if test -n "$BUILD_BRANCH"; then
