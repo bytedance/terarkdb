@@ -8,6 +8,10 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #include "db/db_impl.h"
 
+#include <numeric>
+
+#include "db/version_edit.h"
+
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
 #endif
@@ -269,6 +273,9 @@ static std::string prev_latency_metric_name = "dbiter_prev_latency";
 
 static std::string write_throughput_metric_name = "dbimpl_writeimpl_throughput";
 static std::string write_batch_size_metric_name = "dbimpl_writeimpl_batch_size";
+#ifdef WITH_ZENFS
+std::string MetricsTag(Env* env);
+#endif
 
 DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
                const bool seq_per_batch, const bool batch_per_txn)
@@ -364,7 +371,12 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       closed_(false),
       error_handler_(this, immutable_db_options_, &mutex_),
       atomic_flush_install_cv_(&mutex_),
+#ifdef WITH_ZENFS
+      bytedance_tags_("dbname=" + MetricsTag(env_) + "/" + dbname),
+#else
       bytedance_tags_("dbname=" + dbname),
+#endif
+
       metrics_reporter_factory_(
           options.metrics_reporter_factory == nullptr
               ? std::make_shared<ByteDanceMetricsReporterFactory>()
@@ -1086,15 +1098,17 @@ void DBImpl::ScheduleZNSGC() {
 
   chash_set<uint64_t> mark_for_gc;
 
-  if (initial_db_options_.zenfs_gc_ratio <= 0.0 ||
-      initial_db_options_.zenfs_gc_ratio >= 1.0) {
-    // GC is not enabled
+  double low_r = initial_db_options_.zenfs_low_gc_ratio;
+  double high_r = initial_db_options_.zenfs_high_gc_ratio;
+  double force_r = initial_db_options_.zenfs_force_gc_ratio;
+
+  if (!(0.0 < low_r && low_r <= high_r && high_r <= force_r && force_r <= 1.0)) {
+    // Wrong parameters.
     return;
   }
 
   // Pick files for GC
   auto stat = GetStat(env_);
-
   uint64_t number;
   FileType type;
 
@@ -1116,12 +1130,34 @@ void DBImpl::ScheduleZNSGC() {
   }
 
   std::string strip_filename;
+  size_t free = 0, used = 0, reclaim = 0, total = 0;
+  for (const auto& zone : stat) {
+    free += zone.free_capacity;
+    used += zone.used_capacity;
+    total += zone.used_capacity + zone.reclaim_capacity;
+    if (zone.free_capacity == 0) {
+      reclaim += zone.reclaim_capacity;
+    }
+  }
 
+  // Overall free capacity ratio of disk.
+  double free_r = double(free) / total;
+
+  // Overall used capacity ratio of disk.
+  double used_r = 1.0 - free_r;
+
+  // Overall trash capacity ratio of disk.
+  double trash_r = double(reclaim) / total;
+
+  // Variable target free space ratio threshold for single zone,
+  // Recycle the zone when valid data in zone <= target_r * total_capacity.
+  double target_r = 0.95 - force_r * free_r;
+
+  // Scan the disk in order to find files which needs to be marked.
   for (const auto& zone : stat) {
     std::vector<uint64_t> sst_in_zone;
-    uint64_t written_data = zone.write_position - zone.start_position;
-    // zone is full
-    if (written_data == zone.total_capacity) {
+    // Skip unfinished zones.
+    if (zone.free_capacity == 0) {
       uint64_t total_size = 0;
       bool ignore_zone = false;
       for (const auto& file : zone.files) {
@@ -1166,21 +1202,30 @@ void DBImpl::ScheduleZNSGC() {
         continue;
       }
 
-      // if data in zone <= (1 - ratio) * total_capacity, recycle the zone
-      if (total_size <=
-          (1.0 - initial_db_options_.zenfs_gc_ratio) * written_data) {
+      // if data in zone <= target_r * total_capacity, recycle the zone
+      if (total_size <= target_r * (zone.used_capacity + zone.reclaim_capacity)) {
         for (auto&& file_id : sst_in_zone) {
           mark_for_gc.insert(file_id);
+        }
+        if (used_r >= force_r) {
+          // Only one zone forcely recycled
+          break;
         }
       }
     }
   }
 
+  auto mask = free_r < high_r ? FileMetaData::kMarkedFromFileSystemHigh
+                              : FileMetaData::kMarkedFromFileSystem;
+
+  uint64_t total_count = 0;
+  uint64_t total_new_mark_count = 0;
+  uint64_t total_old_mark_count = 0;
+
   mutex_.Lock();
   for (auto cfd : *versions_->GetColumnFamilySet()) {
     uint64_t new_mark_count = 0;
     uint64_t old_mark_count = 0;
-    uint64_t total_count = 0;
     if (!cfd->initialized() || cfd->IsDropped()) {
       continue;
     }
@@ -1191,17 +1236,36 @@ void DBImpl::ScheduleZNSGC() {
     // enabled.
     for (int l = -1; l < vstorage->num_non_empty_levels(); l++) {
       for (auto meta : vstorage->LevelFiles(l)) {
+        ++total_count;
         if (meta->being_compacted) {
           continue;
         }
-        ++total_count;
-        bool marked = !!(meta->marked_for_compaction &
-                         FileMetaData::kMarkedFromFileSystem);
+        bool marked = !!(meta->marked_for_compaction & mask);
         old_mark_count += marked;
         TEST_SYNC_POINT("DBImpl:Exist-SST");
-        if (!marked && mark_for_gc.count(meta->fd.GetNumber()) > 0) {
-          meta->marked_for_compaction |= FileMetaData::kMarkedFromFileSystem;
-          marked = true;
+        if (mark_for_gc.count(meta->fd.GetNumber()) > 0) {
+          if (!marked) {
+            meta->marked_for_compaction |= mask;
+            marked = true;
+          }
+          if (used_r >= force_r) {
+            // Generate a compaction and schedule at once.
+            auto ca = new CompactionArg;
+            ca->db = this;
+            ca->prepicked_compaction = new PrepickedCompaction;
+            ca->prepicked_compaction->manual_compaction_state = nullptr;
+            std::vector<CompactionInputFiles> inputs(1);
+            inputs[0].level = l;
+            inputs[0].files.push_back(meta);
+            ca->prepicked_compaction->compaction =
+                cfd->compaction_picker()->CompactFiles(
+                    CompactionOptions(), inputs, l, vstorage,
+                    *cfd->GetLatestMutableCFOptions(), meta->fd.GetPathId());
+            ca->prepicked_compaction->compaction->SetInputVersion(cfd->current());
+            bg_compaction_scheduled_++;
+            env_->Schedule(&DBImpl::BGWorkCompaction, ca, Env::Priority::FORCE,
+                           this, &DBImpl::UnscheduleCallback);
+          }
         }
         if (marked) {
           new_mark_count++;
@@ -1209,6 +1273,8 @@ void DBImpl::ScheduleZNSGC() {
         }
       }
     }
+    total_new_mark_count += new_mark_count;
+    total_old_mark_count += old_mark_count;
     if (new_mark_count > old_mark_count) {
       vstorage->ComputeCompactionScore(*cfd->ioptions(),
                                        *cfd->GetLatestMutableCFOptions());
@@ -1217,18 +1283,25 @@ void DBImpl::ScheduleZNSGC() {
         unscheduled_compactions_++;
       }
     }
-    if (old_mark_count != 0 && new_mark_count != 0) {
-      ROCKS_LOG_BUFFER(&log_buffer_info,
-                       "[%s] ZNS GC: SSTs total marked = %" PRIu64
-                       ", new marked = %" PRIu64 ", file count: %" PRIu64,
-                       cfd->GetName().c_str(), old_mark_count, new_mark_count,
-                       total_count);
-    }
   }
   if (unscheduled_compactions_ > 0) {
     MaybeScheduleFlushOrCompaction();
   }
   mutex_.Unlock();
+  ROCKS_LOG_BUFFER(&log_buffer_info,
+                   "ZNS GC :\n"
+                   "\t[SSTable]\n"
+                   "\tExisted\tNewly\tTotal\n"
+                   "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\n"
+                   "\t[Sizes]\n"
+                   "\tFree\tUsed\tReclaim\tTotal in (GB)\n"
+                   "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\n"
+                   "\t[Ratio]\n"
+                   "\tFree\tUsed\tTrash\tTarget\n"
+                   "\t%.3f\t%.3f\t%.3f\t%.3f\n",
+                   total_old_mark_count, total_new_mark_count, total_count,
+                   free >> 30, used >> 30, reclaim >> 30, total >> 30,
+                   free_r, used_r, trash_r, target_r);
   log_buffer_info.FlushBufferToLog();
   log_buffer_debug.FlushBufferToLog();
 }

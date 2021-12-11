@@ -116,6 +116,8 @@ const char* GetCompactionReasonString(CompactionReason compaction_reason) {
       return "FilesMarkedFromRangeDeletion";
     case CompactionReason::kFilesMarkedFromTTL:
       return "FilesMarkedFromTTL";
+    case CompactionReason::kFilesMarkedFromFileSystemHigh:
+      return "FilesMarkedFromFileSystemHigh";
     case CompactionReason::kFilesMarkedFromFileSystem:
       return "FilesMarkedFromFileSystem";
     case CompactionReason::kFilesMarkedFromUpdateBlob:
@@ -132,6 +134,8 @@ const char* GetCompactionReasonString(CompactionReason compaction_reason) {
       return "TrivialMoveLevel";
     case CompactionReason::kGarbageCollection:
       return "GarbageCollection";
+    case CompactionReason::kGarbageCollectionMarkForHigh:
+      return "GarbageCollectionMarkedForHigh";
     case CompactionReason::kRangeDeletion:
       return "RangeDeletion";
     case CompactionReason::kNumOfReasons:

@@ -481,9 +481,13 @@ class ZenfsEnv : public EnvWrapper {
     return zen_fs->GetStat();
   }
 
+  void Set_metrics_tag(std::string tag) { metrics_tag_ = tag; }
+  std::string MetricsTag() { return metrics_tag_; }
+
  private:
   Env* target_;
   FileSystem* fs_;
+  std::string metrics_tag_;
 };
 
 Status NewZenfsEnv(
@@ -491,6 +495,7 @@ Status NewZenfsEnv(
     std::shared_ptr<MetricsReporterFactory> metrics_reporter_factory_) {
   assert(zdb_path.length() > 0);
   auto env = new ZenfsEnv(Env::Default());
+  env->Set_metrics_tag(zdb_path);
   Status s =
       env->InitZenfs(zdb_path, bytedance_tags_, metrics_reporter_factory_);
   *zenfs_env = s.ok() ? env : nullptr;
@@ -507,6 +512,12 @@ std::vector<ZoneStat> GetStat(Env* env) {
   auto zen_env = dynamic_cast<ZenfsEnv*>(env);
   if (!zen_env) return {};
   return zen_env->GetStat();
+}
+
+std::string MetricsTag(Env* env) {
+  auto zen_env = dynamic_cast<ZenfsEnv*>(env);
+  if (!zen_env) return "";
+  return zen_env->MetricsTag();
 }
 
 }  // namespace TERARKDB_NAMESPACE
