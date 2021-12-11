@@ -1,38 +1,56 @@
 #!/bin/bash
 #
-# WITH_TESTS=1 ./build.sh
+# WITH_TESTS=1 WITH_ZNS=1 ./build.sh
 #
 
 set -e
 
 BASE=$PWD
-OUTPUT=output
+OUTPUT=build
 mkdir -p $OUTPUT
 
+if [ -z "$WITH_TESTS" ] || [ -z "${WITH_ZNS}" ]; then
+  echo "usage: WITH_TESTS=OFF WITH_ZNS=OFF ./build.sh"
+  exit
+fi
+
 if test -n "$BUILD_BRANCH"; then
-    # this script is run in SCM auto build
-    git checkout "$BUILD_BRANCH"
-    sudo apt-get update
-    sudo apt-get install libaio-dev -y
+  # this script is run in SCM auto build
+  git checkout "$BUILD_BRANCH"
+  sudo apt-get update
+  sudo apt-get install libaio-dev -y
 else
-    echo you must ensure libaio-dev have been installed
+  echo "libaio is required, please make sure you have it!"
 fi
 
 git submodule update --init --recursive
 
+
+if [ "$WITH_TESTS" == "ON" ]; then
+  BUILD_TYPE=Debug
+  echo "You are building TerarkDB with tests, so debug mode is enabled"
+else
+  BUILD_TYPE=Release
+fi
+
+WITH_BYTEDANCE_METRICS=ON
+if [ -z "$METRICS_PATH" ]; then
+  WITH_BYTEDANCE_METRICS=OFF
+fi
+
+echo "build = $BUILD_TYPE, with_tests = $WITH_TESTS, with_zns = $WITH_ZNS"
+
+cd $BASE/$OUTPUT && cmake ../ \
+  -DCMAKE_INSTALL_PREFIX=$OUTPUT \
+  -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+  -DWITH_TESTS=$WITH_TESTS \
+  -DWITH_ZENFS=$WITH_ZNS \
+  -DBYTEDANCE_METRICS_PATH=$METRICS_PATH \
+  -DWITH_BYTEDANCE_METRICS=$WITH_BYTEDANCE_METRICS \
+  -DWITH_TOOLS=ON \
+  -DWITH_TERARK_ZIP=ON $@
+
 # compatibility with macOS
 NPROC=$(nproc || sysctl -n hw.logicalcpu)
 
-if [ "$WITH_TESTS" == "1" ]; then
-  WITH_TESTS=ON
-  echo "build $BUILD_TYPE, with_tests = $WITH_TESTS"
-  echo "You are building TerarkDB with tests, so debug mode is enabled"
-  cd $BASE/$OUTPUT && cmake ../ -DCMAKE_INSTALL_PREFIX=$OUTPUT -DCMAKE_BUILD_TYPE=Debug -DWITH_TESTS=${WITH_TESTS} -DWITH_TOOLS=ON -DWITH_TERARK_ZIP=ON $@
-  cd $BASE/$OUTPUT && make -j $NPROC && make install
-  echo "You are building TerarkDB with tests, so debug mode is enabled"
-else
-  WITH_TESTS=OFF
-  echo "build $BUILD_TYPE, with_tests = $WITH_TESTS"
-  cd $BASE/$OUTPUT && cmake ../ -DCMAKE_INSTALL_PREFIX=$OUTPUT -DCMAKE_BUILD_TYPE=Release -DWITH_TOOLS=ON -DWITH_TERARK_ZIP=ON $@
-  cd $BASE/$OUTPUT && make -j $NPROC && make install
-fi
+cd $BASE/$OUTPUT && make -j $NPROC && make install
