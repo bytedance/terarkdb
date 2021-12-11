@@ -306,7 +306,9 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
                              "manual_wal_flush=false;"
                              "seq_per_batch=false;"
                              "avoid_unnecessary_blocking_io=false;"
-                             "zenfs_gc_ratio=0.25",
+                             "zenfs_low_gc_ratio=0.25;"
+                             "zenfs_high_gc_ratio=0.6;"
+                             "zenfs_force_gc_ratio=0.9;",
                              new_options));
 
   ASSERT_EQ(unset_bytes_base, NumUnsetBytes(new_options_ptr, sizeof(DBOptions),

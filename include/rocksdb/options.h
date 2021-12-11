@@ -1089,7 +1089,9 @@ struct DBOptions {
   // At the same time, zone size * gc ratio should be less than zone
   // size minus single SST size, otherwise GC will never take effect.
   // If being set to value <= 0.0 or >= 1.0, ZenFS GC will not run.
-  double zenfs_gc_ratio = 0.25;
+  double zenfs_low_gc_ratio = 0.25;
+  double zenfs_high_gc_ratio = 0.6;
+  double zenfs_force_gc_ratio = 0.9;
 };
 
 // Options to control the behavior of a database (passed to DB::Open)
