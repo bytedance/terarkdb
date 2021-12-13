@@ -7,12 +7,13 @@ if [ "$#" -ne 1 ]; then
 fi
 
 DEVICE=$1
+OUTPUT=build
 
 rm -rf /tmp/zenfs_$DEVICE*
-./build/zenfs mkfs --zbd=$DEVICE --aux_path=/tmp/zenfs_$DEVICE --force=true
+./$OUTPUT/zenfs mkfs --zbd=$DEVICE --aux_path=/tmp/zenfs_$DEVICE --force=true
 
-./build/db_bench \
- --zbd_path=$DEVICE \
+./$OUTPUT/db_bench \
+	--zbd_path=$DEVICE \
 	--benchmarks=fillrandom \
 	--readwritepercent=90 \
 	--use_existing_db=0 \
@@ -52,5 +53,7 @@ rm -rf /tmp/zenfs_$DEVICE*
 	--num=60000000 \
 	--db=test_kuankuan \
 	--benchmark_write_rate_limit=200000000 \
-	--prepare_log_writer_num=0 
-#	--zenfs_gc_ratio=0.3
+	--prepare_log_writer_num=0 \
+	--zenfs_low_gc_ratio=0.3 \
+	--zenfs_high_gc_ratio=0.6 \
+	--zenfs_force_gc_ratio=0.9

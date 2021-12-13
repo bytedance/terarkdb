@@ -808,6 +808,8 @@ class DBImpl : public DB {
   void ScheduleTtlGC();
 
 #ifdef WITH_ZENFS
+  // schedule Metrics Reporter background.
+  void ScheduleMetricsReporter();
   // schedule GC by polling ZNS zone status
   void ScheduleZNSGC();
 #endif
@@ -1855,6 +1857,8 @@ class DBImpl : public DB {
   LatencyReporter next_latency_reporter_;
   LatencyReporter seekforprev_latency_reporter_;
   LatencyReporter prev_latency_reporter_;
+
+  LatencyReporter zenfs_get_snapshot_latency_reporter_;
 
   ThroughputReporter write_throughput_reporter_;
   DistributionReporter write_batch_size_reporter_;

@@ -761,6 +761,7 @@ set(SOURCES
         utilities/spatialdb/spatial_db.cc
         utilities/table_properties_collectors/compact_on_deletion_collector.cc
         utilities/trace/file_trace_reader_writer.cc
+        utilities/trace/bytedance_metrics_histogram.cc
         utilities/trace/bytedance_metrics_reporter.cc
         utilities/transactions/optimistic_transaction_db_impl.cc
         utilities/transactions/optimistic_transaction.cc
