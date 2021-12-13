@@ -90,7 +90,7 @@
 #include "utilities/trace/bytedance_metrics_reporter.h"
 
 #ifdef WITH_ZENFS
-#include "third-party/zenfs/fs/zbd_stat.h"
+#include "util/zbd_stat.h"
 #endif
 
 #if !defined(_MSC_VER) && !defined(__APPLE__)
@@ -271,6 +271,8 @@ static std::string seekforprev_latency_metric_name =
     "dbiter_seekforprev_latency";
 static std::string prev_latency_metric_name = "dbiter_prev_latency";
 
+static std::string zenfs_get_snapshot_latency_metric_name = "dbimpl_zenfs_get_snapshot_latency";
+
 static std::string write_throughput_metric_name = "dbimpl_writeimpl_throughput";
 static std::string write_batch_size_metric_name = "dbimpl_writeimpl_batch_size";
 #ifdef WITH_ZENFS
@@ -427,6 +429,9 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
               immutable_db_options_.info_log.get(), env_)),
       prev_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
           prev_latency_metric_name, bytedance_tags_,
+          immutable_db_options_.info_log.get(), env_)),
+      zenfs_get_snapshot_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
+          zenfs_get_snapshot_latency_metric_name, bytedance_tags_,
           immutable_db_options_.info_log.get(), env_)),
       write_throughput_reporter_(*metrics_reporter_factory_->BuildCountReporter(
           write_throughput_metric_name, bytedance_tags_,
@@ -1085,8 +1090,22 @@ void DBImpl::ScheduleTtlGC() {
 }
 
 #ifdef WITH_ZENFS
-// Implemented inside `zenfs/fs/fs_zenfs.cc`
-std::vector<ZoneStat> GetStat(Env* env);
+// Implemented inside `util/fs_zenfs.cc`
+std::vector<BDZoneStat> GetStat(Env* env);
+void GetZenFSSnapshot(Env* env, ZenFSSnapshot& snapshot, const ZenFSSnapshotOptions& options);
+
+
+void DBImpl::ScheduleMetricsReporter() {
+  //TEST_SYNC_POINT("DBImpl:ScheduleMetricsReporter");
+  LatencyHistGuard guard(&zenfs_get_snapshot_latency_reporter_);
+  ZenFSSnapshotOptions options;
+  ZenFSSnapshot snapshot;
+  options.trigger_report_ = 1;
+  options.zone_.enabled_ = 0;
+  options.zone_extent_.enabled_ = 0;
+  options.zone_file_.enabled_ = 0;  
+  GetZenFSSnapshot(env_, snapshot, options);
+}
 
 void DBImpl::ScheduleZNSGC() {
   TEST_SYNC_POINT("DBImpl:ScheduleZNSGC");
@@ -1107,8 +1126,13 @@ void DBImpl::ScheduleZNSGC() {
     return;
   }
 
+  std::vector<BDZoneStat> stat;
+  { 
+    LatencyHistGuard guard(&zenfs_get_snapshot_latency_reporter_);
   // Pick files for GC
-  auto stat = GetStat(env_);
+    stat = GetStat(env_);
+  }
+
   uint64_t number;
   FileType type;
 

@@ -217,3 +217,7 @@ IF(WITH_TERARK_ZIP)
   SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
   add_subdirectory(terark-zip)
 ENDIF()
+
+IF(WITH_ZENFS)
+  EXECUTE_PROCESS(COMMAND bash "-c" "cd ${CMAKE_CURRENT_SOURCE_DIR}/zenfs && ./generate-version.sh" COMMAND_ERROR_IS_FATAL ANY)
+ENDIF()
