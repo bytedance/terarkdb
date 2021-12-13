@@ -17,16 +17,25 @@ class BDZoneFileStat {
 
 class BDZoneStat {
 public:
-  uint64_t total_capacity;
-  uint64_t write_position;
+  //uint64_t total_capacity;
+  uint64_t free_capacity;
+  uint64_t used_capacity;
+  uint64_t reclaim_capacity;
+
+  //uint64_t write_position;
   uint64_t start_position;
+  
+  
   std::vector<BDZoneFileStat> files;
   BDZoneStat(const ZoneSnapshot& zs):
-    total_capacity(zs.MaxCapacity()),
-    write_position(zs.WritePosition()),
+    //total_capacity(zs.MaxCapacity()),
+    free_capacity(zs.RemainingCapacity()),
+    used_capacity(zs.UsedCapacity()),
+    reclaim_capacity(zs.MaxCapacity() - zs.UsedCapacity()),
+    //write_position(zs.WritePosition()),
     start_position(zs.StartPosition()) {}
   ~BDZoneStat() {}
-  uint64_t FakeID() { return start_position; }
+  uint64_t FakeID() const { return start_position; }
 };
 
 }  // namespace ROCKSDB_NAMESPACE

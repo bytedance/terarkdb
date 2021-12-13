@@ -502,8 +502,12 @@ class ZenfsEnv : public EnvWrapper {
     zen_fs->GetZenFSSnapshot(snapshot, options);
     std::vector<ZoneSnapshot>& zones = snapshot.zones_;
     std::vector<ZoneFileSnapshot>& zone_files = snapshot.zone_files_;
-    //zen_fs->GetZoneSnapshot(zones, options);
-    //zen_fs->GetZoneFileSnapshot(zone_files, options);
+    
+    // sort by trash descending order
+    std::sort(zones.begin(), zones.end(), [](const ZoneSnapshot &l, const ZoneSnapshot &r) {
+      return l.RemainingCapacity() < r.RemainingCapacity() ||
+            (l.RemainingCapacity() == r.RemainingCapacity() && l.UsedCapacity() < r.UsedCapacity());
+    });
 
     // Store size of each file_id in each zone
     std::map<uint64_t, std::map<uint64_t, uint64_t>> sizes;
