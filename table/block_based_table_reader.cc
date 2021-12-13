@@ -2578,18 +2578,27 @@ Status BlockBasedTable::ForceEvict() {
   auto compressed_cache_key_prefix_size =
       rep_->compressed_cache_key_prefix_size;
 
-  auto do_evict = [=, &cache_key, &compressed_cache_key](uint64_t offset) {
+  uint64_t block_cache_erase_count = 0;
+  uint64_t block_cache_erase_failures_count = 0;
+
+  auto do_evict = [=, &cache_key, &compressed_cache_key,
+                   &block_cache_erase_count,
+                   &block_cache_erase_failures_count](uint64_t offset) {
     if (block_cache) {
       char* end = EncodeVarint64(cache_key + cache_key_prefix_size, offset);
-      block_cache->Erase(
+      bool erased = block_cache->Erase(
           Slice(cache_key, static_cast<size_t>(end - cache_key)));
+      ++block_cache_erase_count;
+      block_cache_erase_failures_count += !erased;
     }
     if (block_cache_compressed) {
       char* end = EncodeVarint64(
           compressed_cache_key + compressed_cache_key_prefix_size, offset);
-      block_cache_compressed->Erase(
+      bool erased = block_cache_compressed->Erase(
           Slice(compressed_cache_key,
                 static_cast<size_t>(end - compressed_cache_key)));
+      ++block_cache_erase_count;
+      block_cache_erase_failures_count += !erased;
     }
   };
 
@@ -2612,6 +2621,11 @@ Status BlockBasedTable::ForceEvict() {
 
   // IndexBlock
   do_evict(rep_->dummy_index_reader_offset);
+
+  RecordTick(rep_->ioptions.statistics, BLOCK_CACHE_ERASE,
+             block_cache_erase_count);
+  RecordTick(rep_->ioptions.statistics, BLOCK_CACHE_ERASE_FAILURES,
+             block_cache_erase_failures_count);
 
   return Status::OK();
 }
@@ -3127,15 +3141,21 @@ void BlockBasedTable::Close() {
   // cleanup index and filter blocks to avoid accessing dangling pointer
   if (!rep_->table_options.no_block_cache) {
     char cache_key[kMaxCacheKeyPrefixSize + kMaxVarint64Length];
+    uint64_t erased_count = 0;
+
     // Get the filter block key
     auto key = GetCacheKey(rep_->cache_key_prefix, rep_->cache_key_prefix_size,
                            rep_->filter_handle, cache_key);
-    rep_->table_options.block_cache.get()->Erase(key);
+    erased_count += rep_->table_options.block_cache.get()->Erase(key);
     // Get the index block key
     key = GetCacheKeyFromOffset(rep_->cache_key_prefix,
                                 rep_->cache_key_prefix_size,
                                 rep_->dummy_index_reader_offset, cache_key);
-    rep_->table_options.block_cache.get()->Erase(key);
+    erased_count += rep_->table_options.block_cache.get()->Erase(key);
+
+    RecordTick(rep_->ioptions.statistics, BLOCK_CACHE_ERASE, 2);
+    RecordTick(rep_->ioptions.statistics, BLOCK_CACHE_ERASE_FAILURES,
+               2 - erased_count);
   }
   rep_->closed = true;
 }

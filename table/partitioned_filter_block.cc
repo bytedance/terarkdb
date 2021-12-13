@@ -148,6 +148,10 @@ PartitionedFilterBlockReader::~PartitionedFilterBlockReader() {
   IndexBlockIter biter;
   BlockHandle handle;
   Statistics* kNullStats = nullptr;
+
+  uint64_t block_cache_erase_count = 0;
+  uint64_t block_cache_erase_failures_count = 0;
+
   idx_on_fltr_blk_->NewIterator<IndexBlockIter>(
       &comparator_, comparator_.user_comparator(), &biter, kNullStats, true,
       index_key_includes_seq_, index_value_is_full_);
@@ -157,8 +161,13 @@ PartitionedFilterBlockReader::~PartitionedFilterBlockReader() {
     auto key = BlockBasedTable::GetCacheKey(table_->rep_->cache_key_prefix,
                                             table_->rep_->cache_key_prefix_size,
                                             handle, cache_key);
-    block_cache->Erase(key);
+    bool erased = block_cache->Erase(key);
+    ++block_cache_erase_count;
+    block_cache_erase_failures_count += !erased;
   }
+  RecordTick(statistics(), BLOCK_CACHE_ERASE, block_cache_erase_count);
+  RecordTick(statistics(), BLOCK_CACHE_ERASE_FAILURES,
+             block_cache_erase_failures_count);
 }
 
 bool PartitionedFilterBlockReader::KeyMayMatch(
