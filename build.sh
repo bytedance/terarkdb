@@ -2,8 +2,9 @@
 #
 # WITH_TESTS=1 WITH_ZNS=1 [METRICS_PATH=...] ./build.sh
 #
-
 set -e
+
+git submodule update --init --recursive
 
 BASE=$PWD
 OUTPUT=build
@@ -35,8 +36,6 @@ if test -n "$BUILD_BRANCH"; then
 else
   echo "libaio is required, please make sure you have it!"
 fi
-
-git submodule update --init --recursive
 
 echo "build = $BUILD_TYPE, with_tests = $WITH_TESTS, with_zns = $WITH_ZNS"
 

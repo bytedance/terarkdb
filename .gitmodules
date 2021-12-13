@@ -21,4 +21,4 @@
 	url = https://github.com/gflags/gflags.git
 [submodule "third-party/zenfs"]
 	path = third-party/zenfs
-	url = https://github.com/bzbd/zenfs.git
+	url = https://github.com/westerndigitalcorporation/zenfs.git
