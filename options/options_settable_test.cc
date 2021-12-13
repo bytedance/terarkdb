@@ -199,7 +199,6 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
        sizeof(std::shared_ptr<WriteBufferManager>)},
       {offsetof(struct DBOptions, listeners),
        sizeof(std::vector<std::shared_ptr<EventListener>>)},
-      {offsetof(struct DBOptions, row_cache), sizeof(std::shared_ptr<Cache>)},
       {offsetof(struct DBOptions, metrics_reporter_factory),
        sizeof(std::shared_ptr<MetricsReporterFactory>)},
       {offsetof(struct DBOptions, wal_filter), sizeof(const WalFilter*)},
@@ -312,8 +311,8 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
                              "avoid_unnecessary_blocking_io=false;"
                              "zenfs_low_gc_ratio=0.25;"
                              "zenfs_high_gc_ratio=0.6;"
-                             "zenfs_force_gc_ratio=0.9;",
-                             "table_evict_type=kAlwaysForceEvict;"
+                             "zenfs_force_gc_ratio=0.9;"
+                             "table_evict_type=kAlwaysForceEvict;",
                              new_options));
 
   ASSERT_EQ(unset_bytes_base, NumUnsetBytes(new_options_ptr, sizeof(DBOptions),

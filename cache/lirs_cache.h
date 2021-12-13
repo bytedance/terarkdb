@@ -106,7 +106,7 @@ class ALIGN_AS(CACHE_LINE_SIZE) LIRSCacheShard : public CacheShard {
   virtual bool Ref(Cache::Handle* handle) override;
   virtual bool Release(Cache::Handle* handle,
                        bool force_erase = false) override;
-  virtual void Erase(const Slice& key, uint32_t hash) override;
+  virtual bool Erase(const Slice& key, uint32_t hash) override;
 
   virtual size_t GetUsage() const override;
   virtual size_t GetPinnedUsage() const override;

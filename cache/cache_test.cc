@@ -115,8 +115,8 @@ class CacheTest : public testing::TestWithParam<std::string> {
                   &CacheTest::Deleter);
   }
 
-  void Erase(std::shared_ptr<Cache> cache, int key) {
-    cache->Erase(EncodeKey(key));
+  bool Erase(std::shared_ptr<Cache> cache, int key) {
+    return cache->Erase(EncodeKey(key));
   }
 
   int Lookup(int key) { return Lookup(cache_, key); }
@@ -125,7 +125,7 @@ class CacheTest : public testing::TestWithParam<std::string> {
     Insert(cache_, key, value, charge);
   }
 
-  void Erase(int key) { Erase(cache_, key); }
+  bool Erase(int key) { return Erase(cache_, key); }
 
   int Lookup2(int key) { return Lookup(cache2_, key); }
 
@@ -133,7 +133,7 @@ class CacheTest : public testing::TestWithParam<std::string> {
     Insert(cache2_, key, value, charge);
   }
 
-  void Erase2(int key) { Erase(cache2_, key); }
+  bool Erase2(int key) { return Erase(cache2_, key); }
 };
 CacheTest* CacheTest::current_;
 

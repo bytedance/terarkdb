@@ -99,9 +99,7 @@ class TableReader {
                          bool (*callback_func)(void* arg, const Slice& key,
                                                LazyBuffer&& value));
 
-  virtual Status ForceEvict() {
-    return Status::NotSupported();
-  }
+  virtual Status ForceEvict() { return Status::NotSupported(); }
 
   // Prefetch data corresponding to a give range of keys
   // Typically this functionality is required for table implementations that

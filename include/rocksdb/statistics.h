@@ -258,6 +258,11 @@ enum Tickers : uint32_t {
   READ_BLOB_VALID,
   READ_BLOB_INVALID,
 
+  // # of blocks erased from block cache.
+  BLOCK_CACHE_ERASE,
+  // # of failures when erasing blocks from block cache.
+  BLOCK_CACHE_ERASE_FAILURES,
+
   TICKER_ENUM_MAX
 };
 

@@ -438,7 +438,7 @@ Status LRUCacheShardTemplate<CacheMonitor>::Insert(
 }
 
 template <class CacheMonitor>
-void LRUCacheShardTemplate<CacheMonitor>::Erase(const Slice& key,
+bool LRUCacheShardTemplate<CacheMonitor>::Erase(const Slice& key,
                                                 uint32_t hash) {
   LRUHandle* e;
   bool last_reference = false;
@@ -462,6 +462,7 @@ void LRUCacheShardTemplate<CacheMonitor>::Erase(const Slice& key,
   if (last_reference) {
     e->Free();
   }
+  return e != nullptr;
 }
 
 template <class CacheMonitor>

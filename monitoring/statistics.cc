@@ -27,6 +27,8 @@ const std::vector<std::pair<Tickers, std::string>> TickersNameMap = {
     {BLOCK_CACHE_HIT, "rocksdb.block.cache.hit"},
     {BLOCK_CACHE_ADD, "rocksdb.block.cache.add"},
     {BLOCK_CACHE_ADD_FAILURES, "rocksdb.block.cache.add.failures"},
+    {BLOCK_CACHE_ERASE, "rocksdb.block.cache.erase"},
+    {BLOCK_CACHE_ERASE_FAILURES, "rocksdb.block.cache.erase.failures"},
     {BLOCK_CACHE_INDEX_MISS, "rocksdb.block.cache.index.miss"},
     {BLOCK_CACHE_INDEX_HIT, "rocksdb.block.cache.index.hit"},
     {BLOCK_CACHE_INDEX_ADD, "rocksdb.block.cache.index.add"},
