@@ -790,8 +790,7 @@ IF(WITH_TERARK_ZIP)
                       table/terark_zip_config.cc	
                       table/terark_zip_table_builder.cc	
                       table/terark_zip_table_reader.cc	
-                      table/terark_zip_table.cc
-                      tools/remote_compaction_worker_101.cc)
+                      table/terark_zip_table.cc)
 ENDIF()
 
 IF(WITH_TESTS OR WITH_TOOLS)
@@ -1209,6 +1208,10 @@ if(WITH_TOOLS)
       $<TARGET_OBJECTS:testharness>)
   target_link_libraries(db_bench${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
 
+  add_executable(remote_compaction_worker_101 tools/remote_compaction_worker_101.cc
+      $<TARGET_OBJECTS:testharness>)
+  target_link_libraries(remote_compaction_worker_101 gtest ${ROCKSDB_STATIC_LIB})
+                      
   if(WITH_ZENFS)
     include_directories(third-party/zenfs)
     add_executable(zenfs${ARTIFACT_SUFFIX} third-party/zenfs/util/zenfs.cc
