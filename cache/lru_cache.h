@@ -209,7 +209,7 @@ class ALIGN_AS(CACHE_LINE_SIZE) LRUCacheShardTemplate : public CacheMonitor,
   virtual bool Ref(Cache::Handle* handle) override;
   virtual bool Release(Cache::Handle* handle,
                        bool force_erase = false) override;
-  virtual void Erase(const Slice& key, uint32_t hash) override;
+  virtual bool Erase(const Slice& key, uint32_t hash) override;
 
   // Although in some platforms the update of size_t is atomic, to make sure
   // GetUsage() and GetPinnedUsage() work correctly under any platform, we'll

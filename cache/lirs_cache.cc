@@ -407,7 +407,7 @@ Status LIRSCacheShard::Insert(const Slice& key, uint32_t hash, void* value,
   return s;
 }
 
-void LIRSCacheShard::Erase(const Slice& key, uint32_t hash) {
+bool LIRSCacheShard::Erase(const Slice& key, uint32_t hash) {
   LIRSHandle* e;
   bool last_reference = false;
   {
@@ -430,6 +430,7 @@ void LIRSCacheShard::Erase(const Slice& key, uint32_t hash) {
   if (last_reference) {
     e->Free();
   }
+  return e != nullptr;
 }
 
 size_t LIRSCacheShard::GetUsage() const {

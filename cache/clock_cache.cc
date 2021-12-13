@@ -261,7 +261,7 @@ class ClockCacheShard : public CacheShard {
   virtual bool Ref(Cache::Handle* handle) override;
   virtual bool Release(Cache::Handle* handle,
                        bool force_erase = false) override;
-  virtual void Erase(const Slice& key, uint32_t hash) override;
+  virtual bool Erase(const Slice& key, uint32_t hash) override;
   bool EraseAndConfirm(const Slice& key, uint32_t hash,
                        CleanupContext* context);
   virtual size_t GetUsage() const override;
@@ -647,10 +647,11 @@ bool ClockCacheShard::Release(Cache::Handle* h, bool force_erase) {
   return erased;
 }
 
-void ClockCacheShard::Erase(const Slice& key, uint32_t hash) {
+bool ClockCacheShard::Erase(const Slice& key, uint32_t hash) {
   CleanupContext context;
-  EraseAndConfirm(key, hash, &context);
+  bool ret EraseAndConfirm(key, hash, &context);
   Cleanup(context);
+  return ret;
 }
 
 bool ClockCacheShard::EraseAndConfirm(const Slice& key, uint32_t hash,
