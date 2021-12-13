@@ -66,7 +66,8 @@ struct ThreadPoolImpl::Impl {
   void StartBGThreads();
 
   void Submit(std::function<void()>&& schedule,
-              std::function<void()>&& unschedule, void* tag);
+              std::function<void()>&& unschedule, void* tag,
+              bool force = false);
 
   int UnSchedule(void* arg);
 
@@ -272,6 +273,9 @@ void* ThreadPoolImpl::Impl::BGThreadWrapper(void* arg) {
   // uninitialized
   ThreadStatus::ThreadType thread_type = ThreadStatus::NUM_THREAD_TYPES;
   switch (tp->GetThreadPriority()) {
+    case Env::Priority::FORCE:
+      thread_type = ThreadStatus::HIGH_PRIORITY;
+      break;
     case Env::Priority::HIGH:
       thread_type = ThreadStatus::HIGH_PRIORITY;
       break;
@@ -344,8 +348,8 @@ void ThreadPoolImpl::Impl::StartBGThreads() {
 }
 
 void ThreadPoolImpl::Impl::Submit(std::function<void()>&& schedule,
-                                  std::function<void()>&& unschedule,
-                                  void* tag) {
+                                  std::function<void()>&& unschedule, void* tag,
+                                  bool force) {
   std::lock_guard<std::mutex> lock(mu_);
 
   if (exit_all_threads_) {
@@ -353,11 +357,14 @@ void ThreadPoolImpl::Impl::Submit(std::function<void()>&& schedule,
   }
 
   StartBGThreads();
-
   // Add to priority queue
-  queue_.push_back(BGItem());
+  if (force) {
+    queue_.push_front(BGItem());
+  } else {
+    queue_.push_back(BGItem());
+  }
 
-  auto& item = queue_.back();
+  auto& item = force ? queue_.front() : queue_.back();
   item.tag = tag;
   item.function = std::move(schedule);
   item.unschedFunction = std::move(unschedule);
@@ -447,12 +454,14 @@ void ThreadPoolImpl::SubmitJob(std::function<void()>&& job) {
 }
 
 void ThreadPoolImpl::Schedule(void (*function)(void* arg1), void* arg,
-                              void* tag, void (*unschedFunction)(void* arg)) {
+                              void* tag, void (*unschedFunction)(void* arg),
+                              bool force) {
   if (unschedFunction == nullptr) {
-    impl_->Submit(std::bind(function, arg), std::function<void()>(), tag);
+    impl_->Submit(std::bind(function, arg), std::function<void()>(), tag,
+                  force);
   } else {
     impl_->Submit(std::bind(function, arg), std::bind(unschedFunction, arg),
-                  tag);
+                  tag, force);
   }
 }
 

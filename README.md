@@ -1,9 +1,9 @@
-# 0. What is TerarkDB
+# About TerarkDB
 TerarkDB is a RocksDB replacement with optimized tail latency, throughput and compression etc. In most cases you can migrate your existing RocksDB instance to TerarkDB without any
 drawbacks.
 
 - [All-in-one Docs](https://bytedance.feishu.cn/docs/doccnZmYFqHBm06BbvYgjsHHcKc#)
-- [Slack Channel](https://join.slack.com/t/terarkdb/shared_invite/zt-tncbshtt-W0~rC8bKSovAxVCvIzJPMw)
+- [Slack Channel](https://join.slack.com/t/terarkdb/shared_invite/zt-zxo71hwl-j_K4OIQ~p5_SsT4RrFesxg)
 
 **NOTES**
 - TerarkDB was only tested and production ready under Linux platform
@@ -67,6 +67,8 @@ target_link_libraries({YOUR_TARGET} terarkdb)
   - Build with TerarkDB tools (e.g. db_bench, ldb etc)
 - WITH_TERARK_ZIP: OFF
   - Build with TerarkZipTable
+- WITH_ZENFS: OFF
+  - Build with ZNS device support
 
 
 ### Notes
@@ -82,7 +84,7 @@ git clone https://github.com/bytedance/terarkdb.git
 
 cd terarkdb && git submodule update --init --recursive
 
-./build.sh
+WITH_TESTS=OFF WITH_ZNS=OFF ./build.sh
 ```
 
 2) linking

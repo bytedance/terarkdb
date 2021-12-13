@@ -2142,10 +2142,25 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
     }
     assert(temp.size() == files.size());
 
+#ifdef WITH_ZENFS
     // initialize files_by_compaction_pri_
+    for (size_t i = 0; i < temp.size(); i++) {
+      if (temp[i].file->marked_for_compaction &
+          FileMetaData::kMarkedFromFileSystemHigh) {
+        files_by_compaction_pri.push_back(static_cast<int>(temp[i].index));
+      }
+    }
+    for (size_t i = 0; i < temp.size(); i++) {
+      if (!(temp[i].file->marked_for_compaction &
+            FileMetaData::kMarkedFromFileSystemHigh)) {
+        files_by_compaction_pri.push_back(static_cast<int>(temp[i].index));
+      }
+    }
+#else
     for (size_t i = 0; i < temp.size(); i++) {
       files_by_compaction_pri.push_back(static_cast<int>(temp[i].index));
     }
+#endif
     next_file_to_compact_by_size_[level] = 0;
     assert(files_[level].size() == files_by_compaction_pri_[level].size());
   }

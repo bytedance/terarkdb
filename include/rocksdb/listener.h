@@ -116,6 +116,8 @@ enum class CompactionReason : int {
   // DBImpl::ScheduleTtlGC() marked files for compaction
   kFilesMarkedFromTTL,
   // DBImpl::ScheduleZNSGC() marked files for compaction
+  kFilesMarkedFromFileSystemHigh,
+  // DBImpl::ScheduleZNSGC() marked files for compaction
   kFilesMarkedFromFileSystem,
   // Reclam blob file number marked files for compaction
   kFilesMarkedFromUpdateBlob,
@@ -135,6 +137,8 @@ enum class CompactionReason : int {
   kTrivialMoveLevel,
   // kv separate GC.
   kGarbageCollection,
+  //
+  kGarbageCollectionMarkForHigh,
   // Found RangeDeletion
   kRangeDeletion,
   // total number of compaction reasons, new reasons must be added above this.

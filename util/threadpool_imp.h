@@ -70,7 +70,7 @@ class ThreadPoolImpl : public ThreadPool {
   // Can be used to filter and unschedule jobs by a tag
   // that are still in the queue and did not start running
   void Schedule(void (*function)(void* arg1), void* arg, void* tag,
-                void (*unschedFunction)(void* arg));
+                void (*unschedFunction)(void* arg), bool force = false);
 
   // Filter jobs that are still in a queue and match
   // the given tag. Remove them from a queue if any
