@@ -6,7 +6,7 @@
 set -e
 
 BASE=$PWD
-OUTPUT=output
+OUTPUT=build
 mkdir -p $OUTPUT
 
 if [ -z "$WITH_TESTS" ] || [ -z "${WITH_ZNS}" ]; then
