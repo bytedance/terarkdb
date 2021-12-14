@@ -1091,7 +1091,7 @@ void DBImpl::ScheduleTtlGC() {
 
 #ifdef WITH_ZENFS
 // Implemented inside `util/fs_zenfs.cc`
-std::vector<BDZoneStat> GetStat(Env* env);
+void GetStat(Env* env, BDZenFSStat& stat);
 void GetZenFSSnapshot(Env* env, ZenFSSnapshot& snapshot, const ZenFSSnapshotOptions& options);
 
 
@@ -1126,12 +1126,14 @@ void DBImpl::ScheduleZNSGC() {
     return;
   }
 
-  std::vector<BDZoneStat> stat;
+  BDZenFSStat zenfs_stat;
   { 
     LatencyHistGuard guard(&zenfs_get_snapshot_latency_reporter_);
-  // Pick files for GC
-    stat = GetStat(env_);
+    // Pick files for GC
+    GetStat(env_, zenfs_stat);
+    //ROCKS_LOG_BUFFER(&log_buffer_info,"ZNS GC :\n\t[GetStat]=%s\n", zenfs_stat.ToString());
   }
+  std::vector<BDZoneStat> &stat = zenfs_stat.zone_stats_;
 
   uint64_t number;
   FileType type;
