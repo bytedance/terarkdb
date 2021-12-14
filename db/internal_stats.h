@@ -60,11 +60,13 @@ enum class LevelStatType {
   NUM_FILES,
   COMPACTED_FILES,
   SIZE_BYTES,
+  COMPENSATED_SIZE_BYTES,
   SCORE,
   READ_GB,
   RN_GB,
   RNP1_GB,
   WRITE_GB,
+  WRITE_BLOB_GB,
   W_NEW_GB,
   MOVED_GB,
   WRITE_AMP,
@@ -147,6 +149,9 @@ class InternalStats {
     // Total number of bytes written during compaction
     uint64_t bytes_written;
 
+    // Total number of blob bytes written during compaction
+    uint64_t bytes_blob_written;
+
     // Total number of bytes moved to the output level
     uint64_t bytes_moved;
 
@@ -177,6 +182,7 @@ class InternalStats {
           bytes_read_non_output_levels(0),
           bytes_read_output_level(0),
           bytes_written(0),
+          bytes_blob_written(0),
           bytes_moved(0),
           num_input_files_in_non_output_levels(0),
           num_input_files_in_output_level(0),
@@ -195,6 +201,7 @@ class InternalStats {
           bytes_read_non_output_levels(0),
           bytes_read_output_level(0),
           bytes_written(0),
+          bytes_blob_written(0),
           bytes_moved(0),
           num_input_files_in_non_output_levels(0),
           num_input_files_in_output_level(0),
@@ -222,6 +229,7 @@ class InternalStats {
       this->bytes_read_non_output_levels = 0;
       this->bytes_read_output_level = 0;
       this->bytes_written = 0;
+      this->bytes_blob_written = 0;
       this->bytes_moved = 0;
       this->num_input_files_in_non_output_levels = 0;
       this->num_input_files_in_output_level = 0;
@@ -240,6 +248,7 @@ class InternalStats {
       this->bytes_read_non_output_levels += c.bytes_read_non_output_levels;
       this->bytes_read_output_level += c.bytes_read_output_level;
       this->bytes_written += c.bytes_written;
+      this->bytes_blob_written += c.bytes_blob_written;
       this->bytes_moved += c.bytes_moved;
       this->num_input_files_in_non_output_levels +=
           c.num_input_files_in_non_output_levels;
@@ -260,6 +269,7 @@ class InternalStats {
       this->bytes_read_non_output_levels -= c.bytes_read_non_output_levels;
       this->bytes_read_output_level -= c.bytes_read_output_level;
       this->bytes_written -= c.bytes_written;
+      this->bytes_blob_written -= c.bytes_blob_written;
       this->bytes_moved -= c.bytes_moved;
       this->num_input_files_in_non_output_levels -=
           c.num_input_files_in_non_output_levels;
@@ -284,6 +294,7 @@ class InternalStats {
       cf_stats_count_[i] = 0;
       cf_stats_value_[i] = 0;
     }
+    comp_blob_stat_.Clear();
     for (auto& comp_stat : comp_stats_) {
       comp_stat.Clear();
     }
@@ -297,11 +308,19 @@ class InternalStats {
   }
 
   void AddCompactionStats(int level, const CompactionStats& stats) {
-    comp_stats_[level].Add(stats);
+    if (level == -1) {
+      comp_blob_stat_.Add(stats);
+    } else {
+      comp_stats_[level].Add(stats);
+    }
   }
 
   void IncBytesMoved(int level, uint64_t amount) {
-    comp_stats_[level].bytes_moved += amount;
+    if (level == -1) {
+      comp_blob_stat_.bytes_moved += amount;
+    } else {
+      comp_stats_[level].bytes_moved += amount;
+    }
   }
 
   void AddCFStats(InternalCFStatsType type, uint64_t value) {
@@ -359,6 +378,9 @@ class InternalStats {
   void DumpCFMapStats(
       std::map<int, std::map<LevelStatType, double>>* level_stats,
       CompactionStats* compaction_stats_sum);
+  void DumpBlobStat(
+      std::map<int, std::map<LevelStatType, double>>* levels_stats,
+      CompactionStats* compaction_stats_sum);
   void DumpCFMapStatsIOStalls(std::map<std::string, std::string>* cf_stats);
   void DumpCFStats(std::string* value);
   void DumpCFStatsNoFileHistogram(std::string* value);
@@ -373,6 +395,7 @@ class InternalStats {
   uint64_t cf_stats_count_[INTERNAL_CF_STATS_ENUM_MAX];
   // Per-ColumnFamily/level compaction stats
   std::vector<CompactionStats> comp_stats_;
+  CompactionStats comp_blob_stat_;
   std::vector<HistogramImpl> file_read_latency_;
 
   // Used to compute per-interval statistics
@@ -568,6 +591,7 @@ class InternalStats {
     WAL_FILE_BYTES,
     WAL_FILE_SYNCED,
     BYTES_WRITTEN,
+    BYTES_BLOB_WRITTEN,
     NUMBER_KEYS_WRITTEN,
     WRITE_DONE_BY_OTHER,
     WRITE_DONE_BY_SELF,
@@ -583,6 +607,7 @@ class InternalStats {
     uint64_t bytes_read_non_output_levels;
     uint64_t bytes_read_output_level;
     uint64_t bytes_written;
+    uint64_t bytes_blob_written;
     uint64_t bytes_moved;
     int num_input_files_in_non_output_levels;
     int num_input_files_in_output_level;

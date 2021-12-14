@@ -331,6 +331,8 @@ class VersionStorageInfo {
   // Return the combined file size of all files at the specified level.
   uint64_t NumLevelBytes(int level) const;
 
+  uint64_t NumLevelCompensatedBytes(int level) const;
+
   // REQUIRES: This version has been saved (see VersionSet::SaveTo)
   const std::vector<FileMetaData*>& LevelFiles(int level) const {
     return files_[level];
@@ -498,6 +500,8 @@ class VersionStorageInfo {
   std::unordered_map<uint64_t, uint64_t>& blob_overlap_scores() {
     return blob_overlap_scores_;
   }
+  void CalculateEdge();
+  std::vector<uint64_t> edge_cnt_levels() const { return edge_cnt_levels_; }
 
  private:
   const InternalKeyComparator* internal_comparator_;
@@ -518,6 +522,10 @@ class VersionStorageInfo {
   // List of files per level, files in each level are arranged
   // in increasing order of keys
   std::vector<FileMetaData*>* files_;
+
+  // Record sum of dependence each level
+  // We Change it when new version is build
+  std::vector<uint64_t> edge_cnt_levels_;
 
   // Dependence files both in files[-1] and dependence_map
   DependenceMap dependence_map_;

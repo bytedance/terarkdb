@@ -2591,11 +2591,16 @@ void VersionStorageInfo::ExtendFileRangeWithinInterval(
 }
 
 uint64_t VersionStorageInfo::NumLevelBytes(int level) const {
-  assert(level >= 0);
+  assert(level >= -1);
   assert(level < num_levels());
   return TotalFileSize(files_[level]);
 }
 
+uint64_t VersionStorageInfo::NumLevelCompensatedBytes(int level) const {
+  assert(level >= -1);
+  assert(level < num_levels());
+  return TotalCompensatedSize(files_[level]);
+}
 const char* VersionStorageInfo::LevelSummary(
     LevelSummaryStorage* scratch) const {
   int len = 0;
@@ -4848,6 +4853,15 @@ uint64_t VersionSet::GetTotalSstFilesSize(Version* dummy_versions) {
     }
   }
   return total_files_size;
+}
+void VersionStorageInfo::CalculateEdge() {
+  for (int i = 0; i < num_levels_; i++) {
+    uint64_t cnt = 0;
+    for (auto& f : LevelFiles(i)) {
+      cnt += f->prop.dependence.size();
+    }
+    edge_cnt_levels_.push_back(cnt);
+  }
 }
 
 }  // namespace TERARKDB_NAMESPACE

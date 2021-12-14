@@ -981,7 +981,7 @@ DEFINE_uint64(target_blob_file_size, 0, "Blob file size");
 
 DEFINE_uint64(blob_file_defragment_size, 0, "Blob file defragment threshold");
 
-DEFINE_uint64(max_dependence_blob_overlap, 0, "Max dependence blob overlap");
+DEFINE_uint64(max_dependence_blob_overlap, 1024, "Max dependence blob overlap");
 
 DEFINE_uint64(maintainer_job_ratio, 0.1, "Maintainer job ratio");
 
