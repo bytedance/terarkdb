@@ -535,6 +535,7 @@ class Compaction {
 
 // Utility function
 extern uint64_t TotalFileSize(const std::vector<FileMetaData*>& files);
+extern uint64_t TotalCompensatedSize(const std::vector<FileMetaData*>& files);
 
 extern const char* CompactionTypeName(CompactionType type);
 
