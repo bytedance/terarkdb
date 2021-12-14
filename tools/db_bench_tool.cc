@@ -969,9 +969,7 @@ DEFINE_uint64(target_blob_file_size, 0, "Blob file size");
 
 DEFINE_uint64(blob_file_defragment_size, 0, "Blob file defragment threshold");
 
-DEFINE_uint64(max_blob_files, 0, "Num total blob file count limits");
-
-DEFINE_uint64(max_dependence_blob_overlap, 0, "Max dependence blob overlap");
+DEFINE_uint64(max_dependence_blob_overlap, 1024, "Max dependence blob overlap");
 
 DEFINE_uint64(maintainer_job_ratio, 0.1, "Maintainer job ratio");
 
@@ -3311,6 +3309,7 @@ class Benchmark {
         printf("TerarkZipTable was not enabled!");
         exit(1);
 #endif
+        break;
       case kHashDuaLinkedList:
         options.memtable_factory.reset(NewConcurrentHashDualListReqFactory());
         break;
@@ -3535,7 +3534,6 @@ class Benchmark {
     options.blob_gc_ratio = FLAGS_blob_gc_ratio;
     options.target_blob_file_size = FLAGS_target_blob_file_size;
     options.blob_file_defragment_size = FLAGS_blob_file_defragment_size;
-    options.max_blob_files = FLAGS_max_blob_files;
     options.max_dependence_blob_overlap = FLAGS_max_dependence_blob_overlap;
     options.maintainer_job_ratio = FLAGS_maintainer_job_ratio;
     options.optimize_filters_for_hits = FLAGS_optimize_filters_for_hits;
@@ -4034,6 +4032,8 @@ class Benchmark {
         }
       }
       if (!s.ok()) {
+        fprintf(stderr, "try recovering from put error: %s\n",
+                s.ToString().c_str());
         s = listener_->WaitForRecovery(600000000) ? Status::OK() : s;
       }
 

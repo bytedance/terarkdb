@@ -736,6 +736,7 @@ class VersionBuilder::Rep {
       debugger_->Verify(this, vstorage);
     }
     vstorage->ResetVersionBuilderContext(context_.release());
+    vstorage->CalculateEdge();
   }
 
   void LoadTableHandlers(InternalStats* internal_stats,
