@@ -74,6 +74,14 @@ uint64_t TotalFileSize(const std::vector<FileMetaData*>& files) {
   return sum;
 }
 
+uint64_t TotalCompensatedSize(const std::vector<FileMetaData*>& files) {
+  uint64_t sum = 0;
+  for (size_t i = 0; i < files.size() && files[i]; i++) {
+    sum += files[i]->compensated_file_size;
+  }
+  return sum;
+}
+
 const char* CompactionTypeName(CompactionType type) {
   switch (type) {
     case kKeyValueCompaction:

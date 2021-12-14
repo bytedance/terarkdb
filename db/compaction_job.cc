@@ -1395,10 +1395,8 @@ Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
   db_mutex_->AssertHeld();
   Status status = compact_->status;
   ColumnFamilyData* cfd = compact_->compaction->column_family_data();
-  if (compact_->compaction->output_level() != -1) {
-    cfd->internal_stats()->AddCompactionStats(
-        compact_->compaction->output_level(), compaction_stats_);
-  }
+  cfd->internal_stats()->AddCompactionStats(
+      compact_->compaction->output_level(), compaction_stats_);
 
   if (status.ok()) {
     status = InstallCompactionResults(mutable_cf_options);
@@ -1488,6 +1486,14 @@ Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
     }
   }
   stream.EndArray();
+  stream << "edge_state";
+  stream.StartArray();
+  for (auto& cnt : vstorage->edge_cnt_levels()) {
+    stream << cnt;
+  }
+  stream.EndArray();
+  stream << "blob_count";
+  stream << vstorage->NumLevelFiles(-1);
 
   CleanupCompaction();
   return status;
@@ -3155,7 +3161,7 @@ void CompactionJob::UpdateCompactionStats() {
       compaction_stats_.bytes_written += out.meta.fd.file_size;
     }
     for (const auto& out : sub_compact.blob_outputs) {
-      compaction_stats_.bytes_written += out.meta.fd.file_size;
+      compaction_stats_.bytes_blob_written += out.meta.fd.file_size;
     }
     if (sub_compact.num_input_records > sub_compact.num_output_records) {
       compaction_stats_.num_dropped_records +=
@@ -3196,7 +3202,8 @@ void CompactionJob::UpdateCompactionJobStats(
         stats.num_input_files_in_output_level;
 
     // output information
-    compaction_job_stats_->total_output_bytes = stats.bytes_written;
+    compaction_job_stats_->total_output_bytes =
+        stats.bytes_written + stats.bytes_blob_written;
     compaction_job_stats_->num_output_records = compact_->num_output_records;
     compaction_job_stats_->num_output_files = stats.num_output_files;
 
