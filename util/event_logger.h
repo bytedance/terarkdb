@@ -181,7 +181,14 @@ class EventLogger {
   static const char* Prefix() { return "EVENT_LOG_v1"; }
 
   explicit EventLogger(Logger* logger) : logger_(logger) {}
-  InfoLogLevel GetInfoLogLevel() const { return logger_->GetInfoLogLevel(); }
+  InfoLogLevel GetInfoLogLevel() const {
+    if(logger_ == nullptr){
+      // we can return any LEVEL
+      return InfoLogLevel::ERROR_LEVEL;
+    }else{
+      return logger_->GetInfoLogLevel();
+    }
+  }
   EventLoggerStream Log() { return EventLoggerStream(logger_); }
   EventLoggerStream LogToBuffer(LogBuffer* log_buffer) {
     return EventLoggerStream(log_buffer);
