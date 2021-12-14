@@ -3,6 +3,7 @@
 #include "rocksdb/terark_namespace.h"
 #if !defined(ROCKSDB_LITE) && defined(OS_LINUX) && defined(WITH_ZENFS)
 
+#include <algorithm>
 #include <string>
 #include <sstream>
 #include <vector>
