@@ -133,13 +133,13 @@ void PrintLevelStats(char* buf, size_t len, const std::string& name,
       "%4s "      /*  Level */
       "%6d/%-3d " /*  Files */
       "%8s "      /*  Size */
-      "%15s "      /*  Compensated Size*/
+      "%15s "     /*  Compensated Size*/
       "%5.1f "    /*  Score */
       "%8.1f "    /*  Read(GB) */
       "%7.1f "    /*  Rn(GB) */
       "%8.1f "    /*  Rnp1(GB) */
       "%9.1f "    /*  Write(GB) */
-      "%9.1f "    /*  Write(GB) */
+      "%9.1f "    /*  WriteBlob(GB) */
       "%8.1f "    /*  Wnew(GB) */
       "%9.1f "    /*  Moved(GB) */
       "%5.1f "    /*  W-Amp */
