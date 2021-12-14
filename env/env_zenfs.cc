@@ -487,7 +487,7 @@ class ZenfsEnv : public EnvWrapper {
     return Status::NotSupported("GetZbdDiskSpaceInfo is not implemented.");
   }
 
-  std::vector<BDZoneStat> GetStat() {
+  void GetStat(BDZenFSStat& stat) {
     auto zen_fs = dynamic_cast<ZenFS*>(fs_);
     ZenFSSnapshot snapshot;
     ZenFSSnapshotOptions options;
@@ -500,50 +500,14 @@ class ZenfsEnv : public EnvWrapper {
     options.as_lock_free_as_possible_ = 1;
 
     zen_fs->GetZenFSSnapshot(snapshot, options);
-    std::vector<ZoneSnapshot>& zones = snapshot.zones_;
-    std::vector<ZoneFileSnapshot>& zone_files = snapshot.zone_files_;
-    
-    // sort by trash descending order
-    std::sort(zones.begin(), zones.end(), [](const ZoneSnapshot &l, const ZoneSnapshot &r) {
-      return l.RemainingCapacity() < r.RemainingCapacity() ||
-            (l.RemainingCapacity() == r.RemainingCapacity() && l.UsedCapacity() < r.UsedCapacity());
-    });
-
-    // Store size of each file_id in each zone
-    std::map<uint64_t, std::map<uint64_t, uint64_t>> sizes;
-    // Store file_id to filename map
-    std::map<uint64_t, std::string> filenames;
-    for (auto& file : zone_files) {
-      uint64_t file_id = file.FileID();
-      filenames[file_id] = file.Filename();
-      for (const ZoneExtentSnapshot& extent : file.Extent()) {
-        sizes[extent.ZoneID()][file_id] += extent.Length();
-      }
-    }
-
-    std::vector<BDZoneStat> stat;
-
-    for (auto& zone : zones) {
-      BDZoneStat bd_zone(zone);
-      std::map<uint64_t, uint64_t>& zone_files = sizes[bd_zone.FakeID()];
-      
-      for (auto& file : zone_files) {
-        uint64_t file_id = file.first;
-        uint64_t file_length = file.second;
-        BDZoneFileStat file_stat;
-        file_stat.file_id = file_id;
-        file_stat.size_in_zone = file_length;
-        file_stat.filename = filenames[file_id];
-        bd_zone.files.emplace_back(std::move(file_stat));
-      }
-    }
-
-    return stat;
+    stat.SetStat(snapshot, options);
   }
+
   void GetZenFSSnapshot(ZenFSSnapshot& snapshot, const ZenFSSnapshotOptions& options) {
     auto zen_fs = dynamic_cast<ZenFS*>(fs_);
     zen_fs->GetZenFSSnapshot(snapshot, options);
   }
+  
   void Set_metrics_tag(std::string tag) { metrics_tag_ = tag; }
   std::string MetricsTag() { return metrics_tag_; }
  private:
@@ -564,10 +528,10 @@ Status NewZenfsEnv(
   return s;
 }
 
-std::vector<BDZoneStat> GetStat(Env* env) {
+void GetStat(Env* env, BDZenFSStat& stat) {
   auto zen_env = dynamic_cast<ZenfsEnv*>(env);
-  if (!zen_env) return {};
-  return zen_env->GetStat();
+  if (zen_env)
+    zen_env->GetStat(stat);
 }
 
 void GetZenFSSnapshot(Env* env, ZenFSSnapshot& snapshot, const ZenFSSnapshotOptions& options) {
@@ -600,7 +564,7 @@ Status GetZbdDiskSpaceInfo(Env* env, uint64_t& total_size, uint64_t& avail_size,
   return Status::NotSupported("GetZbdDiskSpaceInfo is not implemented.");
 }
 
-std::vector<BDZoneStat> GetStat(Env* env) { return {}; }
+void GetStat(Env* env, BDZenFSStat& stat) {}
 void GetZenFSSnapshot(Env* env, ZenFSSnapshot& snapshot, const ZenFSSnapshotOptions& options) {}
 
 }  // namespace TERARKDB_NAMESPACE
