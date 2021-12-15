@@ -43,6 +43,7 @@ CMAKE_DEPENDENT_OPTION(WITH_TESTS "build with tests" ON "CMAKE_BUILD_TYPE STREQU
 option(WITH_TOOLS "build with tools" OFF)
 option(WITH_TERARK_ZIP "build with TerarkZipTable support" ON)
 option(WITH_ZENFS "build with experimental zenfs" OFF)
+option(WITH_LAVAFS "build with lavafs" OFF)
 option(WITH_DIAGNOSE_CACHE "build with diagnosable cache support" OFF)
 option(WITH_BOOSTLIB "build with boost, if WITH_TERARK_ZIP is ON, this will also set to ON" OFF)
 option(WITH_TERARKDB_NAMESPACE "namespace" "terarkdb")
@@ -56,6 +57,12 @@ endif()
 
 if(NOT WITH_TERARKDB_NAMESPACE)
   SET(WITH_TERARKDB_NAMESPACE "terarkdb")
+endif()
+
+if(WITH_LAVAFS)
+  SET(WITH_TERARKDB_NAMESPACE "rocksdb")
+  #used by lavafs code path to enable specific config for terarkdb case
+  add_definitions(-DTERARKDB=1)
 endif()
 MESSAGE(STATUS "terarkdb namespace: " ${WITH_TERARKDB_NAMESPACE})
 
@@ -190,6 +197,18 @@ if(WITH_ZSTD)
   include_directories(${zstd_INCLUDE_DIR})
   list(APPEND THIRDPARTY_LIBS zstd)
   message("[terarkdb] zstd include dir : ${zstd_INCLUDE_DIR}")
+endif()
+
+if(WITH_LAVAFS)
+  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_EXTENSIONS OFF)
+  set(CMAKE_CXX_STANDARD_REQUIRED ON)
+  set(CMAKE_C_STANDARD 99)
+
+  get_target_property(lavafs_INCLUDE_DIR lavafs INTERFACE_INCLUDE_DIRECTORIES)
+  include_directories(${lavafs_INCLUDE_DIR})
+  list(APPEND THIRDPARTY_LIBS lavafs)
+  message("[terarkdb] lavafs include dir : ${lavafs_INCLUDE_DIR}")
 endif()
 
 string(TIMESTAMP GIT_DATE_TIME "%Y/%m/%d %H:%M:%S" UTC)

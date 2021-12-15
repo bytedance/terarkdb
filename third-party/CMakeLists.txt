@@ -145,6 +145,72 @@ IF(WITH_ZSTD)
   ENDIF()
 ENDIF()
 
+# LAVAFS
+IF(WITH_LAVAFS)
+  IF(TARGET lavafs)
+    MESSAGE("[terarkdb/third-party] lavafs target existed, re-use it!")
+  ELSE()
+    MESSAGE("[terarkdb/third-party] lavafs target not exist, let's build it!")
+    execute_process(
+      COMMAND mkdir -p ${CMAKE_CURRENT_SOURCE_DIR}/lavafs/build
+      )
+    ExternalProject_Add(lavafs-project
+        SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lavafs
+	BINARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lavafs/build
+	CONFIGURE_COMMAND cmake ${CMAKE_CURRENT_SOURCE_DIR}/lavafs -DCMAKE_BUILD_TYPE=Release -DWITH_LIBURING=OFF -DWITH_TERARKDB=ON
+        BUILD_IN_SOURCE 0
+        BUILD_COMMAND $(MAKE) "lava-bluerocks" "lava-bluefs" "lavafs_util" "lava-unittest_alloc"
+        INSTALL_COMMAND ""
+    )
+
+    ADD_LIBRARY(ceph-common SHARED IMPORTED GLOBAL)
+    ADD_DEPENDENCIES(ceph-common lavafs-project)
+    SET_TARGET_PROPERTIES(ceph-common PROPERTIES
+        IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/lavafs/build/lib/libceph-common.so.2
+    )
+
+    ADD_LIBRARY(lava-bluerocks SHARED IMPORTED GLOBAL)
+    ADD_DEPENDENCIES(lava-bluerocks lavafs-project)
+    SET_TARGET_PROPERTIES(lava-bluerocks PROPERTIES
+        IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/lavafs/build/src/os/liblava-bluerocks.so
+    )
+
+    ADD_LIBRARY(lava-bluefs STATIC IMPORTED GLOBAL)
+    ADD_DEPENDENCIES(lava-bluefs lavafs-project)
+    SET_TARGET_PROPERTIES(lava-bluefs PROPERTIES
+        IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/lavafs/build/src/os/liblava-bluefs.a
+    )
+
+    ADD_LIBRARY(lava-blk STATIC IMPORTED GLOBAL)
+    ADD_DEPENDENCIES(lava-blk lavafs-project)
+    SET_TARGET_PROPERTIES(lava-blk PROPERTIES
+        IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/lavafs/build/src/blk/liblava-blk.a
+    )
+
+    ADD_LIBRARY(ceph-global STATIC IMPORTED GLOBAL)
+    ADD_DEPENDENCIES(ceph-global lavafs-project)
+    SET_TARGET_PROPERTIES(ceph-global PROPERTIES
+        IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/lavafs/build/lib/libglobal.a
+    )
+
+    ADD_LIBRARY(ceph-erasure_code STATIC IMPORTED GLOBAL)
+    ADD_DEPENDENCIES(ceph-erasure_code lavafs-project)
+    SET_TARGET_PROPERTIES(ceph-erasure_code PROPERTIES
+        IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/lavafs/build/lib/liberasure_code.a
+    )
+
+    ADD_LIBRARY(lavafs INTERFACE)
+    ADD_DEPENDENCIES(lavafs lavafs-project)
+    TARGET_LINK_LIBRARIES(lavafs INTERFACE
+        lava-bluerocks lava-bluefs lava-blk ceph-global ceph-erasure_code ceph-common)
+    TARGET_INCLUDE_DIRECTORIES(lavafs INTERFACE
+        ${CMAKE_CURRENT_SOURCE_DIR}/lavafs/build/_deps/ceph-src/src/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/lavafs/build/_deps/ceph-src/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/lavafs/build/_deps/ceph-build/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/lavafs/src/os/bluestore)
+  ENDIF()
+ENDIF()
+
 # LZ4
 IF(WITH_LZ4)
   IF(TARGET lz4)
