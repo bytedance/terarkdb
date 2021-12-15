@@ -58,6 +58,12 @@ endif()
 if(NOT WITH_TERARKDB_NAMESPACE)
   SET(WITH_TERARKDB_NAMESPACE "terarkdb")
 endif()
+
+if(WITH_LAVAFS)
+  SET(WITH_TERARKDB_NAMESPACE "rocksdb")
+  #used by lavafs code path to enable specific config for terarkdb case
+  add_definitions(-DTERARKDB=1)
+endif()
 MESSAGE(STATUS "terarkdb namespace: " ${WITH_TERARKDB_NAMESPACE})
 
 option(BUILD_SUFFIX "library suffix" "d")
@@ -194,7 +200,12 @@ if(WITH_ZSTD)
 endif()
 
 if(WITH_LAVAFS)
-  get_target_property(lavafs_INCLUDE_DIR lavafs INCLUDE_DIRECTORIES)
+  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_EXTENSIONS OFF)
+  set(CMAKE_CXX_STANDARD_REQUIRED ON)
+  set(CMAKE_C_STANDARD 99)
+
+  get_target_property(lavafs_INCLUDE_DIR lavafs INTERFACE_INCLUDE_DIRECTORIES)
   include_directories(${lavafs_INCLUDE_DIR})
   list(APPEND THIRDPARTY_LIBS lavafs)
   message("[terarkdb] lavafs include dir : ${lavafs_INCLUDE_DIR}")

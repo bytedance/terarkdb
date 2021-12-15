@@ -37,6 +37,9 @@
 #include "db/malloc_stats.h"
 #include "db/version_set.h"
 #include "hdfs/env_hdfs.h"
+#ifdef WITH_LAVAFS
+#include "BlueRocksEnv.h"
+#endif
 #include "monitoring/histogram.h"
 #include "monitoring/statistics.h"
 #include "options/cf_options.h"
@@ -835,6 +838,10 @@ DEFINE_string(fs_uri, "",
 DEFINE_string(hdfs, "",
               "Name of hdfs environment. Mutually exclusive with"
               " --env_uri and --fs_uri");
+#ifdef WITH_LAVAFS
+DEFINE_string(lavafs, "", "Name of lavafs environment. set lavafs device path."
+              "Mutually exclusive with --hdfs, --env_uri");
+#endif
 #ifdef WITH_ZENFS
 DEFINE_string(zbd_path, "", "Path of zone block device.");
 DEFINE_string(aux_path, "", "Aux path for zenfs.");
@@ -5867,6 +5874,11 @@ int db_bench_tool(int argc, char** argv) {
       exit(1);
     }
   } 
+#ifdef WITH_LAVAFS
+  else if (!FLAGS_lavafs.empty()) {
+    FLAGS_env = new BlueRocksEnv(FLAGS_lavafs);
+  }
+#endif
 #ifdef WITH_ZENFS
   else if (!FLAGS_zbd_path.empty()) {
     if (metrics_reporter_factory == nullptr) {

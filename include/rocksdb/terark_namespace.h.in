@@ -12,8 +12,13 @@
 #cmakedefine WITH_BOOSTLIB
 #cmakedefine WITH_DIAGNOSE_CACHE
 #cmakedefine WITH_ZENFS
+#cmakedefine WITH_LAVAFS
 
 #ifdef WITH_ZENFS
 #define ROCKSDB_NAMESPACE @WITH_TERARKDB_NAMESPACE@
 #define LIBZBD
+#endif
+
+#ifdef WITH_LAVAFS
+#define ROCKSDB_NAMESPACE @WITH_TERARKDB_NAMESPACE@
 #endif
