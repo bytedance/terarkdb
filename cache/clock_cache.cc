@@ -649,7 +649,7 @@ bool ClockCacheShard::Release(Cache::Handle* h, bool force_erase) {
 
 bool ClockCacheShard::Erase(const Slice& key, uint32_t hash) {
   CleanupContext context;
-  bool ret EraseAndConfirm(key, hash, &context);
+  bool ret = EraseAndConfirm(key, hash, &context);
   Cleanup(context);
   return ret;
 }
