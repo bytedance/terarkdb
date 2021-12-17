@@ -6,10 +6,10 @@
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
 #include "rocksdb/options.h"
+#include "rocksdb/perf_context.h"
 #include "rocksdb/terark_namespace.h"
 #include "util/testutil.h"
 #include "utilities/merge_operators.h"
-#include "rocksdb/perf_context.h"
 
 namespace TERARKDB_NAMESPACE {
 
@@ -1527,7 +1527,7 @@ TEST_F(DBRangeDelTest, RangeTombstoneWrittenToMinimalSsts) {
   ASSERT_EQ(1, num_range_deletions);
 }
 
-TEST_F(DBRangeDelTest, SeekInDeleteRange){
+TEST_F(DBRangeDelTest, SeekInDeleteRange) {
   const int kFileBytes = 1 << 20;
   const int kValueBytes = 4 << 10;
   Options options = CurrentOptions();
@@ -1539,8 +1539,6 @@ TEST_F(DBRangeDelTest, SeekInDeleteRange){
   options.target_file_size_base = 2 * kFileBytes;
   options.write_buffer_size = 2 * kFileBytes;
   Reopen(options);
-  
-  get_perf_context()->Reset();
   Random rnd(301);
   for (char first_char : {'a', 'b', 'c'}) {
     for (int i = 0; i < kFileBytes / kValueBytes; ++i) {
@@ -1564,22 +1562,22 @@ TEST_F(DBRangeDelTest, SeekInDeleteRange){
 
   db_->Flush(FlushOptions());
 
-  auto test = [&](const Slice& upper_bound,const int skipped, bool valid){
+  auto test = [&](const Slice& target, const Slice& upper_bound,
+                  const int skipped, bool valid) {
+    get_perf_context()->Reset();
     ReadOptions read_opts;
     read_opts.iterate_upper_bound = &upper_bound;
     auto* iter = db_->NewIterator(read_opts);
-    
-    iter->Seek("b"+ Key(5));
+    iter->Seek(target);
     assert(iter->Valid() == valid);
-    delete iter;  
+    delete iter;
     ASSERT_EQ(
-          static_cast<int>(get_perf_context()->internal_delete_skipped_count), skipped);
-    get_perf_context()->Reset();
+        static_cast<int>(get_perf_context()->internal_delete_skipped_count),
+        skipped);
   };
 
-  test(Slice("b" + Key(10)),5, false);
-  test(Slice("c" + Key(10)),251, true);
-
+  test(Slice("b" + Key(5)), Slice("b" + Key(10)), 5, false);
+  test(Slice("b" + Key(5)), Slice("c" + Key(10)), 251, true);
 }
 
 #endif  // ROCKSDB_LITE
