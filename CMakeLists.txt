@@ -1207,9 +1207,6 @@ if(WITH_TOOLS)
       $<TARGET_OBJECTS:testharness>)
   target_link_libraries(db_bench${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
 
-  add_executable(remote_compaction_worker_101 tools/remote_compaction_worker_101.cc
-      $<TARGET_OBJECTS:testharness>)
-  target_link_libraries(remote_compaction_worker_101 gtest ${ROCKSDB_STATIC_LIB})
                       
   if(WITH_ZENFS)
     include_directories(third-party/zenfs)
@@ -1228,6 +1225,9 @@ if(WITH_TOOLS)
   endif()
 
   if(WITH_TERARK_ZIP)
+    add_executable(remote_compaction_worker_101 tools/remote_compaction_worker_101.cc
+      $<TARGET_OBJECTS:testharness>)
+    target_link_libraries(remote_compaction_worker_101 gtest ${ROCKSDB_STATIC_LIB})
     add_subdirectory(terark-tools/terark-test)
   endif()
   add_subdirectory(tools)
