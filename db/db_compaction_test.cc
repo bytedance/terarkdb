@@ -4250,13 +4250,6 @@ TEST_F(DBCompactionTest, BlobOverlapThredhold) {
     Put(Key(i), bigval);
   }
   Flush();
-
-  dbfull()->TEST_WaitForCompact();
-
-  ASSERT_EQ(NumTableFilesAtLevel(0), 0);
-  ASSERT_EQ(NumTableFilesAtLevel(1), 1);
-  // old sst file in level-1 can be remove , only leave 6(3+3) blob file which
-  // is origin flush sst
   ASSERT_EQ(NumTableFilesAtLevel(-1), 6);
 
   auto blob_overlap_scores2 = dbfull()
@@ -4269,24 +4262,47 @@ TEST_F(DBCompactionTest, BlobOverlapThredhold) {
   ASSERT_TRUE(verify_scores(blob_overlap_scores2, "2,3,3,3,3,4,"));
 
   // now we have 6 blobs:
-  // 8: [0,              2000)
-  // 11:             [1000,         3000)
-  // 13:                        [2500,       3500)
-  // 16:                                     [3400,        4500)
-  // 18:                                   [3200,   4000)
-  // 20:  [100,999)
+  // Flush1: [0,              2000)
+  // Flush2:             [1000,         3000)
+  // Flush3:                        [2500,       3500)
+  // Flush4:                                     [3400,        4500)
+  // Flush5:                                   [3200,   4000)
+  // Flush6:  [100,999)
   // overlap range is [3400, 3500) which contains 3 files (13,16,18)
+
+  int call_back_cnt = 0;
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "Compaction::GetRebuildNeededBlobs::End", [&](void* arg) {
         chash_set<uint64_t>* rebuild_blob_set = (chash_set<uint64_t>*)arg;
-        std::string expect =
-            "13,18,16,";  // TODO filenumber is not stable , future ut may fail
-                          // here when change flush logic
-        std::string we_get;
-        for (auto blob : *rebuild_blob_set) {
-          we_get.append(std::to_string(blob) + ",");
+        call_back_cnt++;
+        auto& dependence_map = dbfull()
+                                   ->TEST_GetVersionSet()
+                                   ->GetColumnFamilySet()
+                                   ->GetColumnFamily("default")
+                                   ->current()
+                                   ->storage_info()
+                                   ->dependence_map();
+        auto test = [&](int blob_number, int start, int end) {
+          auto b = dependence_map.find(blob_number);
+          ASSERT_EQ(b->second->smallest.user_key().ToString(), Key(start));
+          ASSERT_EQ(b->second->largest.user_key().ToString(), Key(end));
+        };
+
+        if (call_back_cnt == 1) {
+          ASSERT_EQ(rebuild_blob_set->size(), 3);
+          std::vector<uint64_t> blobs;
+          for (auto blob : *rebuild_blob_set) {
+            blobs.push_back(blob);
+          }
+          test(blobs[0], 2500, 3499);
+          test(blobs[1], 3200, 3999);
+          test(blobs[2], 3400, 4499);
+
+          // ASSERT(dependence_map)
         }
-        ASSERT_EQ(expect, we_get);
+        if (call_back_cnt == 2) {
+          ASSERT_EQ(rebuild_blob_set->size(), 0);
+        }
       });
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
       "CompactionJob::FinishCompactionOutputBlob::Start", [&](void* arg) {
@@ -4295,7 +4311,10 @@ TEST_F(DBCompactionTest, BlobOverlapThredhold) {
         ASSERT_EQ(meta->largest.user_key().ToString(), Key(4499));
       });
   TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
-
+  dbfull()->TEST_WaitForCompact();
+  ASSERT_EQ(call_back_cnt, 1);
+  ASSERT_EQ(NumTableFilesAtLevel(0), 0);
+  ASSERT_EQ(NumTableFilesAtLevel(1), 1);
   // flush 3 normal sst to triger compaction with level-1, so that rebuild
   // overlap blob
   for (i = 500; i < 600; ++i) {
@@ -4310,8 +4329,8 @@ TEST_F(DBCompactionTest, BlobOverlapThredhold) {
     Put(Key(i), normal_val);
   }
   Flush();
-
   dbfull()->TEST_WaitForCompact();
+  ASSERT_EQ(call_back_cnt, 2);
 }
 
 #endif  // !defined(ROCKSDB_LITE)
