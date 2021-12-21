@@ -6,6 +6,7 @@
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
 #include "rocksdb/options.h"
+#include "rocksdb/perf_context.h"
 #include "rocksdb/terark_namespace.h"
 #include "util/testutil.h"
 #include "utilities/merge_operators.h"
@@ -1524,6 +1525,59 @@ TEST_F(DBRangeDelTest, RangeTombstoneWrittenToMinimalSsts) {
     }
   }
   ASSERT_EQ(1, num_range_deletions);
+}
+
+TEST_F(DBRangeDelTest, SeekInDeleteRange) {
+  const int kFileBytes = 1 << 20;
+  const int kValueBytes = 4 << 10;
+  Options options = CurrentOptions();
+  options.compression = kNoCompression;
+  options.disable_auto_compactions = true;
+  // Have a bit of slack in the size limits but we enforce them more strictly
+  // when manually flushing/compacting.
+  options.max_compaction_bytes = 2 * kFileBytes;
+  options.target_file_size_base = 2 * kFileBytes;
+  options.write_buffer_size = 2 * kFileBytes;
+  Reopen(options);
+  Random rnd(301);
+  for (char first_char : {'a', 'b', 'c'}) {
+    for (int i = 0; i < kFileBytes / kValueBytes; ++i) {
+      std::string key(1, first_char);
+      key.append(Key(i));
+      std::string value = RandomString(&rnd, kValueBytes);
+      ASSERT_OK(Put(key, value));
+    }
+    db_->Flush(FlushOptions());
+    MoveFilesToLevel(2);
+  }
+  ASSERT_EQ(0, NumTableFilesAtLevel(0));
+  ASSERT_EQ(3, NumTableFilesAtLevel(2));
+
+  // Populate the memtable lightly while spanning the whole key-space. The
+  // setting of `max_compaction_bytes` will cause the L0->L1 to output multiple
+  // files to prevent a large L1->L2 compaction later.
+  ASSERT_OK(Put("a", "val"));
+  ASSERT_OK(db_->DeleteRange(WriteOptions(), db_->DefaultColumnFamily(),
+                             "b" + Key(1), "c"));
+
+  db_->Flush(FlushOptions());
+
+  auto test = [&](const Slice& target, const Slice& upper_bound,
+                  const int skipped, bool valid) {
+    get_perf_context()->Reset();
+    ReadOptions read_opts;
+    read_opts.iterate_upper_bound = &upper_bound;
+    auto* iter = db_->NewIterator(read_opts);
+    iter->Seek(target);
+    assert(iter->Valid() == valid);
+    delete iter;
+    ASSERT_EQ(
+        static_cast<int>(get_perf_context()->internal_delete_skipped_count),
+        skipped);
+  };
+
+  test(Slice("b" + Key(5)), Slice("b" + Key(10)), 5, false);
+  test(Slice("b" + Key(5)), Slice("c" + Key(10)), 251, true);
 }
 
 #endif  // ROCKSDB_LITE
