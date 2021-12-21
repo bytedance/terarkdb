@@ -1284,13 +1284,22 @@ void InternalStats::DumpCFStatsNoFileHistogram(std::string* value) {
   // Compact
   uint64_t compact_bytes_read = 0;
   uint64_t compact_bytes_write = 0;
+  uint64_t compact_bytes_rebuild_write = 0;
+  uint64_t compact_bytes_lsm_write = 0;
   uint64_t compact_micros = 0;
   for (int level = 0; level < number_levels_; level++) {
     compact_bytes_read += comp_stats_[level].bytes_read_output_level +
                           comp_stats_[level].bytes_read_non_output_levels;
-    compact_bytes_write += comp_stats_[level].bytes_written;
+    compact_bytes_rebuild_write += comp_stats_[level].bytes_blob_written;
+    compact_bytes_lsm_write += comp_stats_[level].bytes_written;
     compact_micros += comp_stats_[level].micros;
   }
+  compact_bytes_read += comp_blob_stat_.bytes_read_non_output_levels +
+                        comp_blob_stat_.bytes_read_non_output_levels;
+  compact_bytes_write += comp_blob_stat_.bytes_written +
+                         comp_blob_stat_.bytes_blob_written +
+                         compact_bytes_rebuild_write + compact_bytes_lsm_write;
+  compact_micros += comp_blob_stat_.micros;
 
   snprintf(buf, sizeof(buf),
            "Cumulative compaction: %.2f GB write, %.2f MB/s write, "
@@ -1298,6 +1307,13 @@ void InternalStats::DumpCFStatsNoFileHistogram(std::string* value) {
            compact_bytes_write / kGB, compact_bytes_write / kMB / seconds_up,
            compact_bytes_read / kGB, compact_bytes_read / kMB / seconds_up,
            compact_micros / kMicrosInSec);
+  value->append(buf);
+
+  snprintf(buf, sizeof(buf),
+           "Cumulative compaction: %.2f GB (write-lsm), %.2f GB "
+           "(write-rebuild), %.2f GB (write-gc)",
+           compact_bytes_lsm_write / kGB, compact_bytes_rebuild_write / kGB,
+           comp_blob_stat_.bytes_blob_written / kGB);
   value->append(buf);
 
   // Compaction interval
