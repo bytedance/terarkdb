@@ -364,6 +364,12 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // Default: 0
   size_t ttl_max_scan_gap = 0;
 
+
+  // when sst's dependence invalid blob count more than the trigger
+  // we agree mark the sst
+  // Default: 10;
+  size_t invalid_blob_cnt_mark_trigger = 10;
+
   // Create ColumnFamilyOptions with default values for all fields
   ColumnFamilyOptions();
   // Create ColumnFamilyOptions from Options

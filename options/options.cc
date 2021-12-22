@@ -283,6 +283,8 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
                    ttl_gc_ratio);
   ROCKS_LOG_HEADER(log, "                       Options.ttl_max_scan_gap: %zd",
                    ttl_max_scan_gap);
+  ROCKS_LOG_HEADER(log, "          Options.invalid_blob_cnt_mark_trigger: %zd",
+                   invalid_blob_cnt_mark_trigger);
 
   const auto& it_compaction_style =
       compaction_style_to_string.find(compaction_style);

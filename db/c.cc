@@ -2487,6 +2487,11 @@ void rocksdb_options_set_max_dependence_blob_overlap(rocksdb_options_t* opt,
   opt->rep.max_dependence_blob_overlap = v;
 }
 
+void rocksdb_options_set_invalid_blob_cnt_mark_trigger(rocksdb_options_t* opt,
+                                                     size_t v) {
+  opt->rep.invalid_blob_cnt_mark_trigger = v;
+}
+
 void rocksdb_options_set_maintainer_job_ratio(rocksdb_options_t* opt,
                                               double v) {
   opt->rep.maintainer_job_ratio = v;

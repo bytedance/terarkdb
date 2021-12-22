@@ -426,6 +426,16 @@ class VersionBuilder::Rep {
       }
     }
 
+    auto should_mark = [&](FileMetaData* f) {
+      uint64_t cnt = 0;
+      for (auto depend : f->prop.dependence) {
+        if (depend.file_number !=
+            TransFileNumber(depend.file_number)->file_number)
+          cnt++;
+      }
+      return cnt >= 10;
+    };
+
     if (finish) {
       std::sort(old_file_queue.begin(), old_file_queue.end());
       for (uint64_t fn : old_file_queue) {
@@ -433,8 +443,10 @@ class VersionBuilder::Rep {
         if (f->fd.GetFileSize() > context_->maintainer_job_limit) {
           break;
         }
-        context_->maintainer_job_limit -= f->fd.GetFileSize();
-        f->marked_for_compaction |= FileMetaData::kMarkedFromUpdateBlob;
+        if (should_mark(f)) {
+          context_->maintainer_job_limit -= f->fd.GetFileSize();
+          f->marked_for_compaction |= FileMetaData::kMarkedFromUpdateBlob;
+        }
       }
     }
 

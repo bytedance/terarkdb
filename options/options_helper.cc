@@ -198,6 +198,8 @@ ColumnFamilyOptions BuildColumnFamilyOptions(
       mutable_cf_options.max_bytes_for_level_multiplier;
   cf_opts.ttl_gc_ratio = mutable_cf_options.ttl_gc_ratio;
   cf_opts.ttl_max_scan_gap = mutable_cf_options.ttl_max_scan_gap;
+  cf_opts.invalid_blob_cnt_mark_trigger =
+      mutable_cf_options.invalid_blob_cnt_mark_trigger;
 
   cf_opts.max_bytes_for_level_multiplier_additional =
       mutable_cf_options.max_bytes_for_level_multiplier_additional;
@@ -2166,7 +2168,11 @@ std::unordered_map<std::string, OptionTypeInfo>
         {"ttl_max_scan_gap",
          {offset_of(&ColumnFamilyOptions::ttl_max_scan_gap), OptionType::kSizeT,
           OptionVerificationType::kNormal, true,
-          offsetof(struct MutableCFOptions, ttl_max_scan_gap)}}};
+          offsetof(struct MutableCFOptions, ttl_max_scan_gap)}},
+        {"invalid_blob_cnt_mark_trigger",
+         {offset_of(&ColumnFamilyOptions::invalid_blob_cnt_mark_trigger),
+          OptionType::kSizeT, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, invalid_blob_cnt_mark_trigger)}}};
 
 std::unordered_map<std::string, OptionTypeInfo>
     OptionsHelper::universal_compaction_options_type_info = {
