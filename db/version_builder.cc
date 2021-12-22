@@ -324,7 +324,8 @@ class VersionBuilder::Rep {
   }
 
   void CalculateDependence(bool finish, bool is_open_db,
-                           double maintainer_job_ratio) {
+                           double maintainer_job_ratio,
+                           size_t invalid_blob_cnt) {
     if (!finish && (!is_open_db || context_->new_deleted_files < 65536)) {
       return;
     }
@@ -433,7 +434,7 @@ class VersionBuilder::Rep {
             TransFileNumber(depend.file_number)->file_number)
           cnt++;
       }
-      return cnt >= 10;
+      return cnt >= invalid_blob_cnt;
     };
 
     if (finish) {
@@ -688,15 +689,16 @@ class VersionBuilder::Rep {
     }
 
     // shrink files
-    CalculateDependence(false, edit->is_open_db(), 0);
+    CalculateDependence(false, edit->is_open_db(), 0, 0);
   }
 
   // Save the current state in *v.
   // WARNING: this func will call out of mutex
-  void SaveTo(VersionStorageInfo* vstorage, double maintainer_job_ratio) {
+  void SaveTo(VersionStorageInfo* vstorage, double maintainer_job_ratio,
+              size_t invalid_blob_cnt) {
     Init();
     CheckConsistency(vstorage, true);
-    CalculateDependence(true, false, maintainer_job_ratio);
+    CalculateDependence(true, false, maintainer_job_ratio, invalid_blob_cnt);
     auto exists = [&](uint64_t file_number) {
       auto find = context_->inheritance_counter.find(file_number);
       assert(find != context_->inheritance_counter.end());
@@ -891,8 +893,9 @@ bool VersionBuilder::CheckConsistencyForNumLevels() {
 void VersionBuilder::Apply(VersionEdit* edit) { rep_->Apply(edit); }
 
 void VersionBuilder::SaveTo(VersionStorageInfo* vstorage,
-                            double maintainer_job_ratio) {
-  rep_->SaveTo(vstorage, maintainer_job_ratio);
+                            double maintainer_job_ratio,
+                            size_t invalid_blob_cnt) {
+  rep_->SaveTo(vstorage, maintainer_job_ratio, invalid_blob_cnt);
 }
 
 void VersionBuilder::LoadTableHandlers(InternalStats* internal_stats,
