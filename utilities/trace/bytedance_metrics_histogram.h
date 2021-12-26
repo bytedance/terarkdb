@@ -176,7 +176,7 @@ public:
   virtual void ReportGeneral(uint32_t label, size_t value) override {
     Report(label, value, ZENFS_REPORTER_TYPE_GENERAL);
   }
-  virtual void ReportSnapshot(const ZenFSSnapshot& snapshot, const ZenFSSnapshotOptions& options) override;
+  virtual void ReportSnapshot(const ZenFSSnapshot& snapshot) override;
  
  public:
   BDZenFSMetrics(std::shared_ptr<MetricsReporterFactory> factory, std::string bytedance_tags, std::shared_ptr<Logger> logger = nullptr):

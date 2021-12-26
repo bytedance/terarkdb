@@ -8,6 +8,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #include "db/db_impl.h"
 
+#include <iostream>
 #include <numeric>
 
 #include "db/version_edit.h"
@@ -90,7 +91,7 @@
 #include "utilities/trace/bytedance_metrics_reporter.h"
 
 #ifdef WITH_ZENFS
-#include "util/zbd_stat.h"
+#include "utilities/trace/zbd_stat.h"
 #endif
 
 #if !defined(_MSC_VER) && !defined(__APPLE__)
@@ -1090,20 +1091,20 @@ void DBImpl::ScheduleTtlGC() {
 }
 
 #ifdef WITH_ZENFS
-// Implemented inside `util/fs_zenfs.cc`
+// Implemented inside `env/env_zenfs.cc`
 void GetStat(Env* env, BDZenFSStat& stat);
 void GetZenFSSnapshot(Env* env, ZenFSSnapshot& snapshot, const ZenFSSnapshotOptions& options);
-
+// Migrate target zone's all extents to a new zone
+void MigrateExtents(Env* env, const std::vector<ZoneExtentSnapshot*>& ext, bool direct_io);
 
 void DBImpl::ScheduleMetricsReporter() {
   //TEST_SYNC_POINT("DBImpl:ScheduleMetricsReporter");
   LatencyHistGuard guard(&zenfs_get_snapshot_latency_reporter_);
-  ZenFSSnapshotOptions options;
   ZenFSSnapshot snapshot;
+  ZenFSSnapshotOptions options;
+  options.zbd_ = 1;
+  options.zone_file_ = 0;
   options.trigger_report_ = 1;
-  options.zone_.enabled_ = 0;
-  options.zone_extent_.enabled_ = 0;
-  options.zone_file_.enabled_ = 0;  
   GetZenFSSnapshot(env_, snapshot, options);
 }
 
@@ -1155,9 +1156,15 @@ void DBImpl::ScheduleZNSGC() {
     db_paths.emplace(path.path);
   }
 
+  std::set<uint64_t> migrate_zone_ids;
   std::string strip_filename;
   size_t free = 0, used = 0, reclaim = 0, total = 0;
   for (const auto& zone : stat) {
+    // Collect all zones with over 80% garbage
+    if (zone.GarbageRate() > 0.8) {
+      migrate_zone_ids.emplace(zone.start_position);
+    }
+        
     free += zone.free_capacity;
     used += zone.used_capacity;
     total += zone.used_capacity + zone.reclaim_capacity;
@@ -1165,6 +1172,17 @@ void DBImpl::ScheduleZNSGC() {
       reclaim += zone.reclaim_capacity;
     }
   }
+
+  // Migrate all proper extents larger than `min_szie`
+  uint32_t min_size = 128 << 10;
+  std::vector<ZoneExtentSnapshot*> migrate_exts;
+  for(auto& ext: zenfs_stat.snapshot_.extents_) {
+    if (migrate_zone_ids.find(ext.zone_start) != migrate_zone_ids.end() && ext.length > min_size) {
+      migrate_exts.push_back(&ext);
+    }
+  }
+  MigrateExtents(env_, migrate_exts, immutable_db_options_.use_direct_io_for_flush_and_compaction);
+  ROCKS_LOG_BUFFER(&log_buffer_info,"ZNS GC: Migrate Extent Count: %d", migrate_exts.size());
 
   // Overall free capacity ratio of disk.
   double free_r = double(free) / total;
