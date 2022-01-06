@@ -139,6 +139,8 @@ const std::vector<std::pair<Tickers, std::string>> TickersNameMap = {
     {GC_TOUCH_FILES, "rocksdb.num.gc.touch_files"},
     {GC_SKIP_GET_BY_SEQ, "rocksdb.num.gc.skip_by_seqno"},
     {GC_SKIP_GET_BY_FILE, "rocksdb.num.gc.skip_by_file_meta"},
+    {READ_BLOB_VALID, "rocksdb.num.read.blob_valid"},
+    {READ_BLOB_INVALID, "rocksdb.num.read.blob_invalid"},
 };
 
 const std::vector<std::pair<Histograms, std::string>> HistogramsNameMap = {

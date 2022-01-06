@@ -1216,6 +1216,11 @@ VersionStorageInfo::VersionStorageInfo(
       file_indexer_(user_comparator),
       compaction_style_(compaction_style),
       files_(new std::vector<FileMetaData*>[num_levels_ + 1]),
+      edge_cnt_levels_(0),
+      valid_file_cnt_(0),
+      valid_entry_cnt_(0),
+      invalid_file_cnt_(0),
+      invalid_entry_cnt_(0),
       base_level_(num_levels_ == 1 ? -1 : 1),
       level_multiplier_(0.0),
       files_by_compaction_pri_(num_levels_),
@@ -1275,6 +1280,11 @@ Status Version::fetch_buffer(LazyBuffer* buffer) const {
                  context->data[1]);
   uint64_t sequence = context->data[2];
   auto pair = *reinterpret_cast<DependenceMap::value_type*>(context->data[3]);
+  if (pair.second->fd.GetNumber() != pair.first) {
+    RecordTick(db_statistics_, READ_BLOB_INVALID);
+  } else {
+    RecordTick(db_statistics_, READ_BLOB_VALID);
+  }
   bool value_found = false;
   SequenceNumber context_seq;
   GetContext get_context(cfd_->internal_comparator().user_comparator(), nullptr,
@@ -4877,6 +4887,68 @@ void VersionStorageInfo::CalculateEdge() {
     }
     edge_cnt_levels_.push_back(cnt);
   }
+}
+
+void VersionStorageInfo::CalculateBlobInfo() {
+  valid_file_cnt_ = 0;
+  valid_entry_cnt_ = 0;
+  invalid_file_cnt_ = 0;
+  invalid_entry_cnt_ = 0;
+  chash_map<uint64_t, uint64_t> file_map;
+  chash_set<uint64_t> invalid_file_set;
+  for (int i = 0; i < num_levels_; i++) {
+    for (auto& f : LevelFiles(i)) {
+      for (auto fn : f->prop.dependence) {
+        file_map[fn.file_number] += fn.entry_count;
+      }
+    }
+  }
+  for (auto f : file_map) {
+    auto depend_it = dependence_map_.find(f.first);
+    assert(depend_it != dependence_map_.end());
+    if (depend_it == dependence_map_.end()) {
+      std::abort();
+    }
+    uint64_t newest_file_number = depend_it->second->fd.GetNumber();
+    if (newest_file_number != f.first) {
+      invalid_file_set.insert(newest_file_number);
+      invalid_entry_cnt_ += f.second;
+    } else {
+      valid_file_cnt_++;
+      valid_entry_cnt_ += f.second;
+    }
+  }
+  invalid_file_cnt_ = invalid_file_set.size();
+}
+
+void VersionStorageInfo::LogLSMState(EventLoggerStream& stream) {
+  stream << "lsm_state";
+  stream.StartArray();
+  for (int level = 0; level < num_levels(); ++level) {
+    if (LevelFiles(level).size() == 1 &&
+        LevelFiles(level).front()->prop.is_map_sst()) {
+      stream << std::to_string(LevelFiles(level).front()->prop.num_entries);
+    } else {
+      stream << NumLevelFiles(level);
+    }
+  }
+  stream.EndArray();
+  stream << "edge_state";
+  stream.StartArray();
+  for (auto& cnt : edge_cnt_levels()) {
+    stream << cnt;
+  }
+  stream.EndArray();
+  stream << "blob_count";
+  stream << NumLevelFiles(-1);
+  stream << "invalid_file_cnt";
+  stream << invalid_file_cnt();
+  stream << "valid_file_cnt";
+  stream << valid_file_cnt();
+  stream << "invalid_entry_cnt";
+  stream << invalid_entry_cnt();
+  stream << "valid_entry_cnt";
+  stream << valid_entry_cnt();
 }
 
 }  // namespace TERARKDB_NAMESPACE

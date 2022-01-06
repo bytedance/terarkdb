@@ -735,6 +735,7 @@ class VersionBuilder::Rep {
     vstorage->ResetVersionBuilderContext(context_.release());
     vstorage->ComputeBlobOverlapScore();
     vstorage->CalculateEdge();
+    vstorage->CalculateBlobInfo();
   }
 
   void LoadTableHandlers(InternalStats* internal_stats,
