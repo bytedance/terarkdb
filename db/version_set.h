@@ -46,6 +46,7 @@
 #include "port/port.h"
 #include "rocksdb/env.h"
 #include "rocksdb/terark_namespace.h"
+#include "util/event_logger.h"
 
 namespace TERARKDB_NAMESPACE {
 
@@ -503,6 +504,14 @@ class VersionStorageInfo {
   void CalculateEdge();
   std::vector<uint64_t> edge_cnt_levels() const { return edge_cnt_levels_; }
 
+  void CalculateBlobInfo();
+  uint64_t valid_file_cnt() const { return valid_file_cnt_; }
+  uint64_t valid_entry_cnt() const { return valid_entry_cnt_; }
+  uint64_t invalid_file_cnt() const { return invalid_file_cnt_; }
+  uint64_t invalid_entry_cnt() const { return invalid_entry_cnt_; }
+
+  void LogLSMState(EventLoggerStream& stream);
+
  private:
   const InternalKeyComparator* internal_comparator_;
   const Comparator* user_comparator_;
@@ -526,6 +535,11 @@ class VersionStorageInfo {
   // Record sum of dependence each level
   // We Change it when new version is build
   std::vector<uint64_t> edge_cnt_levels_;
+
+  uint64_t valid_file_cnt_;
+  uint64_t valid_entry_cnt_;
+  uint64_t invalid_file_cnt_;
+  uint64_t invalid_entry_cnt_;
 
   // Dependence files both in files[-1] and dependence_map
   DependenceMap dependence_map_;
