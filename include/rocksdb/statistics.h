@@ -253,6 +253,15 @@ enum Tickers : uint32_t {
 
   NO_ITERATOR_CREATED,  // number of iterators created
   NO_ITERATOR_DELETED,  // number of iterators deleted
+
+  GC_GET_KEYS,
+  GC_TOUCH_FILES,
+  GC_SKIP_GET_BY_SEQ,
+  GC_SKIP_GET_BY_FILE,
+
+  READ_BLOB_VALID,
+  READ_BLOB_INVALID,
+
   TICKER_ENUM_MAX
 };
 
@@ -352,7 +361,7 @@ enum StatsLevel {
 class Statistics {
  public:
   virtual ~Statistics() {}
-
+  static const char* Type() { return "Statistics"; }
   virtual uint64_t getTickerCount(uint32_t tickerType) const = 0;
   virtual void histogramData(uint32_t type,
                              HistogramData* const data) const = 0;

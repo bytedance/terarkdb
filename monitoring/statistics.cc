@@ -135,6 +135,12 @@ const std::vector<std::pair<Tickers, std::string>> TickersNameMap = {
     {NUMBER_MULTIGET_KEYS_FOUND, "rocksdb.number.multiget.keys.found"},
     {NO_ITERATOR_CREATED, "rocksdb.num.iterator.created"},
     {NO_ITERATOR_DELETED, "rocksdb.num.iterator.deleted"},
+    {GC_GET_KEYS, "rocksdb.num.gc.get_keys"},
+    {GC_TOUCH_FILES, "rocksdb.num.gc.touch_files"},
+    {GC_SKIP_GET_BY_SEQ, "rocksdb.num.gc.skip_by_seqno"},
+    {GC_SKIP_GET_BY_FILE, "rocksdb.num.gc.skip_by_file_meta"},
+    {READ_BLOB_VALID, "rocksdb.num.read.blob_valid"},
+    {READ_BLOB_INVALID, "rocksdb.num.read.blob_invalid"},
 };
 
 const std::vector<std::pair<Histograms, std::string>> HistogramsNameMap = {
