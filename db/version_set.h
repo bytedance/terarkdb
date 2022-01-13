@@ -935,6 +935,7 @@ class VersionSet {
   // are not opened
   Status Recover(const std::vector<ColumnFamilyDescriptor>& column_families,
                  bool read_only = false);
+  Status ManifestRollback(InstrumentedMutex* mu);
 
   // Reads a manifest file and returns a list of column families in
   // column_families.
@@ -1136,7 +1137,7 @@ class VersionSet {
                            const Slice& key);
 
   // Save current contents to *log
-  Status WriteSnapshot(log::Writer* log);
+  Status WriteSnapshot(log::Writer* log, const bool rollback = false);
 
   void AppendVersion(ColumnFamilyData* column_family_data, Version* v);
 

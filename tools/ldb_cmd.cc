@@ -81,6 +81,9 @@ const std::string LDBCommand::ARG_WRITE_BUFFER_SIZE = "write_buffer_size";
 const std::string LDBCommand::ARG_FILE_SIZE = "file_size";
 const std::string LDBCommand::ARG_CREATE_IF_MISSING = "create_if_missing";
 const std::string LDBCommand::ARG_NO_VALUE = "no_value";
+const std::string LDBCommand::ARG_REBUILD = "kv_combine";
+const std::string LDBCommand::ARG_PARALLEL = "parallel";
+const std::string LDBCommand::ARG_RATE_LIMITER = "rate_limiter_bytes_per_sec";
 
 const char* LDBCommand::DELIM = " ==> ";
 
@@ -193,6 +196,16 @@ LDBCommand* LDBCommand::SelectCommand(const ParsedParams& parsed_params) {
   } else if (parsed_params.cmd == CompactorCommand::Name()) {
     return new CompactorCommand(parsed_params.cmd_params,
                                 parsed_params.option_map, parsed_params.flags);
+  } else if (parsed_params.cmd == KvCombineCommand::Name()) {
+    ParsedParams combineParam = parsed_params;
+    combineParam.option_map["auto_compaction"] = "false";
+    combineParam.flags.push_back("try_load_options");
+    return new KvCombineCommand(combineParam.cmd_params,
+                                combineParam.option_map, combineParam.flags);
+  } else if (parsed_params.cmd == ManifestRollbackCommand::Name()) {
+    return new ManifestRollbackCommand(parsed_params.cmd_params,
+                                       parsed_params.option_map,
+                                       parsed_params.flags);
   } else if (parsed_params.cmd == WALDumperCommand::Name()) {
     return new WALDumperCommand(parsed_params.cmd_params,
                                 parsed_params.option_map, parsed_params.flags);
@@ -641,6 +654,18 @@ Options LDBCommand::PrepareOptionsForOpenDB() {
           LDBCommandExecuteResult::Failed(ARG_FIX_PREFIX_LEN + " must be > 0.");
     }
   }
+  int rate_limiter_bytes_per_sec;
+  if (ParseIntOption(option_map_, ARG_RATE_LIMITER, rate_limiter_bytes_per_sec, exec_state_)) {
+    if (rate_limiter_bytes_per_sec > 0) {
+      options_.rate_limiter.reset(NewGenericRateLimiter(
+          rate_limiter_bytes_per_sec, 100 * 1000 /* refill_period_us */, 10 /* fairness */,
+          RateLimiter::Mode::kWritesOnly, false));
+    } else {
+      exec_state_ =
+          LDBCommandExecuteResult::Failed(ARG_RATE_LIMITER + " must be > 0.");
+    }
+  }
+
   // TODO(ajkr): this return value doesn't reflect the CF options changed, so
   // subcommands that rely on this won't see the effect of CF-related CLI args.
   // Such subcommands need to be changed to properly support CFs.
@@ -792,7 +817,7 @@ CompactorCommand::CompactorCommand(
     const std::vector<std::string>& flags)
     : LDBCommand(options, flags, false,
                  BuildCmdLineOptions({ARG_FROM, ARG_TO, ARG_HEX, ARG_KEY_HEX,
-                                      ARG_VALUE_HEX, ARG_TTL})),
+                                      ARG_VALUE_HEX, ARG_TTL, ARG_REBUILD})),
       null_from_(true),
       null_to_(true) {
   std::map<std::string, std::string>::const_iterator itr =
@@ -815,6 +840,10 @@ CompactorCommand::CompactorCommand(
     if (!null_to_) {
       to_ = HexToString(to_);
     }
+  }
+  if (IsFlagPresent(flags, ARG_REBUILD)) {
+    printf("compact with kv_combine \n");
+    separation_type = kCompactionCombineValue;
   }
 }
 
@@ -841,6 +870,9 @@ void CompactorCommand::DoCommand() {
   }
 
   CompactRangeOptions cro;
+  if (separation_type == kCompactionCombineValue) {
+    cro.separation_type = kCompactionCombineValue;
+  }
   cro.bottommost_level_compaction = BottommostLevelCompaction::kForce;
 
   db_->CompactRange(cro, GetCfHandle(), begin, end);
@@ -848,6 +880,132 @@ void CompactorCommand::DoCommand() {
 
   delete begin;
   delete end;
+}
+KvCombineCommand::KvCombineCommand(
+    const std::vector<std::string>& /*params*/,
+    const std::map<std::string, std::string>& options,
+    const std::vector<std::string>& flags)
+    : LDBCommand(options, flags, false,
+                 BuildCmdLineOptions({ARG_PARALLEL, ARG_RATE_LIMITER})),
+      parallel_(8) {
+}
+void KvCombineCommand::Help(std::string& ret) {
+  ret.append("  ");
+  ret.append(KvCombineCommand::Name());
+  ret.append("\n");
+}
+void KvCombineCommand::DoCommand() {
+  if (!db_) {
+    assert(GetExecuteState().IsFailed());
+    return;
+  }
+
+  int parallel;
+  if (ParseIntOption(option_map_, ARG_PARALLEL, parallel, exec_state_)) {
+    if (parallel > 0) {
+      parallel_ = parallel;
+    } else {
+      exec_state_ =
+          LDBCommandExecuteResult::Failed(ARG_PARALLEL + " must be > 0.");
+      return;
+    }
+  }
+  CompactionOptions cfo;
+
+  cfo.separation_type = kCompactionCombineValue;
+  // we should skip the last level file that kv already combine
+  MutableCFOptions mutable_db_options(options_);
+  while (true) {
+    std::vector<LiveFileMetaData> LiveFiles;
+    db_->GetLiveFilesMetaData(&LiveFiles);
+    std::atomic<size_t> next_file_index(0);
+
+    std::vector<LiveFileMetaData> NonOriginFiles;
+    for(auto& file:LiveFiles){
+      if(file.non_origin_file && file.level >= 0){
+        NonOriginFiles.push_back(file);
+      }
+    }
+    std::function<void()> worker_func([&]() {
+      while (true) {
+        size_t index = next_file_index.fetch_add(1);
+        if (index >= NonOriginFiles.size()) {
+          break;
+        }
+        std::ostringstream output;
+        auto file = NonOriginFiles[index];
+        std::vector<std::string> inputs = {file.name};
+        output << "file_index: " << index << "cf:" << file.column_family_name
+               << " level " << file.level << " compact file " << file.name
+               << std::endl;
+        ColumnFamilyHandle* cfh = cf_handles_[file.column_family_name];
+        cfo.output_file_size_limit = MaxFileSizeForLevel(
+            mutable_db_options, file.level, options_.compaction_style);
+        Status s = db_->CompactFiles(cfo, cfh, inputs, file.level);
+        output << "file_index: " << index << " " << s.ToString() << std::endl;
+        if (!s.ok()) {
+          std::cerr << output.str();
+        } else
+          std::cout << index << "/" << NonOriginFiles.size() << std::endl;
+      }
+    });
+    std::vector<port::Thread> threads;
+    for (int i = 1; i < parallel_; i++) {
+      threads.emplace_back(worker_func);
+    }
+    worker_func();
+    for (auto& t : threads) {
+      t.join();
+    }
+    if (NonOriginFiles.size() == 0) break;
+  }
+  std::cout << "kv_combine finish!" << std::endl;
+}
+ManifestRollbackCommand::ManifestRollbackCommand(
+    const std::vector<std::string>& /*params*/,
+    const std::map<std::string, std::string>& options,
+    const std::vector<std::string>& flags)
+    : LDBCommand(options, flags, true, BuildCmdLineOptions({})) {}
+
+void ManifestRollbackCommand::Help(std::string& ret) {
+  ret.append("  ");
+  ret.append(ManifestRollbackCommand::Name());
+  ret.append("\n");
+}
+void ManifestRollbackCommand::DoCommand() {
+  Options options = PrepareOptionsForOpenDB();
+
+  if (options_.db_paths.empty()) {
+    // `VersionSet` expects options that have been through `SanitizeOptions()`,
+    // which would sanitize an empty `db_paths`.
+    options_.db_paths.emplace_back(db_path_, 0 /* target_size */);
+  }
+
+  WriteController wc(options_.delayed_write_rate);
+  WriteBufferManager wb(options_.db_write_buffer_size);
+
+  std::shared_ptr<Cache> tc(
+      NewLRUCache(1 << 20 /* capacity */, options_.table_cache_numshardbits));
+  EnvOptions sopt;
+  const bool seq_per_batch = false;
+  ImmutableDBOptions immutable_db_options(options);
+  VersionSet versions(db_path_, &immutable_db_options, sopt, seq_per_batch,
+                      tc.get(), &wb, &wc);
+  Status s = LoadLatestOptions(db_path_, Env::Default(), &options_,
+                               &column_families_, ignore_unknown_options_);
+  if (!s.ok()) {
+    printf("LoadLatestOptions Error %s\n", s.ToString().c_str());
+  }
+  s = versions.Recover(column_families_);
+  if (!s.ok()) {
+    printf("Error in Recover DB %s\n", s.ToString().c_str());
+    return;
+  }
+  InstrumentedMutex mutex;
+  s = versions.ManifestRollback(&mutex);
+  if (!s.ok()) {
+    printf("Error in Manifest Rollback %s\n", s.ToString().c_str());
+  }
 }
 
 // ----------------------------------------------------------------------------

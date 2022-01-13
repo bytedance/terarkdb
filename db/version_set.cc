@@ -3009,7 +3009,59 @@ void VersionSet::AppendVersion(ColumnFamilyData* column_family_data,
   v->prev_->next_ = v;
   v->next_->prev_ = v;
 }
+Status VersionSet::ManifestRollback(InstrumentedMutex* mu) {
+  Status s;
+  pending_manifest_file_number_ = NewFileNumber();
+  std::string descriptor_fname =
+      DescriptorFileName(dbname_, pending_manifest_file_number_);
+  std::unique_ptr<WritableFile> descriptor_file;
+  EnvOptions opt_env_opts = env_->OptimizeForManifestWrite(env_options_);
+  s = NewWritableFile(env_, descriptor_fname, &descriptor_file,
+                      opt_env_opts);
+  if (s.ok()) {
+    descriptor_file->SetPreallocationBlockSize(
+        db_options_->manifest_preallocation_size);
 
+    std::unique_ptr<WritableFileWriter> file_writer(new WritableFileWriter(
+        std::move(descriptor_file), descriptor_fname, opt_env_opts, nullptr,
+        db_options_->listeners));
+    descriptor_log_.reset(
+        new log::Writer(std::move(file_writer), 0, false));
+    s = WriteSnapshot(descriptor_log_.get(), true);
+  }
+  do {
+    if(s.ok()) {
+      VersionEdit e;
+      for(auto cfd : *column_family_set_) {
+        LogAndApplyHelper(cfd, nullptr, cfd->current(), &e, mu, false);
+      }
+      std::string record;
+      if (!e.EncodeTo(&record)) {
+        s = Status::Corruption("Unable to encode VersionEdit:" +
+                               e.DebugString(true));
+      }
+      s = descriptor_log_->AddRecord(record);
+      if (!s.ok()) {
+        break;
+      }
+      if (s.ok()) {
+        s = SyncManifest(env_, db_options_, descriptor_log_->file());
+      }
+      if (!s.ok()) {
+        ROCKS_LOG_ERROR(db_options_->info_log, "MANIFEST write %s\n",
+                        s.ToString().c_str());
+      }
+    }
+  }while(false);
+
+  if (s.ok()) {
+    s = SetCurrentFile(env_, dbname_, pending_manifest_file_number_,nullptr);
+  }
+
+
+
+  return s;
+}
 Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
                                          InstrumentedMutex* mu,
                                          Directory* db_directory,
@@ -4359,7 +4411,7 @@ void VersionSet::MarkMinLogNumberToKeep2PC(uint64_t number) {
   }
 }
 
-Status VersionSet::WriteSnapshot(log::Writer* log) {
+Status VersionSet::WriteSnapshot(log::Writer* log, const bool rollback) {
   // TODO: Break up into multiple records to reduce memory usage on recovery?
 
   // WARNING: This method doesn't hold a mutex!!
@@ -4368,6 +4420,9 @@ Status VersionSet::WriteSnapshot(log::Writer* log) {
   // LogAndApply. Column family manipulations can only happen within LogAndApply
   // (the same single thread), so we're safe to iterate.
   for (auto cfd : *column_family_set_) {
+    if(rollback && cfd->current()->storage_info()->LevelFiles(-1).size() != 0){
+      return Status::Corruption("cfd: %s's level -1 is not null", cfd->GetName());
+    }
     if (cfd->IsDropped()) {
       continue;
     }
@@ -4397,6 +4452,9 @@ Status VersionSet::WriteSnapshot(log::Writer* log) {
     {
       // Save files
       VersionEdit edit;
+      if(rollback) {
+        edit.setRollback();
+      }
       edit.SetColumnFamily(cfd->GetID());
 
       for (int level = -1; level < cfd->NumberLevels(); level++) {
@@ -4779,6 +4837,9 @@ void VersionSet::GetLiveFilesMetaData(std::vector<LiveFileMetaData>* metadata) {
         filemetadata.being_compacted = file->being_compacted;
         filemetadata.num_entries = file->prop.num_entries;
         filemetadata.num_deletions = file->prop.num_deletions;
+        if(file->prop.dependence.size() != 0 || file->prop.inheritance.size() !=0 || !file->prop.is_essense_sst()) {
+          filemetadata.non_origin_file = true;
+        }
         metadata->push_back(filemetadata);
       }
     }

@@ -206,7 +206,13 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
       PutLengthPrefixedSlice(dst, varint_log_number);
       min_log_num_written = true;
     }
-    if (true) {
+    if (rollback_) {
+      if (!f.prop.is_essense_sst() || f.prop.dependence.size() != 0 ||
+          f.prop.inheritance.size() != 0) {
+        return false;
+      }
+    }
+    if (!rollback_) {
       PutVarint32(dst, CustomTag::kPropertyCache);
       std::string encode_property_cache;
       encode_property_cache.push_back((char)f.prop.purpose);
@@ -688,6 +694,16 @@ std::string VersionEdit::DebugString(bool hex_key) const {
     r.append(f.smallest.DebugString(hex_key));
     r.append(" .. ");
     r.append(f.largest.DebugString(hex_key));
+  }
+  if(rollback_){
+      r.append("\n  Rollback Info: ");
+      for (size_t i = 0; i < new_files_.size(); i++) {
+          const FileMetaData& f = new_files_[i].second;
+          if (!f.prop.is_essense_sst() || f.prop.dependence.size() != 0 ||
+              f.prop.inheritance.size() != 0){
+            r.append("%d .. ",f.fd.GetNumber());
+          }
+      }
   }
   r.append("\n  ColumnFamily: ");
   AppendNumberTo(&r, column_family_);
