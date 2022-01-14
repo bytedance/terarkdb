@@ -183,7 +183,6 @@ class VersionStorageInfo {
   // Return level number that has idx'th highest score
   int CompactionScoreLevel(int idx) const { return compaction_level_[idx]; }
 
-
   // Return idx'th highest score
   double CompactionScore(int idx) const { return compaction_score_[idx]; }
 

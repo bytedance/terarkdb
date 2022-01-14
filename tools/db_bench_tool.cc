@@ -1407,6 +1407,7 @@ struct DBWithColumnFamilies {
 #ifndef ROCKSDB_LITE
   OptimisticTransactionDB* opt_txn_db;
 #endif  // ROCKSDB_LITE
+
   std::atomic<size_t> num_created;  // Need to be updated after all the
                                     // new entries in cfh are set.
   size_t num_hot;  // Number of column families to be queried at each moment.
@@ -5882,10 +5883,12 @@ int db_bench_tool(int argc, char** argv) {
           std::make_shared<ByteDanceMetricsReporterFactory>();
     }
 
-    Status s = NewZenfsEnv(&FLAGS_env, FLAGS_zbd_path, "dbname=" + FLAGS_zbd_path,
-                           metrics_reporter_factory);
+    Status s =
+        NewZenfsEnv(&FLAGS_env, FLAGS_zbd_path, "dbname=" + FLAGS_zbd_path,
+                    metrics_reporter_factory);
     if (!s.ok()) {
-      fprintf(stderr, "Error: Init zenfs env failed.\nStatus : %s\n", s.ToString().c_str());
+      fprintf(stderr, "Error: Init zenfs env failed.\nStatus : %s\n",
+              s.ToString().c_str());
       exit(1);
     }
   }

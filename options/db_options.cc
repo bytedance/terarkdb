@@ -93,9 +93,6 @@ ImmutableDBOptions::ImmutableDBOptions(const DBOptions& options)
       two_write_queues(options.two_write_queues),
       manual_wal_flush(options.manual_wal_flush),
       avoid_unnecessary_blocking_io(options.avoid_unnecessary_blocking_io),
-      zenfs_low_gc_ratio(options.zenfs_low_gc_ratio),
-      zenfs_high_gc_ratio(options.zenfs_high_gc_ratio),
-      zenfs_force_gc_ratio(options.zenfs_force_gc_ratio),
       persist_stats_to_disk(options.persist_stats_to_disk) {
 }
 
@@ -248,13 +245,7 @@ void ImmutableDBOptions::Dump(Logger* log) const {
                    manual_wal_flush);
   ROCKS_LOG_HEADER(log, "          Options.avoid_unnecessary_blocking_io: %d",
                    avoid_unnecessary_blocking_io);
-  ROCKS_LOG_HEADER(log, "                         Options.zenfs_low_gc_ratio: %lf",
-                   zenfs_low_gc_ratio);
-  ROCKS_LOG_HEADER(log, "                         Options.zenfs_high_gc_ratio: %lf",
-                   zenfs_high_gc_ratio);
-  ROCKS_LOG_HEADER(log, "                         Options.zenfs_force_ratio: %lf",
-                   zenfs_force_gc_ratio);
-  ROCKS_LOG_HEADER(log, "                Options.persist_stats_to_disk: %u",
+  ROCKS_LOG_HEADER(log, "                  Options.persist_stats_to_disk: %u",
                    persist_stats_to_disk);
 }
 
@@ -275,7 +266,10 @@ MutableDBOptions::MutableDBOptions()
       max_open_files(-1),
       bytes_per_sync(0),
       wal_bytes_per_sync(0),
-      compaction_readahead_size(0) {}
+      compaction_readahead_size(0),
+      zenfs_low_gc_ratio(0.25),
+      zenfs_high_gc_ratio(0.6),
+      zenfs_force_gc_ratio(0.9) {}
 
 MutableDBOptions::MutableDBOptions(const DBOptions& options)
     : max_background_jobs(options.max_background_jobs),
@@ -296,7 +290,10 @@ MutableDBOptions::MutableDBOptions(const DBOptions& options)
       max_open_files(options.max_open_files),
       bytes_per_sync(options.bytes_per_sync),
       wal_bytes_per_sync(options.wal_bytes_per_sync),
-      compaction_readahead_size(options.compaction_readahead_size) {}
+      compaction_readahead_size(options.compaction_readahead_size),
+      zenfs_low_gc_ratio(options.zenfs_low_gc_ratio),
+      zenfs_high_gc_ratio(options.zenfs_high_gc_ratio),
+      zenfs_force_gc_ratio(options.zenfs_force_gc_ratio) {}
 
 void MutableDBOptions::Dump(Logger* log) const {
   ROCKS_LOG_HEADER(log, "                   Options.max_background_jobs: %d",
@@ -339,6 +336,12 @@ void MutableDBOptions::Dump(Logger* log) const {
   ROCKS_LOG_HEADER(
       log, "              Options.compaction_readahead_size: %" ROCKSDB_PRIszt,
       compaction_readahead_size);
+  ROCKS_LOG_HEADER(log, "                     Options.zenfs_low_gc_ratio: %lf",
+                   zenfs_low_gc_ratio);
+  ROCKS_LOG_HEADER(log, "                    Options.zenfs_high_gc_ratio: %lf",
+                   zenfs_high_gc_ratio);
+  ROCKS_LOG_HEADER(log, "                      Options.zenfs_force_ratio: %lf",
+                   zenfs_force_gc_ratio);
 }
 
 }  // namespace TERARKDB_NAMESPACE

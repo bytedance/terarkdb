@@ -157,6 +157,25 @@ void AssignUserKey(std::string& key, const Slice& ikey) {
   key.assign(ukey.data(), ukey.size());
 };
 
+CompactionReason ConvertInputsCompactionReason(
+    const std::vector<CompactionInputFiles>& inputs,
+    CompactionReason default_reason) {
+#ifdef WITH_ZENFS
+  for (auto& level : inputs) {
+    for (auto file : level.files) {
+      CompactionReason reason = CompactionPicker::ConvertCompactionReason(
+          file->marked_for_compaction, default_reason);
+      if (reason != default_reason) {
+        return reason;
+      }
+    }
+  }
+#else
+  (void)inputs;
+#endif
+  return default_reason;
+}
+
 }  // anonymous namespace
 
 bool FindIntraL0Compaction(const std::vector<FileMetaData*>& level_files,
@@ -262,17 +281,17 @@ CompactionPicker::~CompactionPicker() {}
 
 CompactionReason CompactionPicker::ConvertCompactionReason(
     uint8_t marked, CompactionReason default_reason) {
-  if (marked & FileMetaData::kMarkedFromFileSystemHigh) {
-    return CompactionReason::kFilesMarkedFromFileSystemHigh;
-  }
   if (marked & FileMetaData::kMarkedFromUser) {
     return CompactionReason::kFilesMarkedFromUser;
   }
-  if (marked & FileMetaData::kMarkedFromTableBuilder) {
-    return CompactionReason::kFilesMarkedFromTableBuilder;
+  if (marked & FileMetaData::kMarkedFromFileSystemHigh) {
+    return CompactionReason::kFilesMarkedFromFileSystemHigh;
   }
   if (marked & FileMetaData::kMarkedFromRangeDeletion) {
     return CompactionReason::kFilesMarkedFromRangeDeletion;
+  }
+  if (marked & FileMetaData::kMarkedFromTableBuilder) {
+    return CompactionReason::kFilesMarkedFromTableBuilder;
   }
   if (marked & FileMetaData::kMarkedFromTTL) {
     return CompactionReason::kFilesMarkedFromTTL;
@@ -966,29 +985,8 @@ Compaction* CompactionPicker::PickGarbageCollection(
   params.max_subcompactions = 1;
   params.score = vstorage->total_garbage_ratio();
   params.compaction_type = kGarbageCollection;
-
-#ifdef WITH_ZENFS
-  for (auto& level : params.inputs) {
-    if (params.compaction_reason ==
-        CompactionReason::kGarbageCollectionMarkForHigh)
-      break;
-    for (auto& file : level.files) {
-      if (file->marked_for_compaction &
-          FileMetaData::kMarkedFromFileSystemHigh) {
-        params.compaction_reason =
-            CompactionReason::kGarbageCollectionMarkForHigh;
-        break;
-      }
-    }
-  }
-  if (params.compaction_reason !=
-      CompactionReason::kGarbageCollectionMarkForHigh)
-    params.compaction_reason = CompactionReason::kGarbageCollection;
-#else
-  params.compaction_reason = CompactionReason::kGarbageCollection;
-#endif
-
-  params.compaction_reason = CompactionReason::kGarbageCollection;
+  params.compaction_reason = ConvertInputsCompactionReason(
+      params.inputs, CompactionReason::kGarbageCollection);
 
   Compaction* c = RegisterCompaction(new Compaction(std::move(params)));
   vstorage->ComputeCompactionScore(ioptions_, mutable_cf_options);
@@ -2254,26 +2252,13 @@ void LevelCompactionBuilder::SetupInitialFiles() {
         // found the compaction!
         if (start_level_ == 0) {
           // L0 score = `num L0 files` / `level0_file_num_compaction_trigger`
-          compaction_reason_ = CompactionReason::kLevelL0FilesNum;
+          compaction_reason_ = ConvertInputsCompactionReason(
+              compaction_inputs_, CompactionReason::kLevelL0FilesNum);
         } else {
           // L1+ score = `Level files size` / `MaxBytesForLevel`
-          compaction_reason_ = CompactionReason::kLevelMaxLevelSize;
+          compaction_reason_ = ConvertInputsCompactionReason(
+              compaction_inputs_, CompactionReason::kLevelMaxLevelSize);
         }
-#ifdef WITH_ZENFS
-        for (auto input : compaction_inputs_) {
-          if (compaction_reason_ ==
-              CompactionReason::kFilesMarkedFromFileSystemHigh)
-            break;
-          for (auto* file : input.files) {
-            if (file->marked_for_compaction &
-                FileMetaData::kMarkedFromFileSystemHigh) {
-              compaction_reason_ =
-                  CompactionReason::kFilesMarkedFromFileSystemHigh;
-              break;
-            }
-          }
-        }
-#endif
         break;
       } else {
         // didn't find the compaction, clear the inputs

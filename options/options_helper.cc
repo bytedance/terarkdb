@@ -104,6 +104,9 @@ DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
       immutable_db_options.new_table_reader_for_compaction_inputs;
   options.compaction_readahead_size =
       mutable_db_options.compaction_readahead_size;
+  options.zenfs_low_gc_ratio = mutable_db_options.zenfs_low_gc_ratio;
+  options.zenfs_high_gc_ratio = mutable_db_options.zenfs_high_gc_ratio;
+  options.zenfs_force_gc_ratio = mutable_db_options.zenfs_force_gc_ratio;
   options.random_access_max_buffer_size =
       immutable_db_options.random_access_max_buffer_size;
   options.writable_file_max_buffer_size =
@@ -142,9 +145,6 @@ DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
   options.manual_wal_flush = immutable_db_options.manual_wal_flush;
   options.avoid_unnecessary_blocking_io =
       immutable_db_options.avoid_unnecessary_blocking_io;
-  options.zenfs_low_gc_ratio = immutable_db_options.zenfs_low_gc_ratio;
-  options.zenfs_high_gc_ratio = immutable_db_options.zenfs_high_gc_ratio;
-  options.zenfs_force_gc_ratio = immutable_db_options.zenfs_force_gc_ratio;
   return options;
 }
 
@@ -1783,17 +1783,17 @@ std::unordered_map<std::string, OptionTypeInfo>
           OptionType::kBoolean, OptionVerificationType::kNormal, false,
           offsetof(struct ImmutableDBOptions, avoid_unnecessary_blocking_io)}},
         {"zenfs_low_gc_ratio",
-         {offsetof(struct DBOptions, zenfs_low_gc_ratio),
-          OptionType::kDouble, OptionVerificationType::kNormal, false,
-          offsetof(struct ImmutableDBOptions, zenfs_low_gc_ratio)}},
+         {offsetof(struct DBOptions, zenfs_low_gc_ratio), OptionType::kDouble,
+          OptionVerificationType::kNormal, true,
+          offsetof(struct MutableDBOptions, zenfs_low_gc_ratio)}},
         {"zenfs_high_gc_ratio",
-         {offsetof(struct DBOptions, zenfs_high_gc_ratio),
-          OptionType::kDouble, OptionVerificationType::kNormal, false,
-          offsetof(struct ImmutableDBOptions, zenfs_high_gc_ratio)}},
+         {offsetof(struct DBOptions, zenfs_high_gc_ratio), OptionType::kDouble,
+          OptionVerificationType::kNormal, true,
+          offsetof(struct MutableDBOptions, zenfs_high_gc_ratio)}},
         {"zenfs_force_gc_ratio",
-         {offsetof(struct DBOptions, zenfs_force_gc_ratio),
-          OptionType::kDouble, OptionVerificationType::kNormal, false,
-          offsetof(struct ImmutableDBOptions, zenfs_force_gc_ratio)}}};
+         {offsetof(struct DBOptions, zenfs_force_gc_ratio), OptionType::kDouble,
+          OptionVerificationType::kNormal, true,
+          offsetof(struct MutableDBOptions, zenfs_force_gc_ratio)}}};
 
 std::unordered_map<std::string, BlockBasedTableOptions::IndexType>
     OptionsHelper::block_base_table_index_type_string_map = {

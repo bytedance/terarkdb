@@ -86,9 +86,6 @@ struct ImmutableDBOptions {
   bool two_write_queues;
   bool manual_wal_flush;
   bool avoid_unnecessary_blocking_io;
-  double zenfs_low_gc_ratio;
-  double zenfs_high_gc_ratio;
-  double zenfs_force_gc_ratio;
   bool persist_stats_to_disk;
 };
 
@@ -116,6 +113,9 @@ struct MutableDBOptions {
   uint64_t bytes_per_sync;
   uint64_t wal_bytes_per_sync;
   size_t compaction_readahead_size;
+  double zenfs_low_gc_ratio;
+  double zenfs_high_gc_ratio;
+  double zenfs_force_gc_ratio;
 };
 
 }  // namespace TERARKDB_NAMESPACE
