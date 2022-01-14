@@ -1847,10 +1847,10 @@ void DBImpl::MaybeScheduleFlushOrCompaction() {
     // we paused the background compaction
     return;
   } else if (error_handler_.IsBGWorkStopped()) {
-    // Compaction is not part of the recovery sequence from a hard error.
-    // We might get here because recovery might do a flush and install a
-    // new super version, which will try to schedule pending compactions.
-    // Bail out here and let the higher level recovery handle compactions
+    // Compaction is not part of the recovery sequence from a hard error. We
+    // might get here because recovery might do a flush and install a new super
+    // version, which will try to schedule pending compactions. Bail out here
+    // and let the higher level recovery handle compactions
     return;
   }
 
@@ -2936,6 +2936,7 @@ Status DBImpl::BackgroundGarbageCollection(bool* made_progress,
     }
   } else {
     status = error_handler_.GetBGError();
+    // If we get here, it means a hard error happened after this garbage
     // collections was scheduled by MaybeScheduleFlushOrCompaction(), but before
     // it got a chance to execute. Since we didn't pop a cfd from the garbage
     // collections queue, increment unscheduled_garbage_collections_
@@ -2966,9 +2967,9 @@ Status DBImpl::BackgroundGarbageCollection(bool* made_progress,
 
     // Pick up latest mutable CF Options and use it throughout the
     // garbage collection job
-    // GarbageCollection makes a copy of the latest MutableCFOptions. It
     // GarbageCollection makes a copy of the latest MutableCFOptions. It should
     // be used throughout the garbage collection procedure to make sure
+    // consistency. It will eventually be installed into SuperVersion
     auto* mutable_cf_options = cfd->GetLatestMutableCFOptions();
     if (!mutable_cf_options->disable_auto_compactions && !cfd->IsDropped()) {
       // NOTE: try to avoid unnecessary copy of MutableCFOptions if

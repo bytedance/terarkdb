@@ -141,6 +141,9 @@ TEST_F(OptionsTest, GetOptionsFromMapTest) {
       {"use_adaptive_mutex", "false"},
       {"new_table_reader_for_compaction_inputs", "true"},
       {"compaction_readahead_size", "100"},
+      {"zenfs_low_gc_ratio", "0.25"},
+      {"zenfs_high_gc_ratio", "0.5"},
+      {"zenfs_force_gc_ratio", "0.75"},
       {"random_access_max_buffer_size", "3145728"},
       {"writable_file_max_buffer_size", "314159"},
       {"bytes_per_sync", "47"},
@@ -280,6 +283,9 @@ TEST_F(OptionsTest, GetOptionsFromMapTest) {
   ASSERT_EQ(new_db_opt.use_adaptive_mutex, false);
   ASSERT_EQ(new_db_opt.new_table_reader_for_compaction_inputs, true);
   ASSERT_EQ(new_db_opt.compaction_readahead_size, 100);
+  ASSERT_EQ(new_db_opt.zenfs_low_gc_ratio, 0.25);
+  ASSERT_EQ(new_db_opt.zenfs_high_gc_ratio, 0.5);
+  ASSERT_EQ(new_db_opt.zenfs_force_gc_ratio, 0.75);
   ASSERT_EQ(new_db_opt.random_access_max_buffer_size, 3145728);
   ASSERT_EQ(new_db_opt.writable_file_max_buffer_size, 314159);
   ASSERT_EQ(new_db_opt.bytes_per_sync, static_cast<uint64_t>(47));

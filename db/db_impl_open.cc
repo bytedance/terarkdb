@@ -159,6 +159,19 @@ DBOptions SanitizeOptions(const std::string& dbname, const DBOptions& src) {
     result.sst_file_manager = sst_file_manager;
   }
 #endif
+
+  // ZenFS collaborative GC must use correct ratios.
+  if (result.zenfs_low_gc_ratio <= 0.0 || result.zenfs_low_gc_ratio > 1.0) {
+    result.zenfs_low_gc_ratio = 0.25;
+  }
+  if (result.zenfs_low_gc_ratio > result.zenfs_high_gc_ratio ||
+      result.zenfs_high_gc_ratio > 1.0) {
+    result.zenfs_high_gc_ratio = result.zenfs_low_gc_ratio;
+  }
+  if (result.zenfs_high_gc_ratio > result.zenfs_force_gc_ratio ||
+      result.zenfs_force_gc_ratio > 1.0) {
+    result.zenfs_force_gc_ratio = result.zenfs_high_gc_ratio;
+  }
   return result;
 }
 

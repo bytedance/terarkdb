@@ -186,8 +186,9 @@ class ZenfsEnv : public EnvWrapper {
   Status InitZenfs(
       const std::string& zdb_path, std::string bytedance_tags_,
       std::shared_ptr<MetricsReporterFactory> metrics_reporter_factory_) {
-    //auto metrics = std::make_shared<NoZenFSMetrics>();
-    auto metrics = std::make_shared<BDZenFSMetrics>(metrics_reporter_factory_, bytedance_tags_, nullptr);
+    // auto metrics = std::make_shared<NoZenFSMetrics>();
+    auto metrics = std::make_shared<BDZenFSMetrics>(metrics_reporter_factory_,
+                                                    bytedance_tags_, nullptr);
     return NewZenFS(&fs_, zdb_path, metrics);
   }
 
@@ -500,18 +501,21 @@ class ZenfsEnv : public EnvWrapper {
     stat.SetStat(snapshot, options);
   }
 
-  void GetZenFSSnapshot(ZenFSSnapshot& snapshot, const ZenFSSnapshotOptions& options) {
+  void GetZenFSSnapshot(ZenFSSnapshot& snapshot,
+                        const ZenFSSnapshotOptions& options) {
     auto zen_fs = dynamic_cast<ZenFS*>(fs_);
     zen_fs->GetZenFSSnapshot(snapshot, options);
   }
 
-  void MigrateExtents(const std::vector<ZoneExtentSnapshot*>& exts, bool direct_io) {
+  void MigrateExtents(const std::vector<ZoneExtentSnapshot*>& exts,
+                      bool direct_io) {
     auto zen_fs = dynamic_cast<ZenFS*>(fs_);
     zen_fs->MigrateExtents(exts);
   }
-  
+
   void Set_metrics_tag(std::string tag) { metrics_tag_ = tag; }
   std::string MetricsTag() { return metrics_tag_; }
+
  private:
   Env* target_;
   FileSystem* fs_;
@@ -537,13 +541,15 @@ void GetStat(Env* env, BDZenFSStat& stat) {
   }
 }
 
-void GetZenFSSnapshot(Env* env, ZenFSSnapshot& snapshot, const ZenFSSnapshotOptions& options) {
+void GetZenFSSnapshot(Env* env, ZenFSSnapshot& snapshot,
+                      const ZenFSSnapshotOptions& options) {
   auto zen_env = dynamic_cast<ZenfsEnv*>(env);
   if (!zen_env) return;
   zen_env->GetZenFSSnapshot(snapshot, options);
 }
 
-void MigrateExtents(Env* env, const std::vector<ZoneExtentSnapshot*>& exts, bool direct_io) {
+void MigrateExtents(Env* env, const std::vector<ZoneExtentSnapshot*>& exts,
+                    bool direct_io) {
   auto zen_env = dynamic_cast<ZenfsEnv*>(env);
   if (!zen_env) return;
   zen_env->MigrateExtents(exts, direct_io);
@@ -574,8 +580,10 @@ Status GetZbdDiskSpaceInfo(Env* env, uint64_t& total_size, uint64_t& avail_size,
 }
 
 void GetStat(Env* env, BDZenFSStat& stat) {}
-void GetZenFSSnapshot(Env* env, ZenFSSnapshot& snapshot, const ZenFSSnapshotOptions& options) {}
-void MigrateExtents(Env* env, const std::vector<ZoneExtentSnapshot*>& exts, bool direct_io);
+void GetZenFSSnapshot(Env* env, ZenFSSnapshot& snapshot,
+                      const ZenFSSnapshotOptions& options) {}
+void MigrateExtents(Env* env, const std::vector<ZoneExtentSnapshot*>& exts,
+                    bool direct_io);
 
 }  // namespace TERARKDB_NAMESPACE
 
