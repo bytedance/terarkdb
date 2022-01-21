@@ -4,7 +4,7 @@
 #
 set -e
 
-#git submodule update --init --recursive
+git submodule update --init --recursive
 
 BASE=$PWD
 OUTPUT=build
