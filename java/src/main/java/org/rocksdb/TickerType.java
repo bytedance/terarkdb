@@ -306,7 +306,7 @@ public enum TickerType {
     /**
      * Number of iterators created.
      */
-    NO_ITERATOR_CREATED((byte) 0x38),
+    NO_ITERATORS((byte) 0x38),
 
     /**
      * Number of MultiGet calls.

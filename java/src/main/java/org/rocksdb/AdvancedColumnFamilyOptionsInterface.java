@@ -391,23 +391,6 @@ public interface AdvancedColumnFamilyOptionsInterface
   CompactionOptionsUniversal compactionOptionsUniversal();
 
   /**
-   * The options for FIFO compaction style
-   *
-   * @param compactionOptionsFIFO The FIFO compaction options
-   *
-   * @return the reference to the current options.
-   */
-  T setCompactionOptionsFIFO(
-      CompactionOptionsFIFO compactionOptionsFIFO);
-
-  /**
-   * The options for FIFO compaction style
-   *
-   * @return The FIFO compaction options
-   */
-  CompactionOptionsFIFO compactionOptionsFIFO();
-
-  /**
    * <p>This flag specifies that the implementation should optimize the filters
    * mainly for cases where keys are found rather than also optimize for keys
    * missed. This would be used in cases where the application knows that
@@ -439,15 +422,6 @@ public interface AdvancedColumnFamilyOptionsInterface
    *     {@code optimize_filters_for_hits} was set.
    */
   boolean optimizeFiltersForHits();
-
-  /**
-   * <p>Returns the current state of the {@code optimize_range_deletion}
-   * setting.</p>
-   *
-   * @return boolean value indicating if the flag
-   *     {@code optimize_range_deletion} was set.
-   */
-  boolean optimizeRangeDeletion();
 
   /**
    * In debug mode, RocksDB run consistency checks on the LSM every time the LSM

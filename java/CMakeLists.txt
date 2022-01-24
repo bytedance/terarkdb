@@ -80,7 +80,6 @@ set(NATIVE_JAVA_CLASSES
         org.rocksdb.ClockCache
         org.rocksdb.ColumnFamilyHandle
         org.rocksdb.ColumnFamilyOptions
-        org.rocksdb.CompactionOptionsFIFO
         org.rocksdb.CompactionOptionsUniversal
         org.rocksdb.CompactRangeOptions
         org.rocksdb.Comparator
@@ -198,7 +197,6 @@ add_jar(
   src/main/java/org/rocksdb/ColumnFamilyHandle.java
   src/main/java/org/rocksdb/ColumnFamilyOptionsInterface.java
   src/main/java/org/rocksdb/ColumnFamilyOptions.java
-  src/main/java/org/rocksdb/CompactionOptionsFIFO.java
   src/main/java/org/rocksdb/CompactionOptionsUniversal.java
   src/main/java/org/rocksdb/CompactionPriority.java
   src/main/java/org/rocksdb/CompactRangeOptions.java
