@@ -96,6 +96,10 @@ IF(WITH_COVERAGE)
   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
 ENDIF()
 
+if(WITH_ZENFS)
+  include_directories(third-party/zenfs)
+ENDIF()
+
 #-------------------------- Print Global Options
 MESSAGE("[terarkdb] FORCE_RELEASE_BUILD = ${FORCE_TERARKDB_RELEASE_BUILD}, cmake_build_type = ${CMAKE_BUILD_TYPE}")
 MESSAGE("[terarkdb] TERARKDB_NAMESPACE=${WITH_TERARKDB_NAMESPACE}")

@@ -67,7 +67,7 @@ target_link_libraries({YOUR_TARGET} terarkdb)
   - Build with TerarkDB tools (e.g. db_bench, ldb etc)
 - WITH_TERARK_ZIP: OFF
   - Build with TerarkZipTable
-- WITH_ZENFS: OFF
+- WITH_ZNS: OFF
   - Build with ZNS device support
 
 
