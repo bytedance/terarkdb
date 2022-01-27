@@ -67,7 +67,6 @@ public class Options extends RocksObject
     this.rateLimiter_ = other.rateLimiter_;
     this.comparator_ = other.comparator_;
     this.compactionOptionsUniversal_ = other.compactionOptionsUniversal_;
-    this.compactionOptionsFIFO_ = other.compactionOptionsFIFO_;
     this.compressionOptions_ = other.compressionOptions_;
     this.rowCache_ = other.rowCache_;
     this.writeBufferManager_ = other.writeBufferManager_;
@@ -1565,19 +1564,6 @@ public class Options extends RocksObject
   }
 
   @Override
-  public Options setCompactionOptionsFIFO(final CompactionOptionsFIFO compactionOptionsFIFO) {
-    setCompactionOptionsFIFO(nativeHandle_,
-        compactionOptionsFIFO.nativeHandle_);
-    this.compactionOptionsFIFO_ = compactionOptionsFIFO;
-    return this;
-  }
-
-  @Override
-  public CompactionOptionsFIFO compactionOptionsFIFO() {
-    return this.compactionOptionsFIFO_;
-  }
-
-  @Override
   public Options setForceConsistencyChecks(final boolean forceConsistencyChecks) {
     setForceConsistencyChecks(nativeHandle_, forceConsistencyChecks);
     return this;
@@ -1923,7 +1909,6 @@ public class Options extends RocksObject
   private RateLimiter rateLimiter_;
   private AbstractComparator<? extends AbstractSlice<?>> comparator_;
   private CompactionOptionsUniversal compactionOptionsUniversal_;
-  private CompactionOptionsFIFO compactionOptionsFIFO_;
   private CompressionOptions compressionOptions_;
   private Cache rowCache_;
   private WriteBufferManager writeBufferManager_;

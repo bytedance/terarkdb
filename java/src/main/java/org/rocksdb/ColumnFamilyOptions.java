@@ -49,7 +49,6 @@ public class ColumnFamilyOptions extends RocksObject
     this.compactionFilter_ = other.compactionFilter_;
     this.compactionFilterFactory_ = other.compactionFilterFactory_;
     this.compactionOptionsUniversal_ = other.compactionOptionsUniversal_;
-    this.compactionOptionsFIFO_ = other.compactionOptionsFIFO_;
     this.compressionOptions_ = other.compressionOptions_;
   }
 
@@ -777,19 +776,6 @@ public class ColumnFamilyOptions extends RocksObject
   }
 
   @Override
-  public ColumnFamilyOptions setCompactionOptionsFIFO(final CompactionOptionsFIFO compactionOptionsFIFO) {
-    setCompactionOptionsFIFO(nativeHandle_,
-        compactionOptionsFIFO.nativeHandle_);
-    this.compactionOptionsFIFO_ = compactionOptionsFIFO;
-    return this;
-  }
-
-  @Override
-  public CompactionOptionsFIFO compactionOptionsFIFO() {
-    return this.compactionOptionsFIFO_;
-  }
-
-  @Override
   public ColumnFamilyOptions setForceConsistencyChecks(final boolean forceConsistencyChecks) {
     setForceConsistencyChecks(nativeHandle_, forceConsistencyChecks);
     return this;
@@ -964,7 +950,6 @@ public class ColumnFamilyOptions extends RocksObject
   AbstractCompactionFilterFactory<? extends AbstractCompactionFilter<?>>
       compactionFilterFactory_;
   private CompactionOptionsUniversal compactionOptionsUniversal_;
-  private CompactionOptionsFIFO compactionOptionsFIFO_;
   private CompressionOptions compressionOptions_;
 
 }
