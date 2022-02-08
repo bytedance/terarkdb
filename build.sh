@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# WITH_TESTS=1 WITH_ZNS=1 [METRICS_PATH=...] ./build.sh
+# WITH_TESTS=ON WITH_ZNS=OFF [METRICS_PATH=...] ./build.sh
 #
 set -e
 
