@@ -471,6 +471,7 @@ TEST_F(DBBlockCacheTest, IndexAndFilterBlocksCachePriority) {
   }
 }
 
+// For this test, we DO want paranoid_file_checks WITHOUT fill_cache
 TEST_F(DBBlockCacheTest, ParanoidFileChecks) {
   Options options = CurrentOptions();
   options.create_if_missing = true;
@@ -487,7 +488,7 @@ TEST_F(DBBlockCacheTest, ParanoidFileChecks) {
   ASSERT_OK(Put(1, "9_key", "val"));
   // Create a new table.
   ASSERT_OK(Flush(1));
-  ASSERT_EQ(0, /* read and cache data block */
+  ASSERT_EQ(0, /* flush will not cache data block */
             TestGetTickerCount(options, BLOCK_CACHE_ADD));
 
   ASSERT_OK(Put(1, "1_key2", "val2"));
@@ -496,7 +497,7 @@ TEST_F(DBBlockCacheTest, ParanoidFileChecks) {
   // and generate another file.
   ASSERT_OK(Flush(1));
   dbfull()->TEST_WaitForCompact();
-  ASSERT_EQ(0, /* Totally 3 files created up to now */
+  ASSERT_EQ(0, /* flush or compaction will not cache data block */
             TestGetTickerCount(options, BLOCK_CACHE_ADD));
 
   // After disabling options.paranoid_file_checks. NO further block
@@ -511,7 +512,7 @@ TEST_F(DBBlockCacheTest, ParanoidFileChecks) {
   ASSERT_OK(Put(1, "9_key4", "val4"));
   ASSERT_OK(Flush(1));
   dbfull()->TEST_WaitForCompact();
-  ASSERT_EQ(0, /* Totally 3 files created up to now */
+  ASSERT_EQ(0, /* flush or compaction will not cache data block */
             TestGetTickerCount(options, BLOCK_CACHE_ADD));
 }
 
