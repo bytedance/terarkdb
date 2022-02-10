@@ -171,7 +171,6 @@ class Repairer {
     if (db_lock_ != nullptr) {
       env_->UnlockFile(db_lock_);
     }
-    delete table_cache_;
   }
 
   Status Run() {
@@ -245,7 +244,7 @@ class Repairer {
   const ColumnFamilyOptions unknown_cf_opts_;
   const bool create_unknown_cfs_;
   std::shared_ptr<Cache> raw_table_cache_;
-  TableCache* table_cache_;
+  std::unique_ptr<TableCache> table_cache_;
   WriteBufferManager wb_;
   WriteController wc_;
   VersionSet vset_;
@@ -437,7 +436,7 @@ class Repairer {
       auto& moptions = *cfd->GetLatestMutableCFOptions();
       status = BuildTable(
           dbname_, &vset_, env_, *cfd->ioptions(), moptions, env_options_,
-          table_cache_, c_style_callback(get_arena_input_iter),
+          table_cache_.get(), c_style_callback(get_arena_input_iter),
           &get_arena_input_iter, c_style_callback(get_range_del_iters),
           &get_range_del_iters, &meta, cfd->internal_comparator(),
           cfd->int_tbl_prop_collector_factories(moptions),
