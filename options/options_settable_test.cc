@@ -416,6 +416,7 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
   options->soft_rate_limit = 0;
   options->purge_redundant_kvs_while_flush = false;
   options->max_mem_compaction_level = 0;
+  options->optimize_range_deletion = false;
 
   char* new_options_ptr = new char[sizeof(ColumnFamilyOptions)];
   ColumnFamilyOptions* new_options =
@@ -481,7 +482,7 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
       "max_dependence_blob_overlap=1024;"
       "maintainer_job_ratio=0.1;"
       "optimize_filters_for_hits=false;"
-      "optimize_range_deletion=false;"
+      "optimize_range_deletion=true;"
       "report_bg_io_stats=true;"
       "ttl_gc_ratio=3.000;"
       "ttl_max_scan_gap=1;",
@@ -492,6 +493,7 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
                           kColumnFamilyOptionsBlacklist));
   EXPECT_EQ(new_options->ttl_gc_ratio, 3.000);
   EXPECT_EQ(new_options->ttl_max_scan_gap, 1);
+  EXPECT_EQ(new_options->optimize_range_deletion, true);
   options->~ColumnFamilyOptions();
   new_options->~ColumnFamilyOptions();
 
