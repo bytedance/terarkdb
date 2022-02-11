@@ -1681,4 +1681,8 @@ Status NewZenfsEnv(
     Env** zenfs_env, const std::string& zdb_path, std::string bytedance_tags_,
     std::shared_ptr<MetricsReporterFactory> metrics_reporter_factory_);
 
+#ifdef WITH_ZENFS
+Status GetZbdDiskSpaceInfo(Env* env, uint64_t* total, uint64_t* free, uint64_t* used);
+#endif
+
 }  // namespace TERARKDB_NAMESPACE
