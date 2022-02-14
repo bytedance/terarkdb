@@ -483,9 +483,29 @@ class ZenfsEnv : public EnvWrapper {
     target_->SanitizeEnvOptions(env_opts);
   }
 
-  Status GetZbdDiskSpaceInfo(uint64_t& total_size, uint64_t& avail_size,
-                             uint64_t& used_size) {
-    return Status::NotSupported("GetZbdDiskSpaceInfo is not implemented.");
+  Status GetZbdDiskSpaceInfo(uint64_t* total_size, uint64_t* avail_size,
+                             uint64_t* used_size) {
+    auto zen_fs = dynamic_cast<ZenFS*>(fs_);
+    assert(total_size);
+    assert(avail_size);
+    assert(used_size);
+    assert(zen_fs != nullptr);
+    if(zen_fs == nullptr) {
+      *total_size = 0;
+      *avail_size = 0;
+      *used_size = 0;
+      return Status::InvalidArgument("ZenFS: fs_ is empty!");
+    }
+
+    ZenFSSnapshot snapshot;
+    ZenFSSnapshotOptions options;
+    // We only need global disk usage info
+    options.zbd_ = 1;
+    zen_fs->GetZenFSSnapshot(snapshot, options);
+    *total_size = (snapshot.zbd_.free_space + snapshot.zbd_.used_space);
+    *avail_size = snapshot.zbd_.free_space;
+    *used_size = snapshot.zbd_.used_space;
+    return Status::OK();
   }
 
   void GetStat(BDZenFSStat& stat) {
@@ -534,6 +554,24 @@ Status NewZenfsEnv(
   return s;
 }
 
+Status GetZbdDiskSpaceInfo(Env* env, uint64_t* total_size, uint64_t* avail_size,
+                           uint64_t* used_size) {
+  assert(total_size);
+  assert(avail_size);
+  assert(used_size);
+  auto s = Status::OK();
+  auto zen_env = dynamic_cast<ZenfsEnv*>(env);
+  if (zen_env) {
+    s = zen_env->GetZbdDiskSpaceInfo(total_size, avail_size, used_size);
+  } else {
+    *total_size = 0;
+    *avail_size = 0;
+    *used_size = 0;
+    return Status::NotSupported();
+  }
+  return s;
+}
+
 void GetStat(Env* env, BDZenFSStat& stat) {
   auto zen_env = dynamic_cast<ZenfsEnv*>(env);
   if (zen_env) {
@@ -574,8 +612,8 @@ Status NewZenfsEnv(
   return Status::NotSupported("ZenFSEnv is not implemented.");
 }
 
-Status GetZbdDiskSpaceInfo(Env* env, uint64_t& total_size, uint64_t& avail_size,
-                           uint64_t& used_size) {
+Status GetZbdDiskSpaceInfo(Env* env, uint64_t* total_size, uint64_t* avail_size,
+                           uint64_t* used_size) {
   return Status::NotSupported("GetZbdDiskSpaceInfo is not implemented.");
 }
 
