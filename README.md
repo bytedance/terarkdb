@@ -246,6 +246,6 @@ TerarkDB has been deployed in lots of applications in Bytedance, in most cases T
 
 # 6. Users
 
-Please let us know if you are using TerarkDB, thanks! (guokuankuan@bytedance.com)
+Please let us know if you are using TerarkDB, thanks! (By joining our slack channel)
 
 - ByteDance (core online services)
