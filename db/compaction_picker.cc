@@ -2073,7 +2073,7 @@ bool LevelCompactionPicker::ShouldSkipMarkedForCompaction(
     const VersionStorageInfo* vstorage, int level,
     const FileMetaData* file_meta) {
   assert(file_meta != nullptr);
-  assert(file_meta->marked_for_compaction);
+//  assert(file_meta->marked_for_compaction);
   (void)file_meta;
   bool result = false;
   if (level != 0) {

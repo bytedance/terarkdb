@@ -667,6 +667,7 @@ set(SOURCES
         tools/sst_dump_tool.cc
         tools/trace_analyzer_tool.cc
         util/arena.cc
+        util/assert.cc
         util/auto_roll_logger.cc
         util/bloom.cc
         util/coding.cc
@@ -1030,6 +1031,7 @@ if(WITH_TESTS)
         tools/sst_dump_test.cc
         tools/trace_analyzer_test.cc
         util/arena_test.cc
+        util/assert_test.cc
         util/auto_roll_logger_test.cc
         util/autovector_test.cc
         util/bloom_test.cc

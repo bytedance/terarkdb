@@ -54,6 +54,7 @@
 #include "monitoring/iostats_context_imp.h"
 #include "monitoring/thread_status_util.h"
 #include "port/port.h"
+#include "rocksdb/assert.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/merge_operator.h"
@@ -134,7 +135,7 @@ const char* GetCompactionReasonString(CompactionReason compaction_reason) {
     case CompactionReason::kNumOfReasons:
       // fall through
     default:
-      assert(false);
+      terark_assert(false);
       return "Invalid";
   }
 }
@@ -229,7 +230,7 @@ struct CompactionJob::SubcompactionState {
         overlapped_bytes(0),
         seen_key(false),
         compression_dict() {
-    assert(compaction != nullptr);
+    terark_assert(compaction != nullptr);
   }
 
   SubcompactionState(SubcompactionState&& o) { *this = std::move(o); }
@@ -265,7 +266,7 @@ struct CompactionJob::SubcompactionState {
 
   SubcompactionState& operator=(const SubcompactionState&) = delete;
 
-  // Returns true iff we should stop building the current output
+  // Returns true if we should stop building the current output
   // before processing "internal_key".
   bool ShouldStopBefore(const Slice& internal_key, uint64_t curr_file_size) {
     const InternalKeyComparator* icmp =
@@ -280,9 +281,10 @@ struct CompactionJob::SubcompactionState {
       if (seen_key) {
         overlapped_bytes += grandparents[grandparent_index]->fd.GetFileSize();
       }
-      assert(grandparent_index + 1 >= grandparents.size() ||
-             icmp->Compare(grandparents[grandparent_index]->largest,
-                           grandparents[grandparent_index + 1]->smallest) <= 0);
+      terark_assert(
+          grandparent_index + 1 >= grandparents.size() ||
+          icmp->Compare(grandparents[grandparent_index]->largest,
+                        grandparents[grandparent_index + 1]->smallest) <= 0);
       grandparent_index++;
     }
     seen_key = true;
@@ -341,7 +343,7 @@ struct CompactionJob::CompactionState {
          ++it) {
       if (it->status.ok() && !it->outputs.empty() &&
           it->current_output()->finished) {
-        assert(it->current_output() != nullptr);
+        terark_assert(it->current_output() != nullptr);
         return it->current_output()->meta.largest.user_key();
       }
     }
@@ -403,7 +405,7 @@ CompactionJob::CompactionJob(
       paranoid_file_checks_(paranoid_file_checks),
       measure_io_stats_(measure_io_stats),
       write_hint_(Env::WLTH_NOT_SET) {
-  assert(log_buffer_ != nullptr);
+  terark_assert(log_buffer_ != nullptr);
   const auto* cfd = compact_->compaction->column_family_data();
   ThreadStatusUtil::SetColumnFamily(cfd, cfd->ioptions()->env,
                                     db_options_.enable_thread_tracking);
@@ -412,7 +414,7 @@ CompactionJob::CompactionJob(
 }
 
 CompactionJob::~CompactionJob() {
-  assert(compact_ == nullptr);
+  terark_assert(compact_ == nullptr);
   ThreadStatusUtil::ResetThreadStatus();
 }
 
@@ -431,8 +433,8 @@ void CompactionJob::ReportStartedCompaction(Compaction* compaction) {
 
   // In the current design, a CompactionJob is always created
   // for non-trivial compaction.
-  assert(compaction->IsTrivialMove() == false ||
-         compaction->is_manual_compaction() == true);
+  terark_assert(compaction->IsTrivialMove() == false ||
+                compaction->is_manual_compaction() == true);
 
   ThreadStatusUtil::SetThreadOperationProperty(
       ThreadStatus::COMPACTION_PROP_FLAGS, compaction->is_manual_compaction());
@@ -463,9 +465,10 @@ int CompactionJob::Prepare(int sub_compaction_slots) {
       ThreadStatus::STAGE_COMPACTION_PREPARE);
   // Generate file_levels_ for compaction berfore making Iterator
   auto* c = compact_->compaction;
-  assert(c->column_family_data() != nullptr);
-  assert(c->column_family_data()->current()->storage_info()->NumLevelFiles(
-             compact_->compaction->level()) > 0);
+  terark_assert(c->column_family_data() != nullptr);
+  terark_assert(
+      c->column_family_data()->current()->storage_info()->NumLevelFiles(
+          compact_->compaction->level()) > 0);
   write_hint_ =
       c->column_family_data()->CalculateSSTWriteHint(c->output_level());
   // Is this compaction producing files at the bottommost level?
@@ -490,12 +493,12 @@ int CompactionJob::Prepare(int sub_compaction_slots) {
       Slice* end = &boundaries_[i * 2 + 1];
       *start = input_range[i].start;
       *end = input_range[i].limit;
-      assert(input_range[i].include_start);
+      terark_assert(input_range[i].include_start);
       if (uc->Compare(*start, c->GetSmallestUserKey()) == 0) {
         start = nullptr;
       }
       if (input_range[i].include_limit) {
-        assert(uc->Compare(*end, c->GetLargestUserKey()) == 0);
+        terark_assert(uc->Compare(*end, c->GetLargestUserKey()) == 0);
         end = nullptr;
       }
       compact_->sub_compact_states.emplace_back(c, start, end);
@@ -506,7 +509,7 @@ int CompactionJob::Prepare(int sub_compaction_slots) {
     MeasureTime(stats_, SUBCOMPACTION_SETUP_TIME,
                 env_->NowMicros() - start_micros);
 
-    assert(sizes_.size() == boundaries_.size() + 1);
+    terark_assert(sizes_.size() == boundaries_.size() + 1);
 
     for (size_t i = 0; i <= boundaries_.size(); i++) {
       Slice* start = i == 0 ? nullptr : &boundaries_[i - 1];
@@ -518,7 +521,7 @@ int CompactionJob::Prepare(int sub_compaction_slots) {
   } else {
     compact_->sub_compact_states.emplace_back(c, nullptr, nullptr);
   }
-  assert(!compact_->sub_compact_states.empty());
+  terark_assert(!compact_->sub_compact_states.empty());
   return static_cast<int>(compact_->sub_compact_states.size() - 1);
 }
 
@@ -584,7 +587,7 @@ void CompactionJob::GenSubcompactionBoundaries(int max_usable_threads) {
                  flevel->files[i].file_metadata->prop.dependence) {
               auto find = dependence_map.find(dependence.file_number);
               if (find == dependence_map.end()) {
-                assert(false);
+                terark_assert(false);
                 continue;
               }
               bounds.emplace_back(find->second->smallest.Encode());
@@ -683,7 +686,7 @@ static std::shared_ptr<CompactionDispatcher> GetCmdLineDispatcher() {
 Status CompactionJob::Run() {
   TEST_SYNC_POINT("CompactionJob::Run():OuterStart");
 #ifdef WITH_TERARK_ZIP
-  assert(!IsCompactionWorkerNode());
+  terark_assert(!IsCompactionWorkerNode());
 #endif
   ColumnFamilyData* cfd = compact_->compaction->column_family_data();
   CompactionDispatcher* dispatcher = cfd->ioptions()->compaction_dispatcher;
@@ -950,7 +953,7 @@ Status CompactionJob::RunSelf() {
   LogCompaction();
 
   const size_t num_threads = compact_->sub_compact_states.size();
-  assert(num_threads > 0);
+  terark_assert(num_threads > 0);
   const uint64_t start_micros = env_->NowMicros();
 
   if (compact_->compaction->compaction_type() != kMapCompaction) {
@@ -968,7 +971,7 @@ Status CompactionJob::RunSelf() {
       arg.future.wait();
     }
   } else {
-    assert(num_threads == 1);
+    terark_assert(num_threads == 1);
   }
 
   compaction_stats_.micros = env_->NowMicros() - start_micros;
@@ -1179,20 +1182,20 @@ void CompactionJob::ProcessCompaction(SubcompactionState* sub_compact) {
       ProcessKeyValueCompaction(sub_compact);
       break;
     case kMapCompaction:
-      assert(false);
+      terark_assert(false);
       break;
     case kGarbageCollection:
       ProcessGarbageCollection(sub_compact);
       break;
     default:
-      assert(false);
+      terark_assert(false);
       break;
   }
   // SetThreadSched(kSchedOther);
 }
 
 void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
-  assert(sub_compact != nullptr);
+  terark_assert(sub_compact != nullptr);
   ColumnFamilyData* cfd = sub_compact->compaction->column_family_data();
   CompactionRangeDelAggregator range_del_agg(&cfd->internal_comparator(),
                                              existing_snapshots_);
@@ -1448,15 +1451,15 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     const LazyBuffer& value = c_iter->value();
     if (c_iter->ikey().type == kTypeValueIndex ||
         c_iter->ikey().type == kTypeMergeIndex) {
-      assert(value.file_number() != uint64_t(-1));
+      terark_assert(value.file_number() != uint64_t(-1));
       auto ib = dependence.emplace(value.file_number(), 1);
       if (!ib.second) {
         ++ib.first->second;
       }
     }
 
-    assert(end == nullptr ||
-           cfd->user_comparator()->Compare(c_iter->user_key(), *end) < 0);
+    terark_assert(end == nullptr || cfd->user_comparator()->Compare(
+                                        c_iter->user_key(), *end) < 0);
     if (c_iter_stats.num_input_records % kRecordStatsEvery ==
         kRecordStatsEvery - 1) {
       RecordDroppedKeys(c_iter_stats, &sub_compact->compaction_job_stats);
@@ -1477,8 +1480,8 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
         sub_compact->builder->SetSecondPassIterator(second_pass_iter.get());
       }
     }
-    assert(sub_compact->builder != nullptr);
-    assert(sub_compact->current_output() != nullptr);
+    terark_assert(sub_compact->builder != nullptr);
+    terark_assert(sub_compact->current_output() != nullptr);
     status = sub_compact->builder->Add(key, value);
     if (!status.ok()) {
       break;
@@ -1506,7 +1509,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
           // Invariant: Because we advance sample iterator while processing the
           // data_elmt containing the sample's last byte, the current sample
           // cannot end before the current data_elmt.
-          assert(data_begin_offset < sample_end_offset);
+          terark_assert(data_begin_offset < sample_end_offset);
 
           size_t data_elmt_copy_offset, data_elmt_copy_len;
           if (*sample_begin_offset_iter <= data_begin_offset) {
@@ -1575,7 +1578,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     }
     const Slice* next_key = nullptr;
     if (output_file_ended) {
-      assert(sub_compact->compaction->max_output_file_size() != 0);
+      terark_assert(sub_compact->compaction->max_output_file_size() != 0);
       if (c_iter->Valid()) {
         next_key = &c_iter->key();
       }
@@ -1701,7 +1704,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
 }  // namespace TERARKDB_NAMESPACE
 
 void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
-  assert(sub_compact != nullptr);
+  terark_assert(sub_compact != nullptr);
   ColumnFamilyData* cfd = sub_compact->compaction->column_family_data();
 
   std::unique_ptr<InternalIterator> input(versions_->MakeInputIterator(
@@ -1725,8 +1728,8 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
     prev_prepare_write_nanos = IOSTATS(prepare_write_nanos);
   }
 
-  assert(sub_compact->start == nullptr);
-  assert(sub_compact->end == nullptr);
+  terark_assert(sub_compact->start == nullptr);
+  terark_assert(sub_compact->end == nullptr);
 
   input->SeekToFirst();
 
@@ -1773,7 +1776,8 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
     Slice curr_key = input->key();
     uint64_t curr_file_number = uint64_t(-1);
     if (!ParseInternalKey(curr_key, &ikey)) {
-      status = Status::Corruption("Invalid InternalKey");
+      status =
+          Status::Corruption("ProcessGarbageCollection invalid InternalKey");
       break;
     }
     do {
@@ -1816,8 +1820,8 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
       }
       curr_file_number = value.file_number();
 
-      assert(sub_compact->blob_builder != nullptr);
-      assert(sub_compact->current_blob_output() != nullptr);
+      terark_assert(sub_compact->blob_builder != nullptr);
+      terark_assert(sub_compact->current_blob_output() != nullptr);
       status = sub_compact->blob_builder->Add(curr_key, value);
       if (!status.ok()) {
         break;
@@ -1829,8 +1833,8 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
 
     if (counter.input > 1 && comp.Compare(curr_key, last_key) == 0 &&
         (last_file_number & curr_file_number) != uint64_t(-1)) {
-      assert(last_file_number == uint64_t(-1) ||
-             curr_file_number == uint64_t(-1));
+      terark_assert(last_file_number == uint64_t(-1) ||
+                    curr_file_number == uint64_t(-1));
       uint64_t valid_file_number = last_file_number & curr_file_number;
       auto pinned_key = ArenaPinSlice(curr_key, &arena);
       std::lock_guard<std::mutex> lock(conflict_map_mutex);
@@ -1864,7 +1868,7 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
   if (status.ok()) {
     auto& meta = sub_compact->blob_outputs.front().meta;
     auto& inputs = *sub_compact->compaction->inputs();
-    assert(inputs.size() == 1 && inputs.front().level == -1);
+    terark_assert(inputs.size() == 1 && inputs.front().level == -1);
     auto& files = inputs.front().files;
     ROCKS_LOG_INFO(
         db_options_.info_log,
@@ -1962,13 +1966,13 @@ Status CompactionJob::FinishCompactionOutputFile(
     const Slice* next_table_min_key /* = nullptr */) {
   AutoThreadOperationStageUpdater stage_updater(
       ThreadStatus::STAGE_COMPACTION_SYNC_FILE);
-  assert(sub_compact != nullptr);
-  assert(sub_compact->outfile);
-  assert(sub_compact->builder != nullptr);
-  assert(sub_compact->current_output() != nullptr);
+  terark_assert(sub_compact != nullptr);
+  terark_assert(sub_compact->outfile);
+  terark_assert(sub_compact->builder != nullptr);
+  terark_assert(sub_compact->current_output() != nullptr);
 
   uint64_t output_number = sub_compact->current_output()->meta.fd.GetNumber();
-  assert(output_number != 0);
+  terark_assert(output_number != 0);
 
   ColumnFamilyData* cfd = sub_compact->compaction->column_family_data();
   const Comparator* ucmp = cfd->user_comparator();
@@ -1976,7 +1980,7 @@ Status CompactionJob::FinishCompactionOutputFile(
   // Check for iterator errors
   Status s = input_status;
   auto meta = &sub_compact->current_output()->meta;
-  assert(meta != nullptr);
+  terark_assert(meta != nullptr);
   if (s.ok() && range_del_agg != nullptr && !range_del_agg->IsEmpty()) {
     Slice lower_bound_guard, upper_bound_guard;
     std::string smallest_user_key;
@@ -1995,11 +1999,12 @@ Status CompactionJob::FinishCompactionOutputFile(
     if (next_table_min_key != nullptr) {
       upper_bound_guard = ExtractUserKey(*next_table_min_key);
       // CompactionIterator will be invalid when arrive sub_compact->end
-      assert(sub_compact->end == nullptr ||
-             ucmp->Compare(upper_bound_guard, *sub_compact->end) < 0);
+      terark_assert(sub_compact->end == nullptr ||
+                    ucmp->Compare(upper_bound_guard, *sub_compact->end) < 0);
       // We would not split an user_key in to multi SST
-      assert(meta->largest.size() == 0 ||
-             ucmp->Compare(meta->largest.user_key(), upper_bound_guard) != 0);
+      terark_assert(
+          meta->largest.size() == 0 ||
+          ucmp->Compare(meta->largest.user_key(), upper_bound_guard) != 0);
       upper_bound = &upper_bound_guard;
     } else {
       upper_bound = sub_compact->end;
@@ -2046,14 +2051,14 @@ Status CompactionJob::FinishCompactionOutputFile(
         largest_candidate.Set(tombstone.end_key_, kMaxSequenceNumber,
                               kTypeRangeDeletion);
       }
-      assert(lower_bound == nullptr ||
-             ucmp->Compare(*lower_bound, tombstone.start_key_) <= 0);
-      assert(lower_bound == nullptr ||
-             ucmp->Compare(*lower_bound, tombstone.end_key_) < 0);
-      assert(upper_bound == nullptr ||
-             ucmp->Compare(*upper_bound, tombstone.start_key_) > 0);
-      assert(upper_bound == nullptr ||
-             ucmp->Compare(*upper_bound, tombstone.end_key_) >= 0);
+      terark_assert(lower_bound == nullptr ||
+                    ucmp->Compare(*lower_bound, tombstone.start_key_) <= 0);
+      terark_assert(lower_bound == nullptr ||
+                    ucmp->Compare(*lower_bound, tombstone.end_key_) < 0);
+      terark_assert(upper_bound == nullptr ||
+                    ucmp->Compare(*upper_bound, tombstone.start_key_) > 0);
+      terark_assert(upper_bound == nullptr ||
+                    ucmp->Compare(*upper_bound, tombstone.end_key_) >= 0);
       if (ucmp->Compare(tombstone.start_key_, tombstone.end_key_) >= 0) {
         continue;
       }
@@ -2111,7 +2116,7 @@ Status CompactionJob::FinishCompactionOutputFile(
   }
 
   if (s.ok() && tp.num_entries == 0 && tp.num_range_deletions == 0) {
-    assert(meta->prop.num_entries == tp.num_entries);
+    terark_assert(meta->prop.num_entries == tp.num_entries);
     // If there is nothing to output, no necessary to generate a sst file.
     // This happens when the output level is bottom level, at the same time
     // the sub_compact output nothing.
@@ -2122,7 +2127,7 @@ Status CompactionJob::FinishCompactionOutputFile(
 
     // Also need to remove the file from outputs, or it will be added to the
     // VersionEdit.
-    assert(!sub_compact->outputs.empty());
+    terark_assert(!sub_compact->outputs.empty());
     sub_compact->outputs.pop_back();
     meta = nullptr;
   }
@@ -2184,26 +2189,25 @@ Status CompactionJob::FinishCompactionOutputBlob(
     const std::vector<uint64_t>& inheritance_tree) {
   AutoThreadOperationStageUpdater stage_updater(
       ThreadStatus::STAGE_COMPACTION_SYNC_FILE);
-  assert(sub_compact != nullptr);
-  assert(sub_compact->blob_outfile);
-  assert(sub_compact->blob_builder != nullptr);
-  assert(sub_compact->current_blob_output() != nullptr);
-
+  terark_assert(sub_compact != nullptr);
+  terark_assert(sub_compact->blob_outfile);
+  terark_assert(sub_compact->blob_builder != nullptr);
+  terark_assert(sub_compact->current_blob_output() != nullptr);
   uint64_t output_number =
       sub_compact->current_blob_output()->meta.fd.GetNumber();
-  assert(output_number != 0);
+  terark_assert(output_number != 0);
 
   ColumnFamilyData* cfd = sub_compact->compaction->column_family_data();
 
   // Check for iterator errors
   Status s = input_status;
   auto meta = &sub_compact->current_blob_output()->meta;
-  assert(meta != nullptr);
+  terark_assert(meta != nullptr);
   if (s.ok()) {
     meta->prop.num_entries = sub_compact->blob_builder->NumEntries();
     meta->prop.inheritance = InheritanceTreeToSet(inheritance_tree);
-    assert(std::is_sorted(meta->prop.inheritance.begin(),
-                          meta->prop.inheritance.end()));
+    terark_assert(std::is_sorted(meta->prop.inheritance.begin(),
+                                 meta->prop.inheritance.end()));
     s = sub_compact->blob_builder->Finish(&meta->prop, nullptr,
                                           &inheritance_tree);
   } else {
@@ -2526,8 +2530,8 @@ void CompactionJob::RecordCompactionIOStats() {
 
 Status CompactionJob::OpenCompactionOutputFile(
     SubcompactionState* sub_compact) {
-  assert(sub_compact != nullptr);
-  assert(sub_compact->builder == nullptr);
+  terark_assert(sub_compact != nullptr);
+  terark_assert(sub_compact->builder == nullptr);
   // no need to lock because VersionSet::next_file_number_ is atomic
   uint64_t file_number = versions_->NewFileNumber();
   std::string fname =
@@ -2622,8 +2626,8 @@ Status CompactionJob::OpenCompactionOutputFile(
 
 Status CompactionJob::OpenCompactionOutputBlob(
     SubcompactionState* sub_compact) {
-  assert(sub_compact != nullptr);
-  assert(sub_compact->blob_builder == nullptr);
+  terark_assert(sub_compact != nullptr);
+  terark_assert(sub_compact->blob_builder == nullptr);
   // no need to lock because VersionSet::next_file_number_ is atomic
   uint64_t file_number = versions_->NewFileNumber();
   std::string fname =
@@ -2715,7 +2719,7 @@ void CompactionJob::CleanupCompaction() {
       sub_compact.builder->Abandon();
       sub_compact.builder.reset();
     } else {
-      assert(!sub_status.ok() || sub_compact.outfile == nullptr);
+      terark_assert(!sub_status.ok() || sub_compact.outfile == nullptr);
     }
     for (const auto& out : sub_compact.outputs) {
       // If this file was inserted into the table cache then remove
@@ -2737,7 +2741,7 @@ void CompactionJob::CleanupCompaction() {
 #ifndef ROCKSDB_LITE
 namespace {
 void CopyPrefix(const Slice& src, size_t prefix_length, std::string* dst) {
-  assert(prefix_length > 0);
+  terark_assert(prefix_length > 0);
   size_t length = src.size() > prefix_length ? prefix_length : src.size();
   dst->assign(src.data(), length);
 }
@@ -2768,7 +2772,7 @@ void CompactionJob::UpdateCompactionStats() {
         sub_compact.outputs.size() + sub_compact.blob_outputs.size();
     if (sub_compact.builder != nullptr) {
       // An error occurred so ignore the last output.
-      assert(num_output_files > 0);
+      terark_assert(num_output_files > 0);
       --num_output_files;
     }
     compaction_stats_.num_output_files += static_cast<int>(num_output_files);
@@ -2881,19 +2885,19 @@ std::mutex g_fa_map_mutex;
 
 void PlantFutureAction(const void* obj,
                        void (*action)(const void* p_obj, std::string* result)) {
-  assert(nullptr != obj);
-  assert(nullptr != action);
+  terark_assert(nullptr != obj);
+  terark_assert(nullptr != action);
   g_fa_map_mutex.lock();
   auto ib = g_fa_map.insert({obj, action});
   g_fa_map_mutex.unlock();
-  assert(ib.second);
+  terark_assert(ib.second);
   if (!ib.second) {
     abort();
   }
 }
 
 bool EraseFutureAction(const void* obj) {
-  assert(nullptr != obj);
+  terark_assert(nullptr != obj);
   g_fa_map_mutex.lock();
   size_t cnt = g_fa_map.erase(obj);
   g_fa_map_mutex.unlock();
@@ -2901,7 +2905,7 @@ bool EraseFutureAction(const void* obj) {
 }
 
 bool ExistFutureAction(const void* obj) {
-  assert(nullptr != obj);
+  terark_assert(nullptr != obj);
   g_fa_map_mutex.lock();
   auto end = g_fa_map.end();
   auto iter = g_fa_map.find(obj);
@@ -2911,8 +2915,8 @@ bool ExistFutureAction(const void* obj) {
 }
 
 bool ReapMatureAction(const void* obj, std::string* result) {
-  assert(nullptr != obj);
-  assert(nullptr != result);
+  terark_assert(nullptr != obj);
+  terark_assert(nullptr != result);
   g_fa_map_mutex.lock();
   auto iter = g_fa_map.find(obj);
   if (g_fa_map.end() != iter) {

@@ -1,0 +1,37 @@
+name: CI
+trigger:
+  change:
+    branches: [ stage, "dev.*" ]
+  push:
+    branches: [ stage, "dev.*" ]
+jobs:
+  build_and_test:
+    name: Build and Test TerarkDB
+    image: hub.byted.org/codebase/ci_debian_buster:latest
+    steps:
+      - name: Create Build Environment
+        commands:
+          - sudo apt-get -y update
+          - sudo apt-get install -y libaio-dev autoconf
+          - git submodule update --init --recursive
+      - name: Cache Dependencies
+        uses: actions/cache
+        inputs:
+          paths:
+            - build
+          key: repo-deps-${{ Head.Branch }}
+          restore_keys:
+            - repo-deps-${{ Head.Branch }}
+            - repo-deps
+      - name: Generate CMake Build Files
+        commands:
+          - cmake -E make_directory build || true
+          - cd build && cmake .. -DCMAKE_BUILD_TYPE=Debug -DWITH_TESTS=ON -DWITH_TOOLS=ON
+      - name: Build
+        commands:
+          - cd build
+          - make boost-project # boost library only supports single-job make
+          - make -j $(nproc)
+      - name: Upload Cache
+        commands:
+          - echo "Build Complete!"

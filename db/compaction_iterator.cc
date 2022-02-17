@@ -7,6 +7,7 @@
 
 #include "db/snapshot_checker.h"
 #include "port/likely.h"
+#include "rocksdb/assert.h"
 #include "rocksdb/listener.h"
 #include "rocksdb/terark_namespace.h"
 #include "table/internal_iterator.h"
@@ -36,9 +37,9 @@ class CompactionIteratorToInternalIterator : public InternalIterator {
       Seek(internal_key.Encode());
     }
   }
-  virtual void SeekToLast() override { assert(false); }
+  virtual void SeekToLast() override { terark_assert(false); }
   virtual void SeekForPrev(const TERARKDB_NAMESPACE::Slice&) override {
-    assert(false);
+    terark_assert(false);
   }
   virtual void Seek(const Slice& target) override;
   virtual void Next() override { c_iter_->Next(); }
@@ -234,7 +235,7 @@ void CompactionIterator::Next() {
       valid_key = ParseInternalKey(key_, &ikey_);
       // MergeUntil stops when it encounters a corrupt key and does not
       // include them in the result, so we expect the keys here to be valid.
-      assert(valid_key);
+      terark_assert(valid_key);
       // Keep current_key_ in sync.
       current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
       key_ = current_key_.GetInternalKey();
@@ -315,7 +316,7 @@ void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
       ikey_.type = kTypeValue;
       current_key_.UpdateInternalKey(ikey_.sequence, kTypeValue);
       value_ = std::move(compaction_filter_value_);
-      assert(value_.file_number() == uint64_t(-1));
+      terark_assert(value_.file_number() == uint64_t(-1));
     } else if (filter == CompactionFilter::Decision::kRemoveAndSkipUntil) {
       *need_skip = true;
       compaction_filter_skip_until_.ConvertFromUserKey(kMaxSequenceNumber,
@@ -326,7 +327,8 @@ void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
 }
 
 void CompactionIterator::SetFilterSampleInterval(size_t sample_interval) {
-  assert((sample_interval & (sample_interval - 1)) == 0);  // must be power of 2
+  terark_assert((sample_interval & (sample_interval - 1)) ==
+                0);  // must be power of 2
   filter_sample_interval_ = sample_interval;
 }
 
@@ -342,7 +344,7 @@ void CompactionIterator::NextFromInput() {
       // and let the caller decide what to do with it.
       // TODO(noetzli): We should have a more elegant solution for this.
       if (expect_valid_internal_key_) {
-        assert(!"Corrupted internal key not expected.");
+        terark_assert(!"Corrupted internal key not expected.");
         status_ = Status::Corruption("Corrupted internal key not expected.");
         break;
       }
@@ -415,7 +417,7 @@ void CompactionIterator::NextFromInput() {
       // newer version of a key is committed, so as the older version. No need
       // to query snapshot_checker_ in that case.
       if (UNLIKELY(!current_key_committed_)) {
-        assert(snapshot_checker_ != nullptr);
+        terark_assert(snapshot_checker_ != nullptr);
         current_key_committed_ =
             snapshot_checker_->IsInSnapshot(ikey_.sequence, kMaxSequenceNumber);
         // Apply the compaction filter to the first committed version of the
@@ -427,7 +429,7 @@ void CompactionIterator::NextFromInput() {
     }
 
     if (UNLIKELY(!current_key_committed_)) {
-      assert(snapshot_checker_ != nullptr);
+      terark_assert(snapshot_checker_ != nullptr);
       valid_ = true;
       break;
     }
@@ -451,8 +453,8 @@ void CompactionIterator::NextFromInput() {
       // In the previous iteration we encountered a single delete that we could
       // not compact out.  We will keep this Put, but can drop it's data.
       // (See Optimization 3, below.)
-      assert(ikey_.type == kTypeValue);
-      assert(current_user_key_snapshot_ == last_snapshot);
+      terark_assert(ikey_.type == kTypeValue);
+      terark_assert(current_user_key_snapshot_ == last_snapshot);
 
       value_.clear();
       valid_ = true;
@@ -600,7 +602,7 @@ void CompactionIterator::NextFromInput() {
       // Note: Dropping this key will not affect TransactionDB write-conflict
       // checking since there has already been a record returned for this key
       // in this snapshot.
-      assert(last_sequence >= current_user_key_sequence_);
+      terark_assert(last_sequence >= current_user_key_sequence_);
       ++iter_stats_.num_record_drop_hidden;  // (A)
       value_.reset();
       input_->Next();
@@ -691,7 +693,7 @@ void CompactionIterator::NextFromInput() {
         valid_key = ParseInternalKey(key_, &ikey_);
         // MergeUntil stops when it encounters a corrupt key and does not
         // include them in the result, so we expect the keys here to valid.
-        assert(valid_key);
+        terark_assert(valid_key);
         // Keep current_key_ in sync.
         current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
         key_ = current_key_.GetInternalKey();
@@ -753,8 +755,9 @@ void CompactionIterator::PrepareOutput() {
          LIKELY(snapshot_checker_->IsInSnapshot(ikey_.sequence,
                                                 earliest_snapshot_))) &&
         ikey_.type != kTypeMerge) {
-      assert(ikey_.type != kTypeDeletion && ikey_.type != kTypeSingleDeletion &&
-             ikey_.type != kTypeValueIndex && ikey_.type != kTypeMergeIndex);
+      terark_assert(
+          ikey_.type != kTypeDeletion && ikey_.type != kTypeSingleDeletion &&
+          ikey_.type != kTypeValueIndex && ikey_.type != kTypeMergeIndex);
       ikey_.sequence = 0;
       current_key_.UpdateInternalKey(0, ikey_.type);
     }
@@ -771,8 +774,8 @@ void CompactionIterator::PrepareOutput() {
       status_ = std::move(s);
       return;
     }
-    assert(value_.size() < (1ull << 49));
-    assert(blob_large_key_ratio_lsh16_ < (1ull << 17));
+    terark_assert(value_.size() < (1ull << 49));
+    terark_assert(blob_large_key_ratio_lsh16_ < (1ull << 17));
     // (key.size << 16) > value.size * large_key_ratio_lsh16
     if (value_.size() < blob_config_.blob_size ||
         (current_user_key_.size() << 16) >
@@ -849,18 +852,18 @@ void CompactionIterator::PrepareOutput() {
 
 inline SequenceNumber CompactionIterator::findEarliestVisibleSnapshot(
     SequenceNumber in, SequenceNumber* prev_snapshot) {
-  assert(snapshots_->size());
+  terark_assert(snapshots_->size());
   auto snapshots_iter =
       std::lower_bound(snapshots_->begin(), snapshots_->end(), in);
   if (snapshots_iter == snapshots_->begin()) {
     *prev_snapshot = 0;
   } else {
     *prev_snapshot = *std::prev(snapshots_iter);
-    assert(*prev_snapshot < in);
+    terark_assert(*prev_snapshot < in);
   }
   for (; snapshots_iter != snapshots_->end(); ++snapshots_iter) {
     auto cur = *snapshots_iter;
-    assert(in <= cur);
+    terark_assert(in <= cur);
     if (snapshot_checker_ == nullptr ||
         snapshot_checker_->IsInSnapshot(in, cur)) {
       return cur;
