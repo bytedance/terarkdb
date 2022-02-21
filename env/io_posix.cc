@@ -18,6 +18,7 @@
 #include <linux/fs.h>
 #endif
 #include <aio.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -365,9 +366,12 @@ static Status PosixFsRead(uint64_t offset, size_t n, Slice* result,
   }
   if (r < 0 && n > 0) {
     // An error: return a non-ok status
-    s = IOError(
-        "While pread offset " + ToString(offset) + " len " + ToString(n),
-        filename_, errno);
+    char ctx_buf[256];
+    snprintf(ctx_buf, sizeof ctx_buf,
+             "While pread(buf = 0x%016" PRIXPTR
+             ", count = %zd, offset = %" PRIu64 ")",
+             uintptr_t(scratch), n, offset);
+    s = IOError(ctx_buf, filename_, errno);
   }
   *result = Slice(scratch, (r < 0) ? 0 : n - left);
   return s;

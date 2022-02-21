@@ -44,6 +44,9 @@ static Status IOError(const std::string& context, const std::string& file_name,
                              strerror(err_number));
     case ESTALE:
       return Status::IOError(Status::kStaleFile);
+    case EFAULT:
+      // let's coredump ...
+      abort();
     default:
       return Status::IOError(IOErrorMsg(context, file_name),
                              strerror(err_number));

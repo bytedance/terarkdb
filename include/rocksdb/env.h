@@ -126,6 +126,14 @@ struct EnvOptions {
 
   // If not nullptr, write rate limiting is enabled for flush and compaction
   RateLimiter* rate_limiter = nullptr;
+
+  // Debugging interface
+  enum DebugCallbackType {
+    DebugCoreDump = 0,     // dump core file for debugging
+    DebugRestart = 1,      // dump core file and restart process
+    DebugUnavailable = 2,  // dump core file and on-call engine team
+  };
+  bool (*debug_callback)(DebugCallbackType type, const char* msg) = nullptr;
 };
 
 class Env {
