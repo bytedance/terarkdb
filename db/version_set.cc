@@ -346,7 +346,7 @@ struct BottommostMarkedFilesComp {
   bool operator()(const std::pair<int, FileMetaData*>& l,
                   const std::pair<int, FileMetaData*>& r) const noexcept {
     uint8_t lm = l.second->marked_for_compaction;
-    uint8_t rm = l.second->marked_for_compaction;
+    uint8_t rm = r.second->marked_for_compaction;
     if (lm != rm) {
       return lm > rm;
     }
@@ -357,7 +357,7 @@ struct MarkedFilesComp {
   bool operator()(const std::pair<int, FileMetaData*>& l,
                   const std::pair<int, FileMetaData*>& r) const noexcept {
     uint8_t lp = l.second->is_output_to_parent_level();
-    uint8_t rp = l.second->is_output_to_parent_level();
+    uint8_t rp = r.second->is_output_to_parent_level();
     if (lp != rp) {
       return lp > rp;
     }
@@ -369,7 +369,7 @@ struct MarkedFilesComp {
       }
     }
     uint8_t lm = l.second->marked_for_compaction;
-    uint8_t rm = l.second->marked_for_compaction;
+    uint8_t rm = r.second->marked_for_compaction;
     if (lm != rm) {
       return lm > rm;
     }
@@ -2152,25 +2152,26 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
     }
     assert(temp.size() == files.size());
 
-#ifdef WITH_ZENFS
-    // initialize files_by_compaction_pri_
-    for (size_t i = 0; i < temp.size(); i++) {
-      if (temp[i].file->marked_for_compaction &
-          FileMetaData::kMarkedFromFileSystemHigh) {
-        files_by_compaction_pri.push_back(static_cast<int>(temp[i].index));
-      }
-    }
-    for (size_t i = 0; i < temp.size(); i++) {
-      if (!(temp[i].file->marked_for_compaction &
-            FileMetaData::kMarkedFromFileSystemHigh)) {
-        files_by_compaction_pri.push_back(static_cast<int>(temp[i].index));
-      }
-    }
-#else
+    std::stable_sort(
+        temp.begin(), temp.end(), [&](const Fsize& l, const Fsize& r) {
+          // lp rp
+          // 0  0   false
+          // 0  1   false
+          // 1  0   true
+          // 1  1   comp marked_for_compaction
+          uint8_t lp = l.file->is_handle_compaction_pri();
+          if (!lp) {
+            return false;
+          }
+          uint8_t rp = r.file->is_handle_compaction_pri();
+          if (!rp) {
+            return true;
+          }
+          return l.file->marked_for_compaction > r.file->marked_for_compaction;
+        });
     for (size_t i = 0; i < temp.size(); i++) {
       files_by_compaction_pri.push_back(static_cast<int>(temp[i].index));
     }
-#endif
     next_file_to_compact_by_size_[level] = 0;
     assert(files_[level].size() == files_by_compaction_pri_[level].size());
   }

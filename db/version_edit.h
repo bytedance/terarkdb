@@ -216,6 +216,13 @@ struct FileMetaData {
     return (marked_for_compaction & kFlag) != 0;
   }
 
+  bool is_handle_compaction_pri() const {
+    constexpr uint8_t kFlag = kMarkedFromUser | kMarkedFromFileSystemHigh |
+                              kMarkedFromRangeDeletion |
+                              kMarkedFromTableBuilder;
+    return (marked_for_compaction & kFlag) != 0;
+  }
+
   bool is_gc_forbidden() const {
     return gc_status == kGarbageCollectionForbidden;
   }
