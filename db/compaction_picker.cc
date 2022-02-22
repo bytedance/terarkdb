@@ -2085,8 +2085,13 @@ void CompactionPicker::PickFilesMarkedForCompaction(
     // If it's being compacted it has nothing to do here.
     // If this assert() fails that means that some function marked some
     // files as being_compacted, but didn't call ComputeCompactionScore()
+    if (ShouldSkipMarkedForCompaction(vstorage, level_file.first,
+                                      level_file.second)) {
+      return false;
+    }
     assert(!level_file.second->being_compacted);
     *start_level = level_file.first;
+
     if (level_file.second->is_output_to_parent_level()) {
       *output_level =
           (*start_level == 0) ? vstorage->base_level() : *start_level + 1;
@@ -2152,6 +2157,27 @@ bool LevelCompactionPicker::NeedsCompaction(
   // FilesMarkedForCompaction & BottommostFilesMarkedForCompaction move to
   // has_space_amplification
   return vstorage->has_space_amplification();
+}
+
+bool LevelCompactionPicker::ShouldSkipMarkedForCompaction(
+    const VersionStorageInfo* vstorage, int level,
+    const FileMetaData* file_meta) {
+  assert(file_meta != nullptr);
+  assert(file_meta->marked_for_compaction);
+  (void)file_meta;
+  bool result = false;
+  if (level != 0) {
+    int check_level = level == vstorage->base_level() ? 0 : level - 1;
+    for (int i = 0; i <= vstorage->MaxInputLevel(); ++i) {
+      if (vstorage->CompactionScoreLevel(i) == check_level) {
+        result = vstorage->CompactionScore(i) >= 1;
+        break;
+      }
+    }
+  }
+  TEST_SYNC_POINT_CALLBACK(
+      "LevelCompactionPicker:ShouldSkipMarkedForCompaction", &result);
+  return result;
 }
 
 namespace {
@@ -2304,6 +2330,10 @@ void LevelCompactionBuilder::SetupInitialFiles() {
     for (i = 0; i < vstorage_->BottommostFilesMarkedForCompaction().size();
          ++i) {
       auto& level_and_file = vstorage_->BottommostFilesMarkedForCompaction()[i];
+      if (compaction_picker_->ShouldSkipMarkedForCompaction(
+              vstorage_, level_and_file.first, level_and_file.second)) {
+        continue;
+      }
       assert(!level_and_file.second->being_compacted);
       start_level_inputs_.level = output_level_ = start_level_ =
           level_and_file.first;

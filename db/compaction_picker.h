@@ -152,6 +152,12 @@ class CompactionPicker {
 
   virtual bool NeedsCompaction(const VersionStorageInfo* vstorage) const = 0;
 
+  // Returns true if should skip pick files marked_for_compaction
+  virtual bool ShouldSkipMarkedForCompaction(const VersionStorageInfo* vstorage,
+                                             int level, const FileMetaData* f) {
+    return false;
+  }
+
 // Sanitize the input set of compaction input files.
 // When the input parameters do not describe a valid compaction, the
 // function will try to fix the input_files by adding necessary
@@ -327,6 +333,9 @@ class LevelCompactionPicker : public CompactionPicker {
                              LogBuffer* log_buffer) override;
 
   bool NeedsCompaction(const VersionStorageInfo* vstorage) const override;
+
+  bool ShouldSkipMarkedForCompaction(const VersionStorageInfo* vstorage,
+                                     int level, const FileMetaData* f) override;
 };
 
 #ifndef ROCKSDB_LITE
