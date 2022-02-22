@@ -513,7 +513,8 @@ TEST_F(CompactionPickerTest, AllowsTrivialMoveUniversal) {
 
 #endif  // ROCKSDB_LITE
 
-// MarkedForCompaction
+// kMarkedFromRangeDeletion is handled by compaction_pri, so SST(4) is the first
+// element in VersionStorageInfo::files_by_compaction_pri
 TEST_F(CompactionPickerTest, MarkedForCompaction1) {
   NewVersionStorage(6, kCompactionStyleLevel);
   ioptions_.compaction_pri = kByCompensatedSize;
@@ -538,7 +539,8 @@ TEST_F(CompactionPickerTest, MarkedForCompaction1) {
   ASSERT_EQ(4U, compaction->input(0, 0)->fd.GetNumber());
 }
 
-// MarkedForCompaction
+// kMarkedFromTTL is not handled by compaction_pri, so SST(2) is the first
+// element in VersionStorageInfo::files_by_compaction_pri
 TEST_F(CompactionPickerTest, MarkedForCompaction2) {
   NewVersionStorage(6, kCompactionStyleLevel);
   ioptions_.compaction_pri = kByCompensatedSize;
@@ -563,7 +565,9 @@ TEST_F(CompactionPickerTest, MarkedForCompaction2) {
   ASSERT_EQ(2U, compaction->input(0, 0)->fd.GetNumber());
 }
 
-// MarkedForCompaction
+// kMarkedFromUpdateBlob and kMarkedFromTTL are both not handled by
+// compaction_pri, so SST(2) is the first element in
+// VersionStorageInfo::files_by_compaction_pri
 TEST_F(CompactionPickerTest, MarkedForCompaction3) {
   NewVersionStorage(6, kCompactionStyleLevel);
   ioptions_.compaction_pri = kByCompensatedSize;
@@ -590,7 +594,8 @@ TEST_F(CompactionPickerTest, MarkedForCompaction3) {
   ASSERT_EQ(2U, compaction->input(0, 0)->fd.GetNumber());
 }
 
-// MarkedForCompaction
+// Compaction scores are less than 1, so SST(7) should picked by
+// marked_for_compaction
 TEST_F(CompactionPickerTest, MarkedForCompaction4) {
   NewVersionStorage(6, kCompactionStyleLevel);
   ioptions_.compaction_pri = kByCompensatedSize;
@@ -617,7 +622,9 @@ TEST_F(CompactionPickerTest, MarkedForCompaction4) {
   ASSERT_EQ(7U, compaction->input(0, 0)->fd.GetNumber());
 }
 
-// MarkedForCompaction
+// Level 1 compaction score is greater than 1, and level 1 files are all
+// conflict with level 2 files. we should skip marked_for_compaction SSTs in
+// level 2, but we disable this login for test
 TEST_F(CompactionPickerTest, MarkedForCompaction5) {
   NewVersionStorage(6, kCompactionStyleLevel);
   ioptions_.compaction_pri = kByCompensatedSize;
@@ -654,7 +661,9 @@ TEST_F(CompactionPickerTest, MarkedForCompaction5) {
   ASSERT_EQ(7U, compaction->input(0, 0)->fd.GetNumber());
 }
 
-// MarkedForCompaction
+// Level 1 compaction score is greater than 1, and level 1 files are all
+// conflict with level 2 files. we should skip marked_for_compaction SSTs in
+// level 2, so we can't pick a compaction
 TEST_F(CompactionPickerTest, MarkedForCompaction6) {
   NewVersionStorage(6, kCompactionStyleLevel);
   ioptions_.compaction_pri = kByCompensatedSize;
