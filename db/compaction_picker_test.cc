@@ -13,6 +13,7 @@
 #include "db/compaction_picker_universal.h"
 #include "rocksdb/terark_namespace.h"
 #include "util/string_util.h"
+#include "util/sync_point.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
@@ -64,7 +65,11 @@ class CompactionPickerTest : public testing::Test {
     ioptions_.enable_lazy_compaction = false;
   }
 
-  ~CompactionPickerTest() {}
+  ~CompactionPickerTest() {
+    TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
+    TERARKDB_NAMESPACE::SyncPoint::GetInstance()->LoadDependency({});
+    TERARKDB_NAMESPACE::SyncPoint::GetInstance()->ClearAllCallBacks();
+  }
 
   void NewVersionStorage(int num_levels, CompactionStyle style) {
     DeleteVersionStorage();
@@ -123,9 +128,9 @@ class CompactionPickerTest : public testing::Test {
     vstorage_->UpdateNumNonEmptyLevels();
     vstorage_->GenerateFileIndexer();
     vstorage_->GenerateLevelFilesBrief();
+    vstorage_->GenerateBottommostFiles();
     vstorage_->ComputeCompactionScore(ioptions_, mutable_cf_options_);
     vstorage_->GenerateLevel0NonOverlapping();
-    vstorage_->ComputeFilesMarkedForCompaction();
     vstorage_->SetFinalized();
   }
 };
@@ -507,6 +512,182 @@ TEST_F(CompactionPickerTest, AllowsTrivialMoveUniversal) {
 }
 
 #endif  // ROCKSDB_LITE
+
+// kMarkedFromRangeDeletion is handled by compaction_pri, so SST(4) is the first
+// element in VersionStorageInfo::files_by_compaction_pri
+TEST_F(CompactionPickerTest, MarkedForCompaction1) {
+  NewVersionStorage(6, kCompactionStyleLevel);
+  ioptions_.compaction_pri = kByCompensatedSize;
+
+  Add(1, 1U, "100", "150", 1U);
+  Add(1, 2U, "200", "250", 1U);
+  Add(1, 3U, "300", "350", 1000000000U);
+  Add(1, 4U, "400", "450", 1U);  // kMarkedFromRangeDeletion
+  Add(1, 5U, "500", "550", 1U);
+  Add(2, 6U, "100", "600", 1U);
+
+  vstorage_->LevelFiles(1)[3]->marked_for_compaction =
+      FileMetaData::kMarkedFromRangeDeletion;
+
+  UpdateVersionStorageInfo();
+
+  std::unique_ptr<Compaction> compaction(level_compaction_picker.PickCompaction(
+      cf_name_, mutable_cf_options_, vstorage_.get(), {}, &log_buffer_));
+  ASSERT_TRUE(compaction.get() != nullptr);
+  ASSERT_EQ(2U, compaction->num_input_levels());
+  ASSERT_EQ(1U, compaction->num_input_files(0));
+  ASSERT_EQ(4U, compaction->input(0, 0)->fd.GetNumber());
+}
+
+// kMarkedFromTTL is not handled by compaction_pri, so SST(2) is the first
+// element in VersionStorageInfo::files_by_compaction_pri
+TEST_F(CompactionPickerTest, MarkedForCompaction2) {
+  NewVersionStorage(6, kCompactionStyleLevel);
+  ioptions_.compaction_pri = kByCompensatedSize;
+
+  Add(1, 1U, "100", "150", 1U);
+  Add(1, 2U, "200", "250", 1000000000U);
+  Add(1, 3U, "300", "350", 1U);
+  Add(1, 4U, "400", "450", 1U);
+  Add(1, 5U, "500", "550", 1U);  // kMarkedFromTTL
+  Add(2, 6U, "100", "600", 1U);
+
+  vstorage_->LevelFiles(1)[4]->marked_for_compaction =
+      FileMetaData::kMarkedFromTTL;
+
+  UpdateVersionStorageInfo();
+
+  std::unique_ptr<Compaction> compaction(level_compaction_picker.PickCompaction(
+      cf_name_, mutable_cf_options_, vstorage_.get(), {}, &log_buffer_));
+  ASSERT_TRUE(compaction.get() != nullptr);
+  ASSERT_EQ(2U, compaction->num_input_levels());
+  ASSERT_EQ(1U, compaction->num_input_files(0));
+  ASSERT_EQ(2U, compaction->input(0, 0)->fd.GetNumber());
+}
+
+// kMarkedFromUpdateBlob and kMarkedFromTTL are both not handled by
+// compaction_pri, so SST(2) is the first element in
+// VersionStorageInfo::files_by_compaction_pri
+TEST_F(CompactionPickerTest, MarkedForCompaction3) {
+  NewVersionStorage(6, kCompactionStyleLevel);
+  ioptions_.compaction_pri = kByCompensatedSize;
+
+  Add(1, 1U, "100", "150", 1U);
+  Add(1, 2U, "200", "250", 1000000000U);  // kMarkedFromUpdateBlob
+  Add(1, 3U, "300", "350", 1U);
+  Add(1, 4U, "400", "450", 1U);
+  Add(1, 5U, "500", "550", 1U);  // kMarkedFromTTL
+  Add(2, 6U, "100", "600", 1U);
+
+  vstorage_->LevelFiles(1)[1]->marked_for_compaction =
+      FileMetaData::kMarkedFromUpdateBlob;
+  vstorage_->LevelFiles(1)[4]->marked_for_compaction =
+      FileMetaData::kMarkedFromTTL;
+
+  UpdateVersionStorageInfo();
+
+  std::unique_ptr<Compaction> compaction(level_compaction_picker.PickCompaction(
+      cf_name_, mutable_cf_options_, vstorage_.get(), {}, &log_buffer_));
+  ASSERT_TRUE(compaction.get() != nullptr);
+  ASSERT_EQ(2U, compaction->num_input_levels());
+  ASSERT_EQ(1U, compaction->num_input_files(0));
+  ASSERT_EQ(2U, compaction->input(0, 0)->fd.GetNumber());
+}
+
+// Compaction scores are less than 1, so SST(7) should picked by
+// marked_for_compaction
+TEST_F(CompactionPickerTest, MarkedForCompaction4) {
+  NewVersionStorage(6, kCompactionStyleLevel);
+  ioptions_.compaction_pri = kByCompensatedSize;
+
+  Add(1, 1U, "100", "150", 1U);
+  Add(1, 2U, "200", "250", 1U);
+  Add(1, 3U, "300", "350", 1U);
+  Add(1, 4U, "400", "450", 1U);
+  Add(1, 5U, "500", "550", 1U);
+  Add(2, 6U, "100", "320", 1U);
+  Add(2, 7U, "330", "600", 1U);  // kMarkedFromTTL
+
+  vstorage_->LevelFiles(2)[1]->marked_for_compaction =
+      FileMetaData::kMarkedFromTTL;
+
+  UpdateVersionStorageInfo();
+
+  std::unique_ptr<Compaction> compaction(level_compaction_picker.PickCompaction(
+      cf_name_, mutable_cf_options_, vstorage_.get(), {}, &log_buffer_));
+  ASSERT_TRUE(compaction.get() != nullptr);
+  ASSERT_EQ(1U, compaction->num_input_levels());
+  ASSERT_EQ(1U, compaction->num_input_files(0));
+  ASSERT_EQ(2U, compaction->start_level());
+  ASSERT_EQ(7U, compaction->input(0, 0)->fd.GetNumber());
+}
+
+// Level 1 compaction score is greater than 1, and level 1 files are all
+// conflict with level 2 files. we should skip marked_for_compaction SSTs in
+// level 2, but we disable this login for test
+TEST_F(CompactionPickerTest, MarkedForCompaction5) {
+  NewVersionStorage(6, kCompactionStyleLevel);
+  ioptions_.compaction_pri = kByCompensatedSize;
+
+  Add(1, 1U, "100", "150", 1U);
+  Add(1, 2U, "200", "250", 1U);
+  Add(1, 3U, "300", "350", 1000000000U);
+  Add(1, 4U, "400", "450", 1U);
+  Add(1, 5U, "500", "550", 1U);
+  Add(2, 6U, "100", "310", 1U);  // being_compacted
+  Add(2, 7U, "320", "330", 1U);  // kMarkedFromTTL
+  Add(2, 8U, "340", "600", 1U);  // being_compacted
+
+  vstorage_->LevelFiles(2)[0]->being_compacted = true;
+  vstorage_->LevelFiles(2)[1]->marked_for_compaction =
+      FileMetaData::kMarkedFromTTL;
+  vstorage_->LevelFiles(2)[2]->being_compacted = true;
+
+  UpdateVersionStorageInfo();
+
+  SyncPoint::GetInstance()->SetCallBack(
+      "LevelCompactionPicker:ShouldSkipMarkedForCompaction", [&](void* arg) {
+        bool* result = static_cast<bool*>(arg);
+        *result = false;
+      });
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
+
+  std::unique_ptr<Compaction> compaction(level_compaction_picker.PickCompaction(
+      cf_name_, mutable_cf_options_, vstorage_.get(), {}, &log_buffer_));
+  ASSERT_TRUE(compaction.get() != nullptr);
+  ASSERT_EQ(1U, compaction->num_input_levels());
+  ASSERT_EQ(1U, compaction->num_input_files(0));
+  ASSERT_EQ(2U, compaction->start_level());
+  ASSERT_EQ(7U, compaction->input(0, 0)->fd.GetNumber());
+}
+
+// Level 1 compaction score is greater than 1, and level 1 files are all
+// conflict with level 2 files. we should skip marked_for_compaction SSTs in
+// level 2, so we can't pick a compaction
+TEST_F(CompactionPickerTest, MarkedForCompaction6) {
+  NewVersionStorage(6, kCompactionStyleLevel);
+  ioptions_.compaction_pri = kByCompensatedSize;
+
+  Add(1, 1U, "100", "150", 1U);
+  Add(1, 2U, "200", "250", 1U);
+  Add(1, 3U, "300", "350", 1000000000U);
+  Add(1, 4U, "400", "450", 1U);
+  Add(1, 5U, "500", "550", 1U);
+  Add(2, 6U, "100", "310", 1U);  // being_compacted
+  Add(2, 7U, "320", "330", 1U);  // kMarkedFromTTL
+  Add(2, 8U, "340", "600", 1U);  // being_compacted
+
+  vstorage_->LevelFiles(2)[0]->being_compacted = true;
+  vstorage_->LevelFiles(2)[1]->marked_for_compaction =
+      FileMetaData::kMarkedFromTTL;
+  vstorage_->LevelFiles(2)[2]->being_compacted = true;
+
+  UpdateVersionStorageInfo();
+
+  std::unique_ptr<Compaction> compaction(level_compaction_picker.PickCompaction(
+      cf_name_, mutable_cf_options_, vstorage_.get(), {}, &log_buffer_));
+  ASSERT_TRUE(compaction.get() == nullptr);
+}
 
 TEST_F(CompactionPickerTest, CompactionPriMinOverlapping1) {
   NewVersionStorage(6, kCompactionStyleLevel);

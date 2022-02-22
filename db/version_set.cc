@@ -50,6 +50,7 @@
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
 #include "util/filename.h"
+#include "util/heap.h"
 #include "util/logging.h"
 #include "util/stop_watch.h"
 #include "util/string_util.h"
@@ -2076,6 +2077,23 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
     assert(temp.size() == files.size());
 
     // initialize files_by_compaction_pri_
+    std::stable_sort(
+        temp.begin(), temp.end(), [&](const Fsize& l, const Fsize& r) {
+          // lp rp
+          // 0  0   false
+          // 0  1   false
+          // 1  0   true
+          // 1  1   comp marked_for_compaction
+          uint8_t lp = l.file->is_handle_compaction_pri();
+          if (!lp) {
+            return false;
+          }
+          uint8_t rp = r.file->is_handle_compaction_pri();
+          if (!rp) {
+            return true;
+          }
+          return l.file->marked_for_compaction > r.file->marked_for_compaction;
+        });
     for (size_t i = 0; i < temp.size(); i++) {
       files_by_compaction_pri.push_back(static_cast<int>(temp[i].index));
     }
