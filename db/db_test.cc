@@ -5741,6 +5741,143 @@ TEST_F(DBTest, SkipValueGet) {
   s = db_->Get(ReadOptions{}, Key(1), static_cast<std::string*>(nullptr));
   ASSERT_TRUE(s.IsNotFound());
 }
+
+TEST_F(DBTest, ForceEvict) {
+  Options options = CurrentOptions();
+  BlockBasedTableOptions bbto;
+  bbto.cache_index_and_filter_blocks = false;
+  options.table_factory.reset(NewBlockBasedTableFactory(bbto));
+  options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
+  options.target_file_size_base = 1;
+  options.disable_auto_compactions = true;
+
+  int evict = 0;
+  int force_evict = 0;
+  int found = 0;
+  int open = 0;
+  int run = 0;
+  int failures = 0;
+
+  SyncPoint::GetInstance()->SetCallBack("TableCache::Evict",
+                                        [&](void* /* arg */) { ++evict; });
+  SyncPoint::GetInstance()->SetCallBack(
+      "TableCache::ForceEvict", [&](void* /* arg */) { ++force_evict; });
+  SyncPoint::GetInstance()->SetCallBack("TableCache::ForceEvict:Found",
+                                        [&](void* /* arg */) { ++found; });
+  SyncPoint::GetInstance()->SetCallBack("TableCache::ForceEvict:Open",
+                                        [&](void* /* arg */) { ++open; });
+  SyncPoint::GetInstance()->SetCallBack("TableCache::ForceEvict:Run",
+                                        [&](void* /* arg */) { ++run; });
+  SyncPoint::GetInstance()->EnableProcessing();
+
+  auto do_something = [&] {
+    for (int i = 0; i < 40; ++i) {
+      ASSERT_OK(Put(Key(i), ""));
+      ASSERT_OK(Flush());
+    }
+    for (int i = 0; i < 40; ++i) {
+      ASSERT_OK(db_->Get(ReadOptions{}, db_->DefaultColumnFamily(), Key(i)));
+    }
+    evict = 0;
+    force_evict = 0;
+    found = 0;
+    open = 0;
+    run = 0;
+    TestGetAndResetTickerCount(options, TERARKDB_NAMESPACE::BLOCK_CACHE_ERASE);
+    TestGetAndResetTickerCount(options,
+                               TERARKDB_NAMESPACE::BLOCK_CACHE_ERASE_FAILURES);
+
+    ASSERT_OK(db_->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(),
+                                db_->DefaultColumnFamily(), nullptr, nullptr));
+
+    failures = TestGetAndResetTickerCount(
+                   options, TERARKDB_NAMESPACE::BLOCK_CACHE_ERASE) -
+               TestGetAndResetTickerCount(
+                   options, TERARKDB_NAMESPACE::BLOCK_CACHE_ERASE_FAILURES);
+
+    // fprintf(stderr,
+    //         "evict = %d;"
+    //         "force_evict = %d;"
+    //         "found = %d;"
+    //         "open = %d;"
+    //         "run = %d;"
+    //         "failures = %d;\n",
+    //         evict, force_evict, found, open, run, failures);
+  };
+
+  options.table_evict_type = TERARKDB_NAMESPACE::kSkipForceEvict;
+  options.max_open_files = -1;
+  DestroyAndReopen(options);
+  do_something();
+  // always evict all
+  ASSERT_EQ(evict, 40);
+  // no try force_evict
+  ASSERT_EQ(force_evict, 0);
+  // no foound
+  ASSERT_EQ(found, 0);
+  // no open
+  ASSERT_EQ(open, 0);
+  // no run force_evict
+  ASSERT_EQ(run, 0);
+  // no cache evict failures
+  ASSERT_EQ(failures, 0);
+
+  options.table_evict_type = TERARKDB_NAMESPACE::kForceEvictIfOpen;
+  options.max_open_files = 20;
+  DestroyAndReopen(options);
+  do_something();
+  // always evict all
+  ASSERT_EQ(evict, 40);
+  // try force_evict all
+  ASSERT_EQ(force_evict, 40);
+  // found 20+ (for max_open_files)
+  ASSERT_GE(found, 20);
+  ASSERT_LT(found, 40);
+  // no open
+  ASSERT_EQ(open, 0);
+  // run force_evict 20+ (for max_open_files)
+  ASSERT_GE(run, 20);
+  ASSERT_LT(run, 40);
+  // cache evict failures 20+ (for max_open_files)
+  ASSERT_GE(failures, 20);
+  ASSERT_LT(failures, 40);
+
+  options.table_evict_type = TERARKDB_NAMESPACE::kForceEvictIfOpen;
+  options.max_open_files = -1;
+  DestroyAndReopen(options);
+  do_something();
+  // always evict all
+  ASSERT_EQ(evict, 40);
+  // try force_evict all
+  ASSERT_EQ(force_evict, 40);
+  // found all
+  ASSERT_EQ(found, 40);
+  // no open
+  ASSERT_EQ(open, 0);
+  // run all force_evict
+  ASSERT_EQ(run, 40);
+  // cache evict failures all
+  ASSERT_EQ(failures, 40);
+
+  options.table_evict_type = TERARKDB_NAMESPACE::kAlwaysForceEvict;
+  options.max_open_files = 20;
+  DestroyAndReopen(options);
+  do_something();
+  // always evict all
+  ASSERT_EQ(evict, 40);
+  // try force_evict all
+  ASSERT_EQ(force_evict, 40);
+  // found 20+ (for max_open_files)
+  ASSERT_GE(found, 20);
+  ASSERT_LT(found, 40);
+  // open 20- (for max_open_files)
+  ASSERT_GT(open, 0);
+  ASSERT_LE(open, 20);
+  // run all force_evict
+  ASSERT_EQ(run, 40);
+  // cache evict failures all
+  ASSERT_EQ(failures, 40);
+}
 }  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {

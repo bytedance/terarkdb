@@ -524,7 +524,9 @@ DEFINE_bool(new_table_reader_for_compaction_inputs, true,
 
 DEFINE_int32(compaction_readahead_size, 0, "Compaction readahead size");
 
-DEFINE_int32(table_evict_type, 0, "Table evict type");
+DEFINE_int32(table_evict_type, 0,
+             "Table evict type"
+             "(0:SkipForceEvict, 1:ForceEvictIfOpen, 2:AlwaysForceEvict)");
 
 DEFINE_int32(random_access_max_buffer_size, 1024 * 1024,
              "Maximum windows randomaccess buffer size");
@@ -5876,7 +5878,7 @@ int db_bench_tool(int argc, char** argv) {
 
     Status s =
         NewZenfsEnv(&FLAGS_env, FLAGS_zbd_path, "dbname=" + FLAGS_zbd_path,
-                           metrics_reporter_factory);
+                    metrics_reporter_factory);
     if (!s.ok()) {
       fprintf(stderr, "Error: Init zenfs env failed.\nStatus : %s\n",
               s.ToString().c_str());

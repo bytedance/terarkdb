@@ -401,7 +401,7 @@ Version::~Version() {
         assert(path_id < cfd_->ioptions()->cf_paths.size());
         vset_->obsolete_files_.emplace_back(
             f, cfd_->ioptions()->cf_paths[path_id].path,
-            cfd_->table_cache_ptr());
+            cfd_->table_cache_shared_ptr());
       }
     }
   }
@@ -2995,16 +2995,21 @@ VersionSet::~VersionSet() {
   // we need to delete column_family_set_ because its destructor depends on
   // VersionSet
   Cache* table_cache = column_family_set_->get_table_cache();
-  table_cache->ApplyToAllCacheEntries(&CloseTables, false /* thread_safe */);
   column_family_set_.reset();
   for (auto& file : obsolete_files_) {
     if (file.metadata->table_reader_handle) {
       table_cache->Release(file.metadata->table_reader_handle);
+    }
+    if (file.table_cache) {
+      file.table_cache->ForceEvict(file.metadata->fd.GetNumber(), nullptr);
+    } else {
       TableCache::Evict(table_cache, file.metadata->fd.GetNumber());
     }
     file.DeleteMetadata();
+    file.table_cache.reset();
   }
   obsolete_files_.clear();
+  table_cache->ApplyToAllCacheEntries(&CloseTables, false /* thread_safe */);
 }
 
 void VersionSet::AppendVersion(ColumnFamilyData* column_family_data,
@@ -4818,7 +4823,10 @@ void VersionSet::GetObsoleteFiles(chash_map<uint64_t, ObsoleteFileInfo>* files,
   std::vector<ObsoleteFileInfo> pending_files;
   for (auto& f : obsolete_files_) {
     if (f.metadata->fd.GetNumber() < min_pending_output) {
-      files->emplace(f.metadata->fd.GetNumber(), std::move(f));
+      auto metadata = f.metadata;
+      if (!files->emplace(f.metadata->fd.GetNumber(), std::move(f)).second) {
+        delete metadata;
+      }
     } else {
       pending_files.push_back(std::move(f));
     }

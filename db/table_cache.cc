@@ -17,7 +17,6 @@
 #include "rocksdb/terark_namespace.h"
 #include "table/get_context.h"
 #include "table/internal_iterator.h"
-#include "table/iterator_wrapper.h"
 #include "table/table_builder.h"
 #include "table/table_reader.h"
 #include "table/two_level_iterator.h"
@@ -649,18 +648,22 @@ size_t TableCache::GetMemoryUsageByTableReader(
 }
 
 void TableCache::Evict(Cache* cache, uint64_t file_number) {
+  TEST_SYNC_POINT("TableCache::Evict");
   cache->Erase(GetSliceForFileNumber(&file_number));
 }
 
 void TableCache::ForceEvict(uint64_t file_number,
                             const FileMetaData* file_meta) {
+  TEST_SYNC_POINT("TableCache::ForceEvict");
   std::unique_ptr<TableReader> reader_holder;
   TableReader* reader = nullptr;
   Slice key = GetSliceForFileNumber(&file_number);
   auto handle = cache_->Lookup(key);
   if (handle != nullptr) {
+    TEST_SYNC_POINT("TableCache::ForceEvict:Found");
     reader = GetTableReaderFromHandle(handle);
   } else if (file_meta != nullptr) {
+    TEST_SYNC_POINT("TableCache::ForceEvict:Open");
     auto s = GetTableReader(env_options_, file_meta->fd, false, 0, 0, nullptr,
                             &reader_holder);
     if (s.ok()) {
@@ -668,7 +671,11 @@ void TableCache::ForceEvict(uint64_t file_number,
     }
   }
   if (reader != nullptr) {
+    TEST_SYNC_POINT("TableCache::ForceEvict:Run");
     reader->ForceEvict();
+  }
+  if (handle != nullptr) {
+    cache_->Release(handle);
   }
   Evict(cache_, file_number);
 }
