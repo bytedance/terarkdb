@@ -270,7 +270,7 @@ class ColumnFamilyData {
                          bool needs_dup_key_check, SequenceNumber earliest_seq);
 
   TableCache* table_cache() const { return table_cache_.get(); }
-  std::shared_ptr<TableCache>& table_cache_ptr() { return table_cache_; }
+  std::shared_ptr<TableCache>& table_cache_shared_ptr() { return table_cache_; }
 
   // See documentation in compaction_picker.h
   // REQUIRES: DB mutex held
