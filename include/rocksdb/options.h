@@ -81,7 +81,7 @@ enum CompressionType : unsigned char {
   kDisableCompressionOption = 0xff,
 };
 
-// TODO(zhaoming.274): what's force evict ?
+// Shall we do ForceEvict before SST dropped ?
 enum TableEvictType : unsigned char {
   kSkipForceEvict = 0,
   kForceEvictIfOpen = 1,
