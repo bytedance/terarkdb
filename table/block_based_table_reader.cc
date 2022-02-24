@@ -347,6 +347,58 @@ class PartitionIndexReader : public IndexReader, public Cleanable {
     }
   }
 
+  virtual void ForceEvict() override {
+    auto rep = table_->rep_;
+    IndexBlockIter biter;
+    Statistics* kNullStats = nullptr;
+    index_block_->NewIterator<IndexBlockIter>(
+        icomparator_, icomparator_->user_comparator(), &biter, kNullStats, true,
+        index_key_includes_seq_, index_value_is_full_);
+
+    BlockHandle handle;
+    char
+        cache_key[BlockBasedTable::kMaxCacheKeyPrefixSize + kMaxVarint64Length];
+    char compressed_cache_key[BlockBasedTable::kMaxCacheKeyPrefixSize +
+                              kMaxVarint64Length];
+
+    uint64_t block_cache_erase_count = 0;
+    uint64_t block_cache_erase_failures_count = 0;
+
+    Cache* block_cache = rep->table_options.block_cache.get();
+    Cache* block_cache_compressed =
+        rep->immortal_table ? nullptr
+                            : rep->table_options.block_cache_compressed.get();
+
+    for (biter.SeekToFirst(); biter.Valid(); biter.Next()) {
+      handle = biter.value();
+
+      if (block_cache != nullptr) {
+        auto key = BlockBasedTable::GetCacheKey(rep->cache_key_prefix,
+                                                rep->cache_key_prefix_size,
+                                                handle, cache_key);
+
+        bool erased = block_cache->Erase(key);
+        ++block_cache_erase_count;
+        block_cache_erase_failures_count += !erased;
+      }
+      if (block_cache_compressed != nullptr) {
+        auto key =
+            BlockBasedTable::GetCacheKey(rep->compressed_cache_key_prefix,
+                                         rep->compressed_cache_key_prefix_size,
+                                         handle, compressed_cache_key);
+
+        bool erased = block_cache_compressed->Erase(key);
+        ++block_cache_erase_count;
+        block_cache_erase_failures_count += !erased;
+      }
+    }
+
+    RecordTick(rep->ioptions.statistics, BLOCK_CACHE_ERASE,
+               block_cache_erase_count);
+    RecordTick(rep->ioptions.statistics, BLOCK_CACHE_ERASE_FAILURES,
+               block_cache_erase_failures_count);
+  }
+
   virtual size_t size() const override { return index_block_->size(); }
   virtual size_t usable_size() const override {
     return index_block_->usable_size();
@@ -2586,16 +2638,16 @@ Status BlockBasedTable::ForceEvict() {
   uint64_t block_cache_erase_failures_count = 0;
 
   auto do_evict = [=, &cache_key, &compressed_cache_key,
-                   &block_cache_erase_count,
-                   &block_cache_erase_failures_count](uint64_t offset) {
-    if (block_cache) {
+                   &block_cache_erase_count, &block_cache_erase_failures_count](
+                      uint64_t offset, bool with_block_cache_compressed) {
+    if (block_cache != nullptr) {
       char* end = EncodeVarint64(cache_key + cache_key_prefix_size, offset);
       bool erased = block_cache->Erase(
           Slice(cache_key, static_cast<size_t>(end - cache_key)));
       ++block_cache_erase_count;
       block_cache_erase_failures_count += !erased;
     }
-    if (block_cache_compressed) {
+    if (with_block_cache_compressed && block_cache_compressed != nullptr) {
       char* end = EncodeVarint64(
           compressed_cache_key + compressed_cache_key_prefix_size, offset);
       bool erased = block_cache_compressed->Erase(
@@ -2606,25 +2658,25 @@ Status BlockBasedTable::ForceEvict() {
     }
   };
 
-  // FilterBlock
-  if (rep_->filter_policy != nullptr &&
-      !rep_->table_options.cache_index_and_filter_blocks) {
-    do_evict(rep_->filter_handle.offset());
-  }
-
   ReadOptions read_options;
+  read_options.fill_cache = false;
   std::unique_ptr<InternalIteratorBase<BlockHandle>> iiter(
       NewIndexIterator(read_options));
 
   // DataBlock
   for (iiter->SeekToFirst(); iiter->Valid(); iiter->Next()) {
-    do_evict(iiter->value().offset());
+    do_evict(iiter->value().offset(), true);
   }
 
   iiter.reset();
 
+  // FilterBlock is evicted in BlockBasedTable::Close()
+
   // IndexBlock
-  do_evict(rep_->dummy_index_reader_offset);
+  if (rep_->index_reader != nullptr) {
+    rep_->index_reader->ForceEvict();
+  }
+  do_evict(rep_->dummy_index_reader_offset, false);
 
   RecordTick(rep_->ioptions.statistics, BLOCK_CACHE_ERASE,
              block_cache_erase_count);

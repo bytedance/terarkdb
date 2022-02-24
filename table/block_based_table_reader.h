@@ -202,6 +202,8 @@ class BlockBasedTable : public TableReader {
 
     virtual void CacheDependencies(bool /* unused */) {}
 
+    virtual void ForceEvict() {}
+
     // Prefetch all the blocks referenced by this index to the buffer
     void PrefetchBlocks(FilePrefetchBuffer* buf);
 
