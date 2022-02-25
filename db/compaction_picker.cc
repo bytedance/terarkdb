@@ -1007,7 +1007,7 @@ void CompactionPicker::InitFilesBeingCompact(
                          const DependenceMap& depend_map, Arena* arena,
                          TableReader** table_reader_ptr) {
     return table_cache_->NewIterator(
-        options, env_options_, *icmp_, *file_metadata, depend_map, nullptr,
+        options, env_options_, *file_metadata, depend_map, nullptr,
         mutable_cf_options.prefix_extractor.get(), table_reader_ptr, nullptr,
         false, arena, true, -1);
   };
@@ -1341,7 +1341,7 @@ Compaction* CompactionPicker::PickRangeCompaction(
                          const DependenceMap& depend_map, Arena* arena,
                          TableReader** table_reader_ptr) {
     return table_cache_->NewIterator(
-        options, env_options_, *icmp_, *file_metadata, depend_map, nullptr,
+        options, env_options_, *file_metadata, depend_map, nullptr,
         mutable_cf_options.prefix_extractor.get(), table_reader_ptr, nullptr,
         false, arena, true, -1);
   };
@@ -1847,7 +1847,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
                          const DependenceMap& dependence_map, Arena* arena,
                          TableReader** reader) {
     return table_cache_->NewIterator(
-        options, env_options_, *icmp_, *f, dependence_map, nullptr,
+        options, env_options_, *f, dependence_map, nullptr,
         mutable_cf_options.prefix_extractor.get(), nullptr, nullptr, false,
         arena, true, input.level);
   };
@@ -1889,8 +1889,8 @@ Compaction* CompactionPicker::PickCompositeCompaction(
       }
       std::shared_ptr<const TableProperties> tp;
       auto s = table_cache_->GetTableProperties(
-          env_options_, *icmp_, *f, &tp,
-          mutable_cf_options.prefix_extractor.get(), true);
+          env_options_, *f, &tp, mutable_cf_options.prefix_extractor.get(),
+          true);
       if (s.IsIncomplete()) {
         if (f->fd.largest_seqno < oldest_snapshot_seqnum) {
           return false;
@@ -2511,8 +2511,7 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
                            const DependenceMap& depend_map, Arena* arena,
                            TableReader** table_reader_ptr) {
       return picker->table_cache()->NewIterator(
-          options, picker->env_options(), ioptions_.internal_comparator,
-          *file_metadata, depend_map, nullptr,
+          options, picker->env_options(), *file_metadata, depend_map, nullptr,
           mutable_cf_options_.prefix_extractor.get(), table_reader_ptr, nullptr,
           false, arena, true, -1);
     };
@@ -2732,8 +2731,7 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
                            const DependenceMap& depend_map, Arena* arena,
                            TableReader** table_reader_ptr) {
       return picker->table_cache()->NewIterator(
-          options, picker->env_options(), ioptions_.internal_comparator,
-          *file_metadata, depend_map, nullptr,
+          options, picker->env_options(), *file_metadata, depend_map, nullptr,
           mutable_cf_options_.prefix_extractor.get(), table_reader_ptr, nullptr,
           false, arena, true, -1);
     };

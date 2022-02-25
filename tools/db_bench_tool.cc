@@ -510,10 +510,6 @@ DEFINE_double(data_block_hash_table_util_ratio, 0.75,
 DEFINE_int64(compressed_cache_size, -1,
              "Number of bytes to use as a cache of compressed data.");
 
-DEFINE_int64(row_cache_size, 0,
-             "Number of bytes to use as a cache of individual rows"
-             " (0 = disabled).");
-
 DEFINE_int32(open_files, TERARKDB_NAMESPACE::Options().max_open_files,
              "Maximum number of files to keep open at the same time"
              " (use default if == 0)");
@@ -527,6 +523,10 @@ DEFINE_bool(new_table_reader_for_compaction_inputs, true,
             "If true, uses a separate file handle for compaction inputs");
 
 DEFINE_int32(compaction_readahead_size, 0, "Compaction readahead size");
+
+DEFINE_int32(table_evict_type, 0,
+             "Table evict type"
+             "(0:SkipForceEvict, 1:ForceEvictIfOpen, 2:AlwaysForceEvict)");
 
 DEFINE_int32(random_access_max_buffer_size, 1024 * 1024,
              "Maximum windows randomaccess buffer size");
@@ -733,7 +733,6 @@ DEFINE_string(
     "that are related to RocksDB options will be ignored:\n"
     "\t--use_existing_db\n"
     "\t--statistics\n"
-    "\t--row_cache_size\n"
     "\t--row_cache_numshardbits\n"
     "\t--enable_io_prio\n"
     "\t--dump_malloc_stats\n"
@@ -3299,6 +3298,8 @@ class Benchmark {
     options.new_table_reader_for_compaction_inputs =
         FLAGS_new_table_reader_for_compaction_inputs;
     options.compaction_readahead_size = FLAGS_compaction_readahead_size;
+    options.table_evict_type =
+        static_cast<TableEvictType>(FLAGS_table_evict_type);
     options.random_access_max_buffer_size = FLAGS_random_access_max_buffer_size;
     options.writable_file_max_buffer_size = FLAGS_writable_file_max_buffer_size;
     options.use_fsync = FLAGS_use_fsync;
@@ -3661,14 +3662,6 @@ class Benchmark {
       if (FLAGS_bloom_bits >= 0) {
         table_options->filter_policy.reset(NewBloomFilterPolicy(
             FLAGS_bloom_bits, FLAGS_use_block_based_filter));
-      }
-    }
-    if (FLAGS_row_cache_size) {
-      if (FLAGS_cache_numshardbits >= 1) {
-        options.row_cache =
-            NewLRUCache(FLAGS_row_cache_size, FLAGS_cache_numshardbits);
-      } else {
-        options.row_cache = NewLRUCache(FLAGS_row_cache_size);
       }
     }
     if (FLAGS_enable_io_prio) {

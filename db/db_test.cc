@@ -5741,6 +5741,246 @@ TEST_F(DBTest, SkipValueGet) {
   s = db_->Get(ReadOptions{}, Key(1), static_cast<std::string*>(nullptr));
   ASSERT_TRUE(s.IsNotFound());
 }
+
+TEST_F(DBTest, ForceEvict) {
+  Options options = CurrentOptions();
+  CompressionType compressions[] = {kZlibCompression, kBZip2Compression,
+                                    kLZ4Compression, kLZ4HCCompression,
+                                    kXpressCompression};
+
+  BlockBasedTableOptions bbto;
+  bbto.cache_index_and_filter_blocks = false;
+  bbto.index_type = BlockBasedTableOptions::kTwoLevelIndexSearch;
+  bbto.filter_policy.reset(TERARKDB_NAMESPACE::NewBloomFilterPolicy(10));
+  bbto.partition_filters = true;
+  bbto.block_cache = TERARKDB_NAMESPACE::NewLRUCache(64ull << 20, 4);
+  options.table_factory.reset(NewBlockBasedTableFactory(bbto));
+  options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
+  options.optimize_filters_for_hits = false;
+  options.target_file_size_base = 1;
+  options.disable_auto_compactions = true;
+  options.compression = kNoCompression;
+
+  int TC_evict = 0;
+  int TC_force_evict = 0;
+  int TC_found = 0;
+  int TC_open = 0;
+  int TC_run = 0;
+  int BC_erase = 0;
+  int BC_failures = 0;
+
+  int test_sst = 40;
+  int max_open_files = 20;
+
+  SyncPoint::GetInstance()->SetCallBack("TableCache::Evict",
+                                        [&](void* /* arg */) { ++TC_evict; });
+  SyncPoint::GetInstance()->SetCallBack(
+      "TableCache::ForceEvict", [&](void* /* arg */) { ++TC_force_evict; });
+  SyncPoint::GetInstance()->SetCallBack("TableCache::ForceEvict:Found",
+                                        [&](void* /* arg */) { ++TC_found; });
+  SyncPoint::GetInstance()->SetCallBack("TableCache::ForceEvict:Open",
+                                        [&](void* /* arg */) { ++TC_open; });
+  SyncPoint::GetInstance()->SetCallBack("TableCache::ForceEvict:Run",
+                                        [&](void* /* arg */) { ++TC_run; });
+  SyncPoint::GetInstance()->EnableProcessing();
+
+  auto do_something = [&] {
+    for (int i = 0; i < 40; ++i) {
+      ASSERT_OK(Put(Key(i), ""));
+      ASSERT_OK(Flush());
+    }
+    for (int i = 0; i < 40; ++i) {
+      ASSERT_OK(db_->Get(ReadOptions{}, db_->DefaultColumnFamily(), Key(i)));
+    }
+    TC_evict = 0;
+    TC_force_evict = 0;
+    TC_found = 0;
+    TC_open = 0;
+    TC_run = 0;
+    TestGetAndResetTickerCount(options, TERARKDB_NAMESPACE::BLOCK_CACHE_ERASE);
+    TestGetAndResetTickerCount(options,
+                               TERARKDB_NAMESPACE::BLOCK_CACHE_ERASE_FAILURES);
+
+    ASSERT_OK(db_->CompactRange(TERARKDB_NAMESPACE::CompactRangeOptions(),
+                                db_->DefaultColumnFamily(), nullptr, nullptr));
+    for (int i = 0; i < 40; ++i) {
+      ASSERT_OK(db_->Get(ReadOptions{}, db_->DefaultColumnFamily(), Key(i)));
+    }
+
+    BC_erase = TestGetAndResetTickerCount(
+        options, TERARKDB_NAMESPACE::BLOCK_CACHE_ERASE);
+    BC_failures = TestGetAndResetTickerCount(
+        options, TERARKDB_NAMESPACE::BLOCK_CACHE_ERASE_FAILURES);
+
+    fprintf(stderr,
+            "TC_evict = %d;"
+            "TC_force_evict = %d;"
+            "TC_found = %d;"
+            "TC_open = %d;"
+            "TC_run = %d;"
+            "BC_erase = %d;"
+            "BC_failures = %d;\n",
+            TC_evict, TC_force_evict, TC_found, TC_open, TC_run, BC_erase,
+            BC_failures);
+  };
+
+  options.table_evict_type = TERARKDB_NAMESPACE::kSkipForceEvict;
+  options.max_open_files = -1;
+  DestroyAndReopen(options);
+  do_something();
+  ASSERT_EQ(TC_evict, test_sst);
+  ASSERT_EQ(TC_force_evict, 0);
+  ASSERT_EQ(TC_found, 0);
+  ASSERT_EQ(TC_open, 0);
+  ASSERT_EQ(TC_run, 0);
+  // block_cache erase:
+  //   index_block(N)
+  //   filter_block(N)
+  //   filter_block_partitions(N)
+  ASSERT_EQ(BC_erase, test_sst * 3);
+  // block_cache failures:
+  //   index_block(N)
+  //   filter_block(N)
+  ASSERT_EQ(BC_failures, test_sst * 2);
+
+  options.table_evict_type = TERARKDB_NAMESPACE::kForceEvictIfOpen;
+  options.max_open_files = max_open_files;
+  DestroyAndReopen(options);
+  do_something();
+  ASSERT_EQ(TC_evict, test_sst);
+  ASSERT_EQ(TC_force_evict, test_sst);
+  ASSERT_GE(TC_found, max_open_files);
+  ASSERT_LT(TC_found, test_sst);
+  ASSERT_EQ(TC_open, 0);
+  ASSERT_EQ(TC_run, TC_found);
+  // block_cache erase:
+  //   index_block(N+F)
+  //   index_block_partitions(F)
+  //   filter_block(N)
+  //   filter_block_partitions(N)
+  //   data_blocks(F)
+  ASSERT_EQ(BC_erase, test_sst * 3 + TC_found * 3);
+  // block_cache failures:
+  //   index_block(N+F)
+  //   filter_block(N)
+  ASSERT_EQ(BC_failures, test_sst * 2 + TC_found);
+
+  options.table_evict_type = TERARKDB_NAMESPACE::kForceEvictIfOpen;
+  options.max_open_files = -1;
+  DestroyAndReopen(options);
+  do_something();
+  ASSERT_EQ(TC_evict, test_sst);
+  ASSERT_EQ(TC_force_evict, test_sst);
+  ASSERT_EQ(TC_found, test_sst);
+  ASSERT_EQ(TC_open, 0);
+  ASSERT_EQ(TC_run, test_sst);
+  // block_cache erase:
+  //   index_block(2N)
+  //   index_block_partitions(N)
+  //   filter_block(N)
+  //   filter_block_partitions(N)
+  //   data_blocks(N)
+  ASSERT_EQ(BC_erase, test_sst * 6);
+  // block_cache failures:
+  //   index_block(2N)
+  //   filter_block(N)
+  ASSERT_EQ(BC_failures, test_sst * 3);
+
+  options.table_evict_type = TERARKDB_NAMESPACE::kAlwaysForceEvict;
+  options.max_open_files = max_open_files;
+  DestroyAndReopen(options);
+  do_something();
+  ASSERT_EQ(TC_evict, test_sst);
+  ASSERT_EQ(TC_force_evict, test_sst);
+  ASSERT_GE(TC_found, max_open_files);
+  ASSERT_LT(TC_found, test_sst);
+  ASSERT_EQ(TC_open, test_sst - TC_found);
+  ASSERT_EQ(TC_run, test_sst);
+  // block_cache erase:
+  //   index_block(2N+O)
+  //   index_block_partitions(N)
+  //   filter_block(N+O)
+  //   filter_block_partitions(N+O)
+  //   data_blocks(N)
+  ASSERT_EQ(BC_erase, test_sst * 6 + TC_open * 3);
+  // block_cache failures:
+  //   index_block(2N+O)
+  //   filter_block(N+O)
+  ASSERT_EQ(BC_failures, test_sst * 3 + TC_open * 2);
+
+  for (auto comp : compressions) {
+    if (CompressionTypeSupported(comp)) {
+      options.compression = comp;
+      break;
+    }
+  }
+  if (options.compression == kNoCompression) {
+    return;
+  }
+  bbto.no_block_cache = true;
+  bbto.block_cache_compressed.swap(bbto.block_cache);
+  options.table_factory.reset(NewBlockBasedTableFactory(bbto));
+
+  options.table_evict_type = TERARKDB_NAMESPACE::kSkipForceEvict;
+  options.max_open_files = -1;
+  DestroyAndReopen(options);
+  do_something();
+  ASSERT_EQ(TC_evict, test_sst);
+  ASSERT_EQ(TC_force_evict, 0);
+  ASSERT_EQ(TC_found, 0);
+  ASSERT_EQ(TC_open, 0);
+  ASSERT_EQ(TC_run, 0);
+  ASSERT_EQ(BC_erase, 0);
+  ASSERT_EQ(BC_failures, 0);
+
+  options.table_evict_type = TERARKDB_NAMESPACE::kForceEvictIfOpen;
+  options.max_open_files = max_open_files;
+  DestroyAndReopen(options);
+  do_something();
+  ASSERT_EQ(TC_evict, test_sst);
+  ASSERT_EQ(TC_force_evict, test_sst);
+  ASSERT_GE(TC_found, max_open_files);
+  ASSERT_LT(TC_found, test_sst);
+  ASSERT_EQ(TC_open, 0);
+  ASSERT_EQ(TC_run, TC_found);
+  // block_cache_compressed erase:
+  //   index_block_partitions(F)
+  //   data_blocks(F)
+  ASSERT_EQ(BC_erase, TC_found * 2);
+  ASSERT_EQ(BC_failures, 0);
+
+  options.table_evict_type = TERARKDB_NAMESPACE::kForceEvictIfOpen;
+  options.max_open_files = -1;
+  DestroyAndReopen(options);
+  do_something();
+  ASSERT_EQ(TC_evict, test_sst);
+  ASSERT_EQ(TC_force_evict, test_sst);
+  ASSERT_EQ(TC_found, test_sst);
+  ASSERT_EQ(TC_open, 0);
+  ASSERT_EQ(TC_run, test_sst);
+  // block_cache_compressed erase:
+  //   index_block_partitions(N)
+  //   data_blocks(N)
+  ASSERT_EQ(BC_erase, test_sst * 2);
+  ASSERT_EQ(BC_failures, 0);
+
+  options.table_evict_type = TERARKDB_NAMESPACE::kAlwaysForceEvict;
+  options.max_open_files = max_open_files;
+  DestroyAndReopen(options);
+  do_something();
+  ASSERT_EQ(TC_evict, test_sst);
+  ASSERT_EQ(TC_force_evict, test_sst);
+  ASSERT_GE(TC_found, max_open_files);
+  ASSERT_LT(TC_found, test_sst);
+  ASSERT_EQ(TC_open, test_sst - TC_found);
+  ASSERT_EQ(TC_run, test_sst);
+  // block_cache_compressed erase:
+  //   index_block_partitions(N)
+  //   data_blocks(N)
+  ASSERT_EQ(BC_erase, test_sst * 2);
+  ASSERT_EQ(BC_failures, 0);
+}
+
 }  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {

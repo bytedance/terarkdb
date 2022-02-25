@@ -559,6 +559,9 @@ bool AreEqualOptions(
     case OptionType::kWALRecoveryMode:
       return (*reinterpret_cast<const WALRecoveryMode*>(offset1) ==
               *reinterpret_cast<const WALRecoveryMode*>(offset2));
+    case OptionType::kTableEviceType:
+      return (*reinterpret_cast<const TableEvictType*>(offset1) ==
+              *reinterpret_cast<const TableEvictType*>(offset2));
     case OptionType::kAccessHint:
       return (*reinterpret_cast<const DBOptions::AccessHint*>(offset1) ==
               *reinterpret_cast<const DBOptions::AccessHint*>(offset2));

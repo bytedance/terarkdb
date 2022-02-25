@@ -216,9 +216,10 @@ class SimCacheImpl : public SimCache {
     return cache_->Release(handle, force_erase);
   }
 
-  virtual void Erase(const Slice& key) override {
-    cache_->Erase(key);
+  virtual bool Erase(const Slice& key) override {
+    bool ret = cache_->Erase(key);
     key_only_cache_->Erase(key);
+    return ret;
   }
 
   virtual void* Value(Handle* handle) override { return cache_->Value(handle); }

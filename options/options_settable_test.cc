@@ -199,7 +199,6 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
        sizeof(std::shared_ptr<WriteBufferManager>)},
       {offsetof(struct DBOptions, listeners),
        sizeof(std::vector<std::shared_ptr<EventListener>>)},
-      {offsetof(struct DBOptions, row_cache), sizeof(std::shared_ptr<Cache>)},
       {offsetof(struct DBOptions, metrics_reporter_factory),
        sizeof(std::shared_ptr<MetricsReporterFactory>)},
       {offsetof(struct DBOptions, wal_filter), sizeof(const WalFilter*)},
@@ -253,6 +252,7 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
                              "zenfs_low_gc_ratio=0.3;"
                              "zenfs_high_gc_ratio=0.33;"
                              "zenfs_force_gc_ratio=0.333;"
+                             "table_evict_type=kForceEvictIfOpen;"
                              "new_table_reader_for_compaction_inputs=false;"
                              "keep_log_file_num=4890;"
                              "skip_stats_update_on_db_open=false;"
@@ -311,7 +311,8 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
                              "avoid_unnecessary_blocking_io=false;"
                              "zenfs_low_gc_ratio=0.25;"
                              "zenfs_high_gc_ratio=0.6;"
-                             "zenfs_force_gc_ratio=0.9;",
+                             "zenfs_force_gc_ratio=0.9;"
+                             "table_evict_type=kAlwaysForceEvict;",
                              new_options));
 
   ASSERT_EQ(unset_bytes_base, NumUnsetBytes(new_options_ptr, sizeof(DBOptions),
@@ -415,6 +416,7 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
   options->soft_rate_limit = 0;
   options->purge_redundant_kvs_while_flush = false;
   options->max_mem_compaction_level = 0;
+  options->optimize_range_deletion = false;
 
   char* new_options_ptr = new char[sizeof(ColumnFamilyOptions)];
   ColumnFamilyOptions* new_options =
@@ -480,7 +482,7 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
       "max_dependence_blob_overlap=1024;"
       "maintainer_job_ratio=0.1;"
       "optimize_filters_for_hits=false;"
-      "optimize_range_deletion=false;"
+      "optimize_range_deletion=true;"
       "report_bg_io_stats=true;"
       "ttl_gc_ratio=3.000;"
       "ttl_max_scan_gap=1;",
@@ -491,6 +493,7 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
                           kColumnFamilyOptionsBlacklist));
   EXPECT_EQ(new_options->ttl_gc_ratio, 3.000);
   EXPECT_EQ(new_options->ttl_max_scan_gap, 1);
+  EXPECT_EQ(new_options->optimize_range_deletion, true);
   options->~ColumnFamilyOptions();
   new_options->~ColumnFamilyOptions();
 

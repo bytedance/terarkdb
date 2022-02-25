@@ -414,7 +414,7 @@ ColumnFamilyData::ColumnFamilyData(
     uint32_t id, const std::string& name, Version* _dummy_versions,
     Cache* _table_cache, WriteBufferManager* write_buffer_manager,
     const ColumnFamilyOptions& cf_options, const ImmutableDBOptions& db_options,
-    const EnvOptions& env_options, ColumnFamilySet* column_family_set)
+    const EnvOptions* env_options, ColumnFamilySet* column_family_set)
     : id_(id),
       name_(name),
       dummy_versions_(_dummy_versions),
@@ -424,9 +424,10 @@ ColumnFamilyData::ColumnFamilyData(
       dropped_(false),
       optimize_filters_for_hits_(cf_options.optimize_filters_for_hits),
       internal_comparator_(cf_options.comparator),
-      initial_cf_options_(SanitizeOptions(db_options, cf_options)),
-      ioptions_(db_options, initial_cf_options_),
-      mutable_cf_options_(initial_cf_options_, db_options.env),
+      table_cache_(new TableCache(SanitizeOptions(db_options, cf_options),
+                                  db_options, env_options, _table_cache)),
+      ioptions_(table_cache_->ioptions()),
+      mutable_cf_options_(table_cache_->initial_cf_options(), db_options.env),
       is_delete_range_supported_(
           cf_options.table_factory->IsDeleteRangeSupported()),
       write_buffer_manager_(write_buffer_manager),
@@ -453,17 +454,16 @@ ColumnFamilyData::ColumnFamilyData(
   if (_dummy_versions != nullptr) {
     internal_stats_.reset(
         new InternalStats(ioptions_.num_levels, db_options.env, this));
-    table_cache_.reset(new TableCache(ioptions_, env_options, _table_cache));
     if (ioptions_.compaction_style == kCompactionStyleLevel) {
       compaction_picker_.reset(new LevelCompactionPicker(
-          table_cache_.get(), env_options, ioptions_, &internal_comparator_));
+          table_cache_.get(), *env_options, ioptions_, &internal_comparator_));
 #ifndef ROCKSDB_LITE
     } else if (ioptions_.compaction_style == kCompactionStyleUniversal) {
       compaction_picker_.reset(new UniversalCompactionPicker(
-          table_cache_.get(), env_options, ioptions_, &internal_comparator_));
+          table_cache_.get(), *env_options, ioptions_, &internal_comparator_));
     } else if (ioptions_.compaction_style == kCompactionStyleNone) {
       compaction_picker_.reset(new NullCompactionPicker(
-          table_cache_.get(), env_options, ioptions_, &internal_comparator_));
+          table_cache_.get(), *env_options, ioptions_, &internal_comparator_));
       ROCKS_LOG_WARN(ioptions_.info_log,
                      "Column family %s does not use any background compaction. "
                      "Compactions can only be done via CompactFiles\n",
@@ -475,14 +475,14 @@ ColumnFamilyData::ColumnFamilyData(
                       "Column family %s will use kCompactionStyleLevel.\n",
                       ioptions_.compaction_style, GetName().c_str());
       compaction_picker_.reset(new LevelCompactionPicker(
-          table_cache_.get(), env_options, ioptions_, &internal_comparator_));
+          table_cache_.get(), *env_options, ioptions_, &internal_comparator_));
     }
 
     if (column_family_set_->NumberOfColumnFamilies() < 10) {
       ROCKS_LOG_INFO(ioptions_.info_log,
                      "--------------- Options for column family [%s]:\n",
                      name.c_str());
-      initial_cf_options_.Dump(ioptions_.info_log);
+      initial_cf_options().Dump(ioptions_.info_log);
     } else {
       ROCKS_LOG_INFO(ioptions_.info_log, "\t(skipping printing options)\n");
     }
@@ -561,7 +561,7 @@ void ColumnFamilyData::SetDropped() {
 }
 
 ColumnFamilyOptions ColumnFamilyData::GetLatestCFOptions() const {
-  return BuildColumnFamilyOptions(initial_cf_options_, mutable_cf_options_);
+  return BuildColumnFamilyOptions(initial_cf_options(), mutable_cf_options_);
 }
 
 uint64_t ColumnFamilyData::OldestLogToKeep() {
@@ -1262,7 +1262,7 @@ Status ColumnFamilyData::SetOptions(
   if (s.ok()) {
     new_mutable_cf_options = MutableCFOptions(
         SanitizeOptions(db_options,
-                        BuildColumnFamilyOptions(initial_cf_options_,
+                        BuildColumnFamilyOptions(initial_cf_options(),
                                                  new_mutable_cf_options)),
         db_options.env);
     optimize_filters_for_hits_.store(
@@ -1277,7 +1277,7 @@ Status ColumnFamilyData::SetOptions(
 
 // REQUIRES: DB mutex held
 Env::WriteLifeTimeHint ColumnFamilyData::CalculateSSTWriteHint(int level) {
-  if (initial_cf_options_.compaction_style != kCompactionStyleLevel) {
+  if (initial_cf_options().compaction_style != kCompactionStyleLevel) {
     return Env::WLTH_NOT_SET;
   }
   if (level == 0) {
@@ -1323,7 +1323,7 @@ Directory* ColumnFamilyData::GetDataDir(size_t path_id) const {
 
 ColumnFamilySet::ColumnFamilySet(const std::string& dbname,
                                  const ImmutableDBOptions* db_options,
-                                 const EnvOptions& env_options,
+                                 const EnvOptions* env_options,
                                  Cache* table_cache,
                                  WriteBufferManager* write_buffer_manager,
                                  WriteController* write_controller)
@@ -1334,7 +1334,7 @@ ColumnFamilySet::ColumnFamilySet(const std::string& dbname,
       default_cfd_cache_(nullptr),
       db_name_(dbname),
       db_options_(db_options),
-      env_options_(env_options),
+      env_options_(*env_options),
       table_cache_(table_cache),
       write_buffer_manager_(write_buffer_manager),
       write_controller_(write_controller) {
@@ -1405,7 +1405,7 @@ ColumnFamilyData* ColumnFamilySet::CreateColumnFamily(
   assert(column_families_.find(name) == column_families_.end());
   ColumnFamilyData* new_cfd = new ColumnFamilyData(
       id, name, dummy_versions, table_cache_, write_buffer_manager_, options,
-      *db_options_, env_options_, this);
+      *db_options_, &env_options_, this);
   column_families_.insert({name, id});
   column_family_data_.insert({id, new_cfd});
   max_column_family_ = std::max(max_column_family_, id);

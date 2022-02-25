@@ -185,8 +185,8 @@ class TablePropertiesCollectionIteratorImpl
       filename_ = TableFileName(cfd_->ioptions()->cf_paths, f->fd.GetNumber(),
                                 f->fd.GetPathId());
       status_ = cfd_->table_cache()->GetTableProperties(
-          impl_->env_options(), cfd_->internal_comparator(), *f, &properties_,
-          prefix_extractor_.get(), false);
+          impl_->env_options(), *f, &properties_, prefix_extractor_.get(),
+          false);
     }
     if (status_.ok()) {
       iter_ = where;
@@ -287,6 +287,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       initial_db_options_(SanitizeOptions(dbname, options)),
       immutable_db_options_(initial_db_options_),
       mutable_db_options_(initial_db_options_),
+      table_evict_type_(mutable_db_options_.table_evict_type),
       stats_(immutable_db_options_.statistics.get()),
       db_lock_(nullptr),
       mutex_(stats_, env_, DB_MUTEX_WAIT_MICROS,
@@ -453,7 +454,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
   table_cache_ = NewLRUCache(table_cache_size,
                              immutable_db_options_.table_cache_numshardbits);
 
-  versions_.reset(new VersionSet(dbname_, &immutable_db_options_, env_options_,
+  versions_.reset(new VersionSet(dbname_, &immutable_db_options_, &env_options_,
                                  seq_per_batch, table_cache_.get(),
                                  write_buffer_manager_, &write_controller_));
   column_family_memtables_.reset(
@@ -1590,6 +1591,7 @@ Status DBImpl::SetDBOptions(
         new_options.bytes_per_sync = 1024 * 1024;
       }
       mutable_db_options_ = new_options;
+      table_evict_type_ = mutable_db_options_.table_evict_type;
       env_options_for_compaction_ = EnvOptions(
           BuildDBOptions(immutable_db_options_, mutable_db_options_));
       env_options_for_compaction_ = env_->OptimizeForCompactionTableWrite(

@@ -144,6 +144,7 @@ TEST_F(OptionsTest, GetOptionsFromMapTest) {
       {"zenfs_low_gc_ratio", "0.25"},
       {"zenfs_high_gc_ratio", "0.5"},
       {"zenfs_force_gc_ratio", "0.75"},
+      {"table_evict_type", "kAlwaysForceEvict"},
       {"random_access_max_buffer_size", "3145728"},
       {"writable_file_max_buffer_size", "314159"},
       {"bytes_per_sync", "47"},
@@ -286,6 +287,7 @@ TEST_F(OptionsTest, GetOptionsFromMapTest) {
   ASSERT_EQ(new_db_opt.zenfs_low_gc_ratio, 0.25);
   ASSERT_EQ(new_db_opt.zenfs_high_gc_ratio, 0.5);
   ASSERT_EQ(new_db_opt.zenfs_force_gc_ratio, 0.75);
+  ASSERT_EQ(new_db_opt.table_evict_type, kAlwaysForceEvict);
   ASSERT_EQ(new_db_opt.random_access_max_buffer_size, 3145728);
   ASSERT_EQ(new_db_opt.writable_file_max_buffer_size, 314159);
   ASSERT_EQ(new_db_opt.bytes_per_sync, static_cast<uint64_t>(47));

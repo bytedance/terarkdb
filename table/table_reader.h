@@ -99,6 +99,10 @@ class TableReader {
                          bool (*callback_func)(void* arg, const Slice& key,
                                                LazyBuffer&& value));
 
+  // Evict all possible block keys no matter if it's in BlockCache
+  // NOTICE: this call allows doing ineffective evict
+  virtual Status ForceEvict() { return Status::NotSupported(); }
+
   // Prefetch data corresponding to a give range of keys
   // Typically this functionality is required for table implementations that
   // persists the data on a non volatile storage medium like disk/SSD

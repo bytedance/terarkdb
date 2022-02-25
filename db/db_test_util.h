@@ -674,7 +674,6 @@ class DBTestBase : public testing::Test {
     kxxHashChecksum = 24,
     kFIFOCompaction = 25,
     kOptimizeFiltersForHits = 26,
-    kRowCache = 27,
     kRecycleLogFiles = 28,
     kConcurrentSkipList = 29,
     kPipelinedWrite = 30,

@@ -3480,8 +3480,12 @@ class TickerTypeJni {
         return 0x65;
       case TERARKDB_NAMESPACE::Tickers::READ_BLOB_INVALID:
         return 0x66;
-      case TERARKDB_NAMESPACE::Tickers::TICKER_ENUM_MAX:
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_ERASE:
         return 0x67;
+      case TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_ERASE_FAILURES:
+        return 0x68;
+      case TERARKDB_NAMESPACE::Tickers::TICKER_ENUM_MAX:
+        return 0x69;
       default:
         // undefined/default
         return 0x0;
@@ -3699,6 +3703,10 @@ class TickerTypeJni {
       case 0x66:
         return TERARKDB_NAMESPACE::Tickers::READ_BLOB_INVALID;
       case 0x67:
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_ERASE;
+      case 0x68:
+        return TERARKDB_NAMESPACE::Tickers::BLOCK_CACHE_ERASE_FAILURES;
+      case 0x69:
         return TERARKDB_NAMESPACE::Tickers::TICKER_ENUM_MAX;
 
       default:

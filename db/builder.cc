@@ -457,7 +457,7 @@ Status BuildTable(
       ro.fill_cache = false;
       for (auto& meta : *meta_vec) {
         std::unique_ptr<InternalIterator> it(table_cache->NewIterator(
-            ro, env_options, internal_comparator, meta, empty_dependence_map,
+            ro, env_options, meta, empty_dependence_map,
             nullptr /* range_del_agg */,
             mutable_cf_options.prefix_extractor.get(), nullptr,
             (internal_stats == nullptr) ? nullptr

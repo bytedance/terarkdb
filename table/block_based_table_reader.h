@@ -124,6 +124,8 @@ class BlockBasedTable : public TableReader {
              GetContext* get_context, const SliceTransform* prefix_extractor,
              bool skip_filters = false) override;
 
+  Status ForceEvict() override;
+
   // Pre-fetch the disk blocks that correspond to the key range specified by
   // (kbegin, kend). The call will return error status in the event of
   // IO or iteration error.
@@ -199,6 +201,8 @@ class BlockBasedTable : public TableReader {
     virtual size_t ApproximateMemoryUsage() const = 0;
 
     virtual void CacheDependencies(bool /* unused */) {}
+
+    virtual void ForceEvict() {}
 
     // Prefetch all the blocks referenced by this index to the buffer
     void PrefetchBlocks(FilePrefetchBuffer* buf);
