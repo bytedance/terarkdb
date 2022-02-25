@@ -37,8 +37,9 @@ class HistogramImpl;
 
 class TableCache {
  public:
-  TableCache(const ImmutableCFOptions& ioptions,
-             const EnvOptions& storage_options, Cache* cache);
+  TableCache(const ColumnFamilyOptions& initial_cf_options,
+             const ImmutableDBOptions& db_options,
+             const EnvOptions* storage_options, Cache* cache);
   ~TableCache();
 
   // Return an iterator for the specified file number (the corresponding
@@ -54,7 +55,6 @@ class TableCache {
   // @param level The level this table is at, -1 for "not set / don't know"
   InternalIterator* NewIterator(
       const ReadOptions& options, const EnvOptions& toptions,
-      const InternalKeyComparator& internal_comparator,
       const FileMetaData& file_meta, const DependenceMap& dependence_map,
       RangeDelAggregator* range_del_agg,
       const SliceTransform* prefix_extractor = nullptr,
@@ -71,7 +71,6 @@ class TableCache {
   // @param skip_filters Disables loading/accessing the filter block
   // @param level The level this table is at, -1 for "not set / don't know"
   Status Get(const ReadOptions& options,
-             const InternalKeyComparator& internal_comparator,
              const FileMetaData& file_meta, const DependenceMap& dependence_map,
              const Slice& k, GetContext* get_context,
              const SliceTransform* prefix_extractor = nullptr,
@@ -90,7 +89,6 @@ class TableCache {
   // @param skip_filters Disables loading/accessing the filter block
   // @param level == -1 means not specified
   Status FindTable(const EnvOptions& toptions,
-                   const InternalKeyComparator& internal_comparator,
                    const FileDescriptor& file_fd, Cache::Handle**,
                    const SliceTransform* prefix_extractor = nullptr,
                    const bool no_io = false, bool record_read_stats = true,
@@ -109,7 +107,6 @@ class TableCache {
   //            return Status::Incomplete() if table is not present in cache and
   //            we set `no_io` to be true.
   Status GetTableProperties(const EnvOptions& toptions,
-                            const InternalKeyComparator& internal_comparator,
                             const FileMetaData& file_meta,
                             std::shared_ptr<const TableProperties>* properties,
                             const SliceTransform* prefix_extractor = nullptr,
@@ -119,7 +116,6 @@ class TableCache {
   // 0 if table reader of the file is not loaded.
   size_t GetMemoryUsageByTableReader(
       const EnvOptions& toptions,
-      const InternalKeyComparator& internal_comparator,
       const FileDescriptor& fd,
       const SliceTransform* prefix_extractor = nullptr);
 
@@ -143,7 +139,6 @@ class TableCache {
  private:
   // Build a table reader
   Status GetTableReader(const EnvOptions& env_options,
-                        const InternalKeyComparator& internal_comparator,
                         const FileDescriptor& fd, bool sequential_mode,
                         size_t readahead, bool record_read_stats,
                         HistogramImpl* file_read_hist,
@@ -153,7 +148,6 @@ class TableCache {
                         bool prefetch_index_and_filter_in_cache = true,
                         bool for_compaction = false, bool force_memory = false);
   Status GetTableReaderImpl(const EnvOptions& env_options,
-                            const InternalKeyComparator& internal_comparator,
                             const FileDescriptor& fd, bool sequential_mode,
                             size_t readahead, bool record_read_stats,
                             HistogramImpl* file_read_hist,
@@ -163,10 +157,10 @@ class TableCache {
                             bool prefetch_index_and_filter_in_cache,
                             bool for_compaction, bool force_memory);
 
-  const ImmutableCFOptions& ioptions_;
+  const ColumnFamilyOptions initial_cf_options_;
+  const ImmutableCFOptions ioptions_;
   const EnvOptions& env_options_;
   Cache* const cache_;
-  std::string row_cache_id_;
   bool immortal_tables_;
 };
 

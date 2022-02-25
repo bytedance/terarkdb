@@ -185,7 +185,7 @@ class TablePropertiesCollectionIteratorImpl
       filename_ = TableFileName(cfd_->ioptions()->cf_paths, f->fd.GetNumber(),
                                 f->fd.GetPathId());
       status_ = cfd_->table_cache()->GetTableProperties(
-          impl_->env_options(), cfd_->internal_comparator(), *f, &properties_,
+          impl_->env_options(), *f, &properties_,
           prefix_extractor_.get(), false);
     }
     if (status_.ok()) {

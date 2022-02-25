@@ -201,7 +201,7 @@ class MapBuilderTest : public testing::Test {
     Status s;
     DependenceMap empty_dependence_map;
     std::unique_ptr<InternalIterator> iter(cfd_->table_cache()->NewIterator(
-        ReadOptions(), env_options_, cfd_->internal_comparator(), *f,
+        ReadOptions(), env_options_, *f,
         empty_dependence_map, nullptr /* range_del_agg */,
         mutable_cf_options_.prefix_extractor.get(), nullptr, nullptr,
         false /* for_compaction */, nullptr /* arena */,

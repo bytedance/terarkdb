@@ -781,7 +781,7 @@ class VersionBuilder::Rep {
         auto file_read_hist =
             level >= 0 ? internal_stats->GetFileReadHist(level) : nullptr;
         table_cache_->FindTable(
-            env_options_, *base_vstorage_->InternalComparator(), file_meta->fd,
+            env_options_, file_meta->fd,
             &file_meta->table_reader_handle, prefix_extractor, false /*no_io */,
             true /* record_read_stats */, file_read_hist, false, level,
             prefetch_index_and_filter_in_cache, file_meta->prop.is_map_sst());
@@ -832,7 +832,7 @@ class VersionBuilder::Rep {
         std::shared_ptr<const TableProperties> properties;
 
         auto s = table_cache_->GetTableProperties(
-            env_options_, *base_vstorage_->InternalComparator(), *file_meta,
+            env_options_, *file_meta,
             &properties, prefix_extractor, false /*no_io */);
 
         if (s.ok() && properties) {
