@@ -15,6 +15,7 @@
 
 #include "monitoring/perf_context_imp.h"
 #include "monitoring/statistics.h"
+#include "rocksdb/statistics.h"
 #include "rocksdb/env.h"
 #include "rocksdb/terark_namespace.h"
 #include "table/block.h"
@@ -199,6 +200,19 @@ inline void BlockFetcher::GetBlockContents() {
 
 Status BlockFetcher::ReadBlockContents() {
   block_size_ = static_cast<size_t>(handle_.size());
+
+  Histograms htype;
+  if (is_foreground_operation()) {
+    RecordTick(ioptions_.statistics, NUMBER_BLOCK_READ_FG);
+    MeasureTime(ioptions_.statistics, FG_READ_BLOCK_ALL_SIZE, block_size_);
+    htype = FG_READ_BLOCK_ALL_MICROS;
+  } else {
+    RecordTick(ioptions_.statistics, NUMBER_BLOCK_READ_BG);
+    MeasureTime(ioptions_.statistics, BG_READ_BLOCK_ALL_SIZE, block_size_);
+    htype = BG_READ_BLOCK_ALL_MICROS;
+  }
+  StopWatch sw(ioptions_.env, ioptions_.statistics, htype);
+
 
   if (TryGetUncompressBlockFromPersistentCache()) {
     compression_type_ = kNoCompression;

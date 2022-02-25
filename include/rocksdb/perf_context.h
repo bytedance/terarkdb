@@ -15,6 +15,20 @@
 
 namespace TERARKDB_NAMESPACE {
 
+enum DBOperationType : unsigned char {
+  kOpTypeBG = 0,
+  kOpTypeFG = 1,
+  kOpTypeUndefined = 2,
+};
+
+class DBOperationTypeGuard {
+public:
+  DBOperationTypeGuard() = delete;
+  explicit DBOperationTypeGuard(const DBOperationType& _db_operation_type);
+  ~DBOperationTypeGuard();
+};
+
+
 // A thread local context for gathering performance counter efficiently
 // and transparently.
 // Use SetPerfLevel(PerfLevel::kEnableTime) to enable time stats.
@@ -209,5 +223,9 @@ struct PerfContext {
 // Get Thread-local PerfContext object pointer
 // if defined(NPERF_CONTEXT), then the pointer is not thread-local
 PerfContext* get_perf_context();
+
+DBOperationType get_db_operation_type();
+
+bool is_foreground_operation();
 
 }  // namespace TERARKDB_NAMESPACE

@@ -1896,6 +1896,8 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
                        ReadCallback* callback) {
   LatencyHistGuard guard(&read_latency_reporter_);
   read_qps_reporter_.AddCount(1);
+  DBOperationTypeGuard op_guard(kOpTypeFG);
+  RecordTick(stats_, NUMBER_DB_GET_FG);
 
   StopWatch sw(env_, stats_, DB_GET);
   PERF_TIMER_GUARD(get_snapshot_time);
