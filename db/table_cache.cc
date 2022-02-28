@@ -91,7 +91,6 @@ class LazyCreateIterator : public Snapshot {
   ReadOptions options_;  // deep copy
   SequenceNumber snapshot_;
   const EnvOptions& env_options_;
-  const InternalKeyComparator& icomparator_;
   RangeDelAggregator* range_del_agg_;
   const SliceTransform* prefix_extractor_;
   bool for_compaction_;
@@ -101,7 +100,6 @@ class LazyCreateIterator : public Snapshot {
  public:
   LazyCreateIterator(TableCache* table_cache, const ReadOptions& options,
                      const EnvOptions& env_options,
-                     const InternalKeyComparator& icomparator,
                      RangeDelAggregator* range_del_agg,
                      const SliceTransform* prefix_extractor,
                      bool for_compaction, bool skip_filters,
@@ -110,7 +108,6 @@ class LazyCreateIterator : public Snapshot {
         options_(options),
         snapshot_(0),
         env_options_(env_options),
-        icomparator_(icomparator),
         range_del_agg_(range_del_agg),
         prefix_extractor_(prefix_extractor),
         for_compaction_(for_compaction),
@@ -140,12 +137,10 @@ class LazyCreateIterator : public Snapshot {
 
 }  // namespace
 
-TableCache::TableCache(const ColumnFamilyOptions& initial_cf_options,
-                       const ImmutableDBOptions& db_options,
-                       const EnvOptions* env_options, Cache* const cache)
-    : initial_cf_options_(initial_cf_options),
-      ioptions_(db_options, initial_cf_options_),
-      env_options_(*env_options),
+TableCache::TableCache(const ImmutableCFOptions& ioptions,
+                       const EnvOptions& env_options, Cache* const cache)
+    : ioptions_(ioptions),
+      env_options_(env_options),
       cache_(cache),
       immortal_tables_(false) {}
 
@@ -368,15 +363,13 @@ InternalIterator* TableCache::NewIterator(
         if (arena != nullptr) {
           void* buffer = arena->AllocateAligned(sizeof(LazyCreateIterator));
           lazy_create_iter = new (buffer) LazyCreateIterator(
-              this, options, env_options, ioptions_.internal_comparator,
-              range_del_agg, prefix_extractor, for_compaction, skip_filters,
-              ignore_range_deletions, level);
+              this, options, env_options, range_del_agg, prefix_extractor,
+              for_compaction, skip_filters, ignore_range_deletions, level);
 
         } else {
           lazy_create_iter = new LazyCreateIterator(
-              this, options, env_options, ioptions_.internal_comparator,
-              range_del_agg, prefix_extractor, for_compaction, skip_filters,
-              ignore_range_deletions, level);
+              this, options, env_options, range_del_agg, prefix_extractor,
+              for_compaction, skip_filters, ignore_range_deletions, level);
         }
         auto map_sst_iter = NewMapSstIterator(
             &file_meta, result, dependence_map, ioptions_.internal_comparator,

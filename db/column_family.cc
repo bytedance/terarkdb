@@ -453,8 +453,7 @@ ColumnFamilyData::ColumnFamilyData(
   if (_dummy_versions != nullptr) {
     internal_stats_.reset(
         new InternalStats(ioptions_.num_levels, db_options.env, this));
-    table_cache_.reset(new TableCache(initial_cf_options_, db_options,
-                                      &env_options, _table_cache));
+    table_cache_.reset(new TableCache(ioptions_, env_options, _table_cache));
     if (ioptions_.compaction_style == kCompactionStyleLevel) {
       compaction_picker_.reset(new LevelCompactionPicker(
           table_cache_.get(), env_options, ioptions_, &internal_comparator_));
