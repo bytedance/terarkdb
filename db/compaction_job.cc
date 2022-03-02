@@ -1269,10 +1269,12 @@ Status CompactionJob::RunSelf() {
       vec_process_arg[i].task_id = int(i);
       vec_process_arg[i].future = vec_process_arg[i].finished.get_future();
       env_->Schedule(&CompactionJob::CallProcessCompaction, &vec_process_arg[i],
-                     TERARKDB_NAMESPACE::Env::LOW, this, nullptr);
+                     TERARKDB_NAMESPACE::Env::LOW, &vec_process_arg[i],
+                     &CompactionJob::CallProcessCompaction);
     }
     ProcessCompaction(&compact_->sub_compact_states.back());
     for (auto& arg : vec_process_arg) {
+      env_->UnSchedule(&arg, TERARKDB_NAMESPACE::Env::LOW);
       arg.future.wait();
     }
   } else {
