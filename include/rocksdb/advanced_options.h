@@ -635,6 +635,9 @@ struct AdvancedColumnFamilyOptions {
   // Default: false
   bool optimize_range_deletion = false;
 
+  // Default: false
+  bool collect_blob_info = false;
+
   // After writing every SST file, reopen it and read all the keys.
   //
   // Default: false

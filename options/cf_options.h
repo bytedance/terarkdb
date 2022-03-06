@@ -178,6 +178,7 @@ struct MutableCFOptions {
         report_bg_io_stats(false),
         optimize_filters_for_hits(false),
         optimize_range_deletion(false),
+        collect_blob_info(false),
         compression(Snappy_Supported() ? kSnappyCompression : kNoCompression),
         ttl_gc_ratio(1.000),
         ttl_max_scan_gap(0) {}
@@ -244,6 +245,7 @@ struct MutableCFOptions {
 
   bool optimize_filters_for_hits;
   bool optimize_range_deletion;
+  bool collect_blob_info;
   CompressionType compression;
 
   // Derived options

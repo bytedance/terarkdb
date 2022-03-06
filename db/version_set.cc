@@ -742,7 +742,7 @@ class BaseReferencedVersionBuilder {
                                 edit, mu, false);
   }
   void DoApplyAndSaveTo(VersionStorageInfo* vstorage,
-                        double maintainer_job_ratio) {
+                        double maintainer_job_ratio, bool collect_blob_info) {
     for (auto edit : edit_list_) {
       version_builder_->Apply(edit);
     }
@@ -3223,7 +3223,8 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
                builder_guards.size() == versions.size());
         builder_guards[i]->DoApplyAndSaveTo(
             versions[i]->storage_info(),
-            mutable_cf_options_ptrs[i]->maintainer_job_ratio);
+            mutable_cf_options_ptrs[i]->maintainer_job_ratio,
+            mutable_cf_options_ptrs[i]->collect_blob_info);
       }
     }
 

@@ -256,6 +256,8 @@ void MutableCFOptions::Dump(Logger* log) const {
                  optimize_filters_for_hits);
   ROCKS_LOG_INFO(log, "                  optimize_range_deletion: %d",
                  optimize_range_deletion);
+  ROCKS_LOG_INFO(log, "                        collect_blob_info: %d",
+                 collect_blob_info);
   ROCKS_LOG_INFO(log, "                              compression: %d",
                  static_cast<int>(compression));
 
@@ -321,6 +323,7 @@ MutableCFOptions::MutableCFOptions(const ColumnFamilyOptions& options, Env* env)
       report_bg_io_stats(options.report_bg_io_stats),
       optimize_filters_for_hits(options.optimize_filters_for_hits),
       optimize_range_deletion(options.optimize_range_deletion),
+      collect_blob_info(options.collect_blob_info),
       compression(options.compression),
       ttl_gc_ratio(options.ttl_gc_ratio),
       ttl_max_scan_gap(options.ttl_max_scan_gap) {

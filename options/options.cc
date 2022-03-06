@@ -100,6 +100,7 @@ AdvancedColumnFamilyOptions::AdvancedColumnFamilyOptions(const Options& options)
       max_successive_merges(options.max_successive_merges),
       optimize_filters_for_hits(options.optimize_filters_for_hits),
       optimize_range_deletion(options.optimize_range_deletion),
+      collect_blob_info(options.collect_blob_info),
       paranoid_file_checks(options.paranoid_file_checks),
       force_consistency_checks(options.force_consistency_checks),
       report_bg_io_stats(options.report_bg_io_stats) {
@@ -366,6 +367,8 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
                    optimize_filters_for_hits);
   ROCKS_LOG_HEADER(log, "                Options.optimize_range_deletion: %d",
                    optimize_range_deletion);
+  ROCKS_LOG_HEADER(log, "                      Options.collect_blob_info: %d",
+                   collect_blob_info);
   ROCKS_LOG_HEADER(log, "                   Options.paranoid_file_checks: %d",
                    paranoid_file_checks);
   ROCKS_LOG_HEADER(log, "               Options.force_consistency_checks: %d",

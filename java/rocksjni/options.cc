@@ -2693,6 +2693,13 @@ jboolean Java_org_rocksdb_Options_optimizeRangeDeletion(JNIEnv* /*env*/,
       ->optimize_range_deletion;
 }
 
+jboolean Java_org_rocksdb_Options_collectBlobInfo(JNIEnv* /*env*/,
+                                                  jobject /*jobj*/,
+                                                  jlong jhandle) {
+  return reinterpret_cast<TERARKDB_NAMESPACE::Options*>(jhandle)
+      ->collect_blob_info;
+}
+
 /*
  * Class:     org_rocksdb_Options
  * Method:    setOptimizeRangeDeletion
@@ -2703,6 +2710,14 @@ void Java_org_rocksdb_Options_setOptimizeRangeDeletion(
     jboolean joptimize_range_deletion) {
   reinterpret_cast<TERARKDB_NAMESPACE::Options*>(jhandle)
       ->optimize_range_deletion = static_cast<bool>(joptimize_range_deletion);
+}
+
+void Java_org_rocksdb_Options_setCollectBlobInfo(JNIEnv* /*env*/,
+                                                 jobject /*jobj*/,
+                                                 jlong jhandle,
+                                                 jboolean jcollect_blob_info) {
+  reinterpret_cast<TERARKDB_NAMESPACE::Options*>(jhandle)->collect_blob_info =
+      static_cast<bool>(jcollect_blob_info);
 }
 
 /*
@@ -4157,6 +4172,30 @@ void Java_org_rocksdb_ColumnFamilyOptions_setOptimizeRangeDeletion(
     jboolean joptimize_range_deletion) {
   reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyOptions*>(jhandle)
       ->optimize_range_deletion = static_cast<bool>(joptimize_range_deletion);
+}
+
+/*
+ * Class:     org_rocksdb_ColumnFamilyOptions
+ * Method:    optimizeRangeDeletion
+ * Signature: (J)Z
+ */
+jboolean Java_org_rocksdb_ColumnFamilyOptions_collectBlobInfo(JNIEnv* /*env*/,
+                                                              jobject /*jobj*/,
+                                                              jlong jhandle) {
+  return reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyOptions*>(jhandle)
+      ->collect_blob_info;
+}
+
+/*
+ * Class:     org_rocksdb_ColumnFamilyOptions
+ * Method:    setCollectBlobinfo
+ * Signature: (JZ)V
+ */
+void Java_org_rocksdb_ColumnFamilyOptions_setOptimizeRangeDeletion(
+    JNIEnv* /*env*/, jobject /*jobj*/, jlong jhandle,
+    jboolean jcollect_blob_info) {
+  reinterpret_cast<TERARKDB_NAMESPACE::ColumnFamilyOptions*>(jhandle)
+      ->collect_blob_info = static_cast<bool>(jcollect_blob_info);
 }
 
 /*

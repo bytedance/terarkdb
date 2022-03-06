@@ -2502,6 +2502,10 @@ void rocksdb_options_set_optimize_range_deletion(rocksdb_options_t* opt,
   opt->rep.optimize_range_deletion = v;
 }
 
+void rocksdb_options_set_collect_blob_info(rocksdb_options_t* opt, bool v) {
+  opt->rep.collect_blob_info = v;
+}
+
 void rocksdb_options_set_delete_obsolete_files_period_micros(
     rocksdb_options_t* opt, uint64_t v) {
   opt->rep.delete_obsolete_files_period_micros = v;

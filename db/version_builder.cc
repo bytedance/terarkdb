@@ -681,7 +681,8 @@ class VersionBuilder::Rep {
 
   // Save the current state in *v.
   // WARNING: this func will call out of mutex
-  void SaveTo(VersionStorageInfo* vstorage, double maintainer_job_ratio) {
+  void SaveTo(VersionStorageInfo* vstorage, double maintainer_job_ratio,
+              bool collect_blob_info = false) {
     Init();
     CheckConsistency(vstorage, true);
     CalculateDependence(true, false, maintainer_job_ratio);
@@ -734,8 +735,11 @@ class VersionBuilder::Rep {
     }
     vstorage->ResetVersionBuilderContext(context_.release());
     vstorage->ComputeBlobOverlapScore();
-    vstorage->CalculateEdge();
-    vstorage->CalculateBlobInfo();
+    if (collect_blob_info) {
+      // TODO record collect cost
+      vstorage->CalculateEdge();
+      vstorage->CalculateBlobInfo();
+    }
   }
 
   void LoadTableHandlers(InternalStats* internal_stats,
@@ -880,8 +884,9 @@ bool VersionBuilder::CheckConsistencyForNumLevels() {
 void VersionBuilder::Apply(VersionEdit* edit) { rep_->Apply(edit); }
 
 void VersionBuilder::SaveTo(VersionStorageInfo* vstorage,
-                            double maintainer_job_ratio) {
-  rep_->SaveTo(vstorage, maintainer_job_ratio);
+                            double maintainer_job_ratio,
+                            bool collect_blob_info = false) {
+  rep_->SaveTo(vstorage, maintainer_job_ratio, collect_blob_info);
 }
 
 void VersionBuilder::LoadTableHandlers(InternalStats* internal_stats,
