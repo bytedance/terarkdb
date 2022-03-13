@@ -16,6 +16,7 @@
 #include "rocksdb/lazy_buffer.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/terark_namespace.h"
+#include "rocksdb/value_extractor.h"
 
 namespace TERARKDB_NAMESPACE {
 namespace flink {
@@ -32,7 +33,7 @@ static const std::size_t JAVA_MAX_SIZE = static_cast<std::size_t>(0x7fffffff);
  * Note: this compaction filter is a special implementation, designed for usage
  * only in Apache Flink project.
  */
-class FlinkCompactionFilter : public CompactionFilter {
+class FlinkCompactionFilter : public CompactionFilter, ValueExtractor {
  public:
   enum StateType {
     // WARNING!!! Do not change the order of enum entries as it is important for
@@ -141,6 +142,9 @@ class FlinkCompactionFilter : public CompactionFilter {
                     const Slice& existing_value_meta,
                     const LazyBuffer& existing_value, LazyBuffer* new_value,
                     std::string* skip_until) const override;
+
+  Status Extract(const Slice& key, const Slice& value,
+                         std::string* output) const override;
 
   bool IgnoreSnapshots() const override { return true; }
 
