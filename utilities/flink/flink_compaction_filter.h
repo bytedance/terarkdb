@@ -33,7 +33,7 @@ static const std::size_t JAVA_MAX_SIZE = static_cast<std::size_t>(0x7fffffff);
  * Note: this compaction filter is a special implementation, designed for usage
  * only in Apache Flink project.
  */
-class FlinkCompactionFilter : public CompactionFilter, ValueExtractor {
+class FlinkCompactionFilter : public CompactionFilter, public ValueExtractor {
  public:
   enum StateType {
     // WARNING!!! Do not change the order of enum entries as it is important for
@@ -144,7 +144,7 @@ class FlinkCompactionFilter : public CompactionFilter, ValueExtractor {
                     std::string* skip_until) const override;
 
   Status Extract(const Slice& key, const Slice& value,
-                         std::string* output) const override;
+                 std::string* output) const override;
 
   bool IgnoreSnapshots() const override { return true; }
 
@@ -195,6 +195,23 @@ static const FlinkCompactionFilter::Config DISABLED_CONFIG =
     FlinkCompactionFilter::Config{FlinkCompactionFilter::StateType::Disabled, 0,
                                   std::numeric_limits<int64_t>::max(),
                                   std::numeric_limits<int64_t>::max(), nullptr};
+
+class FlinkValueExtractorFactory : public ValueExtractorFactory {
+ public:
+  const char* Name() const override {
+    return "flink.ValueTimeStampExtractorFactory";
+  }
+  explicit FlinkValueExtractorFactory(
+      std::shared_ptr<FlinkCompactionFilter::ConfigHolder> config_holder)
+      : config_holder_(std::move(config_holder)) {}
+  std::unique_ptr<ValueExtractor> CreateValueExtractor(
+      const Context& context) const {
+    return std::unique_ptr<ValueExtractor>(
+        new FlinkCompactionFilter(config_holder_, nullptr, nullptr));
+  };
+ private:
+  std::shared_ptr<FlinkCompactionFilter::ConfigHolder> config_holder_;
+};
 
 }  // namespace flink
 }  // namespace TERARKDB_NAMESPACE
