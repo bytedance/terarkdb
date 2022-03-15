@@ -4503,9 +4503,16 @@ class Benchmark {
     Slice key = AllocateKey(&key_guard);
     LazyBuffer lazy_val;
 
+    uint64_t last_block_read_count = 0, init_block_read_count = 0;
+    if (FLAGS_perf_level > TERARKDB_NAMESPACE::PerfLevel::kDisable) {
+      last_block_read_count = get_perf_context()->block_read_count;
+      init_block_read_count = last_block_read_count;
+    }
+
     Duration duration(FLAGS_duration, reads_);
     while (!duration.Done(1)) {
       DBWithColumnFamilies* db_with_cfh = SelectDBWithCfh(thread);
+      Options db_options;
       // We use same key_rand as seed for key and column family so that we can
       // deterministically find the cfh corresponding to a particular key, as it
       // is done in DoWrite method.
@@ -4516,10 +4523,12 @@ class Benchmark {
       if (FLAGS_num_column_families > 1) {
         s = db_with_cfh->db->Get(options, db_with_cfh->GetCfh(key_rand), key,
                                  &lazy_val);
+	    db_options = db_with_cfh->db->GetOptions(db_with_cfh->GetCfh(key_rand));
       } else {
         lazy_val.clear();
         s = db_with_cfh->db->Get(
             options, db_with_cfh->db->DefaultColumnFamily(), key, &lazy_val);
+        db_options = db_with_cfh->db->GetOptions();
       }
       if (s.ok()) {
         found++;
@@ -4536,11 +4545,19 @@ class Benchmark {
       }
 
       thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db, 1, kRead);
+      uint64_t cur_block_read_count = get_perf_context()->block_read_count;
+      if (cur_block_read_count >= last_block_read_count) {
+        MeasureTime(db_options.statistics.get(), FG_READ_BLOCK_ALL_COUNT, cur_block_read_count - last_block_read_count);
+      }
+      last_block_read_count = cur_block_read_count;
     }
 
     char msg[100];
-    snprintf(msg, sizeof(msg), "(%" PRIu64 " of %" PRIu64 " found)\n", found,
-             read);
+    snprintf(msg, sizeof(msg),
+             "(%" PRIu64 " of %" PRIu64 " found), avg read block: %.1f \n",
+             found, read,
+             (get_perf_context()->block_read_count - init_block_read_count) /
+                 (read * 1.0));
 
     thread->stats.AddBytes(bytes);
     thread->stats.AddMessage(msg);
