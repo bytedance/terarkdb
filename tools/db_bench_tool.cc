@@ -3496,6 +3496,8 @@ class Benchmark {
 
 #endif
       }
+      options.table_factory.reset(
+          NewBlockBasedTableFactory(block_based_options));
     }
 
 #ifdef WITH_TERARK_ZIP
