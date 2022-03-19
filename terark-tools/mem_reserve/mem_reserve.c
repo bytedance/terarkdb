@@ -15,6 +15,7 @@
 #include <linux/kallsyms.h>
 #include <linux/mmzone.h>
 #include <linux/nodemask.h>
+#include <linux/version.h>
 
 struct mem_reserve {
     unsigned long size;
@@ -93,7 +94,7 @@ static ssize_t size_write(struct file *file, const char __user *buf,
 
     return count;
 }
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,5,19)
 static const struct file_operations size_fops = {
     .open        = size_open,
     .read        = seq_read,
@@ -101,6 +102,15 @@ static const struct file_operations size_fops = {
     .llseek        = seq_lseek,
     .release    = single_release,
 };
+#else
+static const struct proc_ops size_fops = {
+    .proc_open        = size_open,
+    .proc_read        = seq_read,
+    .proc_write       = size_write,
+    .proc_lseek       = seq_lseek,
+    .proc_release     = single_release,
+};
+#endif
 
 static __init int mem_reserve_init(void)
 {
