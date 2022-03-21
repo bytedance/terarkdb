@@ -638,6 +638,8 @@ void DBImpl::NotifyOnFlushCompleted(
       info.largest_seqno = file_meta->fd.largest_seqno;
       info.table_properties = prop;
       info.flush_reason = cfd->GetFlushReason();
+      info.min_userkey = file_meta->smallest.user_key().ToString();
+      info.max_userkey = file_meta->largest.user_key().ToString();
       for (auto listener : immutable_db_options_.listeners) {
         listener->OnFlushCompleted(this, info);
       }
@@ -1202,6 +1204,8 @@ void DBImpl::NotifyOnCompactionCompleted(
         auto fn = TableFileName(c->immutable_cf_options()->cf_paths,
                                 fmd->fd.GetNumber(), fmd->fd.GetPathId());
         info.input_files.push_back(fn);
+        info.input_min_max.push_back({fmd->smallest.user_key().ToString(),
+                                      fmd->largest.user_key().ToString()});
         if (info.table_properties.count(fn) == 0) {
           std::shared_ptr<const TableProperties> tp;
           auto s = current->GetTableProperties(&tp, fmd, &fn);
@@ -1218,6 +1222,9 @@ void DBImpl::NotifyOnCompactionCompleted(
       info.output_files.push_back(TableFileName(
           c->immutable_cf_options()->cf_paths, newf.second.fd.GetNumber(),
           newf.second.fd.GetPathId()));
+      info.output_min_max.push_back(
+          {newf.second.smallest.user_key().ToString(),
+           newf.second.largest.user_key().ToString()});
     }
     for (auto listener : immutable_db_options_.listeners) {
       listener->OnCompactionCompleted(this, info);

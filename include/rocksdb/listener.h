@@ -239,6 +239,10 @@ struct FlushJobInfo {
   TableProperties table_properties;
 
   FlushReason flush_reason;
+
+  std::string min_userkey;
+
+  std::string max_userkey;
 };
 
 struct TableTransientStat {
@@ -277,9 +281,11 @@ struct CompactionJobInfo {
   int output_level;
   // the names of the compaction input files.
   std::vector<std::string> input_files;
+  std::vector<std::pair<std::string,std::string>> input_min_max;
 
   // the names of the compaction output files.
   std::vector<std::string> output_files;
+  std::vector<std::pair<std::string,std::string>> output_min_max;
   // Table properties for input and output tables.
   // The map is keyed by values from input_files and output_files.
   TablePropertiesCollection table_properties;
