@@ -281,11 +281,11 @@ struct CompactionJobInfo {
   int output_level;
   // the names of the compaction input files.
   std::vector<std::string> input_files;
-  std::vector<std::pair<std::string,std::string>> input_min_max;
+  std::vector<std::pair<std::string,std::string>> input_files_min_max_userkey;
 
   // the names of the compaction output files.
   std::vector<std::string> output_files;
-  std::vector<std::pair<std::string,std::string>> output_min_max;
+  std::vector<std::pair<std::string,std::string>> output_files_min_max_userkey;
   // Table properties for input and output tables.
   // The map is keyed by values from input_files and output_files.
   TablePropertiesCollection table_properties;
