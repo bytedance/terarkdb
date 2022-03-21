@@ -1204,7 +1204,7 @@ void DBImpl::NotifyOnCompactionCompleted(
         auto fn = TableFileName(c->immutable_cf_options()->cf_paths,
                                 fmd->fd.GetNumber(), fmd->fd.GetPathId());
         info.input_files.push_back(fn);
-        info.input_files_min_max_userkey.push_back(
+        info.input_files_boundries_user_key.push_back(
             {fmd->smallest.user_key().ToString(),
              fmd->largest.user_key().ToString()});
         if (info.table_properties.count(fn) == 0) {
@@ -1223,7 +1223,7 @@ void DBImpl::NotifyOnCompactionCompleted(
       info.output_files.push_back(TableFileName(
           c->immutable_cf_options()->cf_paths, newf.second.fd.GetNumber(),
           newf.second.fd.GetPathId()));
-      info.output_files_min_max_userkey.push_back(
+      info.output_files_boundries_user_key.push_back(
           {newf.second.smallest.user_key().ToString(),
            newf.second.largest.user_key().ToString()});
     }
