@@ -638,8 +638,8 @@ void DBImpl::NotifyOnFlushCompleted(
       info.largest_seqno = file_meta->fd.largest_seqno;
       info.table_properties = prop;
       info.flush_reason = cfd->GetFlushReason();
-      info.min_userkey = file_meta->smallest.user_key().ToString();
-      info.max_userkey = file_meta->largest.user_key().ToString();
+      info.smallest_userkey = file_meta->smallest.user_key().ToString();
+      info.largest_userkey = file_meta->largest.user_key().ToString();
       for (auto listener : immutable_db_options_.listeners) {
         listener->OnFlushCompleted(this, info);
       }
