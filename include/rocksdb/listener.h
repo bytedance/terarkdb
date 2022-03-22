@@ -37,6 +37,7 @@ class TablePropertiesCollectionIterator {
 
   virtual bool Valid() const = 0;
   virtual Status status() const = 0;
+  virtual std::pair<std::string,std::string> fileRange() const = 0;
 
  public:
   // No copying allowed
