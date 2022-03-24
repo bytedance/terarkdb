@@ -16,6 +16,7 @@
 #include <linux/mmzone.h>
 #include <linux/nodemask.h>
 #include <linux/version.h>
+#include <linux/delay.h>
 
 struct mem_reserve {
     unsigned long size;
@@ -78,8 +79,10 @@ static ssize_t size_write(struct file *file, const char __user *buf,
     for_each_online_node(node) {
         for (i = 0; i < per_node_size / 4; i++) {
             struct page *page;
-
-            page = alloc_pages_node(node, GFP_KERNEL | __GFP_THISNODE, 10);
+	    do{
+                page = alloc_pages_node(node, GFP_KERNEL | __GFP_THISNODE, 10);
+		if(!page) mdelay(1000);
+	    }while(!page);
             if (!page) {
                 pr_info("allocate memory fail\n");
                 return -ENOMEM;
@@ -94,7 +97,7 @@ static ssize_t size_write(struct file *file, const char __user *buf,
 
     return count;
 }
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,5,19)
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(5,5,19)
 static const struct file_operations size_fops = {
     .open        = size_open,
     .read        = seq_read,
