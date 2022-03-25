@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/meta_blocks.h"
 #include "util/file_reader_writer.h"
 #include "util/testharness.h"

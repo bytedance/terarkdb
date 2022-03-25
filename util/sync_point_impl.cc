@@ -5,7 +5,7 @@
 
 #include "util/sync_point_impl.h"
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 #ifndef NDEBUG
 namespace TERARKDB_NAMESPACE {

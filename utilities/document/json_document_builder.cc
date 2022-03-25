@@ -9,8 +9,8 @@
 
 #include <limits>
 
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/json_document.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/json_document.h"
 #include "third-party/fbson/FbsonWriter.h"
 
 namespace TERARKDB_NAMESPACE {

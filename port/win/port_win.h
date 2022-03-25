@@ -32,8 +32,8 @@
 #include <string>
 
 #include "port/win/win_thread.h"
-#include "rocksdb/options.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/options.h"
+#include "terarkdb/terark_namespace.h"
 
 #undef min
 #undef max

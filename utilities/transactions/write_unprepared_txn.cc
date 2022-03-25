@@ -8,7 +8,7 @@
 #include "utilities/transactions/write_unprepared_txn.h"
 
 #include "db/db_impl.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/cast_util.h"
 #include "utilities/transactions/write_unprepared_txn_db.h"
 

@@ -7,9 +7,9 @@
 
 #include "port/port.h"
 #include "port/stack_trace.h"
-#include "rocksdb/iostats_context.h"
-#include "rocksdb/perf_context.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/iostats_context.h"
+#include "terarkdb/perf_context.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 

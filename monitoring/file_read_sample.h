@@ -5,7 +5,7 @@
 //
 #pragma once
 #include "db/version_edit.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/random.h"
 
 namespace TERARKDB_NAMESPACE {

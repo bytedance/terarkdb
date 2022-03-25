@@ -19,12 +19,12 @@
 #include <utility>
 #include <vector>
 
-#include "include/rocksdb/comparator.h"
-#include "include/rocksdb/slice.h"
+#include "terarkdb/comparator.h"
+#include "terarkdb/slice.h"
 #include "port/port.h"
-#include "rocksdb/env.h"
-#include "rocksdb/status.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/status.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/block_based_table_builder.h"
 #include "table/block_based_table_factory.h"
 #include "table/format.h"

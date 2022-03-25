@@ -11,7 +11,7 @@
 #include <memory>
 
 #include "include/org_rocksdb_SstFileManager.h"
-#include "rocksdb/sst_file_manager.h"
+#include "terarkdb/sst_file_manager.h"
 #include "rocksjni/portal.h"
 
 /*

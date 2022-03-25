@@ -6,10 +6,10 @@
 #pragma once
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/db.h"
-#include "rocksdb/options.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/optimistic_transaction_db.h"
+#include "terarkdb/db.h"
+#include "terarkdb/options.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/optimistic_transaction_db.h"
 
 namespace TERARKDB_NAMESPACE {
 

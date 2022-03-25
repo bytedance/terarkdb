@@ -9,7 +9,7 @@
 #include "include/org_rocksdb_HashSkipListMemTableConfig.h"
 #include "include/org_rocksdb_SkipListMemTableConfig.h"
 #include "include/org_rocksdb_VectorMemTableConfig.h"
-#include "rocksdb/memtablerep.h"
+#include "terarkdb/memtablerep.h"
 #include "rocksjni/portal.h"
 
 /*

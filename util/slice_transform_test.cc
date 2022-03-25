@@ -7,14 +7,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
-#include "rocksdb/slice_transform.h"
+#include "terarkdb/slice_transform.h"
 
-#include "rocksdb/db.h"
-#include "rocksdb/env.h"
-#include "rocksdb/filter_policy.h"
-#include "rocksdb/statistics.h"
-#include "rocksdb/table.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/db.h"
+#include "terarkdb/env.h"
+#include "terarkdb/filter_policy.h"
+#include "terarkdb/statistics.h"
+#include "terarkdb/table.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/testharness.h"
 
 namespace TERARKDB_NAMESPACE {

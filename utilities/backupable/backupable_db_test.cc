@@ -9,7 +9,7 @@
 
 #if !defined(ROCKSDB_LITE) && !defined(OS_WIN)
 
-#include "rocksdb/utilities/backupable_db.h"
+#include "terarkdb/utilities/backupable_db.h"
 
 #include <algorithm>
 #include <string>
@@ -18,11 +18,11 @@
 #include "env/env_chroot.h"
 #include "port/port.h"
 #include "port/stack_trace.h"
-#include "rocksdb/rate_limiter.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/transaction_log.h"
-#include "rocksdb/types.h"
-#include "rocksdb/utilities/options_util.h"
+#include "terarkdb/rate_limiter.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/transaction_log.h"
+#include "terarkdb/types.h"
+#include "terarkdb/utilities/options_util.h"
 #include "util/file_reader_writer.h"
 #include "util/filename.h"
 #include "util/mutexlock.h"

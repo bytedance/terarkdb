@@ -7,8 +7,8 @@
 
 #include "db/snapshot_checker.h"
 #include "port/likely.h"
-#include "rocksdb/listener.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/listener.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 
 namespace TERARKDB_NAMESPACE {

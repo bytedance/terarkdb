@@ -18,11 +18,11 @@
 #include <terark/zbs/lru_page_cache.hpp>
 
 #include "options/options_helper.h"
-#include "rocksdb/convenience.h"
-#include "rocksdb/env.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/table.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/convenience.h"
+#include "terarkdb/env.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/table.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/terark_zip_table.h"
 
 //#define DEBUG_TWO_PASS_ITER

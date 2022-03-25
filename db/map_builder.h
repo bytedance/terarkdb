@@ -14,8 +14,8 @@
 #include "db/compaction.h"
 #include "db/dbformat.h"
 #include "db/log_writer.h"
-#include "rocksdb/db.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/db.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/iterator_cache.h"
 
 namespace TERARKDB_NAMESPACE {

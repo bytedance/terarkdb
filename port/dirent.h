@@ -16,7 +16,7 @@
 #include <sys/types.h>
 #elif defined(OS_WIN)
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 namespace port {

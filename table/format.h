@@ -20,11 +20,11 @@
 #endif
 #include "options/cf_options.h"
 #include "port/port.h"  // noexcept
-#include "rocksdb/options.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/status.h"
-#include "rocksdb/table.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/options.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/status.h"
+#include "terarkdb/table.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/persistent_cache_options.h"
 #include "util/file_reader_writer.h"
 #include "util/memory_allocator.h"

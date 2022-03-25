@@ -11,7 +11,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/coding.h"
 #include "utilities/col_buf_encoder.h"
 

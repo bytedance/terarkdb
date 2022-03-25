@@ -20,8 +20,8 @@
 #include <string>
 
 #include "port/port.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/write_batch.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/write_batch.h"
 
 // Some processors does not allow unaligned access to memory
 #if defined(__sparc)

@@ -5,7 +5,7 @@
 //
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/ldb_tool.h"
+#include "terarkdb/ldb_tool.h"
 
 int main(int argc, char** argv) {
   TERARKDB_NAMESPACE::LDBTool tool;

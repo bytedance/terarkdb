@@ -15,8 +15,8 @@
 
 #include "monitoring/perf_context_imp.h"
 #include "monitoring/statistics.h"
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/block.h"
 #include "table/block_based_table_reader.h"
 #include "table/format.h"

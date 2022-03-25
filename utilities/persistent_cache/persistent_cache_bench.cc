@@ -17,8 +17,8 @@ int main() { fprintf(stderr, "Please install gflags to run tools\n"); }
 
 #include "monitoring/histogram.h"
 #include "port/port.h"
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/block_builder.h"
 #include "util/gflags_compat.h"
 #include "util/mutexlock.h"

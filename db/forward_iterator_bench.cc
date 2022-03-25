@@ -30,10 +30,10 @@ int main() { return 0; }
 #include <thread>
 
 #include "port/port.h"
-#include "rocksdb/cache.h"
-#include "rocksdb/db.h"
-#include "rocksdb/status.h"
-#include "rocksdb/table.h"
+#include "terarkdb/cache.h"
+#include "terarkdb/db.h"
+#include "terarkdb/status.h"
+#include "terarkdb/table.h"
 #include "util/gflags_compat.h"
 #include "util/testharness.h"
 

@@ -7,8 +7,8 @@
 
 #include "monitoring/thread_status_updater.h"
 #include "monitoring/thread_status_util.h"
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

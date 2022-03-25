@@ -14,12 +14,12 @@
 
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
-#include "rocksdb/listener.h"
-#include "rocksdb/options.h"
-#include "rocksdb/perf_context.h"
-#include "rocksdb/perf_level.h"
-#include "rocksdb/table.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/listener.h"
+#include "terarkdb/options.h"
+#include "terarkdb/perf_context.h"
+#include "terarkdb/perf_level.h"
+#include "terarkdb/table.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/random.h"
 #include "util/string_util.h"
 

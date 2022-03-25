@@ -4,7 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #pragma once
-#include <include/rocksdb/env.h>
+#include <terarkdb/env.h>
 
 #include <atomic>
 #include <chrono>
@@ -12,10 +12,10 @@
 #include <string>
 #include <utility>
 
-#include "rocksdb/compaction_filter.h"
-#include "rocksdb/lazy_buffer.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/compaction_filter.h"
+#include "terarkdb/lazy_buffer.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 namespace flink {

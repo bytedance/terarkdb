@@ -13,7 +13,7 @@
 
 #include "include/org_rocksdb_BloomFilter.h"
 #include "include/org_rocksdb_Filter.h"
-#include "rocksdb/filter_policy.h"
+#include "terarkdb/filter_policy.h"
 #include "rocksjni/portal.h"
 
 /*

@@ -11,12 +11,12 @@
 #include <vector>
 
 #include "db/dbformat.h"
-#include "rocksdb/comparator.h"
-#include "rocksdb/options.h"
-#include "rocksdb/perf_context.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/statistics.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/comparator.h"
+#include "terarkdb/options.h"
+#include "terarkdb/perf_context.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/statistics.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/iterator_wrapper.h"
 #include "table/merging_iterator.h"
 #include "util/string_util.h"

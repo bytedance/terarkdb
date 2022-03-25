@@ -13,10 +13,10 @@
 #include <vector>
 
 #include "port/port.h"
-#include "rocksdb/status.h"
-#include "rocksdb/table.h"
-#include "rocksdb/table_properties.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/status.h"
+#include "terarkdb/table.h"
+#include "terarkdb/table_properties.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/table_builder.h"
 #include "util/autovector.h"
 

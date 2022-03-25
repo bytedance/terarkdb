@@ -15,8 +15,8 @@
 #include <string>
 
 #include "port/port.h"
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
 #include "rocksjni/jnicallback.h"
 
 namespace TERARKDB_NAMESPACE {

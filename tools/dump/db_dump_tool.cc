@@ -9,15 +9,15 @@
 #define __STDC_FORMAT_MACROS
 #endif
 
-#include "rocksdb/db_dump_tool.h"
+#include "terarkdb/db_dump_tool.h"
 
 #include <inttypes.h>
 
 #include <iostream>
 
-#include "rocksdb/db.h"
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/db.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/coding.h"
 
 namespace TERARKDB_NAMESPACE {

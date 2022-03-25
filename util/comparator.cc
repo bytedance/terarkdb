@@ -7,15 +7,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
-#include "rocksdb/comparator.h"
+#include "terarkdb/comparator.h"
 
 #include <stdint.h>
 
 #include <algorithm>
 #include <memory>
 
-#include "rocksdb/slice.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/terark_namespace.h"
 #include "utilities/util/factory.h"
 
 namespace TERARKDB_NAMESPACE {

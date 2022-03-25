@@ -20,8 +20,8 @@ int main() { fprintf(stderr, "Please install gflags to run tools\n"); }
 #include <unordered_map>
 
 #include "port/port_posix.h"
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/gflags_compat.h"
 #include "util/mutexlock.h"
 #include "util/random.h"

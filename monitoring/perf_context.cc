@@ -7,7 +7,7 @@
 #include <sstream>
 
 #include "monitoring/perf_context_imp.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

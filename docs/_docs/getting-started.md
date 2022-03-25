@@ -19,7 +19,7 @@ A rocksdb database has a name which corresponds to a file system directory. All 
 
 ```c++
 #include <assert>
-#include "rocksdb/db.h"
+#include "terarkdb/db.h"
 
 TERARKDB_NAMESPACE::DB* db;
 TERARKDB_NAMESPACE::Options options;

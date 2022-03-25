@@ -6,7 +6,7 @@
 #include <cstring>
 #include <memory>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/testharness.h"
 #include "utilities/cassandra/format.h"
 #include "utilities/cassandra/serialize.h"

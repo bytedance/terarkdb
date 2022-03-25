@@ -3,10 +3,10 @@
 #include <iostream>
 #include <string>
 
-#include "rocksdb/comparator.h"
-#include "rocksdb/db.h"
-#include "rocksdb/options.h"
-#include "rocksdb/slice.h"
+#include "terarkdb/comparator.h"
+#include "terarkdb/db.h"
+#include "terarkdb/options.h"
+#include "terarkdb/slice.h"
 
 using namespace TERARKDB_NAMESPACE;
 

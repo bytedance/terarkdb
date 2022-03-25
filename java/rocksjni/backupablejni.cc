@@ -14,7 +14,7 @@
 #include <vector>
 
 #include "include/org_rocksdb_BackupableDBOptions.h"
-#include "rocksdb/utilities/backupable_db.h"
+#include "terarkdb/utilities/backupable_db.h"
 #include "rocksjni/portal.h"
 
 ///////////////////////////////////////////////////////////////////////////

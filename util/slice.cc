@@ -7,14 +7,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
-#include "rocksdb/slice.h"
+#include "terarkdb/slice.h"
 
 #include <stdio.h>
 
 #include <algorithm>
 
-#include "rocksdb/slice_transform.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/slice_transform.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/format.h"
 #include "util/string_util.h"
 #include "utilities/util/factory.h"

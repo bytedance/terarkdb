@@ -8,7 +8,7 @@
 #define __STDC_FORMAT_MACROS
 #endif
 
-#include "rocksdb/utilities/options_util.h"
+#include "terarkdb/utilities/options_util.h"
 
 #include <inttypes.h>
 
@@ -16,9 +16,9 @@
 #include <unordered_map>
 
 #include "options/options_parser.h"
-#include "rocksdb/db.h"
-#include "rocksdb/table.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/db.h"
+#include "terarkdb/table.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/random.h"
 #include "util/testharness.h"
 #include "util/testutil.h"

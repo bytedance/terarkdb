@@ -6,7 +6,7 @@
 #include <numeric>
 #include <vector>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

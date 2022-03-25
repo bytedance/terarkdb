@@ -8,11 +8,11 @@
 
 #include <string>
 
-#include "rocksdb/comparator.h"
-#include "rocksdb/iterator.h"
-#include "rocksdb/lazy_buffer.h"
-#include "rocksdb/status.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/comparator.h"
+#include "terarkdb/iterator.h"
+#include "terarkdb/lazy_buffer.h"
+#include "terarkdb/status.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/format.h"
 
 namespace TERARKDB_NAMESPACE {

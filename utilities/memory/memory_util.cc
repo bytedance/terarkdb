@@ -5,10 +5,10 @@
 
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/utilities/memory_util.h"
+#include "terarkdb/utilities/memory_util.h"
 
 #include "db/db_impl.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

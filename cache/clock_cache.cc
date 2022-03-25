@@ -9,7 +9,7 @@
 
 #include "cache/clock_cache.h"
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 #ifndef SUPPORT_CLOCK_CACHE
 

@@ -10,8 +10,8 @@
 #include <string>
 #include <utility>
 
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
 #include "util/testutil.h"

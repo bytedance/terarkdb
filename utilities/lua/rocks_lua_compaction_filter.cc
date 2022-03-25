@@ -4,14 +4,14 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #if defined(LUA) && !defined(ROCKSDB_LITE)
-#include "rocksdb/utilities/lua/rocks_lua_compaction_filter.h"
+#include "terarkdb/utilities/lua/rocks_lua_compaction_filter.h"
 
 extern "C" {
 #include <luaconf.h>
 }
 
-#include "rocksdb/compaction_filter.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/compaction_filter.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 namespace lua {

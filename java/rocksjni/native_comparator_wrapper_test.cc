@@ -8,9 +8,9 @@
 #include <string>
 
 #include "include/org_rocksdb_NativeComparatorWrapperTest_NativeStringComparatorWrapper.h"
-#include "rocksdb/comparator.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/comparator.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

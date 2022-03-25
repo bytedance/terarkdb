@@ -8,7 +8,7 @@
 
 #include "db/db_impl.h"
 #include "db/version_set.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/get_context.h"
 
 #if !defined(_MSC_VER) && !defined(__APPLE__)

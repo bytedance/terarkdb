@@ -5,7 +5,7 @@
 
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/env_encryption.h"
+#include "terarkdb/env_encryption.h"
 
 #include <algorithm>
 #include <cctype>
@@ -17,7 +17,7 @@
 
 #endif
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

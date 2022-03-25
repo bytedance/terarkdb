@@ -7,9 +7,9 @@
 
 #include "db/dbformat.h"
 #include "monitoring/histogram.h"
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/ttl_extractor.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/ttl_extractor.h"
 #include "util/coding.h"
 #include "utilities/util/factory.h"
 

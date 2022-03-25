@@ -11,10 +11,10 @@
 #include <string>
 
 #include "include/org_rocksdb_SstFileWriter.h"
-#include "rocksdb/comparator.h"
-#include "rocksdb/env.h"
-#include "rocksdb/options.h"
-#include "rocksdb/sst_file_writer.h"
+#include "terarkdb/comparator.h"
+#include "terarkdb/env.h"
+#include "terarkdb/options.h"
+#include "terarkdb/sst_file_writer.h"
 #include "rocksjni/portal.h"
 
 /*

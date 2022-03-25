@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <vector>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/random.h"
 #include "util/testharness.h"
 #include "util/testutil.h"

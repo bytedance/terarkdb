@@ -14,8 +14,8 @@
 #include <cerrno>
 #include <cstddef>
 
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/write_buffer_manager.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/write_buffer_manager.h"
 
 namespace TERARKDB_NAMESPACE {
 

@@ -17,9 +17,9 @@
 #include <vector>
 
 #include "db/db_impl.h"
-#include "rocksdb/status.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/write_batch_with_index.h"
+#include "terarkdb/status.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/write_batch_with_index.h"
 #include "util/string_util.h"
 
 namespace TERARKDB_NAMESPACE {

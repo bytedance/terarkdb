@@ -9,7 +9,7 @@
 #include <assert.h>
 #endif  // ROCKSDB_LITE
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "utilities/transactions/write_prepared_txn_db.h"
 
 namespace TERARKDB_NAMESPACE {

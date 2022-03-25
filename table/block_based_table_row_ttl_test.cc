@@ -2,7 +2,7 @@
 // This source code is licensed under Apache 2.0 License.
 
 #include "db/table_properties_collector.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/block_based_table_builder.h"
 #include "util/coding.h"
 #include "util/string_util.h"

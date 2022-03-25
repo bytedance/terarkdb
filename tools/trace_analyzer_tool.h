@@ -13,10 +13,10 @@
 #include <utility>
 #include <vector>
 
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/trace_reader_writer.h"
-#include "rocksdb/write_batch.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/trace_reader_writer.h"
+#include "terarkdb/write_batch.h"
 #include "util/trace_replay.h"
 
 namespace TERARKDB_NAMESPACE {

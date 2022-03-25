@@ -13,7 +13,7 @@
 #include <inttypes.h>
 
 #include "db/write_batch_internal.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/file_reader_writer.h"
 
 namespace TERARKDB_NAMESPACE {

@@ -6,9 +6,9 @@
 #ifndef ROCKSDB_LITE
 
 #include "db/db_impl.h"
-#include "rocksdb/db.h"
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/db.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/cuckoo_table_factory.h"
 #include "table/cuckoo_table_reader.h"
 #include "table/meta_blocks.h"

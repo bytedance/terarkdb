@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 // The helper function to assert the move from dynamic_cast<> to

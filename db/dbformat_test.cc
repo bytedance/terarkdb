@@ -9,7 +9,7 @@
 
 #include "db/dbformat.h"
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/logging.h"
 #include "util/testharness.h"
 

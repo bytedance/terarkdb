@@ -13,7 +13,7 @@
 #include <chrono>
 
 #include "port/sys_time.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/cast_util.h"
 #include "util/filename.h"
 #include "util/murmurhash.h"

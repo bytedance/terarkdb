@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "include/org_rocksdb_BackupEngine.h"
-#include "rocksdb/utilities/backupable_db.h"
+#include "terarkdb/utilities/backupable_db.h"
 #include "rocksjni/portal.h"
 
 /*

@@ -6,7 +6,7 @@
 
 #include "hdfs/env_hdfs.h"
 
-#include "rocksdb/env.h"
+#include "terarkdb/env.h"
 
 #ifdef USE_HDFS
 #ifndef ROCKSDB_HDFS_FILE_C
@@ -20,8 +20,8 @@
 #include <iostream>
 #include <sstream>
 
-#include "rocksdb/status.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/status.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/string_util.h"
 
 #define HDFS_EXISTS 0

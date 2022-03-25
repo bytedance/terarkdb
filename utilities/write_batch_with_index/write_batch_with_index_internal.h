@@ -12,12 +12,12 @@
 
 #include "options/db_options.h"
 #include "port/port.h"
-#include "rocksdb/comparator.h"
-#include "rocksdb/iterator.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/status.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/write_batch_with_index.h"
+#include "terarkdb/comparator.h"
+#include "terarkdb/iterator.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/status.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/write_batch_with_index.h"
 
 namespace TERARKDB_NAMESPACE {
 

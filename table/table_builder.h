@@ -18,9 +18,9 @@
 #include "db/dbformat.h"
 #include "db/table_properties_collector.h"
 #include "options/cf_options.h"
-#include "rocksdb/options.h"
-#include "rocksdb/table_properties.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/options.h"
+#include "terarkdb/table_properties.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 #include "util/file_reader_writer.h"
 

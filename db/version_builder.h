@@ -8,9 +8,9 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 //
 #pragma once
-#include "rocksdb/env.h"
-#include "rocksdb/slice_transform.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/slice_transform.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

@@ -7,7 +7,7 @@
 
 #include "db/column_family.h"
 #include "monitoring/thread_status_updater.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

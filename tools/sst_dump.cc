@@ -5,7 +5,7 @@
 //
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/sst_dump_tool.h"
+#include "terarkdb/sst_dump_tool.h"
 
 int main(int argc, char** argv) {
   TERARKDB_NAMESPACE::SSTDumpTool tool;

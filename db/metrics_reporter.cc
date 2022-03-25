@@ -1,4 +1,4 @@
-#include "rocksdb/metrics_reporter.h"
+#include "terarkdb/metrics_reporter.h"
 
 #include <inttypes.h>
 
@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <string>
 
-#include "rocksdb/env.h"
+#include "terarkdb/env.h"
 #include "util/logging.h"
 
 #ifdef WITH_BOOSTLIB

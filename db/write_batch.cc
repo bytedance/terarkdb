@@ -33,7 +33,7 @@
 //    len: varint32
 //    data: uint8[len]
 
-#include "rocksdb/write_batch.h"
+#include "terarkdb/write_batch.h"
 
 #include <map>
 #include <stack>
@@ -51,8 +51,8 @@
 #include "db/write_batch_internal.h"
 #include "monitoring/perf_context_imp.h"
 #include "monitoring/statistics.h"
-#include "rocksdb/merge_operator.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/merge_operator.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/duplicate_detector.h"
 #include "util/string_util.h"

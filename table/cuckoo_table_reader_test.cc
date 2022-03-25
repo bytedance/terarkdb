@@ -23,7 +23,7 @@ int main() {
 #include <string>
 #include <vector>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/cuckoo_table_builder.h"
 #include "table/cuckoo_table_factory.h"
 #include "table/cuckoo_table_reader.h"

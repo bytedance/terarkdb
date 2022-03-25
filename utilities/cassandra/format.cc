@@ -9,7 +9,7 @@
 #include <map>
 #include <memory>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "utilities/cassandra/serialize.h"
 #include "utilities/util/valvec.hpp"
 

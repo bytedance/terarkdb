@@ -5,8 +5,8 @@
 //
 #pragma once
 #include "monitoring/perf_step_timer.h"
-#include "rocksdb/iostats_context.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/iostats_context.h"
+#include "terarkdb/terark_namespace.h"
 
 #ifdef ROCKSDB_SUPPORT_THREAD_LOCAL
 namespace TERARKDB_NAMESPACE {

@@ -10,7 +10,7 @@
 #include "db/db_iter.h"
 #include "db/merge_context.h"
 #include "monitoring/perf_context_imp.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #if !defined(_MSC_VER) && !defined(__APPLE__)
 #include <sys/unistd.h>
 #include <table/terark_zip_table.h>

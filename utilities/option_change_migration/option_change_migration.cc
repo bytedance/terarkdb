@@ -3,12 +3,12 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
-#include "rocksdb/utilities/option_change_migration.h"
+#include "terarkdb/utilities/option_change_migration.h"
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 #ifndef ROCKSDB_LITE
-#include "rocksdb/db.h"
+#include "terarkdb/db.h"
 
 namespace TERARKDB_NAMESPACE {
 namespace {

@@ -12,9 +12,9 @@
 
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
-#include "rocksdb/db.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/table_properties_collectors.h"
+#include "terarkdb/db.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/table_properties_collectors.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 

@@ -19,19 +19,19 @@ typedef struct epoll_event Event;
 }
 
 #include <cache/lru_cache.h>
-#include <rocksdb/compaction_filter.h>
-#include <rocksdb/convenience.h>
-#include <rocksdb/db.h>
-#include <rocksdb/experimental.h>
-#include <rocksdb/memtablerep.h>
-#include <rocksdb/merge_operator.h>
-#include <rocksdb/slice.h>
-#include <rocksdb/slice_transform.h>
-#include <rocksdb/sst_file_writer.h>
-#include <rocksdb/table.h>
-#include <rocksdb/utilities/optimistic_transaction_db.h>
-#include <rocksdb/utilities/transaction_db.h>
-#include <rocksdb/utilities/write_batch_with_index.h>
+#include <terarkdb/compaction_filter.h>
+#include <terarkdb/convenience.h>
+#include <terarkdb/db.h>
+#include <terarkdb/experimental.h>
+#include <terarkdb/memtablerep.h>
+#include <terarkdb/merge_operator.h>
+#include <terarkdb/slice.h>
+#include <terarkdb/slice_transform.h>
+#include <terarkdb/sst_file_writer.h>
+#include <terarkdb/table.h>
+#include <terarkdb/utilities/optimistic_transaction_db.h>
+#include <terarkdb/utilities/transaction_db.h>
+#include <terarkdb/utilities/write_batch_with_index.h>
 #include <table/get_context.h>
 #include <table/iterator_wrapper.h>
 #include <table/table_builder.h>
@@ -64,7 +64,7 @@ typedef struct epoll_event Event;
 #endif
 
 // worker test
-#include <rocksdb/compaction_dispatcher.h>
+#include <terarkdb/compaction_dispatcher.h>
 
 #include "db/column_family.h"
 #include "db/compaction_job.h"

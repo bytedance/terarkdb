@@ -9,7 +9,7 @@
 #include <terark/util/hugepage.hpp>
 #include <terark/zbs/blob_store_file_header.hpp>  // for isChecksumVerifyEnabled()
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/get_context.h"
 #include "table/internal_iterator.h"
 #include "table/meta_blocks.h"

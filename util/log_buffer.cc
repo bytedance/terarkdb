@@ -7,7 +7,7 @@
 
 #include "port/port.h"
 #include "port/sys_time.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

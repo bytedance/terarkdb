@@ -14,9 +14,9 @@
 
 #include "db/memtable.h"
 #include "port/port.h"
-#include "rocksdb/convenience.h"
-#include "rocksdb/memtablerep.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/convenience.h"
+#include "terarkdb/memtablerep.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/terark_zip_internal.h"
 #include "terark/fsa/cspptrie.inl"
 #include "terark/heap_ext.hpp"

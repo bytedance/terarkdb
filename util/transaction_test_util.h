@@ -8,10 +8,10 @@
 #ifndef ROCKSDB_LITE
 
 #include "port/port.h"
-#include "rocksdb/options.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/optimistic_transaction_db.h"
-#include "rocksdb/utilities/transaction_db.h"
+#include "terarkdb/options.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/optimistic_transaction_db.h"
+#include "terarkdb/utilities/transaction_db.h"
 
 namespace TERARKDB_NAMESPACE {
 

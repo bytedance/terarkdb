@@ -7,7 +7,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
-#include "rocksdb/options.h"
+#include "terarkdb/options.h"
 
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
@@ -20,17 +20,17 @@
 #include "monitoring/statistics.h"
 #include "options/db_options.h"
 #include "options/options_helper.h"
-#include "rocksdb/cache.h"
-#include "rocksdb/compaction_filter.h"
-#include "rocksdb/comparator.h"
-#include "rocksdb/env.h"
-#include "rocksdb/merge_operator.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/slice_transform.h"
-#include "rocksdb/sst_file_manager.h"
-#include "rocksdb/table.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/wal_filter.h"
+#include "terarkdb/cache.h"
+#include "terarkdb/compaction_filter.h"
+#include "terarkdb/comparator.h"
+#include "terarkdb/env.h"
+#include "terarkdb/merge_operator.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/slice_transform.h"
+#include "terarkdb/sst_file_manager.h"
+#include "terarkdb/table.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/wal_filter.h"
 #include "table/block_based_table_factory.h"
 #include "util/compression.h"
 

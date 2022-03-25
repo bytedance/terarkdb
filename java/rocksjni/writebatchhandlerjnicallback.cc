@@ -8,7 +8,7 @@
 
 #include "rocksjni/writebatchhandlerjnicallback.h"
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "rocksjni/portal.h"
 
 namespace TERARKDB_NAMESPACE {

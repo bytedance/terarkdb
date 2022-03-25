@@ -13,12 +13,12 @@
 #include <vector>
 
 #include "db/dbformat.h"
-#include "rocksdb/env.h"
-#include "rocksdb/iterator.h"
-#include "rocksdb/slice_transform.h"
-#include "rocksdb/table.h"
-#include "rocksdb/table_properties.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/iterator.h"
+#include "terarkdb/slice_transform.h"
+#include "terarkdb/table.h"
+#include "terarkdb/table_properties.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/plain_table_factory.h"
 #include "table/plain_table_index.h"
 #include "table/table_reader.h"

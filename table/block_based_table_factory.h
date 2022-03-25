@@ -16,9 +16,9 @@
 #include "db/dbformat.h"
 #include "options/options_helper.h"
 #include "options/options_parser.h"
-#include "rocksdb/flush_block_policy.h"
-#include "rocksdb/table.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/flush_block_policy.h"
+#include "terarkdb/table.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

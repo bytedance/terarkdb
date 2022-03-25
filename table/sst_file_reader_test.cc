@@ -5,12 +5,12 @@
 
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/sst_file_reader.h"
+#include "terarkdb/sst_file_reader.h"
 
 #include <inttypes.h>
 
-#include "rocksdb/sst_file_writer.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/sst_file_writer.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 #include "utilities/merge_operators.h"

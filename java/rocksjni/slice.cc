@@ -14,7 +14,7 @@
 #include "include/org_rocksdb_AbstractSlice.h"
 #include "include/org_rocksdb_DirectSlice.h"
 #include "include/org_rocksdb_Slice.h"
-#include "rocksdb/slice.h"
+#include "terarkdb/slice.h"
 #include "rocksjni/portal.h"
 
 // <editor-fold desc="org.rocksdb.AbstractSlice>

@@ -6,7 +6,7 @@
 
 #ifndef ROCKSDB_LITE  // Lite does not support C API
 
-#include "rocksdb/c.h"
+#include "terarkdb/c.h"
 
 #include <stddef.h>
 #include <stdlib.h>

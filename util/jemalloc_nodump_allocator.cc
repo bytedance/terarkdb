@@ -10,7 +10,7 @@
 
 #include "port/likely.h"
 #include "port/port.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/string_util.h"
 
 namespace TERARKDB_NAMESPACE {

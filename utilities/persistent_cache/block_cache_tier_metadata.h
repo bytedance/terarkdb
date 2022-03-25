@@ -10,8 +10,8 @@
 #include <string>
 #include <unordered_map>
 
-#include "rocksdb/slice.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/terark_namespace.h"
 #include "utilities/persistent_cache/block_cache_tier_file.h"
 #include "utilities/persistent_cache/hash_table.h"
 #include "utilities/persistent_cache/hash_table_evictable.h"

@@ -12,8 +12,8 @@
 #include <set>
 #include <unordered_set>
 
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/concurrent_arena.h"
 #include "util/hash.h"
 #include "util/random.h"

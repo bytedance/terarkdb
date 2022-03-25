@@ -14,11 +14,11 @@
 #include <string>
 #include <vector>
 
-#include "rocksdb/env.h"
-#include "rocksdb/status.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/geo_db.h"
-#include "rocksdb/utilities/stackable_db.h"
+#include "terarkdb/env.h"
+#include "terarkdb/status.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/geo_db.h"
+#include "terarkdb/utilities/stackable_db.h"
 
 namespace TERARKDB_NAMESPACE {
 

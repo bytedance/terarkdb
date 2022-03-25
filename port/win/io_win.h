@@ -14,9 +14,9 @@
 #include <mutex>
 #include <string>
 
-#include "rocksdb/env.h"
-#include "rocksdb/status.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/status.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/aligned_buffer.h"
 
 namespace TERARKDB_NAMESPACE {

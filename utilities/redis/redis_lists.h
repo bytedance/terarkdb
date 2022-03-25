@@ -16,8 +16,8 @@
 
 #include "redis_list_exception.h"
 #include "redis_list_iterator.h"
-#include "rocksdb/db.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/db.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

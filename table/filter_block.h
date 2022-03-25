@@ -26,11 +26,11 @@
 #include <vector>
 
 #include "format.h"
-#include "rocksdb/options.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/slice_transform.h"
-#include "rocksdb/table.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/options.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/slice_transform.h"
+#include "terarkdb/table.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/hash.h"
 
 namespace TERARKDB_NAMESPACE {

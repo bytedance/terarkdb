@@ -1,6 +1,6 @@
 #include "sst_scan.hpp"
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 #ifdef WITH_BOOSTLIB
 #include <boost/filesystem.hpp>

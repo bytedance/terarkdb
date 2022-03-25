@@ -7,7 +7,7 @@
 
 #include "options/options_sanity_check.h"
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

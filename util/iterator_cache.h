@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <unordered_map>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 #include "util/arena.h"
 #include "util/chash_map.h"

@@ -4,7 +4,7 @@
 
 #include "db/memtable.h"
 #include "memtable/skiplist.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 namespace {

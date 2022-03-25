@@ -5,12 +5,12 @@
 
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/utilities/document_db.h"
+#include "terarkdb/utilities/document_db.h"
 
 #include <algorithm>
 
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/json_document.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/json_document.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 

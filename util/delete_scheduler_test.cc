@@ -12,8 +12,8 @@
 #include <atomic>
 #include <vector>
 
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/sst_file_manager_impl.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"

@@ -11,7 +11,7 @@
 
 #include "include/org_rocksdb_Transaction.h"
 
-#include "rocksdb/utilities/transaction.h"
+#include "terarkdb/utilities/transaction.h"
 #include "rocksjni/portal.h"
 
 using namespace std::placeholders;

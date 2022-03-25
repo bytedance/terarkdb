@@ -14,9 +14,9 @@
 #include <cmath>
 #include <vector>
 
-#include "rocksdb/table.h"
-#include "rocksdb/table_properties.h"
-#include "rocksdb/utilities/table_properties_collectors.h"
+#include "terarkdb/table.h"
+#include "terarkdb/table_properties.h"
+#include "terarkdb/utilities/table_properties_collectors.h"
 #include "util/random.h"
 #include "utilities/table_properties_collectors/compact_on_deletion_collector.h"
 

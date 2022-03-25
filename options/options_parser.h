@@ -10,9 +10,9 @@
 #include <vector>
 
 #include "options/options_sanity_check.h"
-#include "rocksdb/env.h"
-#include "rocksdb/options.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/options.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/block_based_table_factory.h"
 
 namespace TERARKDB_NAMESPACE {

@@ -6,8 +6,8 @@
 #include "trace_replay/block_cache_tracer.h"
 
 #include "db/db_impl/db_impl.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/hash.h"
 #include "util/string_util.h"

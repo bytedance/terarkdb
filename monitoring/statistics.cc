@@ -15,8 +15,8 @@
 #include <cstdio>
 
 #include "port/likely.h"
-#include "rocksdb/statistics.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/statistics.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

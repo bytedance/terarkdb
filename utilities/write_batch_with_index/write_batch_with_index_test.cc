@@ -9,14 +9,14 @@
 
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/utilities/write_batch_with_index.h"
+#include "terarkdb/utilities/write_batch_with_index.h"
 
 #include <map>
 #include <memory>
 
 #include "db/column_family.h"
 #include "port/stack_trace.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/random.h"
 #include "util/string_util.h"
 #include "util/testharness.h"

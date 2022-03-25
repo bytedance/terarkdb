@@ -12,7 +12,7 @@
 #include "db/db_test_util.h"
 #include "db/dbformat.h"
 #include "db/range_tombstone_fragmenter.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/testutil.h"
 
 namespace TERARKDB_NAMESPACE {

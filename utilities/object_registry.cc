@@ -3,9 +3,9 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
-#include "rocksdb/utilities/object_registry.h"
+#include "terarkdb/utilities/object_registry.h"
 
-#include "rocksdb/env.h"
+#include "terarkdb/env.h"
 #include "util/logging.h"
 
 namespace TERARKDB_NAMESPACE {

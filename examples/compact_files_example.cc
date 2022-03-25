@@ -8,9 +8,9 @@
 
 #include <mutex>
 #include <string>
-#include "rocksdb/db.h"
-#include "rocksdb/env.h"
-#include "rocksdb/options.h"
+#include "terarkdb/db.h"
+#include "terarkdb/env.h"
+#include "terarkdb/options.h"
 
 using namespace TERARKDB_NAMESPACE;
 std::string kDBPath = "/tmp/rocksdb_compact_files_example";

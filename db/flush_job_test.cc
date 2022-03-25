@@ -11,9 +11,9 @@
 
 #include "db/column_family.h"
 #include "db/version_set.h"
-#include "rocksdb/cache.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/write_buffer_manager.h"
+#include "terarkdb/cache.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/write_buffer_manager.h"
 #include "table/mock_table.h"
 #include "util/file_reader_writer.h"
 #include "util/string_util.h"

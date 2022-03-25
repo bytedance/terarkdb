@@ -6,7 +6,7 @@
 #include "db/periodic_work_scheduler.h"
 
 #include "db/db_impl.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 #ifndef ROCKSDB_LITE
 namespace TERARKDB_NAMESPACE {

@@ -10,8 +10,8 @@
 #include "db/db_test_util.h"
 
 #include "db/forward_iterator.h"
-#include "rocksdb/env_encryption.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env_encryption.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

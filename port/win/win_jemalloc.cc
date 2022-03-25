@@ -15,7 +15,7 @@
 
 #include "jemalloc/jemalloc.h"
 #include "port/win/port_win.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 #if defined(ZSTD) && defined(ZSTD_STATIC_LINKING_ONLY)
 #include <zstd.h>

@@ -8,8 +8,8 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
-#include "rocksdb/perf_context.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/perf_context.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/fault_injection_test_env.h"
 #if !defined(ROCKSDB_LITE)
 #include "util/sync_point.h"

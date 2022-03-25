@@ -3,13 +3,13 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
-#include "rocksdb/flush_block_policy.h"
+#include "terarkdb/flush_block_policy.h"
 
 #include <cassert>
 
-#include "rocksdb/options.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/options.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/block_builder.h"
 #include "table/format.h"
 

@@ -26,7 +26,7 @@ int main() {
 
 #include "dynamic_bloom.h"
 #include "port/port.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/arena.h"
 #include "util/gflags_compat.h"
 #include "util/logging.h"

@@ -9,7 +9,7 @@
 #include <jni.h>
 
 #include "include/org_rocksdb_CompactRangeOptions.h"
-#include "rocksdb/options.h"
+#include "terarkdb/options.h"
 #include "rocksjni/portal.h"
 
 /*

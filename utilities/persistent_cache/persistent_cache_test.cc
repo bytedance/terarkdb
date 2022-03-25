@@ -14,7 +14,7 @@
 #include <memory>
 #include <thread>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "utilities/persistent_cache/block_cache_tier.h"
 
 namespace TERARKDB_NAMESPACE {

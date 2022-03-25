@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <rocksdb/env.h>
+#include <terarkdb/env.h>
 #include <stdint.h>
 #include <windows.h>
 
@@ -25,7 +25,7 @@
 #include <vector>
 
 #include "port/win/win_thread.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/threadpool_imp.h"
 
 #undef GetCurrentTime

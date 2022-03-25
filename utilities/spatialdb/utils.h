@@ -7,8 +7,8 @@
 #include <algorithm>
 #include <string>
 
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/spatial_db.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/spatial_db.h"
 
 namespace TERARKDB_NAMESPACE {
 namespace spatial {

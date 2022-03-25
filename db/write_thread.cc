@@ -11,7 +11,7 @@
 #include "db/column_family.h"
 #include "monitoring/perf_context_imp.h"
 #include "port/port.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/random.h"
 #include "util/sync_point.h"
 

@@ -3,7 +3,7 @@
 #endif
 
 #include "key_path_analysis.hpp"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 using namespace TERARKDB_NAMESPACE;
 

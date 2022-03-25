@@ -7,9 +7,9 @@
 #include <map>
 #include <memory>
 
-#include "rocksdb/compaction_filter.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/db_ttl.h"
+#include "terarkdb/compaction_filter.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/db_ttl.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
 
