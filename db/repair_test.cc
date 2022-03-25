@@ -11,10 +11,10 @@
 
 #include "db/db_impl.h"
 #include "db/db_test_util.h"
-#include "rocksdb/comparator.h"
-#include "rocksdb/db.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/transaction_log.h"
+#include "terarkdb/comparator.h"
+#include "terarkdb/db.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/transaction_log.h"
 #include "util/file_util.h"
 #include "util/string_util.h"
 

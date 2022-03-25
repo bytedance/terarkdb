@@ -18,7 +18,7 @@
 
 #include "db/event_helpers.h"
 #include "db/memtable_list.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/file_util.h"
 #include "util/sst_file_manager_impl.h"
 #include "utilities/util/valvec.hpp"

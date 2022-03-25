@@ -5,7 +5,7 @@
 
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/utilities/spatial_db.h"
+#include "terarkdb/utilities/spatial_db.h"
 
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
@@ -23,15 +23,15 @@
 #include <vector>
 
 #include "port/port.h"
-#include "rocksdb/cache.h"
-#include "rocksdb/db.h"
-#include "rocksdb/memtablerep.h"
-#include "rocksdb/options.h"
-#include "rocksdb/slice_transform.h"
-#include "rocksdb/statistics.h"
-#include "rocksdb/table.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/stackable_db.h"
+#include "terarkdb/cache.h"
+#include "terarkdb/db.h"
+#include "terarkdb/memtablerep.h"
+#include "terarkdb/options.h"
+#include "terarkdb/slice_transform.h"
+#include "terarkdb/statistics.h"
+#include "terarkdb/table.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/stackable_db.h"
 #include "util/coding.h"
 #include "utilities/spatialdb/utils.h"
 

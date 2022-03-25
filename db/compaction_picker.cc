@@ -22,7 +22,7 @@
 
 #include "db/column_family.h"
 #include "db/map_builder.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/c_style_callback.h"
 #include "util/chash_set.h"
 #include "util/filename.h"

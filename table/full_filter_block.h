@@ -13,10 +13,10 @@
 #include <vector>
 
 #include "db/dbformat.h"
-#include "rocksdb/options.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/slice_transform.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/options.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/slice_transform.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/filter_block.h"
 #include "util/hash.h"
 

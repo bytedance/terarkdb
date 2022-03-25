@@ -5,7 +5,7 @@
 //
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/utilities/ldb_cmd.h"
+#include "terarkdb/utilities/ldb_cmd.h"
 #include "util/testharness.h"
 
 using std::string;

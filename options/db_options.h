@@ -8,9 +8,9 @@
 #include <string>
 #include <vector>
 
-#include "rocksdb/listener.h"
-#include "rocksdb/options.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/listener.h"
+#include "terarkdb/options.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

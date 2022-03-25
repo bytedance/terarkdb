@@ -37,9 +37,9 @@
 #include <vector>
 
 #include "port/port.h"
-#include "rocksdb/status.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/thread_status.h"
+#include "terarkdb/status.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/thread_status.h"
 #include "util/thread_operation.h"
 
 namespace TERARKDB_NAMESPACE {

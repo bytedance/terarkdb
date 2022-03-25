@@ -11,8 +11,8 @@
 #include "db/dbformat.h"
 #include "db/table_properties_collector.h"
 #include "options/db_options.h"
-#include "rocksdb/options.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/options.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/compression.h"
 
 namespace TERARKDB_NAMESPACE {

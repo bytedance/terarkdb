@@ -5,9 +5,9 @@
 
 #include <memory>
 
-#include "rocksdb/merge_operator.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/merge_operator.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/terark_namespace.h"
 #include "utilities/merge_operators.h"
 
 using namespace TERARKDB_NAMESPACE;

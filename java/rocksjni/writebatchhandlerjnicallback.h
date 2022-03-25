@@ -14,8 +14,8 @@
 #include <functional>
 #include <memory>
 
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/write_batch.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/write_batch.h"
 #include "rocksjni/jnicallback.h"
 
 namespace TERARKDB_NAMESPACE {

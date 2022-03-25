@@ -5,8 +5,8 @@
 
 #pragma once
 
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/sim_cache.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/sim_cache.h"
 #include "trace_replay/block_cache_tracer.h"
 
 namespace TERARKDB_NAMESPACE {

@@ -10,8 +10,8 @@
 
 #include "port/jemalloc_helper.h"
 #include "port/port.h"
-#include "rocksdb/memory_allocator.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/memory_allocator.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/core_local.h"
 #include "util/thread_local.h"
 

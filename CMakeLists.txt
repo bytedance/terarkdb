@@ -110,7 +110,7 @@ MESSAGE("[terarkdb] CMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}")
 MESSAGE("[terarkdb] CMAKE_THREAD_LIBS_INIT=${CMAKE_THREAD_LIBS_INIT}")
 MESSAGE("[terarkdb] BYTEDANCE_METRICS_PATH=${BYTEDANCE_METRICS_PATH}")
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/rocksdb/terark_namespace.h.in ${CMAKE_CURRENT_SOURCE_DIR}/include/rocksdb/terark_namespace.h)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/terarkdb/terark_namespace.h.in ${CMAKE_CURRENT_SOURCE_DIR}/include/terarkdb/terark_namespace.h)
 
 #-------------------------- Third-party Libraries
 ADD_SUBDIRECTORY(third-party)
@@ -214,7 +214,7 @@ endif()
 string(REGEX REPLACE "[^0-9a-f]+" "" GIT_SHA "${GIT_SHA}")
 
 # Read rocksdb version from version.h header file.
-file(READ include/rocksdb/version.h version_header_file)
+file(READ include/terarkdb/version.h version_header_file)
 string(REGEX MATCH "#define ROCKSDB_MAJOR ([0-9]+)" _ ${version_header_file})
 set(ROCKSDB_VERSION_MAJOR ${CMAKE_MATCH_1})
 string(REGEX MATCH "#define ROCKSDB_MINOR ([0-9]+)" _ ${version_header_file})
@@ -932,7 +932,7 @@ if(NOT WIN32 OR ROCKSDB_INSTALL_ON_WINDOWS)
   )
 
   install(
-          DIRECTORY include/rocksdb
+          DIRECTORY include/terarkdb
           COMPONENT devel
           DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
           PATTERN "*.h.in" EXCLUDE)

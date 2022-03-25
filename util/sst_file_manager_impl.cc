@@ -9,9 +9,9 @@
 
 #include "db/db_impl.h"
 #include "port/port.h"
-#include "rocksdb/env.h"
-#include "rocksdb/sst_file_manager.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/sst_file_manager.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/mutexlock.h"
 #include "util/sync_point.h"
 

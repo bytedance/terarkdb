@@ -10,9 +10,9 @@
 
 #include "db/column_family.h"
 #include "db/version_edit.h"
-#include "rocksdb/listener.h"
-#include "rocksdb/table_properties.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/listener.h"
+#include "terarkdb/table_properties.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/event_logger.h"
 
 namespace TERARKDB_NAMESPACE {

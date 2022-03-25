@@ -11,8 +11,8 @@
 
 #include "utilities/transactions/write_unprepared_txn_db.h"
 
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/transaction_db.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/transaction_db.h"
 #include "util/cast_util.h"
 
 namespace TERARKDB_NAMESPACE {

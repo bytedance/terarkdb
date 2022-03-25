@@ -10,8 +10,8 @@
 
 #include "db/dbformat.h"
 #include "options/cf_options.h"
-#include "rocksdb/sst_dump_tool.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/sst_dump_tool.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/file_reader_writer.h"
 
 namespace TERARKDB_NAMESPACE {

@@ -1,4 +1,4 @@
-#include <rocksdb/db.h>
+#include <terarkdb/db.h>
 #include <stdio.h>
 #include <getopt.h>
 #include <terark/thread/pipeline.hpp>

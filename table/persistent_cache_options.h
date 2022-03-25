@@ -7,8 +7,8 @@
 #include <string>
 
 #include "monitoring/statistics.h"
-#include "rocksdb/persistent_cache.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/persistent_cache.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

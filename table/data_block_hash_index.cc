@@ -7,8 +7,8 @@
 #include <string>
 #include <vector>
 
-#include "rocksdb/slice.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/hash.h"
 

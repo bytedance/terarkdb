@@ -5,18 +5,18 @@
 
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/utilities/env_librados.h"
+#include "terarkdb/utilities/env_librados.h"
 
 #include <chrono>
 #include <ostream>
 #include <rados/librados.hpp>
 
 #include "env/mock_env.h"
-#include "rocksdb/db.h"
-#include "rocksdb/options.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/transaction_db.h"
+#include "terarkdb/db.h"
+#include "terarkdb/options.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/transaction_db.h"
 #include "util/random.h"
 #include "util/testharness.h"
 

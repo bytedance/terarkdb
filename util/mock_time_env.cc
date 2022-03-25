@@ -5,7 +5,7 @@
 
 #include "util/mock_time_env.h"
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/sync_point.h"
 
 namespace TERARKDB_NAMESPACE {

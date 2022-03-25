@@ -13,9 +13,9 @@
 
 #include <list>
 
-#include "rocksdb/comparator.h"
-#include "rocksdb/flush_block_policy.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/comparator.h"
+#include "terarkdb/flush_block_policy.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/format.h"
 
 // Without anonymous namespace here, we fail the warning -Wmissing-prototypes

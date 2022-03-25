@@ -10,10 +10,10 @@
 #include "monitoring/file_read_sample.h"
 #include "monitoring/perf_context_imp.h"
 #include "monitoring/statistics.h"
-#include "rocksdb/env.h"
-#include "rocksdb/merge_operator.h"
-#include "rocksdb/statistics.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/merge_operator.h"
+#include "terarkdb/statistics.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/util.h"
 
 namespace TERARKDB_NAMESPACE {

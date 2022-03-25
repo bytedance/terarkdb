@@ -5,12 +5,12 @@
 //
 // This file implements the "bridge" between Java and C++ for TERARKDB_NAMESPACE::Options.
 
-#include "rocksdb/table.h"
+#include "terarkdb/table.h"
 #include <jni.h>
 #include "include/org_rocksdb_BlockBasedTableConfig.h"
 #include "include/org_rocksdb_PlainTableConfig.h"
-#include "rocksdb/cache.h"
-#include "rocksdb/filter_policy.h"
+#include "terarkdb/cache.h"
+#include "terarkdb/filter_policy.h"
 
 /*
  * Class:     org_rocksdb_PlainTableConfig

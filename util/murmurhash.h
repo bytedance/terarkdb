@@ -12,8 +12,8 @@
 #pragma once
 #include <stdint.h>
 
-#include "rocksdb/slice.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/terark_namespace.h"
 
 #if defined(__x86_64__)
 #define MURMUR_HASH MurmurHash64A

@@ -8,9 +8,9 @@
 #include <string>
 
 #include "db/table_properties_collector.h"
-#include "rocksdb/table.h"
-#include "rocksdb/table_properties.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/table.h"
+#include "terarkdb/table_properties.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/block.h"
 #include "table/block_fetcher.h"
 #include "table/format.h"

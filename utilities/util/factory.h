@@ -1,12 +1,12 @@
 #pragma once
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 #ifdef WITH_TERARK_ZIP
 #include "terark/util/factory.ipp"
 #else
 
-#include <rocksdb/slice.h>
+#include <terarkdb/slice.h>
 
 #ifdef WITH_BOOSTLIB
 #include <boost/current_function.hpp>

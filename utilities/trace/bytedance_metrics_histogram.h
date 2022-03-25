@@ -1,12 +1,12 @@
 #pragma once
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #if !defined(ROCKSDB_LITE) && defined(OS_LINUX) && defined(WITH_ZENFS)
 
 #include <unordered_map>
 
 #include "bytedance_metrics_reporter.h"
-#include "rocksdb/env.h"
+#include "terarkdb/env.h"
 #include "third-party/zenfs/fs/metrics.h"
 
 namespace ROCKSDB_NAMESPACE {

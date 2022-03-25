@@ -7,7 +7,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
-#include "rocksdb/cache.h"
+#include "terarkdb/cache.h"
 
 #include <forward_list>
 #include <functional>
@@ -17,7 +17,7 @@
 
 #include "cache/clock_cache.h"
 #include "cache/lru_cache.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/string_util.h"
 #include "util/testharness.h"

@@ -20,8 +20,8 @@
 #include <vector>
 
 #include "port/port.h"
-#include "rocksdb/db.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/db.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/logging.h"
 #include "util/sync_point.h"
 #include "util/testharness.h"

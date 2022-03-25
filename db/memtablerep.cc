@@ -1,7 +1,7 @@
 #include <db/memtable.h>
-#include <rocksdb/memtablerep.h>
+#include <terarkdb/memtablerep.h>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/string_util.h"
 
 namespace TERARKDB_NAMESPACE {

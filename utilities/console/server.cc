@@ -6,7 +6,7 @@
 #include "anet.h"
 #include "db/db_impl.h"
 #include "executor.h"
-#include "rocksdb/env.h"
+#include "terarkdb/env.h"
 #include "util/logging.h"
 
 #if __clang__

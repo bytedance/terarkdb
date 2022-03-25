@@ -8,7 +8,7 @@
 #pragma once
 
 #include "port/port.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 
 namespace TERARKDB_NAMESPACE {

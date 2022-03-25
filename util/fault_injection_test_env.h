@@ -19,9 +19,9 @@
 
 #include "db/version_set.h"
 #include "env/mock_env.h"
-#include "rocksdb/db.h"
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/db.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/filename.h"
 #include "util/mutexlock.h"
 #include "util/random.h"

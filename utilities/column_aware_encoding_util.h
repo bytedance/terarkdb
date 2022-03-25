@@ -9,12 +9,12 @@
 #include <vector>
 
 #include "db/dbformat.h"
-#include "include/rocksdb/env.h"
-#include "include/rocksdb/listener.h"
-#include "include/rocksdb/options.h"
-#include "include/rocksdb/status.h"
+#include "terarkdb/env.h"
+#include "terarkdb/listener.h"
+#include "terarkdb/options.h"
+#include "terarkdb/status.h"
 #include "options/cf_options.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/block_based_table_reader.h"
 
 namespace TERARKDB_NAMESPACE {

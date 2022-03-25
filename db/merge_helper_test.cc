@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "rocksdb/comparator.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/comparator.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/iterator_wrapper.h"
 #include "util/coding.h"
 #include "util/testharness.h"

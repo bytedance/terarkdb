@@ -8,7 +8,7 @@
 #include <cmath>
 
 #include "monitoring/histogram_windowing.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/testharness.h"
 
 namespace TERARKDB_NAMESPACE {

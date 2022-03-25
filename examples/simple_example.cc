@@ -6,9 +6,9 @@
 #include <cstdio>
 #include <string>
 
-#include "rocksdb/db.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/options.h"
+#include "terarkdb/db.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/options.h"
 
 using namespace TERARKDB_NAMESPACE;
 

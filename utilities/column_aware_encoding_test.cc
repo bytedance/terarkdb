@@ -7,7 +7,7 @@
 
 #include <vector>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 #include "utilities/col_buf_decoder.h"

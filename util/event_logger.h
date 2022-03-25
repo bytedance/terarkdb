@@ -10,8 +10,8 @@
 #include <sstream>
 #include <string>
 
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/log_buffer.h"
 
 namespace TERARKDB_NAMESPACE {

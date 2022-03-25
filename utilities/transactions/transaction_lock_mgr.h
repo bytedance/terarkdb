@@ -13,8 +13,8 @@
 #include <vector>
 
 #include "monitoring/instrumented_mutex.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/transaction.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/transaction.h"
 #include "util/autovector.h"
 #include "util/hash_map.h"
 #include "util/thread_local.h"

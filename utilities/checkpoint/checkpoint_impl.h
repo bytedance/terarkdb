@@ -8,9 +8,9 @@
 
 #include <string>
 
-#include "rocksdb/db.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/checkpoint.h"
+#include "terarkdb/db.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/checkpoint.h"
 #include "util/filename.h"
 
 namespace TERARKDB_NAMESPACE {

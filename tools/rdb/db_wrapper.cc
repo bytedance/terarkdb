@@ -5,9 +5,9 @@
 #include <node.h>
 
 #include "db/_wrapper.h"
-#include "rocksdb/db.h"
-#include "rocksdb/options.h"
-#include "rocksdb/slice.h"
+#include "terarkdb/db.h"
+#include "terarkdb/options.h"
+#include "terarkdb/slice.h"
 
 namespace {
   void printWithBackSlashes(std::string str) {

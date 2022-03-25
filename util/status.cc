@@ -7,7 +7,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
-#include "rocksdb/status.h"
+#include "terarkdb/status.h"
 
 #include <stdio.h>
 #ifdef OS_WIN
@@ -16,7 +16,7 @@
 #include <cstring>
 
 #include "port/port.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

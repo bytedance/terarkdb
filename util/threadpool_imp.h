@@ -11,9 +11,9 @@
 #include <functional>
 #include <memory>
 
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/threadpool.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/threadpool.h"
 
 namespace TERARKDB_NAMESPACE {
 

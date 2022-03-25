@@ -7,7 +7,7 @@
 
 #include "db/db_impl.h"
 #include "db/event_helpers.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/sst_file_manager_impl.h"
 
 namespace TERARKDB_NAMESPACE {

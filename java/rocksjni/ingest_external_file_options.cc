@@ -9,7 +9,7 @@
 #include <jni.h>
 
 #include "include/org_rocksdb_IngestExternalFileOptions.h"
-#include "rocksdb/options.h"
+#include "terarkdb/options.h"
 
 /*
  * Class:     org_rocksdb_IngestExternalFileOptions

@@ -5,8 +5,8 @@
 
 #pragma once
 
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/trace_reader_writer.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/trace_reader_writer.h"
 
 namespace TERARKDB_NAMESPACE {
 

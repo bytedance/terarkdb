@@ -10,8 +10,8 @@
 #include <utility>
 #include <vector>
 
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/ldb_cmd.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/ldb_cmd.h"
 
 namespace TERARKDB_NAMESPACE {
 

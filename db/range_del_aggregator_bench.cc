@@ -21,9 +21,9 @@ int main() {
 
 #include "db/range_del_aggregator.h"
 #include "db/range_tombstone_fragmenter.h"
-#include "rocksdb/comparator.h"
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/comparator.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/gflags_compat.h"
 #include "util/random.h"

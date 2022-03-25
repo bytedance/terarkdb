@@ -9,8 +9,8 @@
 #include <memory>
 #include <string>
 
-#include "rocksdb/merge_operator.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/merge_operator.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

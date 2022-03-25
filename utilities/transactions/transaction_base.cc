@@ -9,10 +9,10 @@
 
 #include "db/column_family.h"
 #include "db/db_impl.h"
-#include "rocksdb/comparator.h"
-#include "rocksdb/db.h"
-#include "rocksdb/status.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/comparator.h"
+#include "terarkdb/db.h"
+#include "terarkdb/status.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/string_util.h"
 
 namespace TERARKDB_NAMESPACE {

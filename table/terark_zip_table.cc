@@ -28,7 +28,7 @@
 #include <terark/util/tmpfile.hpp>
 #include <terark/zbs/xxhash_helper.hpp>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/meta_blocks.h"
 #include "table/terark_zip_common.h"
 #include "table/terark_zip_internal.h"

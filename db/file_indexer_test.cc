@@ -14,8 +14,8 @@
 #include "db/dbformat.h"
 #include "db/version_edit.h"
 #include "port/stack_trace.h"
-#include "rocksdb/comparator.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/comparator.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 

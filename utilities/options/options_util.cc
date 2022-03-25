@@ -5,11 +5,11 @@
 
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/utilities/options_util.h"
+#include "terarkdb/utilities/options_util.h"
 
 #include "options/options_parser.h"
-#include "rocksdb/options.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/options.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/filename.h"
 
 namespace TERARKDB_NAMESPACE {

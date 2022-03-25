@@ -12,11 +12,11 @@
 #include "db/wal_manager.h"
 #include "options/db_options.h"
 #include "port/port.h"
-#include "rocksdb/env.h"
-#include "rocksdb/options.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/transaction_log.h"
-#include "rocksdb/types.h"
+#include "terarkdb/env.h"
+#include "terarkdb/options.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/transaction_log.h"
+#include "terarkdb/types.h"
 #include "util/filename.h"
 
 namespace TERARKDB_NAMESPACE {

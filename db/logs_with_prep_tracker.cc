@@ -6,7 +6,7 @@
 #include "db/logs_with_prep_tracker.h"
 
 #include "port/likely.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 void LogsWithPrepTracker::MarkLogAsHavingPrepSectionFlushed(uint64_t log) {

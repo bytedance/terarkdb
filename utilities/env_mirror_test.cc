@@ -5,10 +5,10 @@
 
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/utilities/env_mirror.h"
+#include "terarkdb/utilities/env_mirror.h"
 
 #include "env/mock_env.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/testharness.h"
 
 namespace TERARKDB_NAMESPACE {

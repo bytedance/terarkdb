@@ -11,11 +11,11 @@
 #include <unordered_map>
 
 #include "db/read_callback.h"
-#include "rocksdb/db.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/status.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/types.h"
+#include "terarkdb/db.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/status.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/types.h"
 
 namespace TERARKDB_NAMESPACE {
 

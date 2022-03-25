@@ -9,7 +9,7 @@
 #include <jni.h>
 
 #include "include/org_rocksdb_CompactionOptionsUniversal.h"
-#include "rocksdb/advanced_options.h"
+#include "terarkdb/advanced_options.h"
 #include "rocksjni/portal.h"
 
 /*

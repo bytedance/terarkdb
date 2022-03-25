@@ -5,9 +5,9 @@
 
 #include <memory>
 
-#include "rocksdb/lazy_buffer.h"
-#include "rocksdb/merge_operator.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/lazy_buffer.h"
+#include "terarkdb/merge_operator.h"
+#include "terarkdb/terark_namespace.h"
 #include "utilities/merge_operators.h"
 
 using TERARKDB_NAMESPACE::LazyBuffer;

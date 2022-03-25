@@ -9,7 +9,7 @@
 
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/fault_injection_test_env.h"
 #include "util/sync_point.h"
 

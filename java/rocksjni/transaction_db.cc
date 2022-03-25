@@ -13,9 +13,9 @@
 
 #include "include/org_rocksdb_TransactionDB.h"
 
-#include "rocksdb/options.h"
-#include "rocksdb/utilities/transaction.h"
-#include "rocksdb/utilities/transaction_db.h"
+#include "terarkdb/options.h"
+#include "terarkdb/utilities/transaction.h"
+#include "terarkdb/utilities/transaction_db.h"
 
 #include "rocksjni/portal.h"
 

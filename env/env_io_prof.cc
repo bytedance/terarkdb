@@ -1,6 +1,6 @@
-#include <rocksdb/env.h>
+#include <terarkdb/env.h>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "utilities/ioprof/ioprof.h"
 #ifdef WITH_BOOSTLIB
 #include <boost/current_function.hpp>

@@ -18,10 +18,10 @@
 #include "db/compaction.h"
 #include "db/version_set.h"
 #include "options/cf_options.h"
-#include "rocksdb/env.h"
-#include "rocksdb/options.h"
-#include "rocksdb/status.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/options.h"
+#include "terarkdb/status.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/chash_set.h"
 
 namespace TERARKDB_NAMESPACE {

@@ -7,7 +7,7 @@
 #include <terark/rank_select.hpp>
 #include <vector>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/terark_zip_common.h"
 
 using namespace std;

@@ -5,7 +5,7 @@
 
 #include <jni.h>
 
-#include <include/rocksdb/env.h>
+#include <terarkdb/env.h>
 #include "include/org_rocksdb_FlinkCompactionFilter.h"
 #include "loggerjnicallback.h"
 #include "portal.h"

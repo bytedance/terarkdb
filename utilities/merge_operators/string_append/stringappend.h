@@ -5,9 +5,9 @@
  */
 
 #pragma once
-#include "rocksdb/merge_operator.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/merge_operator.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

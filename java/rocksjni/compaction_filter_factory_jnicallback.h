@@ -13,8 +13,8 @@
 
 #include <memory>
 
-#include "rocksdb/compaction_filter.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/compaction_filter.h"
+#include "terarkdb/terark_namespace.h"
 #include "rocksjni/jnicallback.h"
 
 namespace TERARKDB_NAMESPACE {

@@ -12,9 +12,9 @@
 
 #include "monitoring/instrumented_mutex.h"
 #include "options/cf_options.h"
-#include "rocksdb/db.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/date_tiered_db.h"
+#include "terarkdb/db.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/date_tiered_db.h"
 
 namespace TERARKDB_NAMESPACE {
 

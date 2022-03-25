@@ -12,9 +12,9 @@
 #include <vector>
 
 #include "port/port.h"
-#include "rocksdb/comparator.h"
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/comparator.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/crc32c.h"
 #include "util/file_reader_writer.h"
 #include "util/mutexlock.h"

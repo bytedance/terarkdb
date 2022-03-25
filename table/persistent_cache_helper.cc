@@ -5,7 +5,7 @@
 
 #include "table/persistent_cache_helper.h"
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/block_based_table_reader.h"
 #include "table/format.h"
 

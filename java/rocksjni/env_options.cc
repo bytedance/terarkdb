@@ -10,7 +10,7 @@
 #include <jni.h>
 
 #include "include/org_rocksdb_EnvOptions.h"
-#include "rocksdb/env.h"
+#include "terarkdb/env.h"
 
 #define ENV_OPTIONS_SET_BOOL(_jhandle, _opt)                \
   reinterpret_cast<TERARKDB_NAMESPACE::EnvOptions *>(_jhandle)->_opt = \

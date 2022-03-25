@@ -15,9 +15,9 @@
 
 #include "db/db_impl.h"
 #include "port/port.h"
-#include "rocksdb/db.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/write_batch.h"
+#include "terarkdb/db.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/write_batch.h"
 #include "util/random.h"
 #include "util/sync_point.h"
 #include "util/testharness.h"

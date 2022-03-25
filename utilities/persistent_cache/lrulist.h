@@ -9,7 +9,7 @@
 
 #include <atomic>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/mutexlock.h"
 
 namespace TERARKDB_NAMESPACE {

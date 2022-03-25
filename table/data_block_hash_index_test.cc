@@ -10,8 +10,8 @@
 #include <unordered_map>
 
 #include "db/table_properties_collector.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/block.h"
 #include "table/block_based_table_reader.h"
 #include "table/block_builder.h"

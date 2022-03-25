@@ -4,7 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 #ifndef ROCKSDB_LITE
-#include "rocksdb/utilities/ldb_cmd.h"
+#include "terarkdb/utilities/ldb_cmd.h"
 
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
@@ -30,16 +30,16 @@
 #include "db/log_reader.h"
 #include "db/write_batch_internal.h"
 #include "port/dirent.h"
-#include "rocksdb/cache.h"
-#include "rocksdb/table_properties.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/backupable_db.h"
-#include "rocksdb/utilities/checkpoint.h"
-#include "rocksdb/utilities/debug.h"
-#include "rocksdb/utilities/object_registry.h"
-#include "rocksdb/utilities/options_util.h"
-#include "rocksdb/write_batch.h"
-#include "rocksdb/write_buffer_manager.h"
+#include "terarkdb/cache.h"
+#include "terarkdb/table_properties.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/backupable_db.h"
+#include "terarkdb/utilities/checkpoint.h"
+#include "terarkdb/utilities/debug.h"
+#include "terarkdb/utilities/object_registry.h"
+#include "terarkdb/utilities/options_util.h"
+#include "terarkdb/write_batch.h"
+#include "terarkdb/write_buffer_manager.h"
 #include "table/scoped_arena_iterator.h"
 #include "tools/ldb_cmd_impl.h"
 #include "tools/sst_dump_tool_imp.h"

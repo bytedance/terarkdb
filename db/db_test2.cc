@@ -14,9 +14,9 @@
 #include "db/read_callback.h"
 #include "port/port.h"
 #include "port/stack_trace.h"
-#include "rocksdb/persistent_cache.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/wal_filter.h"
+#include "terarkdb/persistent_cache.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/wal_filter.h"
 
 namespace TERARKDB_NAMESPACE {
 

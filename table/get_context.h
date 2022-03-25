@@ -8,10 +8,10 @@
 
 #include "db/merge_context.h"
 #include "db/read_callback.h"
-#include "rocksdb/env.h"
-#include "rocksdb/statistics.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/types.h"
+#include "terarkdb/env.h"
+#include "terarkdb/statistics.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/types.h"
 #include "table/block.h"
 
 namespace TERARKDB_NAMESPACE {

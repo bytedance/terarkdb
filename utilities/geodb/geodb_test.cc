@@ -6,7 +6,7 @@
 #ifndef ROCKSDB_LITE
 #include <cctype>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/testharness.h"
 #include "utilities/geodb/geodb_impl.h"
 

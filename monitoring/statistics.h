@@ -12,8 +12,8 @@
 #include "monitoring/histogram.h"
 #include "port/likely.h"
 #include "port/port.h"
-#include "rocksdb/statistics.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/statistics.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/core_local.h"
 #include "util/mutexlock.h"
 

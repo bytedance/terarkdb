@@ -7,7 +7,7 @@
 #pragma once
 
 #include "db/dbformat.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/iterator_wrapper.h"
 
 namespace TERARKDB_NAMESPACE {

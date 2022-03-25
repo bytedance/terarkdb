@@ -11,10 +11,10 @@
 #include <iostream>
 #include <map>
 
-#include "rocksdb/db.h"
-#include "rocksdb/merge_operator.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/db_ttl.h"
+#include "terarkdb/db.h"
+#include "terarkdb/merge_operator.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/db_ttl.h"
 #include "util/random.h"
 #include "util/testharness.h"
 #include "utilities/merge_operators.h"

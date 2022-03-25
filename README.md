@@ -114,7 +114,7 @@ We didn't archieve all static libraries together yet, so you have to pack all li
 ## 2.1. BlockBasedTable
 ```c++
 #include <cassert>
-#include "rocksdb/db.h"
+#include "terarkdb/db.h"
 
 rocksdb::DB* db;
 rocksdb::Options options;
@@ -142,9 +142,9 @@ Or manually set table format and table options:
 
 ```c++
 #include <cassert>
-#include "rocksdb/db.h"
-#include "rocksdb/options.h"
-#include "rocksdb/table.h"
+#include "terarkdb/db.h"
+#include "terarkdb/options.h"
+#include "terarkdb/table.h"
 
 rocksdb::DB* db;
 rocksdb::Options options;
@@ -179,9 +179,9 @@ assert(s.ok());
 ## 2.2. TerarkZipTable
 ```c++
 #include <cassert>
-#include "rocksdb/db.h"
-#include "rocksdb/options.h"
-#include "rocksdb/table.h"
+#include "terarkdb/db.h"
+#include "terarkdb/options.h"
+#include "terarkdb/table.h"
 #include "table/terark_zip_table.h"
 
 rocksdb::DB* db;

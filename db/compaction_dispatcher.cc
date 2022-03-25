@@ -7,7 +7,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
-#include "rocksdb/compaction_dispatcher.h"
+#include "terarkdb/compaction_dispatcher.h"
 
 #include "table/get_context.h"
 
@@ -30,16 +30,16 @@
 #include "db/map_builder.h"
 #include "db/merge_helper.h"
 #include "db/range_del_aggregator.h"
-#include "rocksdb/advanced_options.h"
-#include "rocksdb/compaction_filter.h"
-#include "rocksdb/comparator.h"
-#include "rocksdb/convenience.h"
-#include "rocksdb/filter_policy.h"
-#include "rocksdb/merge_operator.h"
-#include "rocksdb/status.h"
-#include "rocksdb/table.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/types.h"
+#include "terarkdb/advanced_options.h"
+#include "terarkdb/compaction_filter.h"
+#include "terarkdb/comparator.h"
+#include "terarkdb/convenience.h"
+#include "terarkdb/filter_policy.h"
+#include "terarkdb/merge_operator.h"
+#include "terarkdb/status.h"
+#include "terarkdb/table.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/types.h"
 #include "table/merging_iterator.h"
 #include "table/table_reader.h"
 #include "table/two_level_iterator.h"

@@ -14,8 +14,8 @@
 #include <cstring>
 
 #include "options/options_helper.h"
-#include "rocksdb/convenience.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/convenience.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/testharness.h"
 
 #ifndef GFLAGS

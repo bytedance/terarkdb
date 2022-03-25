@@ -8,9 +8,9 @@
 
 #include "db/db_impl.h"
 #include "db/version_set.h"
-#include "rocksdb/db.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/ldb_cmd.h"
+#include "terarkdb/db.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/ldb_cmd.h"
 #include "tools/ldb_cmd_impl.h"
 #include "util/string_util.h"
 #include "util/testharness.h"

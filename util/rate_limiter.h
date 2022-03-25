@@ -15,9 +15,9 @@
 #include <deque>
 
 #include "port/port.h"
-#include "rocksdb/env.h"
-#include "rocksdb/rate_limiter.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/rate_limiter.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/mutexlock.h"
 #include "util/random.h"
 

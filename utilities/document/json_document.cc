@@ -4,7 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/utilities/json_document.h"
+#include "terarkdb/utilities/json_document.h"
 
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
@@ -18,7 +18,7 @@
 #include <limits>
 #include <memory>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "third-party/fbson/FbsonDocument.h"
 #include "third-party/fbson/FbsonJsonParser.h"
 #include "third-party/fbson/FbsonUtil.h"

@@ -12,9 +12,9 @@
 
 #include <vector>
 
-#include "rocksdb/slice.h"
-#include "rocksdb/table.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/table.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/data_block_hash_index.h"
 
 namespace TERARKDB_NAMESPACE {

@@ -10,8 +10,8 @@
 #include "table/two_level_iterator.h"
 
 #include "db/version_edit.h"
-#include "rocksdb/options.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/options.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/block.h"
 #include "table/format.h"
 #include "util/arena.h"

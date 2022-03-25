@@ -5,7 +5,7 @@
 
 #include "test_utils.h"
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 namespace cassandra {

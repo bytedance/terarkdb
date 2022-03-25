@@ -11,7 +11,7 @@
 
 #include <atomic>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/compression.h"
 #include "util/core_local.h"
 

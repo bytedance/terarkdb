@@ -11,9 +11,9 @@
 #include <memory>
 
 #include "db/range_tombstone_fragmenter.h"
-#include "rocksdb/cache.h"
-#include "rocksdb/slice_transform.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/cache.h"
+#include "terarkdb/slice_transform.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 
 namespace TERARKDB_NAMESPACE {

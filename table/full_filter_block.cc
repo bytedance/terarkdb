@@ -15,8 +15,8 @@
 
 #include "monitoring/perf_context_imp.h"
 #include "port/port.h"
-#include "rocksdb/filter_policy.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/filter_policy.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/coding.h"
 
 namespace TERARKDB_NAMESPACE {

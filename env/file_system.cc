@@ -4,11 +4,11 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 // #include "env/composite_env_wrapper.h"
-#include "rocksdb/file_system.h"
+#include "terarkdb/file_system.h"
 
 #include "options/db_options.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/object_registry.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/object_registry.h"
 
 namespace TERARKDB_NAMESPACE {
 

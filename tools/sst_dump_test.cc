@@ -11,9 +11,9 @@
 
 #include <stdint.h>
 
-#include "rocksdb/filter_policy.h"
-#include "rocksdb/sst_dump_tool.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/filter_policy.h"
+#include "terarkdb/sst_dump_tool.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/block_based_table_factory.h"
 #include "table/table_builder.h"
 #include "util/file_reader_writer.h"

@@ -10,8 +10,8 @@
 
 #include "include/org_rocksdb_OptimisticTransactionOptions.h"
 
-#include "rocksdb/comparator.h"
-#include "rocksdb/utilities/optimistic_transaction_db.h"
+#include "terarkdb/comparator.h"
+#include "terarkdb/utilities/optimistic_transaction_db.h"
 
 /*
  * Class:     org_rocksdb_OptimisticTransactionOptions

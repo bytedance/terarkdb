@@ -23,11 +23,11 @@ int main() {
 #include <thread>
 
 #include "db/db_test_util.h"
-#include "rocksdb/db.h"
-#include "rocksdb/env.h"
-#include "rocksdb/status.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/trace_reader_writer.h"
+#include "terarkdb/db.h"
+#include "terarkdb/env.h"
+#include "terarkdb/status.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/trace_reader_writer.h"
 #include "tools/trace_analyzer_tool.h"
 #include "util/testharness.h"
 #include "util/testutil.h"

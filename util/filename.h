@@ -18,11 +18,11 @@
 
 #include "options/db_options.h"
 #include "port/port.h"
-#include "rocksdb/options.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/status.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/transaction_log.h"
+#include "terarkdb/options.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/status.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/transaction_log.h"
 
 namespace TERARKDB_NAMESPACE {
 

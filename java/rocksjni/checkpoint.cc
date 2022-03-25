@@ -12,8 +12,8 @@
 #include <string>
 
 #include "include/org_rocksdb_Checkpoint.h"
-#include "rocksdb/db.h"
-#include "rocksdb/utilities/checkpoint.h"
+#include "terarkdb/db.h"
+#include "terarkdb/utilities/checkpoint.h"
 #include "rocksjni/portal.h"
 /*
  * Class:     org_rocksdb_Checkpoint

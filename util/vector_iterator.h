@@ -5,9 +5,9 @@
 #include <vector>
 
 #include "db/dbformat.h"
-#include "rocksdb/iterator.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/iterator.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 
 namespace TERARKDB_NAMESPACE {

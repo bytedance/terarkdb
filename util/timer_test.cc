@@ -6,7 +6,7 @@
 #include "util/timer.h"
 
 #include "db/db_test_util.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

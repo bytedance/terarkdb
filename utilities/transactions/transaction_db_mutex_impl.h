@@ -6,8 +6,8 @@
 #pragma once
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/transaction_db_mutex.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/transaction_db_mutex.h"
 
 namespace TERARKDB_NAMESPACE {
 

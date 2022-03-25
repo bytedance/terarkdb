@@ -6,7 +6,7 @@
 #include <iostream>
 
 #include "db/db_impl.h"
-#include "rocksdb/db.h"
+#include "terarkdb/db.h"
 #include "util/random.h"
 #include "util/testharness.h"
 #include "utilities/cassandra/cassandra_compaction_filter.h"

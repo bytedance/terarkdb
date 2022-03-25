@@ -18,7 +18,7 @@
 
 #include "port/likely.h"
 #include "port/port.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/mutexlock.h"
 
 #define MY_USE_FIBER_LOCAL_STORAGE 0  // drop boost lib

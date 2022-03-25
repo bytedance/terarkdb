@@ -7,8 +7,8 @@
 
 #include "include/org_rocksdb_WriteBufferManager.h"
 
-#include "rocksdb/cache.h"
-#include "rocksdb/write_buffer_manager.h"
+#include "terarkdb/cache.h"
+#include "terarkdb/write_buffer_manager.h"
 
 /*
  * Class:     org_rocksdb_WriteBufferManager

@@ -9,9 +9,9 @@
 
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #if !defined(ROCKSDB_LITE)
-#include "rocksdb/utilities/table_properties_collectors.h"
+#include "terarkdb/utilities/table_properties_collectors.h"
 #include "util/sync_point.h"
 
 namespace TERARKDB_NAMESPACE {

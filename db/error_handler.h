@@ -6,9 +6,9 @@
 
 #include "monitoring/instrumented_mutex.h"
 #include "options/db_options.h"
-#include "rocksdb/listener.h"
-#include "rocksdb/status.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/listener.h"
+#include "terarkdb/status.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

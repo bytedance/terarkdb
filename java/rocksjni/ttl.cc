@@ -15,7 +15,7 @@
 #include <vector>
 
 #include "include/org_rocksdb_TtlDB.h"
-#include "rocksdb/utilities/db_ttl.h"
+#include "terarkdb/utilities/db_ttl.h"
 #include "rocksjni/portal.h"
 
 /*

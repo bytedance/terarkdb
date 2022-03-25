@@ -11,8 +11,8 @@
 
 #include "monitoring/statistics.h"
 #include "port/port.h"
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/aligned_buffer.h"
 #include "util/sync_point.h"
 

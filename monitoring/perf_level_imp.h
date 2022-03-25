@@ -5,8 +5,8 @@
 //
 #pragma once
 #include "port/port.h"
-#include "rocksdb/perf_level.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/perf_level.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

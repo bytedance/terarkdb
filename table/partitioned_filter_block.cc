@@ -16,8 +16,8 @@
 
 #include "monitoring/perf_context_imp.h"
 #include "port/port.h"
-#include "rocksdb/filter_policy.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/filter_policy.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/block.h"
 #include "table/block_based_table_reader.h"
 #include "util/coding.h"

@@ -10,10 +10,10 @@
 #include <thread>
 
 #include "port/port.h"
-#include "rocksdb/db.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/optimistic_transaction_db.h"
-#include "rocksdb/utilities/transaction.h"
+#include "terarkdb/db.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/optimistic_transaction_db.h"
+#include "terarkdb/utilities/transaction.h"
 #include "util/random.h"
 #include "util/testharness.h"
 #include "util/transaction_test_util.h"

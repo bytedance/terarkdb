@@ -9,7 +9,7 @@
 #include <jni.h>
 
 #include "include/org_rocksdb_AbstractCompactionFilter.h"
-#include "rocksdb/compaction_filter.h"
+#include "terarkdb/compaction_filter.h"
 
 // <editor-fold desc="org.rocksdb.AbstractCompactionFilter">
 

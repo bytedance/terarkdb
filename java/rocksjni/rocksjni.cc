@@ -17,10 +17,10 @@
 #include <vector>
 
 #include "include/org_rocksdb_RocksDB.h"
-#include "rocksdb/cache.h"
-#include "rocksdb/db.h"
-#include "rocksdb/options.h"
-#include "rocksdb/types.h"
+#include "terarkdb/cache.h"
+#include "terarkdb/db.h"
+#include "terarkdb/options.h"
+#include "terarkdb/types.h"
 #include "rocksjni/portal.h"
 
 #ifdef min

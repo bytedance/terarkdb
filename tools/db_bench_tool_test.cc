@@ -7,16 +7,16 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
-#include "rocksdb/db_bench_tool.h"
+#include "terarkdb/db_bench_tool.h"
 
 #include "options/options_parser.h"
-#include "rocksdb/utilities/options_util.h"
+#include "terarkdb/utilities/options_util.h"
 #include "util/random.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
 #ifdef GFLAGS
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/gflags_compat.h"
 
 namespace TERARKDB_NAMESPACE {

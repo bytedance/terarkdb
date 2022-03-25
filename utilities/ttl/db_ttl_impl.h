@@ -10,13 +10,13 @@
 #include <vector>
 
 #include "db/db_impl.h"
-#include "rocksdb/compaction_filter.h"
-#include "rocksdb/db.h"
-#include "rocksdb/env.h"
-#include "rocksdb/merge_operator.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/db_ttl.h"
-#include "rocksdb/utilities/utility_db.h"
+#include "terarkdb/compaction_filter.h"
+#include "terarkdb/db.h"
+#include "terarkdb/env.h"
+#include "terarkdb/merge_operator.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/db_ttl.h"
+#include "terarkdb/utilities/utility_db.h"
 
 #ifdef _WIN32
 // Windows API macro interference

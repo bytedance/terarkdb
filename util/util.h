@@ -7,7 +7,7 @@
 
 #include <utility>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 #ifndef FALLTHROUGH_INTENDED
 #if defined(__clang__)

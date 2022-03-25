@@ -18,10 +18,10 @@
 #include <vector>
 
 #include "db/db_impl.h"
-#include "rocksdb/db.h"
-#include "rocksdb/options.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/transaction_db.h"
+#include "terarkdb/db.h"
+#include "terarkdb/options.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/transaction_db.h"
 #include "util/cast_util.h"
 #include "util/mutexlock.h"
 #include "util/sync_point.h"

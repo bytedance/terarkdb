@@ -12,7 +12,7 @@
 #include <algorithm>
 
 #include "monitoring/histogram.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/cast_util.h"
 
 namespace TERARKDB_NAMESPACE {

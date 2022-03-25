@@ -9,10 +9,10 @@
 #include <unordered_map>
 #include <utility>
 
-#include "rocksdb/env.h"
-#include "rocksdb/options.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/trace_reader_writer.h"
+#include "terarkdb/env.h"
+#include "terarkdb/options.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/trace_reader_writer.h"
 
 namespace TERARKDB_NAMESPACE {
 

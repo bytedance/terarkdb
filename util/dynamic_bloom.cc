@@ -8,8 +8,8 @@
 #include <algorithm>
 
 #include "port/port.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/allocator.h"
 #include "util/hash.h"
 

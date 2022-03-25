@@ -5,7 +5,7 @@
 //
 #include "db/memtable.h"
 #include "memtable/inlineskiplist.h"
-#include "rocksdb/memtablerep.h"
+#include "terarkdb/memtablerep.h"
 #include "util/arena.h"
 #include "util/string_util.h"
 
@@ -13,7 +13,7 @@
 #include "table/terark_zip_internal.h"
 #endif
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 namespace {

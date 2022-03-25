@@ -11,10 +11,10 @@
 #include <vector>
 
 #include "db/db_impl.h"
-#include "rocksdb/db.h"
-#include "rocksdb/options.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/optimistic_transaction_db.h"
+#include "terarkdb/db.h"
+#include "terarkdb/options.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/optimistic_transaction_db.h"
 #include "utilities/transactions/optimistic_transaction.h"
 
 namespace TERARKDB_NAMESPACE {

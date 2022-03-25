@@ -16,9 +16,9 @@
 #include "db/dbformat.h"
 #include "db/range_del_aggregator.h"
 #include "options/cf_options.h"
-#include "rocksdb/db.h"
-#include "rocksdb/iterator.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/db.h"
+#include "terarkdb/iterator.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/arena.h"
 #include "util/autovector.h"
 
