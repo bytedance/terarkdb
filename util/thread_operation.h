@@ -15,8 +15,8 @@
 
 #include <string>
 
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/thread_status.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/thread_status.h"
 
 namespace TERARKDB_NAMESPACE {
 

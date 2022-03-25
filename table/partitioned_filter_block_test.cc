@@ -7,8 +7,8 @@
 
 #include <map>
 
-#include "rocksdb/filter_policy.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/filter_policy.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/full_filter_bits_builder.h"
 #include "table/index_builder.h"
 #include "util/coding.h"

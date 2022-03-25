@@ -13,7 +13,7 @@
 
 #include "rocksjni/portal.h"
 
-#include "rocksdb/utilities/memory_util.h"
+#include "terarkdb/utilities/memory_util.h"
 
 
 /*

@@ -7,12 +7,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
-#include <rocksdb/env.h>
+#include <terarkdb/env.h>
 
 #include <mutex>
 
 #include "port/win/env_win.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/compression_context_cache.h"
 #include "util/sync_point.h"
 #include "util/thread_local.h"

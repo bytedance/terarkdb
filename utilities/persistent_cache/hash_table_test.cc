@@ -12,7 +12,7 @@
 #include <string>
 
 #include "db/db_test_util.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/arena.h"
 #include "util/random.h"
 #include "util/testharness.h"

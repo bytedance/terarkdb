@@ -10,9 +10,9 @@
 
 #include "include/org_rocksdb_OptionsUtil.h"
 
-#include "rocksdb/db.h"
-#include "rocksdb/env.h"
-#include "rocksdb/utilities/options_util.h"
+#include "terarkdb/db.h"
+#include "terarkdb/env.h"
+#include "terarkdb/utilities/options_util.h"
 #include "rocksjni/portal.h"
 
 void build_column_family_descriptor_list(

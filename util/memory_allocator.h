@@ -6,8 +6,8 @@
 
 #pragma once
 
-#include "rocksdb/memory_allocator.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/memory_allocator.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

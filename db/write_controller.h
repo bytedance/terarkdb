@@ -10,8 +10,8 @@
 #include <atomic>
 #include <memory>
 
-#include "rocksdb/rate_limiter.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/rate_limiter.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

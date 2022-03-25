@@ -4,10 +4,10 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 
-#include "rocksdb/statistics.h"
+#include "terarkdb/statistics.h"
 
 #include "port/stack_trace.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 

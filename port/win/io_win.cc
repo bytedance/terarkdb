@@ -10,7 +10,7 @@
 #include "port/win/io_win.h"
 
 #include "monitoring/iostats_context_imp.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/aligned_buffer.h"
 #include "util/coding.h"
 #include "util/string_util.h"

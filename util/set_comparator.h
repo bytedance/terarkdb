@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 // A comparator to be used in std::set

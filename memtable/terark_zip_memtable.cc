@@ -1,6 +1,6 @@
 #include "terark_zip_memtable.h"
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 #if defined(_MSC_VER)
 //#include <windows.h>

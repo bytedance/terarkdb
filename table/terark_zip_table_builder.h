@@ -28,7 +28,7 @@
 
 #include "options/options_helper.h"
 #include "options/options_parser.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/block_builder.h"
 #include "table/format.h"
 #include "table/internal_iterator.h"

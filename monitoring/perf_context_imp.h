@@ -5,8 +5,8 @@
 //
 #pragma once
 #include "monitoring/perf_step_timer.h"
-#include "rocksdb/perf_context.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/perf_context.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/stop_watch.h"
 
 namespace TERARKDB_NAMESPACE {

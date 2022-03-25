@@ -26,7 +26,7 @@
 #include "db/table_cache.h"
 #include "db/version_set.h"
 #include "port/port.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/c_style_callback.h"
 #include "util/chash_map.h"
 #include "util/chash_set.h"

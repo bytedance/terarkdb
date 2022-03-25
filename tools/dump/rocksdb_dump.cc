@@ -18,8 +18,8 @@ int main() {
 
 #else
 
-#include "rocksdb/convenience.h"
-#include "rocksdb/db_dump_tool.h"
+#include "terarkdb/convenience.h"
+#include "terarkdb/db_dump_tool.h"
 #include "util/gflags_compat.h"
 
 DEFINE_string(db_path, "", "Path to the db that will be dumped");

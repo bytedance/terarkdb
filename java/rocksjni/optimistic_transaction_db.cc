@@ -10,9 +10,9 @@
 
 #include "include/org_rocksdb_OptimisticTransactionDB.h"
 
-#include "rocksdb/options.h"
-#include "rocksdb/utilities/optimistic_transaction_db.h"
-#include "rocksdb/utilities/transaction.h"
+#include "terarkdb/options.h"
+#include "terarkdb/utilities/optimistic_transaction_db.h"
+#include "terarkdb/utilities/transaction.h"
 
 #include "rocksjni/portal.h"
 

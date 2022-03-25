@@ -6,7 +6,7 @@
 // This file implements the "bridge" between Java and C++ and enables
 // calling c++ TERARKDB_NAMESPACE::Env methods from Java side.
 
-#include "rocksdb/env.h"
+#include "terarkdb/env.h"
 #include "include/org_rocksdb_Env.h"
 #include "include/org_rocksdb_RocksEnv.h"
 #include "include/org_rocksdb_RocksMemEnv.h"

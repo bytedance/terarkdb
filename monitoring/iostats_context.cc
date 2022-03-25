@@ -6,8 +6,8 @@
 #include <sstream>
 
 #include "monitoring/iostats_context_imp.h"
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

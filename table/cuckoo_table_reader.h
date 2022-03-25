@@ -16,9 +16,9 @@
 
 #include "db/dbformat.h"
 #include "options/cf_options.h"
-#include "rocksdb/env.h"
-#include "rocksdb/options.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/options.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/table_reader.h"
 #include "util/file_reader_writer.h"
 

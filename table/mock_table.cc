@@ -7,8 +7,8 @@
 
 #include "db/dbformat.h"
 #include "port/port.h"
-#include "rocksdb/table_properties.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/table_properties.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/get_context.h"
 #include "util/coding.h"
 #include "util/file_reader_writer.h"

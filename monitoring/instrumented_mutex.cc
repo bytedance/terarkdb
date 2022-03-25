@@ -7,7 +7,7 @@
 
 #include "monitoring/perf_context_imp.h"
 #include "monitoring/thread_status_util.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/sync_point.h"
 #include "util/util.h"
 

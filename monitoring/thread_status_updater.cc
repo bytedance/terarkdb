@@ -8,8 +8,8 @@
 #include <memory>
 
 #include "port/likely.h"
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/mutexlock.h"
 
 namespace TERARKDB_NAMESPACE {

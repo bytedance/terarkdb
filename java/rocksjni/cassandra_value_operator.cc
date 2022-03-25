@@ -10,13 +10,13 @@
 #include <string>
 
 #include "include/org_rocksdb_CassandraValueMergeOperator.h"
-#include "rocksdb/db.h"
-#include "rocksdb/memtablerep.h"
-#include "rocksdb/merge_operator.h"
-#include "rocksdb/options.h"
-#include "rocksdb/slice_transform.h"
-#include "rocksdb/statistics.h"
-#include "rocksdb/table.h"
+#include "terarkdb/db.h"
+#include "terarkdb/memtablerep.h"
+#include "terarkdb/merge_operator.h"
+#include "terarkdb/options.h"
+#include "terarkdb/slice_transform.h"
+#include "terarkdb/statistics.h"
+#include "terarkdb/table.h"
 #include "rocksjni/portal.h"
 #include "utilities/cassandra/merge_operator.h"
 

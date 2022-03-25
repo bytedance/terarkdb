@@ -8,10 +8,10 @@
 #include <sstream>
 #include <cstdlib>
 
-#include "rocksdb/db.h"
-#include "rocksdb/compaction_filter.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/write_batch.h"
+#include "terarkdb/db.h"
+#include "terarkdb/compaction_filter.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/write_batch.h"
 #include "util/testharness.h"
 #include "port/port.h"
 

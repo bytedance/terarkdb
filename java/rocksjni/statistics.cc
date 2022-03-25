@@ -11,7 +11,7 @@
 #include <set>
 
 #include "include/org_rocksdb_Statistics.h"
-#include "rocksdb/statistics.h"
+#include "terarkdb/statistics.h"
 #include "rocksjni/portal.h"
 #include "rocksjni/statisticsjni.h"
 

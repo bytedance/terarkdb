@@ -12,11 +12,11 @@
 
 #include "options/cf_options.h"
 #include "options/db_options.h"
-#include "rocksdb/options.h"
-#include "rocksdb/status.h"
-#include "rocksdb/table.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/universal_compaction.h"
+#include "terarkdb/options.h"
+#include "terarkdb/status.h"
+#include "terarkdb/table.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/universal_compaction.h"
 #include "table/terark_zip_table.h"
 
 namespace TERARKDB_NAMESPACE {

@@ -7,10 +7,10 @@
 
 #include <vector>
 
-#include "rocksdb/comparator.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/slice_transform.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/comparator.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/slice_transform.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/arena.h"
 #include "util/coding.h"
 #include "util/hash.h"

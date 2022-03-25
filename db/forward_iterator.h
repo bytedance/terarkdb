@@ -11,10 +11,10 @@
 #include <vector>
 
 #include "db/dbformat.h"
-#include "rocksdb/db.h"
-#include "rocksdb/iterator.h"
-#include "rocksdb/options.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/db.h"
+#include "terarkdb/iterator.h"
+#include "terarkdb/options.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 #include "util/arena.h"
 

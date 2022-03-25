@@ -10,7 +10,7 @@
 #include <stdlib.h>
 
 #include "include/org_rocksdb_Snapshot.h"
-#include "rocksdb/db.h"
+#include "terarkdb/db.h"
 #include "rocksjni/portal.h"
 
 /*

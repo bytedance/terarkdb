@@ -6,8 +6,8 @@
 #ifndef ROCKSDB_LITE
 #include "table/cuckoo_table_factory.h"
 
-#include "rocksdb/convenience.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/convenience.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/cuckoo_table_builder.h"
 #include "table/cuckoo_table_reader.h"
 

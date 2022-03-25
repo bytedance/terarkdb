@@ -14,10 +14,10 @@
 #include "db/range_del_aggregator.h"
 #include "db/snapshot_checker.h"
 #include "db/version_edit.h"
-#include "rocksdb/compaction_filter.h"
-#include "rocksdb/env.h"
-#include "rocksdb/lazy_buffer.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/compaction_filter.h"
+#include "terarkdb/env.h"
+#include "terarkdb/lazy_buffer.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/stop_watch.h"
 
 namespace TERARKDB_NAMESPACE {

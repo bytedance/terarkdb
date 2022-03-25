@@ -4,9 +4,9 @@
 #include <map>
 #include <node.h>
 
-#include "rocksdb/db.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/options.h"
+#include "terarkdb/db.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/options.h"
 
 using namespace v8;
 

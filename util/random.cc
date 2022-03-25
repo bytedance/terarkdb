@@ -12,7 +12,7 @@
 #include <utility>
 
 #include "port/likely.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/thread_local.h"
 
 #ifdef ROCKSDB_SUPPORT_THREAD_LOCAL

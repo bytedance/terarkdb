@@ -33,7 +33,7 @@
 #include <string>
 #endif
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/logging.h"
 
 namespace TERARKDB_NAMESPACE {

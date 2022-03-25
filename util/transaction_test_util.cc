@@ -18,11 +18,11 @@
 #include <string>
 #include <thread>
 
-#include "rocksdb/db.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/optimistic_transaction_db.h"
-#include "rocksdb/utilities/transaction.h"
-#include "rocksdb/utilities/transaction_db.h"
+#include "terarkdb/db.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/optimistic_transaction_db.h"
+#include "terarkdb/utilities/transaction.h"
+#include "terarkdb/utilities/transaction_db.h"
 #include "util/random.h"
 #include "util/string_util.h"
 

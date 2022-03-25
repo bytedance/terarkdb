@@ -3,10 +3,10 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
-#include <rocksdb/compaction_filter.h>
-#include <rocksdb/db.h>
-#include <rocksdb/merge_operator.h>
-#include <rocksdb/options.h>
+#include <terarkdb/compaction_filter.h>
+#include <terarkdb/db.h>
+#include <terarkdb/merge_operator.h>
+#include <terarkdb/options.h>
 
 class MyMerge : public TERARKDB_NAMESPACE::MergeOperator {
  public:

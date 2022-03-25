@@ -12,7 +12,7 @@
 #include <random>
 #include <utility>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 #ifndef GFLAGS
 const int64_t FLAGS_iters = 100000;

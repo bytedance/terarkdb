@@ -20,8 +20,8 @@
 
 #include "db/db_test_util.h"
 #include "port/port.h"
-#include "rocksdb/cache.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/cache.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/block_builder.h"
 #include "util/arena.h"
 #include "util/testharness.h"

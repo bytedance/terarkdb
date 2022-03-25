@@ -6,11 +6,11 @@
 #ifndef ROCKSDB_LITE
 
 #include "db/db_impl.h"
-#include "rocksdb/cache.h"
-#include "rocksdb/table.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/memory_util.h"
-#include "rocksdb/utilities/stackable_db.h"
+#include "terarkdb/cache.h"
+#include "terarkdb/table.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/memory_util.h"
+#include "terarkdb/utilities/stackable_db.h"
 #include "table/block_based_table_factory.h"
 #include "util/string_util.h"
 #include "util/testharness.h"

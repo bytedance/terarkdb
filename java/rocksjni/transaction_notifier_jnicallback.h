@@ -11,8 +11,8 @@
 
 #include <jni.h>
 
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/transaction.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/transaction.h"
 #include "rocksjni/jnicallback.h"
 
 namespace TERARKDB_NAMESPACE {

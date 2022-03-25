@@ -6,7 +6,7 @@
 #include "table/adaptive_table_factory.h"
 
 #include "port/port.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/format.h"
 #include "table/table_builder.h"
 #include "utilities/util/factory.h"

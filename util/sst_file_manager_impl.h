@@ -13,8 +13,8 @@
 #include "db/compaction.h"
 #include "db/error_handler.h"
 #include "port/port.h"
-#include "rocksdb/sst_file_manager.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/sst_file_manager.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/delete_scheduler.h"
 
 namespace TERARKDB_NAMESPACE {

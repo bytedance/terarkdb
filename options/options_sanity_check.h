@@ -8,7 +8,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 #ifndef ROCKSDB_LITE
 namespace TERARKDB_NAMESPACE {

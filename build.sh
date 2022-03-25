@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# WITH_TESTS=ON WITH_ZNS=OFF [METRICS_PATH=...] ./build.sh
+# WITH_TESTS=ON [METRICS_PATH=...] ./build.sh
 #
 set -e
 
@@ -10,8 +10,8 @@ BASE=$PWD
 OUTPUT=build
 WITH_BYTEDANCE_METRICS=OFF
 
-if [ -z "$WITH_TESTS" ] || [ -z "${WITH_ZNS}" ]; then
-  echo "usage: WITH_TESTS=OFF WITH_ZNS=OFF ./build.sh"
+if [ -z "$WITH_TESTS" ]; then
+  echo "usage: WITH_TESTS=OFF ./build.sh"
   exit
 fi
 
@@ -37,14 +37,14 @@ else
   echo "libaio is required, please make sure you have it!"
 fi
 
-echo "build = $BUILD_TYPE, with_tests = $WITH_TESTS, with_zns = $WITH_ZNS"
+echo "build = $BUILD_TYPE, with_tests = $WITH_TESTS"
 
 rm -rf $OUTPUT && mkdir -p $OUTPUT
 cd $BASE/$OUTPUT && cmake ../ \
   -DCMAKE_INSTALL_PREFIX=$OUTPUT \
   -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
   -DWITH_TESTS=$WITH_TESTS \
-  -DWITH_ZENFS=$WITH_ZNS \
+  -DWITH_ZENFS=OFF \
   -DBYTEDANCE_METRICS_PATH=$METRICS_PATH \
   -DWITH_BYTEDANCE_METRICS=$WITH_BYTEDANCE_METRICS \
   -DWITH_TOOLS=ON \

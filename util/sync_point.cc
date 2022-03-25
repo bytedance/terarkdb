@@ -5,7 +5,7 @@
 
 #include "util/sync_point.h"
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/sync_point_impl.h"
 
 int rocksdb_kill_odds = 0;

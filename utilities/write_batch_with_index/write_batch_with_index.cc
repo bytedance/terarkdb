@@ -5,7 +5,7 @@
 
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/utilities/write_batch_with_index.h"
+#include "terarkdb/utilities/write_batch_with_index.h"
 
 #include <memory>
 
@@ -16,9 +16,9 @@
 #include "memtable/skiplist.h"
 #include "options/db_options.h"
 #include "port/likely.h"
-#include "rocksdb/comparator.h"
-#include "rocksdb/iterator.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/comparator.h"
+#include "terarkdb/iterator.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/arena.h"
 #include "util/cast_util.h"
 #include "util/string_util.h"

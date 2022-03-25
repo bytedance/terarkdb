@@ -5,13 +5,13 @@
 
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/utilities/spatial_db.h"
+#include "terarkdb/utilities/spatial_db.h"
 
 #include <set>
 #include <string>
 #include <vector>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/compression.h"
 #include "util/random.h"
 #include "util/testharness.h"

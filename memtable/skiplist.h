@@ -37,7 +37,7 @@
 #include <atomic>
 
 #include "port/port.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/allocator.h"
 #include "util/random.h"
 

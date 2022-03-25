@@ -5,7 +5,7 @@
 
 #include "utilities/trace/file_trace_reader_writer.h"
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
 #include "util/trace_replay.h"

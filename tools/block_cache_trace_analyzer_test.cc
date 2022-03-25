@@ -18,10 +18,10 @@ int main() {
 #include <map>
 #include <vector>
 
-#include "rocksdb/env.h"
-#include "rocksdb/status.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/trace_reader_writer.h"
+#include "terarkdb/env.h"
+#include "terarkdb/status.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/trace_reader_writer.h"
 #include "test_util/testharness.h"
 #include "test_util/testutil.h"
 #include "tools/block_cache_trace_analyzer.h"

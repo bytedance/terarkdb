@@ -6,7 +6,7 @@
 // This file implements the "bridge" between Java and C++ for
 // TERARKDB_NAMESPACE::Options.
 
-#include "rocksdb/options.h"
+#include "terarkdb/options.h"
 
 #include <jni.h>
 #include <stdio.h>
@@ -22,15 +22,15 @@
 #include "include/org_rocksdb_Options.h"
 #include "include/org_rocksdb_ReadOptions.h"
 #include "include/org_rocksdb_WriteOptions.h"
-#include "rocksdb/comparator.h"
-#include "rocksdb/convenience.h"
-#include "rocksdb/db.h"
-#include "rocksdb/memtablerep.h"
-#include "rocksdb/merge_operator.h"
-#include "rocksdb/rate_limiter.h"
-#include "rocksdb/slice_transform.h"
-#include "rocksdb/statistics.h"
-#include "rocksdb/table.h"
+#include "terarkdb/comparator.h"
+#include "terarkdb/convenience.h"
+#include "terarkdb/db.h"
+#include "terarkdb/memtablerep.h"
+#include "terarkdb/merge_operator.h"
+#include "terarkdb/rate_limiter.h"
+#include "terarkdb/slice_transform.h"
+#include "terarkdb/statistics.h"
+#include "terarkdb/table.h"
 #include "rocksjni/comparatorjnicallback.h"
 #include "rocksjni/portal.h"
 #include "rocksjni/statisticsjni.h"

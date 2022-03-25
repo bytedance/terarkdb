@@ -7,8 +7,8 @@
 
 #include "include/org_rocksdb_RocksDBExceptionTest.h"
 
-#include "rocksdb/slice.h"
-#include "rocksdb/status.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/status.h"
 #include "rocksjni/portal.h"
 
 /*

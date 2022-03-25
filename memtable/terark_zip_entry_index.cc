@@ -5,7 +5,7 @@
 
 #include <terark/fsa/cspptrie.inl>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/terark_zip_internal.h"
 #include "util/arena.h"
 #include "util/coding.h"

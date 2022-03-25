@@ -7,10 +7,10 @@
 
 #include "monitoring/statistics.h"
 #include "port/port.h"
-#include "rocksdb/env.h"
-#include "rocksdb/statistics.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/thread_status.h"
+#include "terarkdb/env.h"
+#include "terarkdb/statistics.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/thread_status.h"
 #include "util/stop_watch.h"
 
 // MUTEX_DEBUG_MILLISECONDS set 0 to disable

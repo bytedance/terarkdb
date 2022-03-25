@@ -13,9 +13,9 @@
 #include <limits>
 #include <string>
 
-#include "rocksdb/options.h"
-#include "rocksdb/table.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/options.h"
+#include "terarkdb/table.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/compression_context_cache.h"
 #include "util/memory_allocator.h"

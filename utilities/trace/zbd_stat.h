@@ -1,6 +1,6 @@
 #pragma once
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #if !defined(ROCKSDB_LITE) && defined(OS_LINUX) && defined(WITH_ZENFS)
 
 #include <iostream>

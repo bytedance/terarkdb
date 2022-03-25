@@ -7,10 +7,10 @@
 #include <string>
 
 #include "options/db_options.h"
-#include "rocksdb/env.h"
-#include "rocksdb/status.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/types.h"
+#include "terarkdb/env.h"
+#include "terarkdb/status.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/types.h"
 
 namespace TERARKDB_NAMESPACE {
 // use_fsync maps to options.use_fsync, which determines the way that

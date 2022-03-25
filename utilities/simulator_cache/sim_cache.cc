@@ -3,14 +3,14 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
-#include "rocksdb/utilities/sim_cache.h"
+#include "terarkdb/utilities/sim_cache.h"
 
 #include <atomic>
 
 #include "monitoring/statistics.h"
 #include "port/port.h"
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/file_reader_writer.h"
 #include "util/mutexlock.h"
 #include "util/string_util.h"

@@ -7,8 +7,8 @@
 #include <mutex>
 
 #include "monitoring/thread_status_updater.h"
-#include "rocksdb/db.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/db.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/testharness.h"
 
 #ifdef ROCKSDB_USING_THREAD_STATUS

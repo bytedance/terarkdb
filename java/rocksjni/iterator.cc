@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 #include "include/org_rocksdb_RocksIterator.h"
-#include "rocksdb/iterator.h"
+#include "terarkdb/iterator.h"
 #include "rocksjni/portal.h"
 
 /*

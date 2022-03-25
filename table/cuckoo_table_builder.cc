@@ -15,9 +15,9 @@
 
 #include "db/dbformat.h"
 #include "db/version_edit.h"
-#include "rocksdb/env.h"
-#include "rocksdb/table.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/table.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/cuckoo_table_factory.h"
 #include "table/format.h"
 #include "table/meta_blocks.h"

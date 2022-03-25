@@ -15,7 +15,7 @@
 #include <sstream>
 #include <string>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/logging.h"
 #include "util/string_util.h"
 

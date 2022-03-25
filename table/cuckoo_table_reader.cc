@@ -16,9 +16,9 @@
 #include <utility>
 #include <vector>
 
-#include "rocksdb/iterator.h"
-#include "rocksdb/table.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/iterator.h"
+#include "terarkdb/table.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/cuckoo_table_factory.h"
 #include "table/get_context.h"
 #include "table/internal_iterator.h"

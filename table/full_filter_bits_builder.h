@@ -12,8 +12,8 @@
 #include <string>
 #include <vector>
 
-#include "rocksdb/filter_policy.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/filter_policy.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

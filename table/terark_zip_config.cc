@@ -1,12 +1,12 @@
-#include <rocksdb/db.h>
-#include <rocksdb/options.h>
-#include <rocksdb/table.h>
+#include <terarkdb/db.h>
+#include <terarkdb/options.h>
+#include <terarkdb/table.h>
 
 #include <terark/hash_strmap.hpp>
 #include <terark/util/throw.hpp>
 
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/write_batch_with_index.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/write_batch_with_index.h"
 #include "table/terark_zip_common.h"
 #include "table/terark_zip_table.h"
 #ifdef _MSC_VER

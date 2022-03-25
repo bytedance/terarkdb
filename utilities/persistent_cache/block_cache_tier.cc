@@ -11,7 +11,7 @@
 #include <vector>
 
 #include "port/port.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/logging.h"
 #include "util/stop_watch.h"
 #include "util/sync_point.h"

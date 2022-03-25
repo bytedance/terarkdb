@@ -18,8 +18,8 @@
 #include <terark/util/throw.hpp>
 #include <terark/zbs/abstract_blob_store.hpp>
 
-#include "rocksdb/options.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/options.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/block.h"
 #include "table/table_builder.h"
 #include "table/table_reader.h"

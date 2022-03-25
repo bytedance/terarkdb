@@ -7,7 +7,7 @@
 
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #if !defined(ROCKSDB_LITE)
 #include "util/sync_point.h"
 #endif

@@ -16,8 +16,8 @@
 #include <vector>
 
 #include "db/dbformat.h"
-#include "rocksdb/cache.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/cache.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/arena.h"
 #include "util/autovector.h"
 

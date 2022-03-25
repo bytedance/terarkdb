@@ -11,7 +11,7 @@
 
 #include <string.h>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/coding.h"
 #include "util/util.h"
 

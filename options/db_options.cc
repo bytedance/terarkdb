@@ -13,11 +13,11 @@
 
 #include "options/options_helper.h"
 #include "port/port.h"
-#include "rocksdb/cache.h"
-#include "rocksdb/env.h"
-#include "rocksdb/sst_file_manager.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/wal_filter.h"
+#include "terarkdb/cache.h"
+#include "terarkdb/env.h"
+#include "terarkdb/sst_file_manager.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/wal_filter.h"
 #include "util/logging.h"
 
 namespace TERARKDB_NAMESPACE {

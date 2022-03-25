@@ -6,8 +6,8 @@
 #pragma once
 #include <string>
 
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/types.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/types.h"
 #include "util/string_util.h"
 
 namespace TERARKDB_NAMESPACE {

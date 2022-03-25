@@ -6,7 +6,7 @@
 #include <terark/idx/terark_zip_index.hpp>
 #include <terark/util/throw.hpp>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 #ifdef _MSC_VER
 #include <io.h>

@@ -5,13 +5,13 @@
 
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/utilities/json_document.h"
+#include "terarkdb/utilities/json_document.h"
 
 #include <map>
 #include <set>
 #include <string>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 

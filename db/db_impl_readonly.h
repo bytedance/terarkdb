@@ -11,7 +11,7 @@
 #include <vector>
 
 #include "db/db_impl.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

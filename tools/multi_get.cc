@@ -2,7 +2,7 @@
 // Created by leipeng on 2019-08-09.
 //
 
-#include <rocksdb/db.h>
+#include <terarkdb/db.h>
 #include <stdio.h>
 #include <getopt.h>
 #include <terark/util/linebuf.hpp>

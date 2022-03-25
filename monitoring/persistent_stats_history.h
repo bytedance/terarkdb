@@ -9,8 +9,8 @@
 #pragma once
 
 #include "db/db_impl.h"
-#include "rocksdb/stats_history.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/stats_history.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

@@ -3,13 +3,13 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
-#include "rocksdb/sst_file_writer.h"
+#include "terarkdb/sst_file_writer.h"
 
 #include <vector>
 
 #include "db/dbformat.h"
-#include "rocksdb/table.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/table.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/block_based_table_builder.h"
 #include "table/sst_file_writer_collectors.h"
 #include "util/file_reader_writer.h"

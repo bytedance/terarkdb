@@ -32,7 +32,7 @@
 #include "memtable/hash_skiplist_rep.h"
 #include "monitoring/thread_status_util.h"
 #include "options/options_helper.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/merging_iterator.h"
 #include "util/autovector.h"
 #include "util/compression.h"

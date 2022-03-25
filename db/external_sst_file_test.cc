@@ -11,8 +11,8 @@
 #include "db/dbformat.h"
 #include "port/port.h"
 #include "port/stack_trace.h"
-#include "rocksdb/sst_file_writer.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/sst_file_writer.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/filename.h"
 #include "util/testutil.h"
 

@@ -3,12 +3,12 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
-#include "rocksdb/table_properties.h"
+#include "terarkdb/table_properties.h"
 
 #include "port/port.h"
-#include "rocksdb/env.h"
-#include "rocksdb/iterator.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/iterator.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/internal_iterator.h"
 #include "table/table_properties_internal.h"
 #include "util/string_util.h"

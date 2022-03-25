@@ -10,9 +10,9 @@
 #include "db/memtable.h"
 #include "db/range_del_aggregator.h"
 #include "port/stack_trace.h"
-#include "rocksdb/memtablerep.h"
-#include "rocksdb/slice_transform.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/memtablerep.h"
+#include "terarkdb/slice_transform.h"
+#include "terarkdb/terark_namespace.h"
 
 #ifdef WITH_TERARK_ZIP
 #include "memtable/terark_zip_memtable.h"

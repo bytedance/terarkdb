@@ -4,10 +4,10 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 #ifndef ROCKSDB_LITE
-#include "rocksdb/ldb_tool.h"
+#include "terarkdb/ldb_tool.h"
 
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/ldb_cmd.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/ldb_cmd.h"
 #include "tools/ldb_cmd_impl.h"
 
 namespace TERARKDB_NAMESPACE {

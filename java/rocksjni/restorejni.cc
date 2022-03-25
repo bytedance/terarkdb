@@ -13,7 +13,7 @@
 #include <string>
 
 #include "include/org_rocksdb_RestoreOptions.h"
-#include "rocksdb/utilities/backupable_db.h"
+#include "terarkdb/utilities/backupable_db.h"
 #include "rocksjni/portal.h"
 /*
  * Class:     org_rocksdb_RestoreOptions

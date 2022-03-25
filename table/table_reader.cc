@@ -9,8 +9,8 @@
 
 #include "table_reader.h"
 
-#include "rocksdb/statistics.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/statistics.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/get_context.h"
 #include "table/scoped_arena_iterator.h"
 #include "util/arena.h"

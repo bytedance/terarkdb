@@ -25,9 +25,9 @@
 #include <utility>
 #include <vector>
 
-#include "rocksdb/env.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/terark_namespace.h"
 #include "utilities/util/function.hpp"
 
 namespace TERARKDB_NAMESPACE {

@@ -7,9 +7,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
-#include "rocksdb/filter_policy.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/filter_policy.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/terark_namespace.h"
 #include "table/block_based_filter_block.h"
 #include "table/full_filter_bits_builder.h"
 #include "table/full_filter_block.h"

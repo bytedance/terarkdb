@@ -43,8 +43,8 @@
 #include <string>
 
 #include "redis_list_exception.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/coding.h"
 
 namespace TERARKDB_NAMESPACE {

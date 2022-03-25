@@ -13,8 +13,8 @@
 #include <atomic>
 #include <string>
 
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
 
 // For non linux platform, the following macros are used only as place
 // holder.

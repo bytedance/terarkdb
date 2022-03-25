@@ -7,10 +7,10 @@
  * Back-end implementation details specific to the Merge Operator.
  */
 
-#include "rocksdb/merge_operator.h"
+#include "terarkdb/merge_operator.h"
 
-#include "rocksdb/status.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/status.h"
+#include "terarkdb/terark_namespace.h"
 #include "utilities/util/factory.h"
 
 namespace TERARKDB_NAMESPACE {

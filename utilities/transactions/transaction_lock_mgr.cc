@@ -21,9 +21,9 @@
 #include <vector>
 
 #include "monitoring/perf_context_imp.h"
-#include "rocksdb/slice.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/transaction_db_mutex.h"
+#include "terarkdb/slice.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/transaction_db_mutex.h"
 #include "util/cast_util.h"
 #include "util/murmurhash.h"
 #include "util/sync_point.h"

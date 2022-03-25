@@ -8,9 +8,9 @@
 #include <vector>
 
 #include "env/mock_env.h"
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
-#include "rocksdb/utilities/object_registry.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
+#include "terarkdb/utilities/object_registry.h"
 #include "util/testharness.h"
 
 namespace TERARKDB_NAMESPACE {

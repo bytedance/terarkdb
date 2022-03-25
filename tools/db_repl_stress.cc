@@ -16,8 +16,8 @@ int main() {
 #include <cstdio>
 
 #include "db/write_batch_internal.h"
-#include "rocksdb/db.h"
-#include "rocksdb/types.h"
+#include "terarkdb/db.h"
+#include "terarkdb/types.h"
 #include "util/gflags_compat.h"
 #include "util/testutil.h"
 

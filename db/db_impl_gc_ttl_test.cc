@@ -4,7 +4,7 @@
 #include "db/db_impl.h"
 #include "db/db_test_util.h"
 #include "db/periodic_work_scheduler.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
 #include "util/testharness.h"

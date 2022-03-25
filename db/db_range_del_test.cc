@@ -5,9 +5,9 @@
 
 #include "db/db_test_util.h"
 #include "port/stack_trace.h"
-#include "rocksdb/options.h"
-#include "rocksdb/perf_context.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/options.h"
+#include "terarkdb/perf_context.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/testutil.h"
 #include "utilities/merge_operators.h"
 

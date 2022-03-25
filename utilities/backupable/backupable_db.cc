@@ -9,11 +9,11 @@
 
 #ifndef ROCKSDB_LITE
 
-#include "rocksdb/utilities/backupable_db.h"
+#include "terarkdb/utilities/backupable_db.h"
 
 #include "port/port.h"
-#include "rocksdb/rate_limiter.h"
-#include "rocksdb/transaction_log.h"
+#include "terarkdb/rate_limiter.h"
+#include "terarkdb/transaction_log.h"
 #include "util/channel.h"
 #include "util/coding.h"
 #include "util/crc32c.h"
@@ -44,7 +44,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 

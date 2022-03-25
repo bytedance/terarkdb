@@ -18,6 +18,6 @@ int main() {
   return 1;
 }
 #else
-#include <rocksdb/db_bench_tool.h>
+#include <terarkdb/db_bench_tool.h>
 int main(int argc, char** argv) { return TERARKDB_NAMESPACE::db_bench_tool(argc, argv); }
 #endif  // GFLAGS

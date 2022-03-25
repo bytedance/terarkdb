@@ -1,6 +1,6 @@
 #include "manifest.hpp"
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 
 using namespace TERARKDB_NAMESPACE;
 

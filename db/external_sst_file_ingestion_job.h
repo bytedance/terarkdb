@@ -13,10 +13,10 @@
 #include "db/internal_stats.h"
 #include "db/snapshot_impl.h"
 #include "options/db_options.h"
-#include "rocksdb/db.h"
-#include "rocksdb/env.h"
-#include "rocksdb/sst_file_writer.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/db.h"
+#include "terarkdb/env.h"
+#include "terarkdb/sst_file_writer.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/autovector.h"
 
 namespace TERARKDB_NAMESPACE {

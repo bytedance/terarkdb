@@ -14,10 +14,10 @@
 #include <vector>
 
 #include "monitoring/histogram.h"
-#include "rocksdb/env.h"
-#include "rocksdb/persistent_cache.h"
-#include "rocksdb/status.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/persistent_cache.h"
+#include "terarkdb/status.h"
+#include "terarkdb/terark_namespace.h"
 
 // Persistent Cache
 //

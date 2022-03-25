@@ -12,8 +12,8 @@ int main() {
 #else
 
 #include "monitoring/histogram.h"
-#include "rocksdb/env.h"
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/env.h"
+#include "terarkdb/terark_namespace.h"
 #include "util/file_reader_writer.h"
 #include "util/gflags_compat.h"
 #include "util/testharness.h"

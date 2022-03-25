@@ -8,7 +8,7 @@
 
 #include "rocksjni/compaction_filter_factory_jnicallback.h"
 
-#include "rocksdb/terark_namespace.h"
+#include "terarkdb/terark_namespace.h"
 #include "rocksjni/portal.h"
 
 namespace TERARKDB_NAMESPACE {
