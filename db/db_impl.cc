@@ -171,11 +171,10 @@ class TablePropertiesCollectionIteratorImpl
     return filename_;
   }
 
-  std::pair<std::string, std::string> fileRange() const override {
+  std::pair<Slice, Slice> boundaries() const override {
     assert(Valid());
     FileMetaData* f = *iter_;
-    return {f->smallest.user_key().ToString(),
-            f->largest.user_key().ToString()};
+    return {f->smallest.user_key(), f->largest.user_key()};
   }
 
   const std::shared_ptr<const TableProperties>& properties() const override {

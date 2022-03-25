@@ -37,7 +37,7 @@ class TablePropertiesCollectionIterator {
 
   virtual bool Valid() const = 0;
   virtual Status status() const = 0;
-  virtual std::pair<std::string,std::string> fileRange() const = 0;
+  virtual std::pair<Slice,Slice> boundaries() const = 0;
 
  public:
   // No copying allowed
@@ -282,11 +282,11 @@ struct CompactionJobInfo {
   int output_level;
   // the names of the compaction input files.
   std::vector<std::string> input_files;
-  std::vector<std::pair<std::string,std::string>> input_files_boundries_user_key;
+  std::vector<std::pair<Slice,Slice> input_boundries;
 
   // the names of the compaction output files.
   std::vector<std::string> output_files;
-  std::vector<std::pair<std::string,std::string>> output_files_boundries_user_key;
+  std::vector<std::pair<Slice,Slice>> output_boundries;
   // Table properties for input and output tables.
   // The map is keyed by values from input_files and output_files.
   TablePropertiesCollection table_properties;
