@@ -18,6 +18,7 @@ struct FileMetaData;
 class RangeDelAggregator;
 class TableReader;
 
+// <FileNumber -> FileMetaData>
 typedef chash_map<uint64_t, FileMetaData*> DependenceMap;
 
 class IteratorCache {

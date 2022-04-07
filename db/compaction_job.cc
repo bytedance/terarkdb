@@ -304,7 +304,9 @@ struct CompactionJob::SubcompactionState {
   }
 
   struct RebuildBlobsInfo {
+    // File numbers
     chash_set<uint64_t> blobs;
+    // pop_count = planned file count - actual used file count.
     size_t pop_count;
   };
   struct BlobRefInfo {
@@ -1493,6 +1495,9 @@ void CompactionJob::ProcessCompaction(SubcompactionState* sub_compact) {
     case kGarbageCollection:
       ProcessGarbageCollection(sub_compact);
       break;
+    case kLinkCompaction:
+      ProcessLinkCompaction(sub_compact);
+      break;
     default:
       assert(false);
       break;
@@ -1765,6 +1770,9 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   if (!sub_compact->compaction->partial_compaction()) {
     dict_sample_data.reserve(kSampleBytes);
   }
+
+  // Represents how many records in target blob SST that are needed by the key
+  // SST
   std::unordered_map<uint64_t, uint64_t> dependence;
 
   size_t yield_count = 0;
@@ -2036,7 +2044,12 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   sub_compact->c_iter.reset();
   input.reset();
   sub_compact->status = status;
-}  // namespace TERARKDB_NAMESPACE
+}
+
+// TODO(guokuankuan@bytedance.com)
+void CompactionJob::ProcessLinkCompaction(SubcompactionState* sub_compact) {
+  return;
+}
 
 void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
   assert(sub_compact != nullptr);

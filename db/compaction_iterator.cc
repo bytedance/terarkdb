@@ -170,7 +170,7 @@ CompactionIterator::CompactionIterator(
     level_ptrs_ = std::vector<size_t>(compaction_->number_levels(), 0);
   }
 
-  if (snapshots_->size() == 0) {
+  if (snapshots_->empty()) {
     // optimize for fast path if there are no snapshots
     visible_at_tip_ = true;
     earliest_snapshot_ = kMaxSequenceNumber;

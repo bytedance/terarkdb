@@ -123,6 +123,7 @@ class CompactionJob {
   // kv-pairs
   void ProcessCompaction(SubcompactionState* sub_compact);
   void ProcessKeyValueCompaction(SubcompactionState* sub_compact);
+  void ProcessLinkCompaction(SubcompactionState* sub_compact);
   void ProcessGarbageCollection(SubcompactionState* sub_compact);
 
   Status FinishCompactionOutputFile(

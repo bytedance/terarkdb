@@ -77,6 +77,7 @@ enum CompactionType {
   kKeyValueCompaction = 0,
   kMapCompaction = 1,
   kGarbageCollection = 2,
+  kLinkCompaction = 3,
 };
 
 struct CompactionParams {

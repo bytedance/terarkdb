@@ -1258,6 +1258,7 @@ class DBImpl : public DB {
   void BackgroundCallGarbageCollection();
   void BackgroundCallFlush();
   void BackgroundCallPurge();
+
   Status BackgroundCompaction(bool* madeProgress, JobContext* job_context,
                               LogBuffer* log_buffer,
                               PrepickedCompaction* prepicked_compaction);

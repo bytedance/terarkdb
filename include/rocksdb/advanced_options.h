@@ -216,6 +216,11 @@ struct AdvancedColumnFamilyOptions {
   // LazyCompaction, default false
   bool enable_lazy_compaction = false;
 
+  // Link Compaciton is a replacement policy to general compactions.
+  // It will not physically compacts target SST files immediately but instead link them logically.
+  // The actually physical compaction will be triggered in the background.
+  bool enable_link_compaction = false;
+
   // Read TableProperties from file if false
   bool pin_table_properties_in_reader = true;
 
