@@ -42,9 +42,17 @@ extern InternalIteratorBase<BlockHandle>* NewTwoLevelIterator(
     TwoLevelIteratorState* state,
     InternalIteratorBase<BlockHandle>* first_level_iter);
 
-// Retuan a two level iterator. for unroll map sst
 // keep all params lifecycle please
+// @return a two level iterator. for unroll map sst
 extern InternalIterator* NewMapSstIterator(
+    const FileMetaData* file_meta, InternalIterator* mediate_sst_iter,
+    const DependenceMap& dependence_map, const InternalKeyComparator& icomp,
+    void* callback_arg, const IteratorCache::CreateIterCallback& create_iter,
+    Arena* arena = nullptr);
+
+// A link sst iterator should expand all its dependencies for the callers.
+// @return TwoLevelIterator
+extern InternalIterator* NewLinkSstIterator(
     const FileMetaData* file_meta, InternalIterator* mediate_sst_iter,
     const DependenceMap& dependence_map, const InternalKeyComparator& icomp,
     void* callback_arg, const IteratorCache::CreateIterCallback& create_iter,

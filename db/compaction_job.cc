@@ -1585,34 +1585,8 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       snapshot_checker_, compact_->compaction->level(),
       db_options_.statistics.get(), shutting_down_);
 
-  struct BuilderSeparateHelper : public SeparateHelper {
-    SeparateHelper* separate_helper = nullptr;
-    std::unique_ptr<ValueExtractor> value_meta_extractor;
-    Status (*trans_to_separate_callback)(void* args, const Slice& key,
-                                         LazyBuffer& value) = nullptr;
-    void* trans_to_separate_callback_args = nullptr;
+  BuilderSeparateHelper separate_helper;
 
-    Status TransToSeparate(const Slice& internal_key, LazyBuffer& value,
-                           const Slice& meta, bool is_merge,
-                           bool is_index) override {
-      return SeparateHelper::TransToSeparate(
-          internal_key, value, value.file_number(), meta, is_merge, is_index,
-          value_meta_extractor.get());
-    }
-
-    Status TransToSeparate(const Slice& key, LazyBuffer& value) override {
-      if (trans_to_separate_callback == nullptr) {
-        return Status::NotSupported();
-      }
-      return trans_to_separate_callback(trans_to_separate_callback_args, key,
-                                        value);
-    }
-
-    LazyBuffer TransToCombined(const Slice& user_key, uint64_t sequence,
-                               const LazyBuffer& value) const override {
-      return separate_helper->TransToCombined(user_key, sequence, value);
-    }
-  } separate_helper;
   if (compact_->compaction->immutable_cf_options()
           ->value_meta_extractor_factory != nullptr) {
     ValueExtractorContext context = {cfd->GetID()};
@@ -2048,7 +2022,8 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
 
 // TODO(guokuankuan@bytedance.com)
 void CompactionJob::ProcessLinkCompaction(SubcompactionState* sub_compact) {
-  return;
+  assert(sub_compact != nullptr);
+  return ProcessKeyValueCompaction(sub_compact);
 }
 
 void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {

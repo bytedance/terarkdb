@@ -19,6 +19,10 @@ class RangeDelAggregator;
 class TableReader;
 
 // <FileNumber -> FileMetaData>
+//
+// TODO(guokuankuan@bytedance.com)
+// Shall we change this variable name to `FileMetaMap`? This map is simply map
+// file number to it's related file metadata
 typedef chash_map<uint64_t, FileMetaData*> DependenceMap;
 
 class IteratorCache {

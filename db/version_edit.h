@@ -98,8 +98,11 @@ struct TablePropertyCache {
   std::vector<uint64_t> inheritance;   // inheritance set
   uint64_t earliest_time_begin_compact = port::kMaxUint64;
   uint64_t latest_time_end_compact = port::kMaxUint64;
+  uint32_t lbr_hash_bits = 11;         // hash bits for each LinkSST KV
+  uint32_t lbr_group_size = 16;        // Group size for LinkBlockRecord
 
   bool is_map_sst() const { return purpose == kMapSst; }
+  bool is_link_sst() const {return purpose == kLinkSst; }
   bool has_range_deletions() const { return (flags & kNoRangeDeletions) == 0; }
   bool map_handle_range_deletions() const {
     return (flags & kMapHandleRangeDeletions) != 0;

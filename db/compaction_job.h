@@ -65,6 +65,38 @@ class VersionSet;
 
 class CompactionJob {
  public:
+
+  class BuilderSeparateHelper : public SeparateHelper {
+   public:
+    SeparateHelper* separate_helper = nullptr;
+    std::unique_ptr<ValueExtractor> value_meta_extractor;
+    Status (*trans_to_separate_callback)(void* args, const Slice& key,
+                                         LazyBuffer& value) = nullptr;
+    void* trans_to_separate_callback_args = nullptr;
+
+    Status TransToSeparate(const Slice& internal_key, LazyBuffer& value,
+                           const Slice& meta, bool is_merge,
+                           bool is_index) override {
+      return SeparateHelper::TransToSeparate(
+          internal_key, value, value.file_number(), meta, is_merge, is_index,
+          value_meta_extractor.get());
+    }
+
+    Status TransToSeparate(const Slice& key, LazyBuffer& value) override {
+      if (trans_to_separate_callback == nullptr) {
+        return Status::NotSupported();
+      }
+      return trans_to_separate_callback(trans_to_separate_callback_args, key,
+                                        value);
+    }
+
+    LazyBuffer TransToCombined(const Slice& user_key, uint64_t sequence,
+                               const LazyBuffer& value) const override {
+      return separate_helper->TransToCombined(user_key, sequence, value);
+    }
+  };
+
+ public:
   CompactionJob(int job_id, Compaction* compaction,
                 const ImmutableDBOptions& db_options,
                 const EnvOptions env_options, VersionSet* versions,

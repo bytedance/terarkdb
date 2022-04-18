@@ -85,7 +85,7 @@ static bool InheritanceMismatch(const FileMetaData& sst_meta,
   return true;
 }
 
-// Store params for create depend table iterator in future
+// Store params for create dependency table iterator in future
 class LazyCreateIterator : public Snapshot {
   TableCache* table_cache_;
   ReadOptions options_;  // deep copy
@@ -292,7 +292,7 @@ InternalIterator* TableCache::NewIterator(
   }
   size_t readahead = 0;
   bool record_stats = !for_compaction;
-  if (file_meta.prop.is_map_sst()) {
+  if (file_meta.prop.is_map_sst() || file_meta.prop.is_link_sst()) {
     record_stats = false;
   } else {
     // MapSST don't handle these
@@ -340,15 +340,9 @@ InternalIterator* TableCache::NewIterator(
   }
   InternalIterator* result = nullptr;
   if (s.ok()) {
-    if (!file_meta.prop.is_map_sst()) {
-      if (options.table_filter &&
-          !options.table_filter(*table_reader->GetTableProperties())) {
-        result = NewEmptyInternalIterator<LazyBuffer>(arena);
-      } else {
-        result = table_reader->NewIterator(options, prefix_extractor, arena,
-                                           skip_filters, for_compaction);
-      }
-    } else {
+    // For map & linked SST, we should expand their underlying key value pairs,
+    // not simply iterate the input SST key values.
+    if(file_meta.prop.is_map_sst() || file_meta.prop.is_link_sst()) {
       ReadOptions map_options = options;
       map_options.total_order_seek = true;
       map_options.readahead_size = 0;
@@ -356,6 +350,7 @@ InternalIterator* TableCache::NewIterator(
           table_reader->NewIterator(map_options, prefix_extractor, arena,
                                     skip_filters, false /* for_compaction */);
       if (!dependence_map.empty()) {
+        // Map SST will handle range deletion internally, so we can skip here.
         bool ignore_range_deletions =
             options.ignore_range_deletions ||
             file_meta.prop.map_handle_range_deletions();
@@ -365,33 +360,54 @@ InternalIterator* TableCache::NewIterator(
           lazy_create_iter = new (buffer) LazyCreateIterator(
               this, options, env_options, range_del_agg, prefix_extractor,
               for_compaction, skip_filters, ignore_range_deletions, level);
-
         } else {
           lazy_create_iter = new LazyCreateIterator(
               this, options, env_options, range_del_agg, prefix_extractor,
               for_compaction, skip_filters, ignore_range_deletions, level);
         }
-        auto map_sst_iter = NewMapSstIterator(
-            &file_meta, result, dependence_map, ioptions_.internal_comparator,
-            lazy_create_iter, c_style_callback(*lazy_create_iter), arena);
+
+        // For map & linked sst, we should expand their dependencies and merge
+        // all related iterators into one combined iterator for further reads.
+        InternalIterator* sst_iter = nullptr;
+
+        if(file_meta.prop.is_map_sst()) {
+          sst_iter = NewMapSstIterator(
+              &file_meta, result, dependence_map, ioptions_.internal_comparator,
+              lazy_create_iter, c_style_callback(*lazy_create_iter), arena);
+        } else {
+          assert(file_meta.prop.is_link_sst());
+          sst_iter = NewLinkSstIterator(
+              &file_meta, result, dependence_map, ioptions_.internal_comparator,
+              lazy_create_iter, c_style_callback(*lazy_create_iter), arena);
+        }
+
         if (arena != nullptr) {
-          map_sst_iter->RegisterCleanup(
+          sst_iter->RegisterCleanup(
               [](void* arg1, void* arg2) {
                 static_cast<InternalIterator*>(arg1)->~InternalIterator();
                 static_cast<LazyCreateIterator*>(arg2)->~LazyCreateIterator();
               },
               result, lazy_create_iter);
         } else {
-          map_sst_iter->RegisterCleanup(
+          sst_iter->RegisterCleanup(
               [](void* arg1, void* arg2) {
                 delete static_cast<InternalIterator*>(arg1);
                 delete static_cast<LazyCreateIterator*>(arg2);
               },
               result, lazy_create_iter);
         }
-        result = map_sst_iter;
+        result = sst_iter;
+      }
+    } else {
+      if (options.table_filter &&
+          !options.table_filter(*table_reader->GetTableProperties())) {
+        result = NewEmptyInternalIterator<LazyBuffer>(arena);
+      } else {
+        result = table_reader->NewIterator(options, prefix_extractor, arena,
+                                           skip_filters, for_compaction);
       }
     }
+
     if (create_new_table_reader) {
       assert(handle == nullptr);
       result->RegisterCleanup(&DeleteTableReader, table_reader,
