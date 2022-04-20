@@ -489,11 +489,42 @@ Status TableCache::Get(const ReadOptions& options,
   if (s.ok()) {
     t->UpdateMaxCoveringTombstoneSeq(options, ExtractUserKey(k),
                                      get_context->max_covering_tombstone_seq());
-    if (!file_meta.prop.is_map_sst()) {
+    if (!file_meta.prop.is_map_sst() && !file_meta.prop.is_link_sst()) {
+      // For ordinary SST we could read directly from the TableReader
       s = t->Get(options, k, get_context, prefix_extractor, skip_filters);
     } else if (dependence_map.empty()) {
+      // TODO (guokuankuan@bytedance.com) What shall we do to the ordinary SSTs during LnkSST GC?
+      // Both MapSST & LinkSST need the data from dependence_map
       s = Status::Corruption(
           "TableCache::Get: Composite sst depend files missing");
+    } else if(file_meta.prop.is_link_sst()) {
+        ReadOptions forward_options = options;
+        forward_options.ignore_range_deletions |=
+                file_meta.prop.link_handle_range_deletions();
+
+        // Find target LinkBlockRecord & check LBR's key hash to determine which ordinary SST we
+        // should look into
+        Arena arena;
+        uint64_t file_number;
+        LinkSstIterator* iter_ptr = reinterpret_cast<LinkSstIterator*>
+                                    (t->NewIterator(ReadOptions(), prefix_extractor, &arena));
+        std::unique_ptr<LinkSstIterator> link_sst_iter(iter_ptr);
+        s = link_sst_iter->GetTargetFileNumber(k, &file_number);
+
+        // Forward Get() to target ordinary SST
+        if(s.ok()) {
+          auto find = dependence_map.find(file_number);
+          if (find == dependence_map.end()) {
+            s = Status::Corruption("Link sst dependence missing");
+          } else {
+            assert(find->second->fd.GetNumber() == file_number);
+            s = Get(forward_options, *find->second, dependence_map, k,
+                    get_context, prefix_extractor, file_read_hist, skip_filters,
+                    level, inheritance);
+          }
+        }
+        // TODO (guokuankuan@bytedance.com) shall we recovery min_seq_backup?
+        // get_context->SetMinSequenceAndType(min_seq_type_backup);
     } else {
       // Forward query to target sst
       ReadOptions forward_options = options;

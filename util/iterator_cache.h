@@ -14,15 +14,14 @@
 
 namespace TERARKDB_NAMESPACE {
 
-struct FileMetaData;
 class RangeDelAggregator;
 class TableReader;
 
 // <FileNumber -> FileMetaData>
 //
 // TODO(guokuankuan@bytedance.com)
-// Shall we change this variable name to `FileMetaMap`? This map is simply map
-// file number to it's related file metadata
+// Shall we change this variable name to `FileMetaMap`? This map simply maps file
+// numbers to their related file metadata
 typedef chash_map<uint64_t, FileMetaData*> DependenceMap;
 
 class IteratorCache {
