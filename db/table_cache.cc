@@ -523,7 +523,7 @@ Status TableCache::Get(const ReadOptions& options,
                     level, inheritance);
           }
         }
-        // TODO (guokuankuan@bytedance.com) shall we recovery min_seq_backup?
+        // TODO (guokuankuan@bytedance.com) shall we recover with min_seq_backup?
         // get_context->SetMinSequenceAndType(min_seq_type_backup);
     } else {
       // Forward query to target sst

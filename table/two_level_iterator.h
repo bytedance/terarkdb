@@ -100,28 +100,28 @@ class LinkBlockRecord {
 
         // Seek all iterators to their first item.
         Status SeekToFirst() {
-            iter_idx = 0;
             for(int i = 0; i < group_sz_; ++i) {
-                auto it = iterator_cache_->GetIterator(file_numbers_[iter_idx]);
+                auto it = iterator_cache_->GetIterator(file_numbers_[i]);
                 it->SeekToFirst();
                 if(!it->status().ok()) {
                     return it->status();
                 }
             }
+            iter_idx_ = 0;
             return Status::OK();
         }
 
         // Seek all iterators to their last item.
         Status SeekToLast() {
             assert(group_sz_ == file_numbers_.size());
-            iter_idx = group_sz_ - 1;
             for(int i = 0; i < group_sz_; ++i) {
-                auto it = iterator_cache_->GetIterator(file_numbers_[iter_idx]);
+                auto it = iterator_cache_->GetIterator(file_numbers_[i]);
                 it->SeekToLast();
                 if(!it->status().ok()) {
                     return it->status();
                 }
             }
+            iter_idx_ = group_sz_ - 1;
             return Status::OK();
         }
 
@@ -152,8 +152,7 @@ class LinkBlockRecord {
             while(left < right) {
                 uint32_t mid = left + (right - left) / 2;
                 auto key = buffered_key(mid);
-                // TODO (guokuankuan@bytedance.com)
-                // Shall we check key's hash value here?
+                // TODO (guokuankuan@bytedance.com) Shall we check key's hash value here?
                 if(icomp.Compare(key, target) >= 0) {
                     right = mid;
                 } else {
@@ -162,15 +161,19 @@ class LinkBlockRecord {
             }
 
             if(left < group_sz_) {
-                iter_idx = left;
-                // Prepare target SST's iterator for further use
-                // TODO Shall we init all other iterators to the right place so we can
-                // reuse them in later Next()/Prev()?
-                auto it = iterator_cache_->GetIterator(file_numbers_[iter_idx]);
-                it->Seek(target);
+                iter_idx_ = left;
+                // We should seek all related iterators within a LinkBlockRecord
+                std::set<uint64_t> unique_file_numbers(file_numbers_.begin(), file_numbers_.end());
+                for(const auto& fn: unique_file_numbers) {
+                    auto it = iterator_cache_->GetIterator(file_numbers_[iter_idx_]);
+                    it->Seek(target);
+                    if(!it->status().ok()) {
+                        return it->status();
+                    }
+                }
                 return Status::OK();
             } else {
-                iter_idx = -1;
+                iter_idx_ = -1;
                 return Status::Corruption();
             }
         }
@@ -180,12 +183,14 @@ class LinkBlockRecord {
         // If all subsequent items are invalid, return an error status.
         Status Next() {
             // Find the next valid position of current LinkBlock
-            int next_iter_idx = iter_idx + 1;
+            int next_iter_idx = iter_idx_ + 1;
             while(next_iter_idx < hash_values_.size()) {
                 // Move forward target iterator
                 auto it = iterator_cache_->GetIterator(file_numbers_[next_iter_idx]);
                 it->Next();
-                assert(it->status().ok());
+                if(!it->status().ok()) {
+                    return it->status();
+                }
                 if(hash_values_[next_iter_idx] != INVALID_ITEM_HASH) {
                     break;
                 }
@@ -200,7 +205,7 @@ class LinkBlockRecord {
             }
 
             // Current LinkBlock is still in use, update iter_idx.
-            iter_idx = next_iter_idx;
+            iter_idx_ = next_iter_idx;
             return Status::OK();
         }
 
@@ -208,12 +213,14 @@ class LinkBlockRecord {
         // except iterator direction.
         Status Prev() {
             // Find the previous valid position of current LinkBlock
-            int prev_iter_idx = iter_idx - 1;
+            int prev_iter_idx = iter_idx_ - 1;
             while(prev_iter_idx >= 0) {
                 // Move backward
                 auto it = iterator_cache_->GetIterator(file_numbers_[prev_iter_idx]);
                 it->Prev();
-                assert(it->status().ok());
+                if(!it->status().ok()) {
+                    return it->status();
+                }
                 if(hash_values_[prev_iter_idx] != INVALID_ITEM_HASH) {
                     break;
                 }
@@ -226,20 +233,20 @@ class LinkBlockRecord {
             }
 
             // Current LinkBlock is still in use, update iter_idx.
-            iter_idx = prev_iter_idx;
+            iter_idx_ = prev_iter_idx;
 
             return Status::OK();
         }
 
         // Extract key from the underlying SST iterator
         Slice CurrentKey() const {
-            auto it = iterator_cache_->GetIterator(file_numbers_[iter_idx]);
+            auto it = iterator_cache_->GetIterator(file_numbers_[iter_idx_]);
             return it->key();
         }
 
         // Extract value from the underlying SST iterator
         LazyBuffer CurrentValue() const {
-            auto it = iterator_cache_->GetIterator(file_numbers_[iter_idx]);
+            auto it = iterator_cache_->GetIterator(file_numbers_[iter_idx_]);
             return it->value();
         }
 
@@ -283,7 +290,9 @@ class LinkBlockRecord {
                 // position `idx`, fill all touched keys into the key buffer.
                 auto it = iterator_cache_->GetIterator(file_number);
                 it->SeekForPrev(max_key_);
-                assert(it->status().ok());
+                if(!it->status().ok()) {
+                    return Slice(nullptr);
+                }
                 for(uint32_t i = occurrence.size() - 1; i >=0; --i) {
                     uint32_t pos = occurrence[i];
                     if(!key_buffer_[pos].valid()) {
@@ -314,7 +323,7 @@ class LinkBlockRecord {
         // Each KV pair has a hash value (hash(user_key))
         std::vector<uint32_t> hash_values_;
         // Current iteration index of this LinkBlock.
-        int iter_idx = 0;
+        int iter_idx_ = 0;
         // Optional, if smallest_key_exist, it means one of the underlying iterator
         // is expired, we should seek all iterators to target key again for further
         // iteration.
@@ -408,7 +417,6 @@ class LinkSstIterator : public InternalIterator {
         bool Valid() const override { return !lbr_list_.empty() && valid_; }
         void SeekToFirst() override {
             if(!InitLinkBlockRecords() || !InitSecondLevelIterators()) {
-                status_ = Status::Aborted();
                 return;
             }
             assert(!lbr_list_.empty());
@@ -419,7 +427,6 @@ class LinkSstIterator : public InternalIterator {
 
         void SeekToLast() override {
             if(!InitLinkBlockRecords() || !InitSecondLevelIterators()) {
-                status_ = Status::Corruption();
                 return;
             }
             assert(!lbr_list_.empty());
@@ -432,7 +439,6 @@ class LinkSstIterator : public InternalIterator {
         // Is input target a InternalKey ? then what is the default sequence#?
         void Seek(const Slice& target) override {
             if(!InitLinkBlockRecords() || !InitSecondLevelIterators()) {
-                status_ = Status::Corruption();
                 return;
             }
             // Find target LinkBlock's position
@@ -490,9 +496,9 @@ class LinkSstIterator : public InternalIterator {
                 assert(cur_lbr_idx_ < lbr_list_.size());
                 // If next LBR has a valid smallest key, we should re-seek all iterators
                 // (which means the iterators' continuous may break)
-                auto lbr = lbr_list_[cur_lbr_idx_];
-                if(lbr.HasSmallestKey()) {
-                    lbr.Seek(lbr.SmallestKey(), icomp_);
+                auto next_lbr = lbr_list_[cur_lbr_idx_];
+                if(next_lbr.HasSmallestKey()) {
+                    next_lbr.Seek(next_lbr.SmallestKey(), icomp_);
                 }
             }
 
