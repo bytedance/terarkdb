@@ -848,6 +848,7 @@ DEFINE_string(aux_path, "", "Aux path for zenfs.");
 #endif
 
 static std::shared_ptr<TERARKDB_NAMESPACE::Env> env_guard;
+static bool delete_env_needed = false;
 
 static TERARKDB_NAMESPACE::Env* FLAGS_env = TERARKDB_NAMESPACE::Env::Default();
 
@@ -2471,6 +2472,9 @@ class Benchmark {
     if (cache_.get() != nullptr) {
       // this will leak, but we're shutting down so nobody cares
       cache_->DisownData();
+    }
+    if (delete_env_needed) {
+      delete FLAGS_env;
     }
   }
 
@@ -5896,6 +5900,7 @@ int db_bench_tool(int argc, char** argv) {
 #ifdef WITH_LAVAFS
   else if (!FLAGS_lavafs.empty()) {
     FLAGS_env = new BlueRocksEnv(FLAGS_lavafs);
+    delete_env_needed = true;
   }
 #endif
 #ifdef WITH_ZENFS
