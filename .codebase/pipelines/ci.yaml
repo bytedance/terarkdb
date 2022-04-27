@@ -1,0 +1,66 @@
+name: CI
+trigger:
+  change:
+    branches: [ stage, "dev.*" ]
+  push:
+    branches: [ stage, "dev.*" ]
+jobs:
+  build_and_test:
+    name: Build TerarkDB
+    image: hub.byted.org/codebase/ci_debian_buster:latest
+    steps:
+      - name: Create Build Environment
+        commands:
+          - sudo apt-get -y update
+          - sudo apt-get install -y libaio-dev autoconf
+          - git submodule update --init --recursive
+      - name: Cache Dependencies
+        uses: actions/cache
+        inputs:
+          paths:
+            - build
+          key: repo-deps-${{ Head.Branch }}
+          restore_keys:
+            - repo-deps-${{ Head.Branch }}
+            - repo-deps
+      - name: Generate CMake Build Files
+        commands:
+          - rm -rf build
+          - cmake -E make_directory build || true
+          - cd build && cmake .. -DCMAKE_BUILD_TYPE=Debug -DWITH_TESTS=ON -DWITH_TOOLS=ON -DWITH_BYTEDANCE_METRICS=ON -DBYTEDANCE_METRICS_PATH=`pwd`/../third-party/metrics2-cmake
+      - name: Build
+        commands:
+          - cd build
+          - make boost-project # boost library only supports single-job make
+          - make -j4 VERBOSE=1
+      - name: Upload Cache
+        commands:
+          - echo "Build Complete!"
+  gen_coverage:
+    name: Test and Generate Code Coverage Report for TerarkDB
+    image: hub.byted.org/codebase/ci_debian_buster:latest
+    steps:
+      - name: Create Build Environment
+        commands:
+          - sudo apt-get -y update
+          - sudo apt-get install -y libaio-dev autoconf lcov
+          - git submodule update --init --recursive
+      - name: gen coverage
+        commands:
+          - rm -rf build
+          - cmake -E make_directory build || true
+          - cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=`pwd` -DWITH_COVERAGE=ON -DCMAKE_BUILD_TYPE=Debug -DWITH_TESTS=ON -DWITH_TOOLS=ON -DWITH_TERARK_ZIP=ON -DWITH_BYTEDANCE_METRICS=ON -DBYTEDANCE_METRICS_PATH=`pwd`/../third-party/metrics2-cmake
+          - make -j4
+          - ctest -E "compaction_picker_test|db_block_cache_test|db_compaction_test|db_range_del_test|version_set_test|transaction_test|write_prepared_transaction_test|db_flush_test|db_sst_test|db_test2" -j $(nproc) -V
+          - GCC_VERSION=`gcc -dumpversion | awk -F '.' '{print $1}')`
+          - lcov --gcov-tool /usr/bin/gcov-$GCC_VERSION --directory . --capture --output-file code_coverage.info
+          - genhtml code_coverage.info --output=cov_html
+          - git clone https://github.com/eriwen/lcov-to-cobertura-xml.git
+          - python ./lcov-to-cobertura-xml/lcov_cobertura/lcov_cobertura.py ./code_coverage.info -o /home/code/build/code_coverage.xml
+      - name: report coverage
+        uses: actions/codecov
+        inputs:
+          file: build/code_coverage.xml
+          fail_ci_if_error: true
+          report: build/cov_html
+          ignore_snoar: false
