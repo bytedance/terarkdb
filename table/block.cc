@@ -43,7 +43,7 @@ struct DecodeEntry {
     // We need 2 bytes for shared and non_shared size. We also need one more
     // byte either for value size or the actual value in case of value delta
     // encoding.
-    assert(limit - p >= 3);
+    terarkdb_assert(limit - p >= 3);
     *shared = reinterpret_cast<const unsigned char*>(p)[0];
     *non_shared = reinterpret_cast<const unsigned char*>(p)[1];
     *value_length = reinterpret_cast<const unsigned char*>(p)[2];
@@ -60,7 +60,8 @@ struct DecodeEntry {
 
     // Using an assert in place of "return null" since we should not pay the
     // cost of checking for corruption on every single key decoding
-    assert(!(static_cast<uint32_t>(limit - p) < (*non_shared + *value_length)));
+    terarkdb_assert(
+        !(static_cast<uint32_t>(limit - p) < (*non_shared + *value_length)));
     return p;
   }
 };
@@ -97,17 +98,17 @@ struct DecodeKeyV4 {
 };
 
 void DataBlockIter::Next() {
-  assert(Valid());
+  terarkdb_assert(Valid());
   ParseNextDataKey();
 }
 
 void IndexBlockIter::Next() {
-  assert(Valid());
+  terarkdb_assert(Valid());
   ParseNextIndexKey();
 }
 
 void IndexBlockIter::Prev() {
-  assert(Valid());
+  terarkdb_assert(Valid());
   // Scan backwards to a restart point before current_
   const uint32_t original = current_;
   while (GetRestartPoint(restart_index_) >= original) {
@@ -130,10 +131,11 @@ void IndexBlockIter::Prev() {
 
 // Similar to IndexBlockIter::Prev but also caches the prev entries
 void DataBlockIter::Prev() {
-  assert(Valid());
+  terarkdb_assert(Valid());
 
-  assert(prev_entries_idx_ == -1 ||
-         static_cast<size_t>(prev_entries_idx_) < prev_entries_.size());
+  terarkdb_assert(prev_entries_idx_ == -1 ||
+                  static_cast<size_t>(prev_entries_idx_) <
+                      prev_entries_.size());
   // Check if we can use cached prev_entries_
   if (prev_entries_idx_ > 0 &&
       prev_entries_[prev_entries_idx_].offset == current_) {
@@ -282,7 +284,7 @@ bool DataBlockIter::SeekForGetImpl(const Slice& target) {
   uint32_t restart_index = entry;
 
   // check if the key is in the restart_interval
-  assert(restart_index < num_restarts_);
+  terarkdb_assert(restart_index < num_restarts_);
   SeekToRestartPoint(restart_index);
 
   const char* limit = nullptr;
@@ -488,14 +490,14 @@ bool DataBlockIter::ParseNextDataKey(const char* limit) {
       // If we are reading a file with a global sequence number we should
       // expect that all encoded sequence numbers are zeros and any value
       // type is kTypeValue, kTypeMerge, kTypeDeletion, or kTypeRangeDeletion.
-      assert(GetInternalKeySeqno(key_.GetInternalKey()) == 0);
+      terarkdb_assert(GetInternalKeySeqno(key_.GetInternalKey()) == 0);
 
       uint64_t packed = ExtractInternalKeyFooter(key_.GetKey());
       UnPackSequenceAndType(packed, &stored_seqno_, &stored_value_type_);
-      assert(stored_value_type_ == ValueType::kTypeValue ||
-             stored_value_type_ == ValueType::kTypeMerge ||
-             stored_value_type_ == ValueType::kTypeDeletion ||
-             stored_value_type_ == ValueType::kTypeRangeDeletion);
+      terarkdb_assert(stored_value_type_ == ValueType::kTypeValue ||
+                      stored_value_type_ == ValueType::kTypeMerge ||
+                      stored_value_type_ == ValueType::kTypeDeletion ||
+                      stored_value_type_ == ValueType::kTypeRangeDeletion);
 
       if (key_pinned_) {
         // TODO(tec): Investigate updating the seqno in the loaded block
@@ -566,7 +568,7 @@ bool IndexBlockIter::ParseNextIndexKey() {
   // else we are in the middle of a restart interval and the restart_index_
   // thus has not changed
   if (value_delta_encoded_) {
-    assert(value_length == 0);
+    terarkdb_assert(value_length == 0);
     DecodeCurrentValue(shared);
   }
   return true;
@@ -584,14 +586,14 @@ bool IndexBlockIter::ParseNextIndexKey() {
 // Otherwise the format is delta-size = block handle size - size of last block
 // handle.
 void IndexBlockIter::DecodeCurrentValue(uint32_t shared) {
-  assert(value_delta_encoded_);
+  terarkdb_assert(value_delta_encoded_);
   const char* limit = data_ + restarts_;
   if (shared == 0) {
     uint64_t o, s;
     const char* newp = GetVarint64Ptr(value_.data(), limit, &o);
-    assert(newp);
+    terarkdb_assert(newp);
     newp = GetVarint64Ptr(newp, limit, &s);
-    assert(newp);
+    terarkdb_assert(newp);
     decoded_value_ = BlockHandle(o, s);
     value_ = Slice(value_.data(), newp - value_.data());
   } else {
@@ -614,7 +616,7 @@ template <typename DecodeKeyFunc>
 bool BlockIter<TValue>::BinarySeek(const Slice& target, uint32_t left,
                                    uint32_t right, uint32_t* index,
                                    const Comparator* comp) {
-  assert(left <= right);
+  terarkdb_assert(left <= right);
 
   while (left < right) {
     uint32_t mid = (left + right + 1) / 2;
@@ -669,7 +671,7 @@ int IndexBlockIter::CompareBlockKey(uint32_t block_index, const Slice& target) {
 bool IndexBlockIter::BinaryBlockIndexSeek(const Slice& target,
                                           uint32_t* block_ids, uint32_t left,
                                           uint32_t right, uint32_t* index) {
-  assert(left <= right);
+  terarkdb_assert(left <= right);
   uint32_t left_bound = left;
 
   while (left <= right) {
@@ -709,7 +711,7 @@ bool IndexBlockIter::BinaryBlockIndexSeek(const Slice& target,
     *index = block_ids[left];
     return true;
   } else {
-    assert(left > right);
+    terarkdb_assert(left > right);
     // Mark iterator invalid
     current_ = restarts_;
     return false;
@@ -717,7 +719,7 @@ bool IndexBlockIter::BinaryBlockIndexSeek(const Slice& target,
 }
 
 bool IndexBlockIter::PrefixSeek(const Slice& target, uint32_t* index) {
-  assert(prefix_index_);
+  terarkdb_assert(prefix_index_);
   Slice seek_key = target;
   if (!key_includes_seq_) {
     seek_key = ExtractUserKey(target);
@@ -734,7 +736,7 @@ bool IndexBlockIter::PrefixSeek(const Slice& target, uint32_t* index) {
 }
 
 uint32_t Block::NumRestarts() const {
-  assert(size_ >= 2 * sizeof(uint32_t));
+  terarkdb_assert(size_ >= 2 * sizeof(uint32_t));
   uint32_t block_footer = DecodeFixed32(data_ + size_ - sizeof(uint32_t));
   uint32_t num_restarts = block_footer;
   if (size_ > kMaxBlockSizeSupportedByHashIndex) {
@@ -756,7 +758,7 @@ uint32_t Block::NumRestarts() const {
 }
 
 BlockBasedTableOptions::DataBlockIndexType Block::IndexType() const {
-  assert(size_ >= 2 * sizeof(uint32_t));
+  terarkdb_assert(size_ >= 2 * sizeof(uint32_t));
   if (size_ > kMaxBlockSizeSupportedByHashIndex) {
     // The check is for the same reason as that in NumRestarts()
     return BlockBasedTableOptions::kDataBlockBinarySearch;

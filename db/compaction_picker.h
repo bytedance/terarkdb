@@ -56,8 +56,8 @@ class CompactionPicker {
           compensated_file_size(_compensated_file_size),
           being_compacted(_being_compacted),
           skip_composite(false) {
-      assert(compensated_file_size > 0);
-      assert(level != 0 || file != nullptr);
+      terarkdb_assert(compensated_file_size > 0);
+      terarkdb_assert(level != 0 || file != nullptr);
     }
 
     void Dump(char* out_buf, size_t out_buf_size,

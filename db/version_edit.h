@@ -167,7 +167,7 @@ struct FileMetaData {
   bool Unref() {
     int old_refs = reinterpret_cast<std::atomic<int>&>(refs).fetch_sub(
         1, std::memory_order_relaxed);
-    assert(old_refs > 0);
+    terarkdb_assert(old_refs > 0);
     return old_refs == 1;
   }
 
@@ -277,7 +277,7 @@ class VersionEdit {
 
     operator bool() const { return callback != nullptr; }
     void operator()(const Status& s) const {
-      assert(callback != nullptr);
+      terarkdb_assert(callback != nullptr);
       callback(args, s);
     }
   };
@@ -325,7 +325,7 @@ class VersionEdit {
                const InternalKey& largest, const SequenceNumber& smallest_seqno,
                const SequenceNumber& largest_seqno,
                uint8_t marked_for_compaction, const TablePropertyCache& prop) {
-    assert(smallest_seqno <= largest_seqno);
+    terarkdb_assert(smallest_seqno <= largest_seqno);
     FileMetaData f;
     f.fd = FileDescriptor(file, file_path_id, file_size, smallest_seqno,
                           largest_seqno);
@@ -340,7 +340,7 @@ class VersionEdit {
   }
 
   void AddFile(int level, const FileMetaData& f) {
-    assert(f.fd.smallest_seqno <= f.fd.largest_seqno);
+    terarkdb_assert(f.fd.smallest_seqno <= f.fd.largest_seqno);
     new_files_.emplace_back(level, f);
   }
 
@@ -351,12 +351,12 @@ class VersionEdit {
 
   void SetApplyCallback(void (*apply_callback)(void*, const Status&),
                         void* apply_callback_arg) {
-    assert(apply_callback != nullptr);
+    terarkdb_assert(apply_callback != nullptr);
     apply_callback_vec_.emplace_back(
         ApplyCallback{apply_callback, apply_callback_arg});
   }
   void SetApplyCallback(ApplyCallback callback) {
-    assert(callback);
+    terarkdb_assert(callback);
     apply_callback_vec_.emplace_back(callback);
   }
 
@@ -373,18 +373,18 @@ class VersionEdit {
 
   // set column family ID by calling SetColumnFamily()
   void AddColumnFamily(const std::string& name) {
-    assert(!is_column_family_drop_);
-    assert(!is_column_family_add_);
-    assert(NumEntries() == 0);
+    terarkdb_assert(!is_column_family_drop_);
+    terarkdb_assert(!is_column_family_add_);
+    terarkdb_assert(NumEntries() == 0);
     is_column_family_add_ = true;
     column_family_name_ = name;
   }
 
   // set column family ID by calling SetColumnFamily()
   void DropColumnFamily() {
-    assert(!is_column_family_drop_);
-    assert(!is_column_family_add_);
-    assert(NumEntries() == 0);
+    terarkdb_assert(!is_column_family_drop_);
+    terarkdb_assert(!is_column_family_add_);
+    terarkdb_assert(NumEntries() == 0);
     is_column_family_drop_ = true;
   }
 

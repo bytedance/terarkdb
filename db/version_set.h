@@ -311,7 +311,7 @@ class VersionStorageInfo {
 
   // REQUIRES: This version has been saved (see VersionSet::SaveTo)
   int num_non_empty_levels() const {
-    assert(finalized_);
+    terarkdb_assert(finalized_);
     return num_non_empty_levels_;
   }
 
@@ -325,7 +325,7 @@ class VersionStorageInfo {
 
   // REQUIRES: This version has been saved (see VersionSet::SaveTo)
   int NumLevelFiles(int level) const {
-    assert(finalized_);
+    terarkdb_assert(finalized_);
     return static_cast<int>(files_[level].size());
   }
 
@@ -343,13 +343,13 @@ class VersionStorageInfo {
   const DependenceMap& dependence_map() const { return dependence_map_; }
 
   const TERARKDB_NAMESPACE::LevelFilesBrief& LevelFilesBrief(int level) const {
-    assert(level < static_cast<int>(level_files_brief_.size()));
+    terarkdb_assert(level < static_cast<int>(level_files_brief_.size()));
     return level_files_brief_[level];
   }
 
   // REQUIRES: This version has been saved (see VersionSet::SaveTo)
   const std::vector<int>& FilesByCompactionPri(int level) const {
-    assert(finalized_);
+    terarkdb_assert(finalized_);
     return files_by_compaction_pri_[level];
   }
 
@@ -357,7 +357,7 @@ class VersionStorageInfo {
   // REQUIRES: DB mutex held during access
   const autovector<std::pair<int, FileMetaData*>>& FilesMarkedForCompaction()
       const {
-    assert(finalized_);
+    terarkdb_assert(finalized_);
     return files_marked_for_compaction_;
   }
 
@@ -365,7 +365,7 @@ class VersionStorageInfo {
   // REQUIRES: DB mutex held during access
   const autovector<std::pair<int, FileMetaData*>>&
   BottommostFilesMarkedForCompaction() const {
-    assert(finalized_);
+    terarkdb_assert(finalized_);
     return bottommost_files_marked_for_compaction_;
   }
 
@@ -386,7 +386,7 @@ class VersionStorageInfo {
 
   // REQUIRES: This version has been saved (see VersionSet::SaveTo)
   const FileIndexer& file_indexer() const {
-    assert(finalized_);
+    terarkdb_assert(finalized_);
     return file_indexer_;
   }
 
@@ -1020,21 +1020,21 @@ class VersionSet {
 
   // Set the last sequence number to s.
   void SetLastSequence(uint64_t s) {
-    assert(s >= last_sequence_);
+    terarkdb_assert(s >= last_sequence_);
     // Last visible sequence must always be less than last written seq
-    assert(!db_options_->two_write_queues || s <= last_allocated_sequence_);
+    terarkdb_assert(!db_options_->two_write_queues || s <= last_allocated_sequence_);
     last_sequence_.store(s, std::memory_order_release);
   }
 
   // Note: memory_order_release must be sufficient
   void SetLastPublishedSequence(uint64_t s) {
-    assert(s >= last_published_sequence_);
+    terarkdb_assert(s >= last_published_sequence_);
     last_published_sequence_.store(s, std::memory_order_seq_cst);
   }
 
   // Note: memory_order_release must be sufficient
   void SetLastAllocatedSequence(uint64_t s) {
-    assert(s >= last_allocated_sequence_);
+    terarkdb_assert(s >= last_allocated_sequence_);
     last_allocated_sequence_.store(s, std::memory_order_seq_cst);
   }
 

@@ -107,7 +107,7 @@ uint64_t TotalCompensatedFileSize(const std::vector<FileMetaData*>& files) {
 uint32_t GetPathId(const ImmutableCFOptions& ioptions,
                    const MutableCFOptions& mutable_cf_options, int level) {
   uint32_t p = 0;
-  assert(!ioptions.cf_paths.empty());
+  terarkdb_assert(!ioptions.cf_paths.empty());
 
   // size remaining in the most recent path
   uint64_t current_path_size = ioptions.cf_paths[0].target_size;
@@ -201,7 +201,7 @@ bool FindIntraL0Compaction(const std::vector<FileMetaData*>& level_files,
 
   if (span_len >= min_files_to_compact &&
       compact_bytes_per_del_file < max_compact_bytes_per_del_file) {
-    assert(comp_inputs != nullptr);
+    terarkdb_assert(comp_inputs != nullptr);
     comp_inputs->level = 0;
     for (size_t i = 0; i < span_len; ++i) {
       comp_inputs->files.push_back(level_files[i]);
@@ -235,7 +235,7 @@ CompressionType GetCompressionType(const ImmutableCFOptions& ioptions,
   // If the user has specified a different compression level for each level,
   // then pick the compression for that level.
   if (!ioptions.compression_per_level.empty()) {
-    assert(level == 0 || level >= base_level);
+    terarkdb_assert(level == 0 || level >= base_level);
     int idx = (level == 0) ? 0 : level - base_level + 1;
 
     const int n = static_cast<int>(ioptions.compression_per_level.size()) - 1;
@@ -370,7 +370,8 @@ bool CompactionPicker::FixInputRange(std::vector<SelectedRange>& input_range,
   if (sort) {
     std::sort(input_range.begin(), input_range.end(), range_cmp);
   } else {
-    assert(std::is_sorted(input_range.begin(), input_range.end(), range_cmp));
+    terarkdb_assert(
+        std::is_sorted(input_range.begin(), input_range.end(), range_cmp));
   }
   if (merge && input_range.size() > 1) {
     size_t c = 0, n = input_range.size();
@@ -410,14 +411,14 @@ bool CompactionPicker::FixInputRange(std::vector<SelectedRange>& input_range,
       }
     }
   }
-  assert(std::is_sorted(input_range.begin(), input_range.end(),
-                        TERARK_FIELD(start) < *uc));
-  assert(std::is_sorted(input_range.begin(), input_range.end(),
-                        TERARK_FIELD(limit) < *uc));
-  assert(std::find_if(input_range.begin(), input_range.end(),
-                      [uc](const RangeStorage& r) {
-                        return uc->Compare(r.start, r.limit) > 0;
-                      }) == input_range.end());
+  terarkdb_assert(std::is_sorted(input_range.begin(), input_range.end(),
+                                 TERARK_FIELD(start) < *uc));
+  terarkdb_assert(std::is_sorted(input_range.begin(), input_range.end(),
+                                 TERARK_FIELD(limit) < *uc));
+  terarkdb_assert(std::find_if(input_range.begin(), input_range.end(),
+                               [uc](const RangeStorage& r) {
+                                 return uc->Compare(r.start, r.limit) > 0;
+                               }) == input_range.end());
   return !input_range.empty();
 }
 
@@ -433,7 +434,7 @@ void CompactionPicker::GetRange(const CompactionInputFiles& inputs,
                                 InternalKey* smallest,
                                 InternalKey* largest) const {
   const int level = inputs.level;
-  assert(!inputs.empty());
+  terarkdb_assert(!inputs.empty());
   smallest->Clear();
   largest->Clear();
 
@@ -462,7 +463,7 @@ void CompactionPicker::GetRange(const CompactionInputFiles& inputs1,
                                 const CompactionInputFiles& inputs2,
                                 InternalKey* smallest,
                                 InternalKey* largest) const {
-  assert(!inputs1.empty() || !inputs2.empty());
+  terarkdb_assert(!inputs1.empty() || !inputs2.empty());
   if (inputs1.empty()) {
     GetRange(inputs2, smallest, largest);
   } else if (inputs2.empty()) {
@@ -501,7 +502,7 @@ void CompactionPicker::GetRange(const std::vector<CompactionInputFiles>& inputs,
       }
     }
   }
-  assert(initialized);
+  terarkdb_assert(initialized);
 }
 
 bool CompactionPicker::ExpandInputsToCleanCut(const std::string& /*cf_name*/,
@@ -509,7 +510,7 @@ bool CompactionPicker::ExpandInputsToCleanCut(const std::string& /*cf_name*/,
                                               CompactionInputFiles* inputs,
                                               InternalKey** next_smallest) {
   // This isn't good compaction
-  assert(!inputs->empty());
+  terarkdb_assert(!inputs->empty());
 
   const int level = inputs->level;
   // GetOverlappingInputs will always do the right thing for level-0.
@@ -536,7 +537,7 @@ bool CompactionPicker::ExpandInputsToCleanCut(const std::string& /*cf_name*/,
 
   // we started off with inputs non-empty and the previous loop only grew
   // inputs. thus, inputs should be non-empty here
-  assert(!inputs->empty());
+  terarkdb_assert(!inputs->empty());
 
   // If, after the expansion, there are files that are already under
   // compaction, then we must drop/cancel this compaction.
@@ -598,12 +599,12 @@ Compaction* CompactionPicker::CompactFiles(
     const std::vector<CompactionInputFiles>& input_files, int output_level,
     VersionStorageInfo* vstorage, const MutableCFOptions& mutable_cf_options,
     uint32_t output_path_id) {
-  assert(input_files.size());
+  terarkdb_assert(input_files.size());
   // This compaction output should not overlap with a running compaction as
   // `SanitizeCompactionInputFiles` should've checked earlier and db mutex
   // shouldn't have been released since.
-  assert(output_level < 1 ||
-         !FilesRangeOverlapWithCompaction(input_files, output_level));
+  terarkdb_assert(output_level < 1 ||
+                  !FilesRangeOverlapWithCompaction(input_files, output_level));
 
   CompressionType compression_type;
   if (compact_options.compression == kDisableCompressionOption) {
@@ -650,7 +651,7 @@ Status CompactionPicker::GetCompactionInputsFromFileNumbers(
     return Status::InvalidArgument(
         "Compaction must include at least one file.");
   }
-  assert(input_files);
+  terarkdb_assert(input_files);
 
   std::vector<CompactionInputFiles> matched_input_files;
   matched_input_files.resize(vstorage->num_levels());
@@ -697,7 +698,7 @@ bool CompactionPicker::IsRangeInCompaction(VersionStorageInfo* vstorage,
                                            const InternalKey* largest,
                                            int level, int* level_index) {
   std::vector<FileMetaData*> inputs;
-  assert(level < NumberLevels());
+  terarkdb_assert(level < NumberLevels());
 
   vstorage->GetOverlappingInputs(level, smallest, largest, &inputs,
                                  level_index ? *level_index : 0, level_index);
@@ -719,8 +720,8 @@ bool CompactionPicker::SetupOtherInputs(
     VersionStorageInfo* vstorage, CompactionInputFiles* inputs,
     CompactionInputFiles* output_level_inputs, int* parent_index,
     int base_index) {
-  assert(!inputs->empty());
-  assert(output_level_inputs->empty());
+  terarkdb_assert(!inputs->empty());
+  terarkdb_assert(output_level_inputs->empty());
   const int input_level = inputs->level;
   const int output_level = output_level_inputs->level;
   if (input_level == output_level) {
@@ -731,7 +732,7 @@ bool CompactionPicker::SetupOtherInputs(
   // For now, we only support merging two levels, start level and output level.
   // We need to assert other levels are empty.
   for (int l = input_level + 1; l < output_level; l++) {
-    assert(vstorage->NumLevelFiles(l) == 0);
+    terarkdb_assert(vstorage->NumLevelFiles(l) == 0);
   }
 
   InternalKey smallest, largest;
@@ -788,7 +789,7 @@ bool CompactionPicker::SetupOtherInputs(
       vstorage->GetOverlappingInputs(output_level, &new_start, &new_limit,
                                      &expanded_output_level_inputs.files,
                                      *parent_index, parent_index);
-      assert(!expanded_output_level_inputs.empty());
+      terarkdb_assert(!expanded_output_level_inputs.empty());
       if (!AreFilesInCompaction(expanded_output_level_inputs.files) &&
           ExpandInputsToCleanCut(cf_name, vstorage,
                                  &expanded_output_level_inputs) &&
@@ -859,8 +860,8 @@ Compaction* CompactionPicker::PickGarbageCollection(
   }
   // Preferentially select files marked by high priority
   auto candidate_cmp = [](const GarbageFileInfo& l, const GarbageFileInfo& r) {
-    assert(l.f != nullptr && !l.f->being_compacted);
-    assert(r.f != nullptr && !l.f->being_compacted);
+    terarkdb_assert(l.f != nullptr && !l.f->being_compacted);
+    terarkdb_assert(r.f != nullptr && !l.f->being_compacted);
     return (l.f->marked_for_compaction < r.f->marked_for_compaction) ||
            (l.f->marked_for_compaction == r.f->marked_for_compaction &&
             l.score < r.score);
@@ -1030,7 +1031,7 @@ void CompactionPicker::InitFilesBeingCompact(
       }
       if (begin != nullptr &&
           icmp_->Compare(element.largest_key, begin->Encode()) < 0) {
-        assert(level == 0);
+        terarkdb_assert(level == 0);
         continue;
       }
       if (end != nullptr &&
@@ -1072,9 +1073,9 @@ Compaction* CompactionPicker::CompactRange(
   inputs.level = input_level;
   bool covering_the_whole_range = true;
   if (output_level == ColumnFamilyData::kCompactToBaseLevel) {
-    assert(input_level == 0);
+    terarkdb_assert(input_level == 0);
     output_level = vstorage->base_level();
-    assert(output_level > 0);
+    terarkdb_assert(output_level > 0);
   }
 
   // All files are 'overlapping' in universal style compaction.
@@ -1180,7 +1181,7 @@ Compaction* CompactionPicker::CompactRange(
         }
       }
     } else {
-      assert(output_level < vstorage->num_levels());
+      terarkdb_assert(output_level < vstorage->num_levels());
       std::vector<FileMetaData*> parents;
       vstorage->GetOverlappingInputs(output_level,
                                      &inputs.files.front()->smallest,
@@ -1208,7 +1209,8 @@ Compaction* CompactionPicker::CompactRange(
       }
     }
   }
-  assert(output_path_id < static_cast<uint32_t>(ioptions_.cf_paths.size()));
+  terarkdb_assert(output_path_id <
+                  static_cast<uint32_t>(ioptions_.cf_paths.size()));
 
   InternalKey key_storage;
   InternalKey* next_smallest = &key_storage;
@@ -1302,7 +1304,7 @@ Compaction* CompactionPicker::PickRangeCompaction(
     const InternalKey* begin, const InternalKey* end,
     uint32_t max_subcompactions, const chash_set<uint64_t>* files_being_compact,
     bool* manual_conflict, LogBuffer* log_buffer) {
-  assert(ioptions_.enable_lazy_compaction);
+  terarkdb_assert(ioptions_.enable_lazy_compaction);
   auto& level_files = vstorage->LevelFiles(level);
 
   if (files_being_compact == nullptr || files_being_compact->empty() ||
@@ -1452,7 +1454,7 @@ Compaction* CompactionPicker::PickRangeCompaction(
       end_key = level_files.back()->largest.Encode();
     }
     end_key = ExtractUserKey(end_key);
-    assert(ic.user_comparator()->Compare(range.limit, end_key) <= 0);
+    terarkdb_assert(ic.user_comparator()->Compare(range.limit, end_key) <= 0);
     range.limit.assign(end_key.data(), end_key.size());
     input_range.emplace_back(std::move(range));
   }
@@ -1659,8 +1661,8 @@ Status CompactionPicker::SanitizeCompactionInputFilesForAllLevels(
 Status CompactionPicker::SanitizeCompactionInputFiles(
     std::unordered_set<uint64_t>* input_files,
     const ColumnFamilyMetaData& cf_meta, const int output_level) const {
-  assert(static_cast<int>(cf_meta.levels.size()) - 1 ==
-         cf_meta.levels[cf_meta.levels.size() - 1].level);
+  terarkdb_assert(static_cast<int>(cf_meta.levels.size()) - 1 ==
+                  cf_meta.levels[cf_meta.levels.size() - 1].level);
   if (output_level >= static_cast<int>(cf_meta.levels.size())) {
     return Status::InvalidArgument(
         "Output level for column family " + cf_meta.name +
@@ -1726,9 +1728,10 @@ Compaction* CompactionPicker::RegisterCompaction(Compaction* c) {
   if (c == nullptr) {
     return nullptr;
   }
-  assert(ioptions_.compaction_style != kCompactionStyleLevel ||
-         ioptions_.enable_lazy_compaction || c->output_level() <= 0 ||
-         !FilesRangeOverlapWithCompaction(*c->inputs(), c->output_level()));
+  terarkdb_assert(
+      ioptions_.compaction_style != kCompactionStyleLevel ||
+      ioptions_.enable_lazy_compaction || c->output_level() <= 0 ||
+      !FilesRangeOverlapWithCompaction(*c->inputs(), c->output_level()));
   if (c->start_level() == 0 ||
       ioptions_.compaction_style == kCompactionStyleUniversal) {
     level0_compactions_in_progress_.insert(c);
@@ -1941,7 +1944,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
   auto set_include_limit = [&] {
     range.include_limit = true;
     auto uend = input.files.back()->largest.user_key();
-    assert(uc->Compare(range.limit, uend) <= 0);
+    terarkdb_assert(uc->Compare(range.limit, uend) <= 0);
     range.limit.assign(uend.data(), uend.size());
   };
 
@@ -1968,7 +1971,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
         continue;
       }
       uint64_t file_size = f->fd.GetFileSize();
-      assert(file_size > 0);
+      terarkdb_assert(file_size > 0);
       total_file_size += file_size;
       total_garbage += file_size * f->num_antiquation /
                        std::max<uint64_t>(1, f->prop.num_entries);
@@ -2003,7 +2006,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
                   std::less<double>());
     priority_heap.pop_back();
     iter->Seek(key);
-    assert(iter->Valid());
+    terarkdb_assert(iter->Valid());
     if (unique_check.count(iter->key()) > 0) {
       continue;
     }
@@ -2036,7 +2039,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
     }
     // always try pick prev range
     iter->SeekForPrev(key);
-    assert(iter->Valid());
+    terarkdb_assert(iter->Valid());
     do {
       iter->Prev();
       if (!iter->Valid() || unique_check.count(iter->key()) > 0) {
@@ -2083,13 +2086,13 @@ void CompactionPicker::PickFilesMarkedForCompaction(
 
   auto continuation = [&, cf_name](std::pair<int, FileMetaData*> level_file) {
     // If it's being compacted it has nothing to do here.
-    // If this assert() fails that means that some function marked some
+    // If this terarkdb_assert() fails that means that some function marked some
     // files as being_compacted, but didn't call ComputeCompactionScore()
     if (ShouldSkipMarkedForCompaction(vstorage, level_file.first,
                                       level_file.second)) {
       return false;
     }
-    assert(!level_file.second->being_compacted);
+    terarkdb_assert(!level_file.second->being_compacted);
     *start_level = level_file.first;
 
     if (level_file.second->is_output_to_parent_level()) {
@@ -2124,7 +2127,7 @@ bool CompactionPicker::GetOverlappingL0Files(
     int output_level, int* parent_index) {
   // Two level 0 compaction won't run at the same time, so don't need to worry
   // about files on level 0 being compacted.
-  assert(level0_compactions_in_progress()->empty());
+  terarkdb_assert(level0_compactions_in_progress()->empty());
   InternalKey smallest, largest;
   GetRange(*start_level_inputs, &smallest, &largest);
   // Note that the next call will discard the file we placed in
@@ -2142,7 +2145,7 @@ bool CompactionPicker::GetOverlappingL0Files(
                           parent_index)) {
     return false;
   }
-  assert(!start_level_inputs->files.empty());
+  terarkdb_assert(!start_level_inputs->files.empty());
 
   return true;
 }
@@ -2162,8 +2165,9 @@ bool LevelCompactionPicker::NeedsCompaction(
 bool LevelCompactionPicker::ShouldSkipMarkedForCompaction(
     const VersionStorageInfo* vstorage, int level,
     const FileMetaData* file_meta) {
-  assert(file_meta != nullptr);
-  assert(file_meta->marked_for_compaction || file_meta->prop.has_snapshots());
+  terarkdb_assert(file_meta != nullptr);
+  terarkdb_assert(file_meta->marked_for_compaction ||
+                  file_meta->prop.has_snapshots());
   (void)file_meta;
   bool result = false;
   if (level != 0) {
@@ -2264,7 +2268,8 @@ void LevelCompactionBuilder::SetupInitialFiles() {
   for (int i = 0; i < compaction_picker_->NumberLevels() - 1; i++) {
     start_level_score_ = vstorage_->CompactionScore(i);
     start_level_ = vstorage_->CompactionScoreLevel(i);
-    assert(i == 0 || start_level_score_ <= vstorage_->CompactionScore(i - 1));
+    terarkdb_assert(i == 0 ||
+                    start_level_score_ <= vstorage_->CompactionScore(i - 1));
     if (start_level_score_ >= 1) {
       if (skipped_l0_to_base && start_level_ == vstorage_->base_level()) {
         // If L0->base_level compaction is pending, don't schedule further
@@ -2334,7 +2339,7 @@ void LevelCompactionBuilder::SetupInitialFiles() {
               vstorage_, level_and_file.first, level_and_file.second)) {
         continue;
       }
-      assert(!level_and_file.second->being_compacted);
+      terarkdb_assert(!level_and_file.second->being_compacted);
       start_level_inputs_.level = output_level_ = start_level_ =
           level_and_file.first;
       start_level_inputs_.files = {level_and_file.second};
@@ -2346,14 +2351,14 @@ void LevelCompactionBuilder::SetupInitialFiles() {
     if (i == vstorage_->BottommostFilesMarkedForCompaction().size()) {
       start_level_inputs_.clear();
     } else {
-      assert(!start_level_inputs_.empty());
+      terarkdb_assert(!start_level_inputs_.empty());
       compaction_reason_ = CompactionPicker::ConvertCompactionReason(
           start_level_inputs_.files.front()->marked_for_compaction,
           CompactionReason::kBottommostFiles);
       return;
     }
 
-    assert(start_level_inputs_.empty());
+    terarkdb_assert(start_level_inputs_.empty());
   }
 }
 
@@ -2409,7 +2414,7 @@ Compaction* LevelCompactionBuilder::PickCompaction() {
   if (start_level_inputs_.empty()) {
     return nullptr;
   }
-  assert(start_level_ >= 0 && output_level_ >= 0);
+  terarkdb_assert(start_level_ >= 0 && output_level_ >= 0);
 
   // If it is a L0 -> base level compaction, we need to set up other L0
   // files if needed.
@@ -2439,7 +2444,7 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
   if (bottommost_level < 0) {
     return nullptr;
   }
-  assert(bottommost_level < vstorage_->num_levels());
+  terarkdb_assert(bottommost_level < vstorage_->num_levels());
 
   auto picker = compaction_picker_;
   // filter out being_compacted levels
@@ -2659,7 +2664,7 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
         }
       };
 
-      assert(!src.empty());
+      terarkdb_assert(!src.empty());
       auto queue_end = src.end() - 1;
       do {
         while (src_size < pick_size && queue_limit != queue_end) {
@@ -2913,7 +2918,7 @@ bool LevelCompactionBuilder::PickFileToCompact() {
 
   start_level_inputs_.clear();
 
-  assert(start_level_ >= 0);
+  terarkdb_assert(start_level_ >= 0);
 
   // Pick the largest file in this level that is not already
   // being compacted

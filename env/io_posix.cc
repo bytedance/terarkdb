@@ -155,21 +155,21 @@ PosixSequentialFile::PosixSequentialFile(const std::string& fname, FILE* file,
       fd_(fd),
       use_direct_io_(options.use_direct_reads),
       logical_sector_size_(GetLogicalBufferSize(fd_)) {
-  assert(!options.use_direct_reads || !options.use_mmap_reads);
+  terarkdb_assert(!options.use_direct_reads || !options.use_mmap_reads);
 }
 
 PosixSequentialFile::~PosixSequentialFile() {
   if (!use_direct_io_) {
-    assert(file_);
+    terarkdb_assert(file_);
     fclose(file_);
   } else {
-    assert(fd_);
+    terarkdb_assert(fd_);
     close(fd_);
   }
 }
 
 Status PosixSequentialFile::Read(size_t n, Slice* result, char* scratch) {
-  assert(result != nullptr && !use_direct_io_);
+  terarkdb_assert(result != nullptr && !use_direct_io_);
   Status s;
   size_t r = 0;
   do {
@@ -192,7 +192,7 @@ Status PosixSequentialFile::Read(size_t n, Slice* result, char* scratch) {
 
 Status PosixSequentialFile::PositionedRead(uint64_t offset, size_t n,
                                            Slice* result, char* scratch) {
-  assert(use_direct_io_);
+  terarkdb_assert(use_direct_io_);
   assert(IsSectorAligned(offset, GetRequiredBufferAlignment()));
   assert(IsSectorAligned(n, GetRequiredBufferAlignment()));
   assert(IsSectorAligned(scratch, GetRequiredBufferAlignment()));
@@ -266,7 +266,7 @@ size_t PosixHelper::GetUniqueIdFromFile(int fd, char* id, size_t max_size) {
 
   struct stat buf;
   int result = fstat(fd, &buf);
-  assert(result != -1);
+  terarkdb_assert(result != -1);
   if (result == -1) {
     return 0;
   }
@@ -283,7 +283,7 @@ size_t PosixHelper::GetUniqueIdFromFile(int fd, char* id, size_t max_size) {
   rid = EncodeVarint64(rid, buf.st_dev);
   rid = EncodeVarint64(rid, buf.st_ino);
   rid = EncodeVarint64(rid, uversion);
-  assert(rid >= id);
+  terarkdb_assert(rid >= id);
   return static_cast<size_t>(rid - id);
 }
 #endif
@@ -304,7 +304,7 @@ size_t PosixHelper::GetUniqueIdFromFile(int fd, char* id, size_t max_size) {
   rid = EncodeVarint64(rid, buf.st_dev);
   rid = EncodeVarint64(rid, buf.st_ino);
   rid = EncodeVarint64(rid, buf.st_gen);
-  assert(rid >= id);
+  terarkdb_assert(rid >= id);
   return static_cast<size_t>(rid - id);
 }
 #endif
@@ -320,8 +320,8 @@ PosixRandomAccessFile::PosixRandomAccessFile(const std::string& fname, int fd,
       use_direct_io_(options.use_direct_reads),
       use_aio_reads_(options.use_aio_reads),
       logical_sector_size_(GetLogicalBufferSize(fd_)) {
-  assert(!options.use_direct_reads || !options.use_mmap_reads);
-  assert(!options.use_mmap_reads || sizeof(void*) < 8);
+  terarkdb_assert(!options.use_direct_reads || !options.use_mmap_reads);
+  terarkdb_assert(!options.use_mmap_reads || sizeof(void*) < 8);
 }
 
 PosixRandomAccessFile::~PosixRandomAccessFile() { close(fd_); }
@@ -435,7 +435,7 @@ void PosixRandomAccessFile::Hint(AccessPattern pattern) {
       Fadvise(fd_, 0, 0, POSIX_FADV_DONTNEED);
       break;
     default:
-      assert(false);
+      terarkdb_assert(false);
       break;
   }
 }
@@ -475,8 +475,8 @@ PosixMmapReadableFile::PosixMmapReadableFile(const int fd,
     : fd_(fd), filename_(fname), mmapped_region_(base), length_(length) {
   fd_ = fd_ + 0;  // suppress the warning for used variables
   use_aio_reads_ = options.use_aio_reads;
-  assert(options.use_mmap_reads);
-  assert(!options.use_direct_reads);
+  terarkdb_assert(options.use_mmap_reads);
+  terarkdb_assert(!options.use_direct_reads);
 }
 
 PosixMmapReadableFile::~PosixMmapReadableFile() {
@@ -550,7 +550,7 @@ Status PosixMmapFile::UnmapCurrentRegion() {
 
 Status PosixMmapFile::MapNewRegion() {
 #ifdef ROCKSDB_FALLOCATE_PRESENT
-  assert(base_ == nullptr);
+  terarkdb_assert(base_ == nullptr);
   TEST_KILL_RANDOM("PosixMmapFile::UnmapCurrentRegion:0", rocksdb_kill_odds);
   // we can't fallocate with FALLOC_FL_KEEP_SIZE here
   if (allow_fallocate_) {
@@ -617,9 +617,9 @@ PosixMmapFile::PosixMmapFile(const std::string& fname, int fd, size_t page_size,
 #else
   (void)options;
 #endif
-  assert((page_size & (page_size - 1)) == 0);
-  assert(options.use_mmap_writes);
-  assert(!options.use_direct_writes);
+  terarkdb_assert((page_size & (page_size - 1)) == 0);
+  terarkdb_assert(options.use_mmap_writes);
+  terarkdb_assert(!options.use_direct_writes);
 }
 
 PosixMmapFile::~PosixMmapFile() {
@@ -632,8 +632,8 @@ Status PosixMmapFile::Append(const Slice& data) {
   const char* src = data.data();
   size_t left = data.size();
   while (left > 0) {
-    assert(base_ <= dst_);
-    assert(dst_ <= limit_);
+    terarkdb_assert(base_ <= dst_);
+    terarkdb_assert(dst_ <= limit_);
     size_t avail = limit_ - dst_;
     if (avail == 0) {
       Status s = UnmapCurrentRegion();
@@ -648,7 +648,7 @@ Status PosixMmapFile::Append(const Slice& data) {
     }
 
     size_t n = (left <= avail) ? left : avail;
-    assert(dst_);
+    terarkdb_assert(dst_);
     memcpy(dst_, src, n);
     dst_ += n;
     src += n;
@@ -731,8 +731,8 @@ Status PosixMmapFile::InvalidateCache(size_t offset, size_t length) {
 
 #ifdef ROCKSDB_FALLOCATE_PRESENT
 Status PosixMmapFile::Allocate(uint64_t offset, uint64_t len) {
-  assert(offset <= std::numeric_limits<off_t>::max());
-  assert(len <= std::numeric_limits<off_t>::max());
+  terarkdb_assert(offset <= std::numeric_limits<off_t>::max());
+  terarkdb_assert(len <= std::numeric_limits<off_t>::max());
   TEST_KILL_RANDOM("PosixMmapFile::Allocate:0", rocksdb_kill_odds);
   int alloc_status = 0;
   if (allow_fallocate_) {
@@ -766,7 +766,7 @@ PosixWritableFile::PosixWritableFile(const std::string& fname, int fd,
   allow_fallocate_ = options.allow_fallocate;
   fallocate_with_keep_size_ = options.fallocate_with_keep_size;
 #endif
-  assert(!options.use_mmap_writes);
+  terarkdb_assert(!options.use_mmap_writes);
 }
 
 PosixWritableFile::~PosixWritableFile() {
@@ -805,7 +805,7 @@ Status PosixWritableFile::PositionedAppend(const Slice& data, uint64_t offset) {
     assert(IsSectorAligned(data.data(), GetRequiredBufferAlignment()));
   }
 #endif
-  assert(offset <= std::numeric_limits<off_t>::max());
+  terarkdb_assert(offset <= std::numeric_limits<off_t>::max());
   const char* src = data.data();
   size_t left = data.size();
   while (left != 0) {
@@ -949,8 +949,8 @@ Status PosixWritableFile::InvalidateCache(size_t offset, size_t length) {
 
 #ifdef ROCKSDB_FALLOCATE_PRESENT
 Status PosixWritableFile::Allocate(uint64_t offset, uint64_t len) {
-  assert(offset <= std::numeric_limits<off_t>::max());
-  assert(len <= std::numeric_limits<off_t>::max());
+  terarkdb_assert(offset <= std::numeric_limits<off_t>::max());
+  terarkdb_assert(len <= std::numeric_limits<off_t>::max());
   TEST_KILL_RANDOM("PosixWritableFile::Allocate:0", rocksdb_kill_odds);
   IOSTATS_TIMER_GUARD(allocate_nanos);
   int alloc_status = 0;
@@ -971,8 +971,8 @@ Status PosixWritableFile::Allocate(uint64_t offset, uint64_t len) {
 
 #ifdef ROCKSDB_RANGESYNC_PRESENT
 Status PosixWritableFile::RangeSync(uint64_t offset, uint64_t nbytes) {
-  assert(offset <= std::numeric_limits<off_t>::max());
-  assert(nbytes <= std::numeric_limits<off_t>::max());
+  terarkdb_assert(offset <= std::numeric_limits<off_t>::max());
+  terarkdb_assert(nbytes <= std::numeric_limits<off_t>::max());
   if (sync_file_range(fd_, static_cast<off_t>(offset),
                       static_cast<off_t>(nbytes), SYNC_FILE_RANGE_WRITE) == 0) {
     return Status::OK();

@@ -57,12 +57,6 @@ static Slice GetSliceForFileNumber(const uint64_t* file_number) {
 
 static bool InheritanceMismatch(const FileMetaData& sst_meta,
                                 const FileMetaData& blob_meta) {
-  assert(std::is_sorted(sst_meta.prop.dependence.begin(),
-                        sst_meta.prop.dependence.end(),
-                        TERARK_CMP(file_number, <)));
-  assert(std::is_sorted(blob_meta.prop.inheritance.begin(),
-                        blob_meta.prop.inheritance.end()));
-
   auto sst_begin = sst_meta.prop.dependence.begin(),
        sst_end = sst_meta.prop.dependence.end();
   if (std::binary_search(sst_begin, sst_end,
@@ -179,7 +173,7 @@ Status TableCache::GetTableReader(
       prefetch_index_and_filter_in_cache, for_compaction, force_memory);
   if (s.IsInvalidArgument() && s.subcode() == Status::kRequireMmap) {
     // this table requires mmap open, make it happy
-    assert(!env_options.use_mmap_reads);
+    terarkdb_assert(!env_options.use_mmap_reads);
     EnvOptions mmap_env_options = env_options;
     mmap_env_options.use_mmap_reads = true;
     mmap_env_options.use_direct_reads = false;
@@ -270,7 +264,7 @@ Status TableCache::FindTable(const EnvOptions& env_options,
                        prefetch_index_and_filter_in_cache,
                        false /* for_compaction */, force_memory);
     if (!s.ok()) {
-      assert(table_reader == nullptr);
+      terarkdb_assert(table_reader == nullptr);
       RecordTick(ioptions_.statistics, NO_FILE_ERRORS);
       // We do not cache error results so that if the error is transient,
       // or somebody repairs the file, we recover automatically.
@@ -405,7 +399,7 @@ InternalIterator* TableCache::NewIterator(
       }
     }
     if (create_new_table_reader) {
-      assert(handle == nullptr);
+      terarkdb_assert(handle == nullptr);
       result->RegisterCleanup(&DeleteTableReader, table_reader,
                               ioptions_.statistics);
     } else if (handle != nullptr) {
@@ -439,7 +433,7 @@ InternalIterator* TableCache::NewIterator(
     ReleaseHandle(handle);
   }
   if (!s.ok()) {
-    assert(result == nullptr);
+    terarkdb_assert(result == nullptr);
     result = NewErrorInternalIterator<LazyBuffer>(s, arena);
   }
   return result;
@@ -528,8 +522,8 @@ Status TableCache::Get(const ReadOptions& options,
             // k is out of smallest bound
             return false;
           }
-          assert(ExtractInternalKeyFooter(k) >
-                 ExtractInternalKeyFooter(smallest_key));
+          terarkdb_assert(ExtractInternalKeyFooter(k) >
+                          ExtractInternalKeyFooter(smallest_key));
           if (include_smallest) {
             // shrink to smallest_key
             find_k = smallest_key;
@@ -555,8 +549,8 @@ Status TableCache::Get(const ReadOptions& options,
         if (is_largest_user_key) {
           // shrink seqno to largest_key, make sure can't read greater keys
           uint64_t seq_type = ExtractInternalKeyFooter(largest_key);
-          assert(seq_type <=
-                 PackSequenceAndType(kMaxSequenceNumber, kValueTypeForSeek));
+          terarkdb_assert(seq_type <= PackSequenceAndType(kMaxSequenceNumber,
+                                                          kValueTypeForSeek));
           // For safety. may kValueTypeForSeek can be 255 in the future ?
           if (seq_type == port::kMaxUint64 && !include_largest) {
             // 'largest_key' has the smallest seq_type of current user_key
@@ -578,7 +572,7 @@ Status TableCache::Get(const ReadOptions& options,
             s = Status::Corruption("Map sst dependence missing");
             return false;
           }
-          assert(find->second->fd.GetNumber() == file_number);
+          terarkdb_assert(find->second->fd.GetNumber() == file_number);
           s = Get(forward_options, *find->second, dependence_map, find_k,
                   get_context, prefix_extractor, file_read_hist, skip_filters,
                   level, inheritance);
@@ -629,7 +623,7 @@ Status TableCache::GetTableProperties(
   if (!s.ok()) {
     return s;
   }
-  assert(table_handle);
+  terarkdb_assert(table_handle);
   auto table = GetTableReaderFromHandle(table_handle);
   *properties = table->GetTableProperties();
   ReleaseHandle(table_handle);
@@ -651,7 +645,7 @@ size_t TableCache::GetMemoryUsageByTableReader(
   if (!s.ok()) {
     return 0;
   }
-  assert(table_handle);
+  terarkdb_assert(table_handle);
   auto table = GetTableReaderFromHandle(table_handle);
   auto ret = table->ApproximateMemoryUsage();
   ReleaseHandle(table_handle);

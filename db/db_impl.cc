@@ -177,11 +177,11 @@ class TablePropertiesCollectionIteratorImpl
   }
 
   const std::string& filename() const override {
-    assert(Valid());
+    terarkdb_assert(Valid());
     return filename_;
   }
   const std::shared_ptr<const TableProperties>& properties() const override {
-    assert(Valid());
+    terarkdb_assert(Valid());
     return properties_;
   }
 
@@ -458,7 +458,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
           immutable_db_options_.info_log.get(), env_)) {
   // !batch_per_trx_ implies seq_per_batch_ because it is only unset for
   // WriteUnprepared, which should use seq_per_batch_.
-  assert(batch_per_txn_ || seq_per_batch_);
+  terarkdb_assert(batch_per_txn_ || seq_per_batch_);
   env_->GetAbsolutePath(dbname, &db_absolute_path_);
 
   // Reserve ten files or so for other uses and give the rest to TableCache.
@@ -1021,8 +1021,8 @@ void DBImpl::PersistStats() {
 bool DBImpl::FindStatsByTime(uint64_t start_time, uint64_t end_time,
                              uint64_t* new_time,
                              std::map<std::string, uint64_t>* stats_map) {
-  assert(new_time);
-  assert(stats_map);
+  terarkdb_assert(new_time);
+  terarkdb_assert(stats_map);
   if (!new_time || !stats_map) return false;
   // lock when search for start_time
   {
@@ -1408,10 +1408,10 @@ void DBImpl::DumpStats() {
 #ifndef ROCKSDB_LITE
   const DBPropertyInfo* cf_property_info =
       GetPropertyInfo(DB::Properties::kCFStats);
-  assert(cf_property_info != nullptr);
+  terarkdb_assert(cf_property_info != nullptr);
   const DBPropertyInfo* db_property_info =
       GetPropertyInfo(DB::Properties::kDBStats);
-  assert(db_property_info != nullptr);
+  terarkdb_assert(db_property_info != nullptr);
 
   if (shutdown_initiated_) {
     return;
@@ -1496,7 +1496,7 @@ void DBImpl::FlushInfoLog() {
 }
 
 Directory* DBImpl::GetDataDir(ColumnFamilyData* cfd, size_t path_id) const {
-  assert(cfd);
+  terarkdb_assert(cfd);
   Directory* ret_dir = cfd->GetDataDir(path_id);
   if (ret_dir == nullptr) {
     return directories_.GetDataDir(path_id);
@@ -1505,7 +1505,7 @@ Directory* DBImpl::GetDataDir(ColumnFamilyData* cfd, size_t path_id) const {
 }
 
 Directory* DBImpl::Directories::GetDataDir(size_t path_id) const {
-  assert(path_id < data_dirs_.size());
+  terarkdb_assert(path_id < data_dirs_.size());
   Directory* ret_dir = data_dirs_[path_id].get();
   if (ret_dir == nullptr) {
     // Should use db_dir_
@@ -1744,7 +1744,7 @@ Status DBImpl::SyncWAL() {
 
   {
     InstrumentedMutexLock l(&mutex_);
-    assert(!logs_.empty());
+    terarkdb_assert(!logs_.empty());
 
     // This SyncWAL() call only cares about logs up to this number.
     current_log_number = logfile_number_;
@@ -1767,7 +1767,7 @@ Status DBImpl::SyncWAL() {
     for (auto it = logs_.begin();
          it != logs_.end() && it->number <= current_log_number; ++it) {
       auto& log = *it;
-      assert(!log.getting_synced);
+      terarkdb_assert(!log.getting_synced);
       log.getting_synced = true;
       logs_to_sync.push_back(log.writer);
     }
@@ -1826,7 +1826,7 @@ void DBImpl::MarkLogsSynced(uint64_t up_to, bool synced_dir,
   }
   for (auto it = logs_.begin(); it != logs_.end() && it->number <= up_to;) {
     auto& log = *it;
-    assert(log.getting_synced);
+    terarkdb_assert(log.getting_synced);
     if (status.ok() && logs_.size() > 1) {
       logs_to_free_.push_back(log.ReleaseWriter());
       // To modify logs_ both mutex_ and log_write_mutex_ must be held
@@ -1837,8 +1837,8 @@ void DBImpl::MarkLogsSynced(uint64_t up_to, bool synced_dir,
       ++it;
     }
   }
-  assert(!status.ok() || logs_.empty() || logs_[0].number > up_to ||
-         (logs_.size() == 1 && !logs_[0].getting_synced));
+  terarkdb_assert(!status.ok() || logs_.empty() || logs_[0].number > up_to ||
+                  (logs_.size() == 1 && !logs_[0].getting_synced));
   log_sync_cv_.SignalAll();
 }
 
@@ -1883,7 +1883,7 @@ InternalIterator* DBImpl::NewInternalIterator(
 
 void DBImpl::SchedulePurge() {
   mutex_.AssertHeld();
-  assert(opened_successfully_);
+  terarkdb_assert(opened_successfully_);
 
   // Purge operations are put into High priority queue
   bg_purge_scheduled_++;
@@ -2003,8 +2003,8 @@ InternalIterator* DBImpl::NewInternalIterator(
     RangeDelAggregator* range_del_agg, SequenceNumber sequence,
     SeparateHelper** separate_helper) {
   InternalIterator* internal_iter;
-  assert(arena != nullptr);
-  assert(range_del_agg != nullptr);
+  terarkdb_assert(arena != nullptr);
+  terarkdb_assert(range_del_agg != nullptr);
   // Need to create internal iterator from the arena.
   MergeIteratorBuilder merge_iter_builder(
       &cfd->internal_comparator(), arena,
@@ -2061,7 +2061,7 @@ Status DBImpl::Get(const ReadOptions& read_options,
                    ColumnFamilyHandle* column_family, const Slice& key,
                    LazyBuffer* value) {
   auto s = GetImpl(read_options, column_family, key, value);
-  assert(!s.ok() || value == nullptr || value->valid());
+  terarkdb_assert(!s.ok() || value == nullptr || value->valid());
   return s;
 }
 
@@ -2351,7 +2351,7 @@ std::vector<Status> DBImpl::MultiGet(
     auto cfd = cfh->cfd();
     SequenceNumber max_covering_tombstone_seq = 0;
     auto mgd_iter = multiget_cf_data.find(cfh->cfd()->GetID());
-    assert(mgd_iter != multiget_cf_data.end());
+    terarkdb_assert(mgd_iter != multiget_cf_data.end());
     auto mgd = mgd_iter->second;
     auto super_version = mgd->super_version;
     bool skip_memtable =
@@ -2395,7 +2395,7 @@ std::vector<Status> DBImpl::MultiGet(
       fiber_pool.submit(myhead, get_one, i);
     }
     fiber_pool.reap(myhead);
-    assert(0 == counting);
+    terarkdb_assert(0 == counting);
 #else
     auto tls = &gt_fibers;
     tls->update_fiber_count(read_options.aio_concurrency);
@@ -2452,7 +2452,7 @@ std::vector<Status> DBImpl::MultiGet(
 Status DBImpl::CreateColumnFamily(const ColumnFamilyOptions& cf_options,
                                   const std::string& column_family,
                                   ColumnFamilyHandle** handle) {
-  assert(handle != nullptr);
+  terarkdb_assert(handle != nullptr);
   Status s =
       CreateColumnFamilyImpl({&cf_options}, {&column_family}, {handle}).front();
   if (s.ok()) {
@@ -2466,7 +2466,7 @@ Status DBImpl::CreateColumnFamilies(
     const ColumnFamilyOptions& cf_options,
     const std::vector<std::string>& column_family_names,
     std::vector<ColumnFamilyHandle*>* handles) {
-  assert(handles != nullptr);
+  terarkdb_assert(handles != nullptr);
   handles->clear();
   size_t num_cf = column_family_names.size();
   autovector<const ColumnFamilyOptions*> cf_options_list;
@@ -2505,7 +2505,7 @@ Status DBImpl::CreateColumnFamilies(
 Status DBImpl::CreateColumnFamilies(
     const std::vector<ColumnFamilyDescriptor>& column_families,
     std::vector<ColumnFamilyHandle*>* handles) {
-  assert(handles != nullptr);
+  terarkdb_assert(handles != nullptr);
   handles->clear();
   size_t num_cf = column_families.size();
   autovector<const ColumnFamilyOptions*> cf_options_list;
@@ -2545,8 +2545,8 @@ autovector<Status> DBImpl::CreateColumnFamilyImpl(
     autovector<const ColumnFamilyOptions*> cf_options,
     autovector<const std::string*> column_family_name,
     autovector<ColumnFamilyHandle**> handle) {
-  assert(cf_options.size() == column_family_name.size());
-  assert(cf_options.size() == handle.size());
+  terarkdb_assert(cf_options.size() == column_family_name.size());
+  terarkdb_assert(cf_options.size() == handle.size());
   autovector<Status> s;
   s.resize(cf_options.size());
   Status persist_options_status;
@@ -2643,10 +2643,10 @@ autovector<Status> DBImpl::CreateColumnFamilyImpl(
       column_family_options_list.emplace_back(cf_options[i]);
 
       ++ok_count;
-      assert(ok_count == cfds.size());
-      assert(ok_count == mutable_cf_options_list.size());
-      assert(ok_count == edit_lists.size());
-      assert(ok_count == column_family_options_list.size());
+      terarkdb_assert(ok_count == cfds.size());
+      terarkdb_assert(ok_count == mutable_cf_options_list.size());
+      terarkdb_assert(ok_count == edit_lists.size());
+      terarkdb_assert(ok_count == column_family_options_list.size());
     }
     // LogAndApply will both write the creation in MANIFEST and create
     // ColumnFamilyData object
@@ -2671,14 +2671,14 @@ autovector<Status> DBImpl::CreateColumnFamilyImpl(
       if (s[i].ok()) {
         auto* cfd = versions_->GetColumnFamilySet()->GetColumnFamily(
             *column_family_name[i]);
-        assert(cfd != nullptr);
+        terarkdb_assert(cfd != nullptr);
         s[i] = cfd->AddDirectories();
       }
       if (s[i].ok()) {
         single_column_family_mode_ = false;
         auto* cfd = versions_->GetColumnFamilySet()->GetColumnFamily(
             *column_family_name[i]);
-        assert(cfd != nullptr);
+        terarkdb_assert(cfd != nullptr);
         InstallSuperVersionAndScheduleWork(cfd, &sv_context,
                                            *cfd->GetLatestMutableCFOptions());
 
@@ -2713,7 +2713,7 @@ autovector<Status> DBImpl::CreateColumnFamilyImpl(
 }
 
 Status DBImpl::DropColumnFamily(ColumnFamilyHandle* column_family) {
-  assert(column_family != nullptr);
+  terarkdb_assert(column_family != nullptr);
   Status s = DropColumnFamilyImpl(column_family);
   if (s.ok()) {
     s = WriteOptionsFile(true /*need_mutex_lock*/,
@@ -2796,7 +2796,7 @@ Status DBImpl::DropColumnFamilyImpl(ColumnFamilyHandle* column_family) {
     // cfd before its ref-count goes to zero to avoid having to erase cf_info
     // later inside db_mutex.
     EraseThreadStatusCfInfo(cfd);
-    assert(cfd->IsDropped());
+    terarkdb_assert(cfd->IsDropped());
     ROCKS_LOG_INFO(immutable_db_options_.info_log,
                    "Dropped column family with id %u\n", cfd->GetID());
   } else {
@@ -2811,7 +2811,7 @@ Status DBImpl::DropColumnFamilyImpl(ColumnFamilyHandle* column_family) {
 bool DBImpl::KeyMayExist(const ReadOptions& read_options,
                          ColumnFamilyHandle* column_family, const Slice& key,
                          std::string* value, bool* value_found) {
-  assert(value != nullptr);
+  terarkdb_assert(value != nullptr);
   if (value_found != nullptr) {
     // falsify later if key-may-exist but can't fetch value
     *value_found = true;
@@ -3150,7 +3150,7 @@ bool DBImpl::GetProperty(ColumnFamilyHandle* column_family,
   }
   // Shouldn't reach here since exactly one of handle_string and handle_int
   // should be non-nullptr.
-  assert(false);
+  terarkdb_assert(false);
   return false;
 }
 
@@ -3185,7 +3185,7 @@ bool DBImpl::GetIntProperty(ColumnFamilyHandle* column_family,
 bool DBImpl::GetIntPropertyInternal(ColumnFamilyData* cfd,
                                     const DBPropertyInfo& property_info,
                                     bool is_locked, uint64_t* value) {
-  assert(property_info.handle_int != nullptr);
+  terarkdb_assert(property_info.handle_int != nullptr);
   if (!property_info.need_out_of_mutex) {
     if (is_locked) {
       mutex_.AssertHeld();
@@ -3214,7 +3214,7 @@ bool DBImpl::GetIntPropertyInternal(ColumnFamilyData* cfd,
 }
 
 bool DBImpl::GetPropertyHandleOptionsStatistics(std::string* value) {
-  assert(value != nullptr);
+  terarkdb_assert(value != nullptr);
   Statistics* statistics = immutable_db_options_.statistics.get();
   if (!statistics) {
     return false;
@@ -3311,7 +3311,7 @@ void DBImpl::ReturnAndCleanupSuperVersion(uint32_t column_family_id,
 
   // If SuperVersion is held, and we successfully fetched a cfd using
   // GetAndRefSuperVersion(), it must still exist.
-  assert(cfd != nullptr);
+  terarkdb_assert(cfd != nullptr);
   ReturnAndCleanupSuperVersion(cfd, sv);
 }
 
@@ -3367,8 +3367,9 @@ void DBImpl::GetApproximateMemTableStats(ColumnFamilyHandle* column_family,
 void DBImpl::GetApproximateSizes(ColumnFamilyHandle* column_family,
                                  const Range* range, int n, uint64_t* sizes,
                                  uint8_t include_flags) {
-  assert(include_flags & DB::SizeApproximationFlags::INCLUDE_FILES ||
-         include_flags & DB::SizeApproximationFlags::INCLUDE_MEMTABLES);
+  terarkdb_assert(include_flags & DB::SizeApproximationFlags::INCLUDE_FILES ||
+                  include_flags &
+                      DB::SizeApproximationFlags::INCLUDE_MEMTABLES);
   Version* v;
   auto cfh = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family);
   auto cfd = cfh->cfd();
@@ -3467,7 +3468,7 @@ Status DBImpl::DeleteFile(std::string name) {
       job_context.Clean(nullptr);
       return Status::InvalidArgument("File not found");
     }
-    assert(level < cfd->NumberLevels());
+    terarkdb_assert(level < cfd->NumberLevels());
 
     // If the file is being compacted no need to delete.
     if (metadata->being_compacted) {
@@ -3551,12 +3552,12 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
       std::unordered_set<FileMetaData*> file_marked;
 
       void Lock() {
-        assert(!is_lock);
+        terarkdb_assert(!is_lock);
         is_lock = true;
         db_mutex->Lock();
       }
       void Unlock() {
-        assert(is_lock);
+        terarkdb_assert(is_lock);
         is_lock = false;
         db_mutex->Unlock();
       }
@@ -3860,7 +3861,7 @@ void DBImpl::GetLiveFilesMetaData(std::vector<LiveFileMetaData>* metadata) {
 
 void DBImpl::GetColumnFamilyMetaData(ColumnFamilyHandle* column_family,
                                      ColumnFamilyMetaData* cf_meta) {
-  assert(column_family);
+  terarkdb_assert(column_family);
   auto* cfd = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family)->cfd();
   auto* sv = GetAndRefSuperVersion(cfd);
   sv->current->GetColumnFamilyMetaData(cf_meta);
@@ -4457,7 +4458,7 @@ SequenceNumber DBImpl::GetEarliestMemTableSequenceNumber(SuperVersion* sv,
   if (earliest_seq == kMaxSequenceNumber) {
     earliest_seq = sv->mem->GetEarliestSequenceNumber();
   }
-  assert(sv->mem->GetEarliestSequenceNumber() >= earliest_seq);
+  terarkdb_assert(sv->mem->GetEarliestSequenceNumber() >= earliest_seq);
 
   return earliest_seq;
 }

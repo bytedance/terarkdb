@@ -5982,6 +5982,69 @@ TEST_F(DBTest, ForceEvict) {
   ASSERT_EQ(BC_failures, 0);
 }
 
+class EmptyTest : public testing::Test {};
+
+struct DebugInterfaceCallback {
+  static int counter[4];
+  static void debug_callback(DebugCallbackType type, const char* msg) {
+    ++counter[type];
+  }
+};
+
+int DebugInterfaceCallback::counter[4] = {};
+
+TEST_F(EmptyTest, DebugInterface) {
+#if TERARKDB_DEBUG_LEVEL != 0
+  int unlock_counter = 0;
+
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
+      "InvokeDebugCallback:Lock", [&](void* arg) {
+        auto debug_term_mutex = static_cast<std::mutex*>(arg);
+        debug_term_mutex->unlock();
+        ++unlock_counter;
+      });
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
+
+  ASSERT_TRUE(TerarkDBInstallDebugCallback(nullptr));
+  ASSERT_TRUE(
+      TerarkDBInstallDebugCallback(&DebugInterfaceCallback::debug_callback));
+
+  // kDebugMessageInstallSuccessfully
+  ASSERT_EQ(DebugInterfaceCallback::counter[kDebugMessage], 1);
+
+  terarkdb_assert(false);
+  ASSERT_EQ(DebugInterfaceCallback::counter[kDebugMessage], 1);
+  ASSERT_EQ(DebugInterfaceCallback::counter[kDebugUnavailable], 1);
+  ASSERT_EQ(unlock_counter, 1);
+
+  terarkdb_assert(false);
+  // kDebugMessageSkipCoreDump
+  ASSERT_EQ(DebugInterfaceCallback::counter[kDebugMessage], 2);
+  ASSERT_EQ(DebugInterfaceCallback::counter[kDebugUnavailable], 1);
+  ASSERT_EQ(unlock_counter, 2);
+
+  InvokeDebugCallback(kDebugCoreDump, "Foo");
+  // kDebugMessageSkipCoreDump
+  ASSERT_EQ(DebugInterfaceCallback::counter[kDebugMessage], 3);
+  ASSERT_EQ(DebugInterfaceCallback::counter[kDebugCoreDump], 0);
+  ASSERT_EQ(unlock_counter, 2);
+
+  InvokeDebugCallback(kDebugRestart, "Bar");
+  // kDebugMessageSkipCoreDump
+  ASSERT_EQ(DebugInterfaceCallback::counter[kDebugMessage], 4);
+  ASSERT_EQ(DebugInterfaceCallback::counter[kDebugRestart], 0);
+  ASSERT_EQ(unlock_counter, 3);
+
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->LoadDependency({});
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->ClearAllCallBacks();
+
+  ASSERT_TRUE(TerarkDBInstallDebugCallback(nullptr));
+#else
+  ASSERT_FALSE(TerarkDBInstallDebugCallback(nullptr));
+#endif
+}
+
 }  // namespace TERARKDB_NAMESPACE
 
 int main(int argc, char** argv) {

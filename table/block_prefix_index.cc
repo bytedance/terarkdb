@@ -50,12 +50,12 @@ inline bool IsBlockId(uint32_t block_id) {
 
 inline uint32_t DecodeIndex(uint32_t block_id) {
   uint32_t index = block_id ^ kBlockArrayMask;
-  assert(index < kBlockArrayMask);
+  terarkdb_assert(index < kBlockArrayMask);
   return index;
 }
 
 inline uint32_t EncodeIndex(uint32_t index) {
-  assert(index < kBlockArrayMask);
+  terarkdb_assert(index < kBlockArrayMask);
   return index | kBlockArrayMask;
 }
 
@@ -97,7 +97,7 @@ class BlockPrefixIndex::Builder {
       // connected to the last block of the previous prefix.
       PrefixRecord* prev = prefixes_per_bucket[bucket];
       if (prev) {
-        assert(current->start_block >= prev->end_block);
+        terarkdb_assert(current->start_block >= prev->end_block);
         auto distance = current->start_block - prev->end_block;
         if (distance <= 1) {
           prev->end_block = current->end_block;
@@ -127,15 +127,15 @@ class BlockPrefixIndex::Builder {
     for (uint32_t i = 0; i < num_buckets; i++) {
       uint32_t num_blocks = num_blocks_per_bucket[i];
       if (num_blocks == 0) {
-        assert(prefixes_per_bucket[i] == nullptr);
+        terarkdb_assert(prefixes_per_bucket[i] == nullptr);
         buckets[i] = kNoneBlock;
       } else if (num_blocks == 1) {
-        assert(prefixes_per_bucket[i] != nullptr);
-        assert(prefixes_per_bucket[i]->next == nullptr);
+        terarkdb_assert(prefixes_per_bucket[i] != nullptr);
+        terarkdb_assert(prefixes_per_bucket[i]->next == nullptr);
         buckets[i] = prefixes_per_bucket[i]->start_block;
       } else {
-        assert(total_block_array_entries > 0);
-        assert(prefixes_per_bucket[i] != nullptr);
+        terarkdb_assert(total_block_array_entries > 0);
+        terarkdb_assert(prefixes_per_bucket[i] != nullptr);
         buckets[i] = EncodeIndex(offset);
         block_array_buffer[offset] = num_blocks;
         uint32_t* last_block = &block_array_buffer[offset + num_blocks];
@@ -148,12 +148,12 @@ class BlockPrefixIndex::Builder {
           }
           current = current->next;
         }
-        assert(last_block == &block_array_buffer[offset]);
+        terarkdb_assert(last_block == &block_array_buffer[offset]);
         offset += (num_blocks + 1);
       }
     }
 
-    assert(offset == total_block_array_entries);
+    terarkdb_assert(offset == total_block_array_entries);
 
     return new BlockPrefixIndex(internal_prefix_extractor_, num_buckets,
                                 buckets, total_block_array_entries,
@@ -221,11 +221,11 @@ uint32_t BlockPrefixIndex::GetBlocks(const Slice& key, uint32_t** blocks) {
     return 1;
   } else {
     uint32_t index = DecodeIndex(block_id);
-    assert(index < num_block_array_buffer_entries_);
+    terarkdb_assert(index < num_block_array_buffer_entries_);
     *blocks = &block_array_buffer_[index + 1];
     uint32_t num_blocks = block_array_buffer_[index];
-    assert(num_blocks > 1);
-    assert(index + num_blocks < num_block_array_buffer_entries_);
+    terarkdb_assert(num_blocks > 1);
+    terarkdb_assert(index + num_blocks < num_block_array_buffer_entries_);
     return num_blocks;
   }
 }

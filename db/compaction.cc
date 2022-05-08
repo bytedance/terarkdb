@@ -184,7 +184,7 @@ std::vector<uint64_t> InheritanceTreeToSet(const std::vector<uint64_t>& tree) {
   std::vector<uint64_t> set = tree;
   std::sort(set.begin(), set.end());
   auto it = std::unique(set.begin(), set.end());
-  assert(set.end() - it == it - set.begin());
+  terarkdb_assert(set.end() - it == it - set.begin());
   set.resize(it - set.begin());
   set.shrink_to_fit();
   return set;
@@ -282,7 +282,8 @@ bool Compaction::IsBottommostLevel(
       }
       ++output_l0_idx;
     }
-    assert(static_cast<size_t>(output_l0_idx) < vstorage->LevelFiles(0).size());
+    terarkdb_assert(static_cast<size_t>(output_l0_idx) <
+                    vstorage->LevelFiles(0).size());
   } else {
     output_l0_idx = -1;
   }
@@ -355,7 +356,7 @@ Compaction::Compaction(CompactionParams&& params)
 
 #ifndef NDEBUG
   for (size_t i = 1; i < inputs_.size(); ++i) {
-    assert(inputs_[i].level > inputs_[i - 1].level);
+    terarkdb_assert(inputs_[i].level > inputs_[i - 1].level);
   }
 #endif
 
@@ -405,7 +406,7 @@ bool Compaction::IsTrivialMove() const {
 
   // TrivialMoveLevel
   if (compaction_reason_ == CompactionReason::kTrivialMoveLevel) {
-    assert(is_trivial_move_);
+    terarkdb_assert(is_trivial_move_);
     return true;
   }
 
@@ -465,9 +466,9 @@ void Compaction::AddInputDeletions(VersionEdit* out_edit) {
 
 bool Compaction::KeyNotExistsBeyondOutputLevel(
     const Slice& user_key, std::vector<size_t>* level_ptrs) const {
-  assert(input_version_ != nullptr);
-  assert(level_ptrs != nullptr);
-  assert(level_ptrs->size() == static_cast<size_t>(number_levels_));
+  terarkdb_assert(input_version_ != nullptr);
+  terarkdb_assert(level_ptrs != nullptr);
+  terarkdb_assert(level_ptrs->size() == static_cast<size_t>(number_levels_));
   if (bottommost_level_) {
     return true;
   } else if (output_level_ != 0 &&
@@ -499,8 +500,8 @@ bool Compaction::KeyNotExistsBeyondOutputLevel(
 void Compaction::MarkFilesBeingCompacted(bool mark_as_compacted) {
   for (size_t i = 0; i < num_input_levels(); i++) {
     for (size_t j = 0; j < inputs_[i].size(); j++) {
-      assert(mark_as_compacted ? !inputs_[i][j]->being_compacted
-                               : inputs_[i][j]->being_compacted);
+      terarkdb_assert(mark_as_compacted ? !inputs_[i][j]->being_compacted
+                                        : inputs_[i][j]->being_compacted);
       inputs_[i][j]->being_compacted = mark_as_compacted;
     }
   }
@@ -551,7 +552,7 @@ void Compaction::ReleaseCompactionFiles(Status status) {
 }
 
 void Compaction::ResetNextCompactionIndex() {
-  assert(input_version_ != nullptr);
+  terarkdb_assert(input_version_ != nullptr);
   if (start_level_ >= 0) {
     input_vstorage_->ResetNextCompactionIndex(start_level_);
   }

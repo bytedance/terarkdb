@@ -52,8 +52,8 @@ bool ShouldReportDetailedTime(Env* env, Statistics* stats) {
 
 void BlockHandle::EncodeTo(std::string* dst) const {
   // Sanity check that all fields have been set
-  assert(offset_ != ~static_cast<uint64_t>(0));
-  assert(size_ != ~static_cast<uint64_t>(0));
+  terarkdb_assert(offset_ != ~static_cast<uint64_t>(0));
+  terarkdb_assert(size_ != ~static_cast<uint64_t>(0));
   PutVarint64Varint64(dst, offset_, size_);
 }
 
@@ -105,7 +105,7 @@ inline uint64_t UpconvertLegacyFooterFormat(uint64_t magic_number) {
   if (magic_number == kLegacyPlainTableMagicNumber) {
     return kPlainTableMagicNumber;
   }
-  assert(false);
+  terarkdb_assert(false);
   return 0;
 }
 }  // namespace
@@ -123,17 +123,17 @@ inline uint64_t UpconvertLegacyFooterFormat(uint64_t magic_number) {
 //    footer version (4 bytes)
 //    table_magic_number (8 bytes)
 void Footer::EncodeTo(std::string* dst) const {
-  assert(HasInitializedTableMagicNumber());
+  terarkdb_assert(HasInitializedTableMagicNumber());
   if (IsLegacyFooterFormat(table_magic_number())) {
     // has to be default checksum with legacy footer
-    assert(checksum_ == kCRC32c);
+    terarkdb_assert(checksum_ == kCRC32c);
     const size_t original_size = dst->size();
     metaindex_handle_.EncodeTo(dst);
     index_handle_.EncodeTo(dst);
     dst->resize(original_size + 2 * BlockHandle::kMaxEncodedLength);  // Padding
     PutFixed32(dst, static_cast<uint32_t>(table_magic_number() & 0xffffffffu));
     PutFixed32(dst, static_cast<uint32_t>(table_magic_number() >> 32));
-    assert(dst->size() == original_size + kVersion0EncodedLength);
+    terarkdb_assert(dst->size() == original_size + kVersion0EncodedLength);
   } else {
     const size_t original_size = dst->size();
     dst->push_back(static_cast<char>(checksum_));
@@ -143,7 +143,7 @@ void Footer::EncodeTo(std::string* dst) const {
     PutFixed32(dst, version());
     PutFixed32(dst, static_cast<uint32_t>(table_magic_number() & 0xffffffffu));
     PutFixed32(dst, static_cast<uint32_t>(table_magic_number() >> 32));
-    assert(dst->size() == original_size + kNewVersionsEncodedLength);
+    terarkdb_assert(dst->size() == original_size + kNewVersionsEncodedLength);
   }
 }
 
@@ -152,13 +152,13 @@ Footer::Footer(uint64_t _table_magic_number, uint32_t _version)
       checksum_(kCRC32c),
       table_magic_number_(_table_magic_number) {
   // This should be guaranteed by constructor callers
-  assert(!IsLegacyFooterFormat(_table_magic_number) || version_ == 0);
+  terarkdb_assert(!IsLegacyFooterFormat(_table_magic_number) || version_ == 0);
 }
 
 Status Footer::DecodeFrom(Slice* input) {
-  assert(!HasInitializedTableMagicNumber());
-  assert(input != nullptr);
-  assert(input->size() >= kMinEncodedLength);
+  terarkdb_assert(!HasInitializedTableMagicNumber());
+  terarkdb_assert(input != nullptr);
+  terarkdb_assert(input->size() >= kMinEncodedLength);
 
   const char* magic_ptr =
       input->data() + input->size() - kMagicNumberLengthByte;
@@ -287,7 +287,7 @@ Status UncompressBlockContentsForCompressionType(
     const ImmutableCFOptions& ioptions, MemoryAllocator* allocator) {
   CacheAllocationPtr ubuf;
 
-  assert(uncompression_ctx.type() != kNoCompression &&
+  terarkdb_assert(uncompression_ctx.type() != kNoCompression &&
          "Invalid compression type");
 
   StopWatchNano timer(ioptions.env, ShouldReportDetailedTime(
@@ -405,8 +405,8 @@ Status UncompressBlockContents(const UncompressionContext& uncompression_ctx,
                                BlockContents* contents, uint32_t format_version,
                                const ImmutableCFOptions& ioptions,
                                MemoryAllocator* allocator) {
-  assert(data[n] != kNoCompression);
-  assert(data[n] == uncompression_ctx.type());
+  terarkdb_assert(data[n] != kNoCompression);
+  terarkdb_assert(data[n] == uncompression_ctx.type());
   return UncompressBlockContentsForCompressionType(uncompression_ctx, data, n,
                                                    contents, format_version,
                                                    ioptions, allocator);

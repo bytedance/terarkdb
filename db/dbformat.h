@@ -149,12 +149,12 @@ extern bool ParseInternalKey(const Slice& internal_key,
 
 // Returns the user key portion of an internal key.
 inline Slice ExtractUserKey(const Slice& internal_key) {
-  assert(internal_key.size() >= 8);
+  terarkdb_assert(internal_key.size() >= 8);
   return Slice(internal_key.data(), internal_key.size() - 8);
 }
 
 inline uint64_t ExtractInternalKeyFooter(const Slice& internal_key) {
-  assert(internal_key.size() >= 8);
+  terarkdb_assert(internal_key.size() >= 8);
   const size_t n = internal_key.size();
   return DecodeFixed64(internal_key.data() + n - 8);
 }
@@ -216,7 +216,7 @@ class InternalKey {
   // sets the internal key to be bigger or equal to all internal keys with this
   // user key
   void SetMaxPossibleForUserKey(const Slice& _user_key) {
-    assert(rep_.empty());
+    terarkdb_assert(rep_.empty());
     AppendInternalKey(
         &rep_, ParsedInternalKey(_user_key, 0, static_cast<ValueType>(0)));
   }
@@ -224,7 +224,7 @@ class InternalKey {
   // sets the internal key to be smaller or equal to all internal keys with this
   // user key
   void SetMinPossibleForUserKey(const Slice& _user_key) {
-    assert(rep_.empty());
+    terarkdb_assert(rep_.empty());
     AppendInternalKey(&rep_, ParsedInternalKey(_user_key, kMaxSequenceNumber,
                                                kValueTypeForSeek));
   }
@@ -236,7 +236,7 @@ class InternalKey {
 
   void DecodeFrom(const Slice& s) { rep_.assign(s.data(), s.size()); }
   Slice Encode() const {
-    assert(!rep_.empty());
+    terarkdb_assert(!rep_.empty());
     return rep_;
   }
 
@@ -281,7 +281,7 @@ inline bool ParseInternalKey(const Slice& internal_key,
   unsigned char c = num & 0xff;
   result->sequence = num >> 8;
   result->type = static_cast<ValueType>(c);
-  assert(result->type <= ValueType::kMaxValue);
+  terarkdb_assert(result->type <= ValueType::kMaxValue);
   result->user_key = Slice(internal_key.data(), n - 8);
   return IsExtendedValueType(result->type);
 }
@@ -290,7 +290,7 @@ inline bool ParseInternalKey(const Slice& internal_key,
 // Guarantees not to invalidate ikey.data().
 inline void UpdateInternalKey(std::string* ikey, uint64_t seq, ValueType t) {
   size_t ikey_sz = ikey->size();
-  assert(ikey_sz >= 8);
+  terarkdb_assert(ikey_sz >= 8);
   uint64_t newval = (seq << 8) | t;
 
   // Note: Since C++11, strings are guaranteed to be stored contiguously and
@@ -301,14 +301,14 @@ inline void UpdateInternalKey(std::string* ikey, uint64_t seq, ValueType t) {
 // Get the sequence number from the internal key
 inline uint64_t GetInternalKeySeqno(const Slice& internal_key) {
   const size_t n = internal_key.size();
-  assert(n >= 8);
+  terarkdb_assert(n >= 8);
   uint64_t num = DecodeFixed64(internal_key.data() + n - 8);
   return num >> 8;
 }
 // Get value type from the internal key
 inline ValueType GetInternalKeyType(const Slice& internal_key) {
   const size_t n = internal_key.size();
-  assert(n >= 8);
+  terarkdb_assert(n >= 8);
   return static_cast<ValueType>(internal_key[n - 8]);
 }
 
@@ -376,7 +376,7 @@ class IterKey {
   Slice GetKey() const { return Slice(key_, key_size_); }
 
   Slice GetInternalKey() const {
-    assert(!IsUserKey());
+    terarkdb_assert(!IsUserKey());
     return Slice(key_, key_size_);
   }
 
@@ -384,7 +384,7 @@ class IterKey {
     if (IsUserKey()) {
       return Slice(key_, key_size_);
     } else {
-      assert(key_size_ >= 8);
+      terarkdb_assert(key_size_ >= 8);
       return Slice(key_, key_size_ - 8);
     }
   }
@@ -399,7 +399,7 @@ class IterKey {
   // non_shared_data: data to be append, its length must be >= non_shared_len
   void TrimAppend(const size_t shared_len, const char* non_shared_data,
                   const size_t non_shared_len) {
-    assert(shared_len <= key_size_);
+    terarkdb_assert(shared_len <= key_size_);
     size_t total_size = shared_len + non_shared_len;
 
     if (IsKeyPinned() /* key is not in buf_ */) {
@@ -443,7 +443,7 @@ class IterKey {
   // and returns a Slice referencing the new copy.
   Slice SetInternalKey(const Slice& key, ParsedInternalKey* ikey) {
     size_t key_n = key.size();
-    assert(key_n >= 8);
+    terarkdb_assert(key_n >= 8);
     SetInternalKey(key);
     ikey->user_key = Slice(key_, key_n - 8);
     return Slice(key_, key_n);
@@ -451,7 +451,7 @@ class IterKey {
 
   // Copy the key into IterKey own buf_
   void OwnKey() {
-    assert(IsKeyPinned() == true);
+    terarkdb_assert(IsKeyPinned() == true);
 
     Reserve(key_size_);
     memcpy(buf_, key_, key_size_);
@@ -461,8 +461,8 @@ class IterKey {
   // Update the sequence number in the internal key.  Guarantees not to
   // invalidate slices to the key (and the user key).
   void UpdateInternalKey(uint64_t seq, ValueType t) {
-    assert(!IsKeyPinned());
-    assert(key_size_ >= 8);
+    terarkdb_assert(!IsKeyPinned());
+    terarkdb_assert(key_size_ >= 8);
     uint64_t newval = (seq << 8) | t;
     EncodeFixed64(&buf_[key_size_ - 8], newval);
   }
@@ -805,7 +805,7 @@ class SeparateHelper {
     return Slice(reinterpret_cast<char*>(&file_number), sizeof file_number);
   }
   static uint64_t DecodeFileNumber(const Slice& slice) {
-    assert(slice.size() >= sizeof(uint64_t));
+    terarkdb_assert(slice.size() >= sizeof(uint64_t));
     uint64_t file_number;
     memcpy(&file_number, slice.data(), sizeof(uint64_t));
     if (!port::kLittleEndian) {
@@ -814,7 +814,7 @@ class SeparateHelper {
     return file_number;
   }
   static Slice DecodeValueMeta(const Slice& slice) {
-    assert(slice.size() >= sizeof(uint64_t));
+    terarkdb_assert(slice.size() >= sizeof(uint64_t));
     return Slice(slice.data() + sizeof(uint64_t),
                  slice.size() - sizeof(uint64_t));
   }
@@ -827,7 +827,7 @@ class SeparateHelper {
   virtual Status TransToSeparate(const Slice& internal_key, LazyBuffer& value,
                                  const Slice& meta, bool is_merge,
                                  bool is_index) {
-    assert(value.file_number() != uint64_t(-1));
+    terarkdb_assert(value.file_number() != uint64_t(-1));
     return TransToSeparate(internal_key, value, value.file_number(), meta,
                            is_merge, is_index, nullptr);
   }

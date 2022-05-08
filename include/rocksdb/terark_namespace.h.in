@@ -14,7 +14,11 @@
 #cmakedefine WITH_DIAGNOSE_CACHE
 #cmakedefine WITH_ZENFS
 
+#define TERARKDB_DEBUG_LEVEL @TERARKDB_DEBUG_LEVEL@
+
 #ifdef WITH_ZENFS
 #define ROCKSDB_NAMESPACE @WITH_TERARKDB_NAMESPACE@
 #define LIBZBD
 #endif
+
+#include "terark_debug.inc"

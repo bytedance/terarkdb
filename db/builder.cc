@@ -54,9 +54,10 @@ TableBuilder* NewTableBuilder(
     double compaction_load, const std::string* compression_dict,
     bool skip_filters, uint64_t creation_time, uint64_t oldest_key_time,
     SstPurpose sst_purpose) {
-  assert((column_family_id ==
-          TablePropertiesCollectorFactory::Context::kUnknownColumnFamily) ==
-         column_family_name.empty());
+  terarkdb_assert(
+      (column_family_id ==
+       TablePropertiesCollectorFactory::Context::kUnknownColumnFamily) ==
+      column_family_name.empty());
   return ioptions.table_factory->NewTableBuilder(
       TableBuilderOptions(ioptions, moptions, internal_comparator,
                           int_tbl_prop_collector_factories, compression_type,
@@ -91,13 +92,14 @@ Status BuildTable(
     std::vector<TableProperties>* table_properties_vec, int level,
     double compaction_load, const uint64_t creation_time,
     const uint64_t oldest_key_time, Env::WriteLifeTimeHint write_hint) {
-  assert((column_family_id ==
-          TablePropertiesCollectorFactory::Context::kUnknownColumnFamily) ==
-         column_family_name.empty());
+  terarkdb_assert(
+      (column_family_id ==
+       TablePropertiesCollectorFactory::Context::kUnknownColumnFamily) ==
+      column_family_name.empty());
   // Reports the IOStats for flush for every following bytes.
   const size_t kReportFlushIOStatsEvery = 1048576;
   Status s;
-  assert(meta_vec->size() == 1);
+  terarkdb_assert(meta_vec->size() == 1);
   if (table_properties_vec != nullptr) {
     table_properties_vec->emplace_back();
   }
@@ -191,7 +193,7 @@ Status BuildTable(
       LazyBuffer TransToCombined(const Slice& /*user_key*/,
                                  uint64_t /*sequence*/,
                                  const LazyBuffer& /*value*/) const override {
-        assert(false);
+        terarkdb_assert(false);
         return LazyBuffer();
       }
     } separate_helper;
@@ -236,7 +238,7 @@ Status BuildTable(
         mutable_cf_options, ioptions.num_levels, ioptions.compaction_style);
 
     auto trans_to_separate = [&](const Slice& key, LazyBuffer& value) {
-      assert(value.file_number() == uint64_t(-1));
+      terarkdb_assert(value.file_number() == uint64_t(-1));
       Status status;
       TableBuilder* blob_builder = separate_helper.builder.get();
       FileMetaData* blob_meta = separate_helper.current_output;
@@ -406,9 +408,9 @@ Status BuildTable(
     } else {
       for (size_t i = 1; i < meta_vec->size(); ++i) {
         auto& blob = (*meta_vec)[i];
-        assert(sst_meta()->prop.dependence.empty() ||
-               blob.fd.GetNumber() >
-                   sst_meta()->prop.dependence.back().file_number);
+        terarkdb_assert(sst_meta()->prop.dependence.empty() ||
+                        blob.fd.GetNumber() >
+                            sst_meta()->prop.dependence.back().file_number);
         sst_meta()->prop.dependence.emplace_back(
             Dependence{blob.fd.GetNumber(), blob.prop.num_entries});
       }
@@ -425,11 +427,11 @@ Status BuildTable(
       sst_meta()->marked_for_compaction |=
           builder->NeedCompact() ? FileMetaData::kMarkedFromTableBuilder : 0;
       sst_meta()->prop.num_entries = builder->NumEntries();
-      assert(sst_meta()->fd.GetFileSize() > 0);
+      terarkdb_assert(sst_meta()->fd.GetFileSize() > 0);
       // refresh now that builder is finished
       tp = builder->GetTableProperties();
       if (table_properties_vec != nullptr) {
-        assert(table_properties_vec->size() >= 1);
+        terarkdb_assert(table_properties_vec->size() >= 1);
         table_properties_vec->front() = tp;
       }
     }
@@ -447,7 +449,7 @@ Status BuildTable(
     if (s.ok() && !empty) {
       // this sst has no depend ...
       DependenceMap empty_dependence_map;
-      assert(!sst_meta()->prop.is_map_sst());
+      terarkdb_assert(!sst_meta()->prop.is_map_sst());
       // Verify that the table is usable
       // We set for_compaction to false and don't OptimizeForCompactionTableRead
       // here because this is a special case after we finish the table building

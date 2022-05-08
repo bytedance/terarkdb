@@ -9,7 +9,6 @@
 
 #include "table/block_based_table_builder.h"
 
-#include <assert.h>
 #include <stdio.h>
 
 #include <list>
@@ -70,11 +69,11 @@ FilterBlockBuilder* CreateFilterBlockBuilder(
                                             table_opt);
   } else {
     if (table_opt.partition_filters) {
-      assert(p_index_builder != nullptr);
+      terarkdb_assert(p_index_builder != nullptr);
       // Since after partition cut request from filter builder it takes time
       // until index builder actully cuts the partition, we take the lower bound
       // as partition size.
-      assert(table_opt.block_size_deviation <= 100);
+      terarkdb_assert(table_opt.block_size_deviation <= 100);
       auto partition_size =
           static_cast<uint32_t>(((table_opt.metadata_block_size *
                                   (100 - table_opt.block_size_deviation)) +
@@ -384,15 +383,16 @@ BlockBasedTableBuilder::BlockBasedTableBuilder(
 }
 
 BlockBasedTableBuilder::~BlockBasedTableBuilder() {
-  assert(rep_->closed);  // Catch errors where caller forgot to call Finish()
+  terarkdb_assert(
+      rep_->closed);  // Catch errors where caller forgot to call Finish()
   delete rep_;
 }
 
 Status BlockBasedTableBuilder::Add(const Slice& key,
                                    const LazyBuffer& lazy_value) {
   Rep* r = rep_;
-  assert(!r->closed);
-  assert(ok());
+  terarkdb_assert(!r->closed);
+  terarkdb_assert(ok());
   auto s = lazy_value.fetch();
   if (!s.ok()) {
     return s;
@@ -400,13 +400,14 @@ Status BlockBasedTableBuilder::Add(const Slice& key,
   const Slice& value = lazy_value.slice();
   if (r->props.num_entries > 0 &&
       r->internal_comparator.Compare(key, Slice(r->last_key)) <= 0) {
-    assert(r->internal_comparator.Compare(key, Slice(r->last_key)) > 0);
+    terarkdb_assert(r->internal_comparator.Compare(key, Slice(r->last_key)) >
+                    0);
     return Status::Corruption("BlockBasedTableBuilder::Add: overlapping key");
   }
 
   auto should_flush = r->flush_block_policy->Update(key, value);
   if (should_flush) {
-    assert(!r->data_block.empty());
+    terarkdb_assert(!r->data_block.empty());
     Flush();
 
     // Add item to index block.
@@ -449,14 +450,14 @@ Status BlockBasedTableBuilder::Add(const Slice& key,
 Status BlockBasedTableBuilder::AddTombstone(const Slice& key,
                                             const LazyBuffer& lazy_value) {
   Rep* r = rep_;
-  assert(!r->closed);
-  assert(ok());
+  terarkdb_assert(!r->closed);
+  terarkdb_assert(ok());
   auto s = lazy_value.fetch();
   if (!s.ok()) {
     return s;
   }
   const Slice& value = lazy_value.slice();
-  assert(ExtractValueType(key) == kTypeRangeDeletion);
+  terarkdb_assert(ExtractValueType(key) == kTypeRangeDeletion);
   r->range_del_block.Add(key, value);
   ++r->props.num_range_deletions;
   r->props.raw_key_size += key.size();
@@ -469,7 +470,7 @@ Status BlockBasedTableBuilder::AddTombstone(const Slice& key,
 
 void BlockBasedTableBuilder::Flush() {
   Rep* r = rep_;
-  assert(!r->closed);
+  terarkdb_assert(!r->closed);
   if (!ok()) return;
   if (r->data_block.empty()) return;
   WriteBlock(&r->data_block, &r->pending_handle, true /* is_data_block */);
@@ -494,7 +495,7 @@ void BlockBasedTableBuilder::WriteBlock(const Slice& raw_block_contents,
   //    block_data: uint8[n]
   //    type: uint8
   //    crc: uint32
-  assert(ok());
+  terarkdb_assert(ok());
   Rep* r = rep_;
 
   auto type = r->compression_ctx.type();
@@ -510,14 +511,14 @@ void BlockBasedTableBuilder::WriteBlock(const Slice& raw_block_contents,
     if (is_data_block && r->compression_dict && r->compression_dict->size()) {
       r->compression_ctx.dict() = *r->compression_dict;
       if (r->table_options.verify_compression) {
-        assert(r->verify_ctx != nullptr);
+        terarkdb_assert(r->verify_ctx != nullptr);
         r->verify_ctx->dict() = *r->compression_dict;
       }
     } else {
       // Clear dictionary
       r->compression_ctx.dict() = Slice();
       if (r->table_options.verify_compression) {
-        assert(r->verify_ctx != nullptr);
+        terarkdb_assert(r->verify_ctx != nullptr);
         r->verify_ctx->dict() = Slice();
       }
     }
@@ -585,7 +586,7 @@ void BlockBasedTableBuilder::WriteRawBlock(const Slice& block_contents,
   StopWatch sw(r->ioptions.env, r->ioptions.statistics, WRITE_RAW_BLOCK_MICROS);
   handle->set_offset(r->offset);
   handle->set_size(block_contents.size());
-  assert(r->status.ok());
+  terarkdb_assert(r->status.ok());
   r->status = r->file->Append(block_contents);
   if (r->status.ok()) {
     char trailer[kBlockTrailerSize];
@@ -624,7 +625,7 @@ void BlockBasedTableBuilder::WriteRawBlock(const Slice& block_contents,
       }
     }
 
-    assert(r->status.ok());
+    terarkdb_assert(r->status.ok());
     r->status = r->file->Append(Slice(trailer, kBlockTrailerSize));
     if (r->status.ok()) {
       r->status = InsertBlockInCache(block_contents, type, handle);
@@ -704,7 +705,7 @@ void BlockBasedTableBuilder::WriteFilterBlock(
     while (ok() && s.IsIncomplete()) {
       Slice filter_content =
           rep_->filter_builder->Finish(filter_block_handle, &s);
-      assert(s.ok() || s.IsIncomplete());
+      terarkdb_assert(s.ok() || s.IsIncomplete());
       rep_->props.filter_size += filter_content.size();
       WriteRawBlock(filter_content, kNoCompression, &filter_block_handle);
     }
@@ -733,7 +734,7 @@ void BlockBasedTableBuilder::WriteIndexBlock(
     // We we have more than one index partition then meta_blocks are not
     // supported for the index. Currently meta_blocks are used only by
     // HashIndexBuilder which is not multi-partition.
-    assert(index_blocks.meta_blocks.empty());
+    terarkdb_assert(index_blocks.meta_blocks.empty());
   } else if (ok() && !index_builder_status.ok()) {
     rep_->status = index_builder_status;
   }
@@ -821,7 +822,7 @@ void BlockBasedTableBuilder::WritePropertiesBlock(
     rep_->props.property_collectors_names = property_collectors_names;
     if (rep_->table_options.index_type ==
         BlockBasedTableOptions::kTwoLevelIndexSearch) {
-      assert(rep_->p_index_builder_ != nullptr);
+      terarkdb_assert(rep_->p_index_builder_ != nullptr);
       rep_->props.index_partitions = rep_->p_index_builder_->NumPartitions();
       rep_->props.top_level_index_size =
           rep_->p_index_builder_->TopLevelIndexSize(rep_->offset);
@@ -879,10 +880,10 @@ Status BlockBasedTableBuilder::Finish(
     const std::vector<SequenceNumber>* snapshots,
     const std::vector<uint64_t>* inheritance_tree) {
   Rep* r = rep_;
-  assert(r->status.ok());
+  terarkdb_assert(r->status.ok());
   bool empty_data_block = r->data_block.empty();
   Flush();
-  assert(!r->closed);
+  terarkdb_assert(!r->closed);
   r->closed = true;
 
   if (prop != nullptr) {
@@ -936,8 +937,8 @@ Status BlockBasedTableBuilder::Finish(
     // number and always write new table files with new magic number
     bool legacy = (r->table_options.format_version == 0);
     // this is guaranteed by BlockBasedTableBuilder's constructor
-    assert(r->table_options.checksum == kCRC32c ||
-           r->table_options.format_version != 0);
+    terarkdb_assert(r->table_options.checksum == kCRC32c ||
+                    r->table_options.format_version != 0);
     Footer footer(legacy ? kLegacyBlockBasedTableMagicNumber
                          : kBlockBasedTableMagicNumber,
                   r->table_options.format_version);
@@ -946,7 +947,7 @@ Status BlockBasedTableBuilder::Finish(
     footer.set_checksum(r->table_options.checksum);
     std::string footer_encoding;
     footer.EncodeTo(&footer_encoding);
-    assert(r->status.ok());
+    terarkdb_assert(r->status.ok());
     r->status = r->file->Append(footer_encoding);
     if (r->status.ok()) {
       r->offset += footer_encoding.size();
@@ -958,7 +959,7 @@ Status BlockBasedTableBuilder::Finish(
 
 void BlockBasedTableBuilder::Abandon() {
   Rep* r = rep_;
-  assert(!r->closed);
+  terarkdb_assert(!r->closed);
   r->closed = true;
 }
 

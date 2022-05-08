@@ -43,16 +43,16 @@ class TwoLevelIndexIterator : public InternalIteratorBase<BlockHandle> {
 
   virtual bool Valid() const override { return second_level_iter_.Valid(); }
   virtual Slice key() const override {
-    assert(Valid());
+    terarkdb_assert(Valid());
     return second_level_iter_.key();
   }
   virtual BlockHandle value() const override {
-    assert(Valid());
+    terarkdb_assert(Valid());
     return second_level_iter_.value();
   }
   virtual Status status() const override {
     if (!first_level_iter_.status().ok()) {
-      assert(second_level_iter_.iter() == nullptr);
+      terarkdb_assert(second_level_iter_.iter() == nullptr);
       return first_level_iter_.status();
     } else if (second_level_iter_.iter() != nullptr &&
                !second_level_iter_.status().ok()) {
@@ -132,13 +132,13 @@ void TwoLevelIndexIterator::SeekToLast() {
 }
 
 void TwoLevelIndexIterator::Next() {
-  assert(Valid());
+  terarkdb_assert(Valid());
   second_level_iter_.Next();
   SkipEmptyDataBlocksForward();
 }
 
 void TwoLevelIndexIterator::Prev() {
-  assert(Valid());
+  terarkdb_assert(Valid());
   second_level_iter_.Prev();
   SkipEmptyDataBlocksBackward();
 }
@@ -270,7 +270,7 @@ class MapSstIterator final : public InternalIterator {
         status_ = Status::Corruption(err_msg);
         return false;
       }
-      assert(file_meta_ == nullptr ||
+      terarkdb_assert(file_meta_ == nullptr ||
              std::binary_search(file_meta_->prop.dependence.begin(),
                                 file_meta_->prop.dependence.end(),
                                 Dependence{link_[i], 0},
@@ -293,7 +293,7 @@ class MapSstIterator final : public InternalIterator {
   }
 
   void InitSecondLevelMinHeapImpl(const Slice& target, bool include) {
-    assert(min_heap_.empty());
+    terarkdb_assert(min_heap_.empty());
     auto& icomp = min_heap_.comparator().internal_comparator();
     for (auto file_number : link_) {
       auto it = iterator_cache_.GetIterator(file_number);
@@ -314,7 +314,7 @@ class MapSstIterator final : public InternalIterator {
       }
       auto k = it->key();
       if (icomp.Compare(k, largest_key_) < include_largest_) {
-        assert(IsInRange(k));
+        terarkdb_assert(IsInRange(k));
         min_heap_.push(HeapElement{it, k});
       }
     }
@@ -334,7 +334,7 @@ class MapSstIterator final : public InternalIterator {
   }
 
   void InitSecondLevelMaxHeapImpl(const Slice& target, bool include) {
-    assert(max_heap_.empty());
+    terarkdb_assert(max_heap_.empty());
     auto& icomp = min_heap_.comparator().internal_comparator();
     for (auto file_number : link_) {
       auto it = iterator_cache_.GetIterator(file_number);
@@ -355,7 +355,7 @@ class MapSstIterator final : public InternalIterator {
       }
       auto k = it->key();
       if (icomp.Compare(smallest_key_, k) < include_smallest_) {
-        assert(IsInRange(k));
+        terarkdb_assert(IsInRange(k));
         max_heap_.push(HeapElement{it, k});
       }
     }
@@ -396,7 +396,7 @@ class MapSstIterator final : public InternalIterator {
     first_level_iter_->SeekToFirst();
     if (InitFirstLevelIter()) {
       InitSecondLevelMinHeap(smallest_key_, include_smallest_);
-      assert(min_heap_.empty() || IsInRange(min_heap_.top().key));
+      terarkdb_assert(min_heap_.empty() || IsInRange(min_heap_.top().key));
     }
   }
   virtual void SeekToLast() override {
@@ -405,7 +405,7 @@ class MapSstIterator final : public InternalIterator {
     first_level_iter_->SeekToLast();
     if (InitFirstLevelIter()) {
       InitSecondLevelMaxHeap(largest_key_, include_largest_);
-      assert(max_heap_.empty() || IsInRange(max_heap_.top().key));
+      terarkdb_assert(max_heap_.empty() || IsInRange(max_heap_.top().key));
     }
   }
   virtual void Seek(const Slice& target) override {
@@ -413,7 +413,7 @@ class MapSstIterator final : public InternalIterator {
     first_level_value_.reset();
     first_level_iter_->Seek(target);
     if (!InitFirstLevelIter()) {
-      assert(min_heap_.empty());
+      terarkdb_assert(min_heap_.empty());
       return;
     }
     auto& icomp = min_heap_.comparator().internal_comparator();
@@ -427,14 +427,14 @@ class MapSstIterator final : public InternalIterator {
       first_level_value_.reset();
       first_level_iter_->Next();
       if (!InitFirstLevelIter()) {
-        assert(min_heap_.empty());
+        terarkdb_assert(min_heap_.empty());
         return;
       }
       seek_target = smallest_key_;
       include = include_smallest_;
     }
     InitSecondLevelMinHeap(seek_target, include);
-    assert(min_heap_.empty() || IsInRange(min_heap_.top().key));
+    terarkdb_assert(min_heap_.empty() || IsInRange(min_heap_.top().key));
   }
   virtual void SeekForPrev(const Slice& target) override {
     is_backword_ = true;
@@ -444,7 +444,7 @@ class MapSstIterator final : public InternalIterator {
       first_level_iter_->SeekToLast();
     }
     if (!InitFirstLevelIter()) {
-      assert(max_heap_.empty());
+      terarkdb_assert(max_heap_.empty());
       return;
     }
     auto& icomp = min_heap_.comparator().internal_comparator();
@@ -455,7 +455,7 @@ class MapSstIterator final : public InternalIterator {
       first_level_value_.reset();
       first_level_iter_->Prev();
       if (!InitFirstLevelIter()) {
-        assert(max_heap_.empty());
+        terarkdb_assert(max_heap_.empty());
         return;
       }
       seek_target = largest_key_;
@@ -465,7 +465,7 @@ class MapSstIterator final : public InternalIterator {
       include = include_largest_;
     }
     InitSecondLevelMaxHeap(seek_target, include);
-    assert(max_heap_.empty() || IsInRange(max_heap_.top().key));
+    terarkdb_assert(max_heap_.empty() || IsInRange(max_heap_.top().key));
   }
   virtual void Next() override {
     if (is_backword_) {
@@ -473,7 +473,7 @@ class MapSstIterator final : public InternalIterator {
       where.DecodeFrom(max_heap_.top().key);
       max_heap_.clear();
       InitSecondLevelMinHeap(where.Encode(), false);
-      assert(min_heap_.empty() || IsInRange(max_heap_.top().key));
+      terarkdb_assert(min_heap_.empty() || IsInRange(max_heap_.top().key));
       is_backword_ = false;
     } else {
       auto current = min_heap_.top();
@@ -493,10 +493,10 @@ class MapSstIterator final : public InternalIterator {
         first_level_iter_->Next();
         if (InitFirstLevelIter()) {
           InitSecondLevelMinHeap(smallest_key_, include_smallest_);
-          assert(min_heap_.empty() || IsInRange(min_heap_.top().key));
+          terarkdb_assert(min_heap_.empty() || IsInRange(min_heap_.top().key));
         }
       } else {
-        assert(IsInRange(min_heap_.top().key));
+        terarkdb_assert(IsInRange(min_heap_.top().key));
       }
     }
   }
@@ -506,7 +506,7 @@ class MapSstIterator final : public InternalIterator {
       where.DecodeFrom(min_heap_.top().key);
       min_heap_.clear();
       InitSecondLevelMaxHeap(where.Encode(), false);
-      assert(min_heap_.empty() || IsInRange(min_heap_.top().key));
+      terarkdb_assert(min_heap_.empty() || IsInRange(min_heap_.top().key));
       is_backword_ = true;
     } else {
       auto current = max_heap_.top();
@@ -526,19 +526,19 @@ class MapSstIterator final : public InternalIterator {
         first_level_iter_->Prev();
         if (InitFirstLevelIter()) {
           InitSecondLevelMaxHeap(largest_key_, include_largest_);
-          assert(max_heap_.empty() || IsInRange(max_heap_.top().key));
+          terarkdb_assert(max_heap_.empty() || IsInRange(max_heap_.top().key));
         }
       } else {
-        assert(IsInRange(max_heap_.top().key));
+        terarkdb_assert(IsInRange(max_heap_.top().key));
       }
     }
   }
   virtual Slice key() const override {
-    assert(Valid());
+    terarkdb_assert(Valid());
     return min_heap_.top().key;
   }
   virtual LazyBuffer value() const override {
-    assert(Valid());
+    terarkdb_assert(Valid());
     return min_heap_.top().iter->value();
   }
   virtual Status status() const override { return status_; }
@@ -557,7 +557,7 @@ InternalIterator* NewMapSstIterator(
     const DependenceMap& dependence_map, const InternalKeyComparator& icomp,
     void* callback_arg, const IteratorCache::CreateIterCallback& create_iter,
     Arena* arena) {
-  assert(file_meta == nullptr || file_meta->prop.is_map_sst());
+  terarkdb_assert(file_meta == nullptr || file_meta->prop.is_map_sst());
   if (arena == nullptr) {
     return new MapSstIterator(file_meta, mediate_sst_iter, dependence_map,
                               icomp, callback_arg, create_iter);

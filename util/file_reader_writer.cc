@@ -127,7 +127,7 @@ Status RandomAccessFileReader::Read(uint64_t offset, size_t n, Slice* result,
               buf.Capacity() - buf.CurrentSize(), buf.Alignment(),
               Env::IOPriority::IO_LOW, stats_, RateLimiter::OpType::kRead);
         } else {
-          assert(buf.CurrentSize() == 0);
+          terarkdb_assert(buf.CurrentSize() == 0);
           allowed = read_size;
         }
         Slice tmp;
@@ -201,7 +201,7 @@ Status RandomAccessFileReader::Read(uint64_t offset, size_t n, Slice* result,
           res_scratch = tmp_result.data();
         } else {
           // make sure chunks are inserted contiguously into `res_scratch`.
-          assert(tmp_result.data() == res_scratch + pos);
+          terarkdb_assert(tmp_result.data() == res_scratch + pos);
         }
         pos += tmp_result.size();
         if (!s.ok() || tmp_result.size() < allowed) {
@@ -257,7 +257,7 @@ Status WritableFileWriter::Append(const Slice& data) {
         return s;
       }
     }
-    assert(buf_.CurrentSize() == 0);
+    terarkdb_assert(buf_.CurrentSize() == 0);
   }
 
   // We never write directly to disk with direct I/O on.
@@ -278,7 +278,7 @@ Status WritableFileWriter::Append(const Slice& data) {
     }
   } else {
     // Writing directly to file bypassing the buffer
-    assert(buf_.CurrentSize() == 0);
+    terarkdb_assert(buf_.CurrentSize() == 0);
     s = WriteBuffered(src, left, true);
   }
 
@@ -290,7 +290,7 @@ Status WritableFileWriter::Append(const Slice& data) {
 }
 
 Status WritableFileWriter::Pad(const size_t pad_bytes) {
-  assert(pad_bytes < kDefaultPageSize);
+  terarkdb_assert(pad_bytes < kDefaultPageSize);
   size_t left = pad_bytes;
   size_t cap = buf_.Capacity() - buf_.CurrentSize();
 
@@ -448,7 +448,7 @@ Status WritableFileWriter::AutoRangeSync(uint64_t filesize_for_sync) {
     if (filesize_for_sync > kBytesNotSyncRange) {
       uint64_t offset_sync_to = filesize_for_sync - kBytesNotSyncRange;
       offset_sync_to -= offset_sync_to % kBytesAlignWhenSync;
-      assert(offset_sync_to >= last_sync_size_);
+      terarkdb_assert(offset_sync_to >= last_sync_size_);
       if (offset_sync_to > 0 &&
           offset_sync_to - last_sync_size_ >= bytes_per_sync_) {
         s = RangeSync(last_sync_size_, offset_sync_to - last_sync_size_);
@@ -470,7 +470,7 @@ Status WritableFileWriter::RangeSync(uint64_t offset, uint64_t nbytes) {
 Status WritableFileWriter::WriteBuffered(const char* data, size_t size,
                                          bool auto_sync) {
   Status s;
-  assert(!use_direct_io());
+  terarkdb_assert(!use_direct_io());
   const char* src = data;
   size_t left = size;
   size_t filesize_for_sync = filesize_;
@@ -536,10 +536,10 @@ Status WritableFileWriter::WriteBuffered(const char* data, size_t size,
 // offsets.
 #ifndef ROCKSDB_LITE
 Status WritableFileWriter::WriteDirect() {
-  assert(use_direct_io());
+  terarkdb_assert(use_direct_io());
   Status s;
   const size_t alignment = buf_.Alignment();
-  assert((next_write_offset_ % alignment) == 0);
+  terarkdb_assert((next_write_offset_ % alignment) == 0);
 
   // Calculate whole page final file advance if all writes succeed
   size_t file_advance = TruncateToPageBoundary(alignment, buf_.CurrentSize());
@@ -591,7 +591,7 @@ Status WritableFileWriter::WriteDirect() {
     left -= size;
     src += size;
     write_offset += size;
-    assert((next_write_offset_ % alignment) == 0);
+    terarkdb_assert((next_write_offset_ % alignment) == 0);
   }
 
   if (s.ok()) {
@@ -732,7 +732,7 @@ class ReadaheadRandomAccessFile : public RandomAccessFile {
     if (s.ok()) {
       buffer_offset_ = offset;
       buffer_.Size(result.size());
-      assert(buffer_.BufferStart() == result.data());
+      terarkdb_assert(buffer_.BufferStart() == result.data());
     }
     return s;
   }
@@ -824,8 +824,8 @@ Status FilePrefetchBuffer::Prefetch(RandomAccessFileReader* reader,
   uint64_t rounddown_offset = Rounddown(offset_, alignment);
   uint64_t roundup_end = Roundup(offset_ + n, alignment);
   uint64_t roundup_len = roundup_end - rounddown_offset;
-  assert(roundup_len >= alignment);
-  assert(roundup_len % alignment == 0);
+  terarkdb_assert(roundup_len >= alignment);
+  terarkdb_assert(roundup_len % alignment == 0);
 
   // Check if requested bytes are in the existing buffer_.
   // If all bytes exist -- return.
@@ -850,10 +850,10 @@ Status FilePrefetchBuffer::Prefetch(RandomAccessFileReader* reader,
       chunk_offset_in_buffer =
           Rounddown(static_cast<size_t>(offset - buffer_offset_), alignment);
       chunk_len = buffer_.CurrentSize() - chunk_offset_in_buffer;
-      assert(chunk_offset_in_buffer % alignment == 0);
-      assert(chunk_len % alignment == 0);
-      assert(chunk_offset_in_buffer + chunk_len <=
-             buffer_offset_ + buffer_.CurrentSize());
+      terarkdb_assert(chunk_offset_in_buffer % alignment == 0);
+      terarkdb_assert(chunk_len % alignment == 0);
+      terarkdb_assert(chunk_offset_in_buffer + chunk_len <=
+                      buffer_offset_ + buffer_.CurrentSize());
       if (chunk_len > 0) {
         copy_data_to_new_buffer = true;
       } else {
@@ -903,8 +903,8 @@ bool FilePrefetchBuffer::TryReadFromCache(uint64_t offset, size_t n,
   //    If readahead is not enabled: return false.
   if (offset + n > buffer_offset_ + buffer_.CurrentSize()) {
     if (readahead_size_ > 0) {
-      assert(file_reader_ != nullptr);
-      assert(max_readahead_size_ >= readahead_size_);
+      terarkdb_assert(file_reader_ != nullptr);
+      terarkdb_assert(max_readahead_size_ >= readahead_size_);
 
       Status s = Prefetch(file_reader_, offset, n + readahead_size_);
       if (!s.ok()) {

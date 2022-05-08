@@ -260,7 +260,7 @@ bool WriteBatch::HasMerge() const {
 }
 
 bool ReadKeyFromWriteBatchEntry(Slice* input, Slice* key, bool cf_record) {
-  assert(input != nullptr && key != nullptr);
+  terarkdb_assert(input != nullptr && key != nullptr);
   // Skip tag byte
   input->remove_prefix(1);
 
@@ -295,7 +295,7 @@ bool WriteBatch::HasRollback() const {
 Status ReadRecordFromWriteBatch(Slice* input, char* tag,
                                 uint32_t* column_family, Slice* key,
                                 Slice* value, Slice* blob, Slice* xid) {
-  assert(key != nullptr && value != nullptr);
+  terarkdb_assert(key != nullptr && value != nullptr);
   *tag = (*input)[0];
   input->remove_prefix(1);
   *column_family = 0;  // default
@@ -351,7 +351,7 @@ Status ReadRecordFromWriteBatch(Slice* input, char* tag,
       return Status::Corruption(
           "WriteBatch don't contents ValueIndex or MergeIndex");
     case kTypeLogData:
-      assert(blob != nullptr);
+      terarkdb_assert(blob != nullptr);
       if (!GetLengthPrefixedSlice(input, blob)) {
         return Status::Corruption("bad WriteBatch Blob");
       }
@@ -421,8 +421,8 @@ Status WriteBatch::Iterate(Handler* handler) const {
         return s;
       }
     } else {
-      assert(s.IsTryAgain());
-      assert(!last_was_try_again);  // to detect infinite loop bugs
+      terarkdb_assert(s.IsTryAgain());
+      terarkdb_assert(!last_was_try_again);  // to detect infinite loop bugs
       if (UNLIKELY(last_was_try_again)) {
         return Status::Corruption(
             "two consecutive TryAgain in WriteBatch handler; this is either a "
@@ -435,7 +435,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
     switch (tag) {
       case kTypeColumnFamilyValue:
       case kTypeValue:
-        assert(content_flags_.load(std::memory_order_relaxed) &
+        terarkdb_assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_PUT));
         s = handler->PutCF(column_family, key, value);
         if (LIKELY(s.ok())) {
@@ -445,7 +445,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
         break;
       case kTypeColumnFamilyDeletion:
       case kTypeDeletion:
-        assert(content_flags_.load(std::memory_order_relaxed) &
+        terarkdb_assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_DELETE));
         s = handler->DeleteCF(column_family, key);
         if (LIKELY(s.ok())) {
@@ -455,7 +455,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
         break;
       case kTypeColumnFamilySingleDeletion:
       case kTypeSingleDeletion:
-        assert(content_flags_.load(std::memory_order_relaxed) &
+        terarkdb_assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_SINGLE_DELETE));
         s = handler->SingleDeleteCF(column_family, key);
         if (LIKELY(s.ok())) {
@@ -465,7 +465,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
         break;
       case kTypeColumnFamilyRangeDeletion:
       case kTypeRangeDeletion:
-        assert(content_flags_.load(std::memory_order_relaxed) &
+        terarkdb_assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_DELETE_RANGE));
         s = handler->DeleteRangeCF(column_family, key, value);
         if (LIKELY(s.ok())) {
@@ -475,7 +475,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
         break;
       case kTypeColumnFamilyMerge:
       case kTypeMerge:
-        assert(content_flags_.load(std::memory_order_relaxed) &
+        terarkdb_assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_MERGE));
         s = handler->MergeCF(column_family, key, value);
         if (LIKELY(s.ok())) {
@@ -486,7 +486,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
       case kTypeValueIndex:
       case kTypeMergeIndex:
         // WriteBatch don't contents value index or merge index
-        assert(false);
+        terarkdb_assert(false);
         break;
       case kTypeLogData:
         handler->LogData(blob);
@@ -494,7 +494,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
         empty_batch = false;
         break;
       case kTypeBeginPrepareXID:
-        assert(content_flags_.load(std::memory_order_relaxed) &
+        terarkdb_assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_BEGIN_PREPARE));
         handler->MarkBeginPrepare();
         empty_batch = false;
@@ -513,7 +513,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
         }
         break;
       case kTypeBeginPersistedPrepareXID:
-        assert(content_flags_.load(std::memory_order_relaxed) &
+        terarkdb_assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_BEGIN_PREPARE));
         handler->MarkBeginPrepare();
         empty_batch = false;
@@ -526,7 +526,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
         }
         break;
       case kTypeBeginUnprepareXID:
-        assert(content_flags_.load(std::memory_order_relaxed) &
+        terarkdb_assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_BEGIN_UNPREPARE));
         handler->MarkBeginPrepare(true /* unprepared */);
         empty_batch = false;
@@ -545,19 +545,19 @@ Status WriteBatch::Iterate(Handler* handler) const {
         }
         break;
       case kTypeEndPrepareXID:
-        assert(content_flags_.load(std::memory_order_relaxed) &
+        terarkdb_assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_END_PREPARE));
         handler->MarkEndPrepare(xid);
         empty_batch = true;
         break;
       case kTypeCommitXID:
-        assert(content_flags_.load(std::memory_order_relaxed) &
+        terarkdb_assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_COMMIT));
         handler->MarkCommit(xid);
         empty_batch = true;
         break;
       case kTypeRollbackXID:
-        assert(content_flags_.load(std::memory_order_relaxed) &
+        terarkdb_assert(content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_ROLLBACK));
         handler->MarkRollback(xid);
         empty_batch = true;
@@ -697,7 +697,7 @@ Status WriteBatchInternal::MarkEndPrepare(WriteBatch* b, const Slice& xid,
                                           bool write_after_commit,
                                           bool unprepared_batch) {
   // a manually constructed batch can only contain one prepare section
-  assert(b->rep_[12] == static_cast<char>(kTypeNoop));
+  terarkdb_assert(b->rep_[12] == static_cast<char>(kTypeNoop));
 
   // all savepoints up to this point are cleared
   if (b->save_points_ != nullptr) {
@@ -973,8 +973,8 @@ Status WriteBatch::RollbackToSavePoint() {
   SavePoint savepoint = save_points_->stack.top();
   save_points_->stack.pop();
 
-  assert(savepoint.size <= rep_.size());
-  assert(savepoint.count <= Count());
+  terarkdb_assert(savepoint.size <= rep_.size());
+  terarkdb_assert(savepoint.count <= Count());
 
   if (savepoint.size == rep_.size()) {
     // No changes to rollback
@@ -1039,7 +1039,7 @@ class MemTableInserter : public WriteBatch::Handler {
   bool dup_dectector_on_;
 
   MemPostInfoMap& GetPostMap() {
-    assert(concurrent_memtable_writes_);
+    terarkdb_assert(concurrent_memtable_writes_);
     if (!post_info_created_) {
       new (&mem_post_info_map_) MemPostInfoMap();
       post_info_created_ = true;
@@ -1048,8 +1048,8 @@ class MemTableInserter : public WriteBatch::Handler {
   }
 
   bool IsDuplicateKeySeq(uint32_t column_family_id, const Slice& key) {
-    assert(!write_after_commit_);
-    assert(rebuilding_trx_ != nullptr);
+    terarkdb_assert(!write_after_commit_);
+    terarkdb_assert(rebuilding_trx_ != nullptr);
     if (!dup_dectector_on_) {
       new (&duplicate_detector_) DuplicateDetector(db_);
       dup_dectector_on_ = true;
@@ -1096,7 +1096,7 @@ class MemTableInserter : public WriteBatch::Handler {
         unprepared_batch_(false),
         duplicate_detector_(),
         dup_dectector_on_(false) {
-    assert(cf_mems_);
+    terarkdb_assert(cf_mems_);
   }
 
   ~MemTableInserter() {
@@ -1134,7 +1134,7 @@ class MemTableInserter : public WriteBatch::Handler {
   SequenceNumber sequence() const { return sequence_; }
 
   void PostProcess() {
-    assert(concurrent_memtable_writes_);
+    terarkdb_assert(concurrent_memtable_writes_);
     // If post info was not created there is nothing
     // to process and no need to create on demand
     if (post_info_created_) {
@@ -1197,7 +1197,7 @@ class MemTableInserter : public WriteBatch::Handler {
     if (UNLIKELY(!SeekToColumnFamily(column_family_id, &seek_status))) {
       bool batch_boundry = false;
       if (rebuilding_trx_ != nullptr) {
-        assert(!write_after_commit_);
+        terarkdb_assert(!write_after_commit_);
         // The CF is probably flushed and hence no need for insert but we still
         // need to keep track of the keys for upcoming rollback/commit.
         WriteBatchInternal::Put(rebuilding_trx_, column_family_id, key, value);
@@ -1212,22 +1212,22 @@ class MemTableInserter : public WriteBatch::Handler {
     auto* moptions = mem->GetImmutableMemTableOptions();
     // inplace_update_support is inconsistent with snapshots, and therefore with
     // any kind of transactions including the ones that use seq_per_batch
-    assert(!seq_per_batch_ || !moptions->inplace_update_support);
+    terarkdb_assert(!seq_per_batch_ || !moptions->inplace_update_support);
     if (!moptions->inplace_update_support) {
       bool mem_res =
           mem->Add(sequence_, value_type, key, value,
                    concurrent_memtable_writes_, get_post_process_info(mem));
       if (UNLIKELY(!mem_res)) {
-        assert(seq_per_batch_);
+        terarkdb_assert(seq_per_batch_);
         ret_status = Status::TryAgain("key+seq exists");
         const bool BATCH_BOUNDRY = true;
         MaybeAdvanceSeq(BATCH_BOUNDRY);
       }
     } else if (moptions->inplace_callback == nullptr) {
-      assert(!concurrent_memtable_writes_);
+      terarkdb_assert(!concurrent_memtable_writes_);
       mem->Update(sequence_, key, value);
     } else {
-      assert(!concurrent_memtable_writes_);
+      terarkdb_assert(!concurrent_memtable_writes_);
       if (mem->UpdateCallback(sequence_, key, value)) {
       } else {
         // key not found in memtable. Do sst get, update, add
@@ -1261,20 +1261,20 @@ class MemTableInserter : public WriteBatch::Handler {
           bool mem_res __attribute__((__unused__));
           mem_res = mem->Add(sequence_, value_type, key,
                              Slice(prev_buffer, prev_size));
-          assert(mem_res);
+          terarkdb_assert(mem_res);
           RecordTick(moptions->statistics, NUMBER_KEYS_WRITTEN);
         } else if (status == UpdateStatus::UPDATED) {
           // merged_value contains the final value.
           bool mem_res __attribute__((__unused__));
           mem_res = mem->Add(sequence_, value_type, key, Slice(merged_value));
-          assert(mem_res);
+          terarkdb_assert(mem_res);
           RecordTick(moptions->statistics, NUMBER_KEYS_WRITTEN);
         }
       }
     }
     // optimize for non-recovery mode
     if (UNLIKELY(!ret_status.IsTryAgain() && rebuilding_trx_ != nullptr)) {
-      assert(!write_after_commit_);
+      terarkdb_assert(!write_after_commit_);
       // If the ret_status is TryAgain then let the next try to add the ky to
       // the rebuilding transaction object.
       WriteBatchInternal::Put(rebuilding_trx_, column_family_id, key, value);
@@ -1300,7 +1300,7 @@ class MemTableInserter : public WriteBatch::Handler {
         mem->Add(sequence_, delete_type, key, value,
                  concurrent_memtable_writes_, get_post_process_info(mem));
     if (UNLIKELY(!mem_res)) {
-      assert(seq_per_batch_);
+      terarkdb_assert(seq_per_batch_);
       ret_status = Status::TryAgain("key+seq exists");
       const bool BATCH_BOUNDRY = true;
       MaybeAdvanceSeq(BATCH_BOUNDRY);
@@ -1323,7 +1323,7 @@ class MemTableInserter : public WriteBatch::Handler {
     if (UNLIKELY(!SeekToColumnFamily(column_family_id, &seek_status))) {
       bool batch_boundry = false;
       if (rebuilding_trx_ != nullptr) {
-        assert(!write_after_commit_);
+        terarkdb_assert(!write_after_commit_);
         // The CF is probably flushed and hence no need for insert but we still
         // need to keep track of the keys for upcoming rollback/commit.
         WriteBatchInternal::Delete(rebuilding_trx_, column_family_id, key);
@@ -1336,7 +1336,7 @@ class MemTableInserter : public WriteBatch::Handler {
     auto ret_status = DeleteImpl(column_family_id, key, Slice(), kTypeDeletion);
     // optimize for non-recovery mode
     if (UNLIKELY(!ret_status.IsTryAgain() && rebuilding_trx_ != nullptr)) {
-      assert(!write_after_commit_);
+      terarkdb_assert(!write_after_commit_);
       // If the ret_status is TryAgain then let the next try to add the ky to
       // the rebuilding transaction object.
       WriteBatchInternal::Delete(rebuilding_trx_, column_family_id, key);
@@ -1357,7 +1357,7 @@ class MemTableInserter : public WriteBatch::Handler {
     if (UNLIKELY(!SeekToColumnFamily(column_family_id, &seek_status))) {
       bool batch_boundry = false;
       if (rebuilding_trx_ != nullptr) {
-        assert(!write_after_commit_);
+        terarkdb_assert(!write_after_commit_);
         // The CF is probably flushed and hence no need for insert but we still
         // need to keep track of the keys for upcoming rollback/commit.
         WriteBatchInternal::SingleDelete(rebuilding_trx_, column_family_id,
@@ -1372,7 +1372,7 @@ class MemTableInserter : public WriteBatch::Handler {
         DeleteImpl(column_family_id, key, Slice(), kTypeSingleDeletion);
     // optimize for non-recovery mode
     if (UNLIKELY(!ret_status.IsTryAgain() && rebuilding_trx_ != nullptr)) {
-      assert(!write_after_commit_);
+      terarkdb_assert(!write_after_commit_);
       // If the ret_status is TryAgain then let the next try to add the ky to
       // the rebuilding transaction object.
       WriteBatchInternal::SingleDelete(rebuilding_trx_, column_family_id, key);
@@ -1395,7 +1395,7 @@ class MemTableInserter : public WriteBatch::Handler {
     if (UNLIKELY(!SeekToColumnFamily(column_family_id, &seek_status))) {
       bool batch_boundry = false;
       if (rebuilding_trx_ != nullptr) {
-        assert(!write_after_commit_);
+        terarkdb_assert(!write_after_commit_);
         // The CF is probably flushed and hence no need for insert but we still
         // need to keep track of the keys for upcoming rollback/commit.
         WriteBatchInternal::DeleteRange(rebuilding_trx_, column_family_id,
@@ -1425,7 +1425,7 @@ class MemTableInserter : public WriteBatch::Handler {
         DeleteImpl(column_family_id, begin_key, end_key, kTypeRangeDeletion);
     // optimize for non-recovery mode
     if (UNLIKELY(!ret_status.IsTryAgain() && rebuilding_trx_ != nullptr)) {
-      assert(!write_after_commit_);
+      terarkdb_assert(!write_after_commit_);
       // If the ret_status is TryAgain then let the next try to add the ky to
       // the rebuilding transaction object.
       WriteBatchInternal::DeleteRange(rebuilding_trx_, column_family_id,
@@ -1436,7 +1436,7 @@ class MemTableInserter : public WriteBatch::Handler {
 
   virtual Status MergeCF(uint32_t column_family_id, const Slice& key,
                          const Slice& value) override {
-    assert(!concurrent_memtable_writes_);
+    terarkdb_assert(!concurrent_memtable_writes_);
     // optimize for non-recovery mode
     if (UNLIKELY(write_after_commit_ && rebuilding_trx_ != nullptr)) {
       WriteBatchInternal::Merge(rebuilding_trx_, column_family_id, key, value);
@@ -1448,7 +1448,7 @@ class MemTableInserter : public WriteBatch::Handler {
     if (UNLIKELY(!SeekToColumnFamily(column_family_id, &seek_status))) {
       bool batch_boundry = false;
       if (rebuilding_trx_ != nullptr) {
-        assert(!write_after_commit_);
+        terarkdb_assert(!write_after_commit_);
         // The CF is probably flushed and hence no need for insert but we still
         // need to keep track of the keys for upcoming rollback/commit.
         WriteBatchInternal::Merge(rebuilding_trx_, column_family_id, key,
@@ -1500,7 +1500,7 @@ class MemTableInserter : public WriteBatch::Handler {
 
       // 2) Apply this merge
       auto merge_operator = moptions->merge_operator;
-      assert(merge_operator);
+      terarkdb_assert(merge_operator);
 
       LazyBuffer new_value;
       std::vector<LazyBuffer> operands;
@@ -1521,7 +1521,7 @@ class MemTableInserter : public WriteBatch::Handler {
           bool mem_res =
               mem->Add(sequence_, kTypeValue, key, new_value.slice());
           if (UNLIKELY(!mem_res)) {
-            assert(seq_per_batch_);
+            terarkdb_assert(seq_per_batch_);
             ret_status = Status::TryAgain("key+seq exists");
             const bool BATCH_BOUNDRY = true;
             MaybeAdvanceSeq(BATCH_BOUNDRY);
@@ -1536,7 +1536,7 @@ class MemTableInserter : public WriteBatch::Handler {
       // Add merge operator to memtable
       bool mem_res = mem->Add(sequence_, kTypeMerge, key, value);
       if (UNLIKELY(!mem_res)) {
-        assert(seq_per_batch_);
+        terarkdb_assert(seq_per_batch_);
         ret_status = Status::TryAgain("key+seq exists");
         const bool BATCH_BOUNDRY = true;
         MaybeAdvanceSeq(BATCH_BOUNDRY);
@@ -1545,7 +1545,7 @@ class MemTableInserter : public WriteBatch::Handler {
 
     // optimize for non-recovery mode
     if (UNLIKELY(!ret_status.IsTryAgain() && rebuilding_trx_ != nullptr)) {
-      assert(!write_after_commit_);
+      terarkdb_assert(!write_after_commit_);
       // If the ret_status is TryAgain then let the next try to add the ky to
       // the rebuilding transaction object.
       WriteBatchInternal::Merge(rebuilding_trx_, column_family_id, key, value);
@@ -1558,7 +1558,7 @@ class MemTableInserter : public WriteBatch::Handler {
   void CheckMemtableFull() {
     if (flush_scheduler_ != nullptr) {
       auto* cfd = cf_mems_->current();
-      assert(cfd != nullptr);
+      terarkdb_assert(cfd != nullptr);
       if (cfd->mem()->ShouldScheduleFlush() &&
           cfd->mem()->MarkFlushScheduled()) {
         // MarkFlushScheduled only returns true if we are the one that
@@ -1571,8 +1571,8 @@ class MemTableInserter : public WriteBatch::Handler {
   // The write batch handler calls MarkBeginPrepare with unprepare set to true
   // if it encounters the kTypeBeginUnprepareXID marker.
   Status MarkBeginPrepare(bool unprepare) override {
-    assert(rebuilding_trx_ == nullptr);
-    assert(db_);
+    terarkdb_assert(rebuilding_trx_ == nullptr);
+    terarkdb_assert(db_);
 
     if (recovering_log_number_ != 0) {
       // during recovery we rebuild a hollow transaction
@@ -1588,7 +1588,7 @@ class MemTableInserter : public WriteBatch::Handler {
       rebuilding_trx_seq_ = sequence_;
       // We only call MarkBeginPrepare once per batch, and unprepared_batch_
       // is initialized to false by default.
-      assert(!unprepared_batch_);
+      terarkdb_assert(!unprepared_batch_);
       unprepared_batch_ = unprepare;
 
       if (has_valid_writes_ != nullptr) {
@@ -1600,11 +1600,11 @@ class MemTableInserter : public WriteBatch::Handler {
   }
 
   Status MarkEndPrepare(const Slice& name) override {
-    assert(db_);
-    assert((rebuilding_trx_ != nullptr) == (recovering_log_number_ != 0));
+    terarkdb_assert(db_);
+    terarkdb_assert((rebuilding_trx_ != nullptr) == (recovering_log_number_ != 0));
 
     if (recovering_log_number_ != 0) {
-      assert(db_->allow_2pc());
+      terarkdb_assert(db_->allow_2pc());
       size_t batch_cnt =
           write_after_commit_
               ? 0  // 0 will disable further checks
@@ -1614,7 +1614,7 @@ class MemTableInserter : public WriteBatch::Handler {
                                       batch_cnt, unprepared_batch_);
       rebuilding_trx_ = nullptr;
     } else {
-      assert(rebuilding_trx_ == nullptr);
+      terarkdb_assert(rebuilding_trx_ == nullptr);
     }
     const bool batch_boundry = true;
     MaybeAdvanceSeq(batch_boundry);
@@ -1636,7 +1636,7 @@ class MemTableInserter : public WriteBatch::Handler {
   }
 
   Status MarkCommit(const Slice& name) override {
-    assert(db_);
+    terarkdb_assert(db_);
 
     Status s;
 
@@ -1652,10 +1652,10 @@ class MemTableInserter : public WriteBatch::Handler {
       if (trx != nullptr) {
         // at this point individual CF lognumbers will prevent
         // duplicate re-insertion of values.
-        assert(log_number_ref_ == 0);
+        terarkdb_assert(log_number_ref_ == 0);
         if (write_after_commit_) {
           // write_after_commit_ can only have one batch in trx.
-          assert(trx->batches_.size() == 1);
+          terarkdb_assert(trx->batches_.size() == 1);
           const auto& batch_info = trx->batches_.begin()->second;
           // all inserts must reference this trx log number
           log_number_ref_ = batch_info.log_number_;
@@ -1675,7 +1675,7 @@ class MemTableInserter : public WriteBatch::Handler {
       // When writes are not delayed until commit, there is no disconnect
       // between a memtable write and the WAL that supports it. So the commit
       // need not reference any log as the only log to which it depends.
-      assert(!write_after_commit_ || log_number_ref_ > 0);
+      terarkdb_assert(!write_after_commit_ || log_number_ref_ > 0);
     }
     const bool batch_boundry = true;
     MaybeAdvanceSeq(batch_boundry);
@@ -1684,7 +1684,7 @@ class MemTableInserter : public WriteBatch::Handler {
   }
 
   Status MarkRollback(const Slice& name) override {
-    assert(db_);
+    terarkdb_assert(db_);
 
     if (recovering_log_number_ != 0) {
       auto trx = db_->GetRecoveredTransaction(name.ToString());
@@ -1745,8 +1745,8 @@ Status WriteBatchInternal::InsertInto(
     if (!w->status.ok()) {
       return w->status;
     }
-    assert(!seq_per_batch || w->batch_cnt != 0);
-    assert(!seq_per_batch || inserter.sequence() - w->sequence == w->batch_cnt);
+    terarkdb_assert(!seq_per_batch || w->batch_cnt != 0);
+    terarkdb_assert(!seq_per_batch || inserter.sequence() - w->sequence == w->batch_cnt);
   }
   return Status::OK();
 }
@@ -1760,7 +1760,7 @@ Status WriteBatchInternal::InsertInto(
 #ifdef NDEBUG
   (void)batch_cnt;
 #endif
-  assert(writer->ShouldWriteToMemtable());
+  terarkdb_assert(writer->ShouldWriteToMemtable());
   MemTableInserter inserter(
       sequence, memtables, flush_scheduler, ignore_missing_column_families,
       log_number, db, concurrent_memtable_writes, nullptr /*has_valid_writes*/,
@@ -1768,8 +1768,8 @@ Status WriteBatchInternal::InsertInto(
   SetSequence(writer->batch, sequence);
   inserter.set_log_number_ref(writer->log_ref);
   Status s = writer->batch->Iterate(&inserter);
-  assert(!seq_per_batch || batch_cnt != 0);
-  assert(!seq_per_batch || inserter.sequence() - sequence == batch_cnt);
+  terarkdb_assert(!seq_per_batch || batch_cnt != 0);
+  terarkdb_assert(!seq_per_batch || inserter.sequence() - sequence == batch_cnt);
   if (concurrent_memtable_writes) {
     inserter.PostProcess();
   }
@@ -1797,7 +1797,7 @@ Status WriteBatchInternal::InsertInto(
 }
 
 Status WriteBatchInternal::SetContents(WriteBatch* b, const Slice& contents) {
-  assert(contents.size() >= WriteBatchInternal::kHeader);
+  terarkdb_assert(contents.size() >= WriteBatchInternal::kHeader);
   b->rep_.assign(contents.data(), contents.size());
   b->content_flags_.store(ContentFlags::DEFERRED, std::memory_order_relaxed);
   return Status::OK();
@@ -1822,7 +1822,7 @@ Status WriteBatchInternal::Append(WriteBatch* dst, const WriteBatch* src,
   }
 
   SetCount(dst, Count(dst) + src_count);
-  assert(src->rep_.size() >= WriteBatchInternal::kHeader);
+  terarkdb_assert(src->rep_.size() >= WriteBatchInternal::kHeader);
   dst->rep_.append(src->rep_.data() + WriteBatchInternal::kHeader, src_len);
   dst->content_flags_.store(
       dst->content_flags_.load(std::memory_order_relaxed) | src_flags,

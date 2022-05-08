@@ -24,7 +24,7 @@ class FullFilterBlockBuilder;
 FullFilterBitsBuilder::FullFilterBitsBuilder(const size_t bits_per_key,
                                              const size_t num_probes)
     : bits_per_key_(bits_per_key), num_probes_(num_probes) {
-  assert(bits_per_key_);
+  terarkdb_assert(bits_per_key_);
 }
 
 FullFilterBitsBuilder::~FullFilterBitsBuilder() {}
@@ -40,7 +40,7 @@ Slice FullFilterBitsBuilder::Finish(std::unique_ptr<const char[]>* buf) {
   uint32_t total_bits, num_lines;
   char* data = ReserveSpace(static_cast<int>(hash_entries_.size()), &total_bits,
                             &num_lines);
-  assert(data);
+  terarkdb_assert(data);
 
   if (total_bits != 0 && num_lines != 0) {
     for (auto h : hash_entries_) {
@@ -72,13 +72,13 @@ uint32_t FullFilterBitsBuilder::GetTotalBitsForLocality(uint32_t total_bits) {
 uint32_t FullFilterBitsBuilder::CalculateSpace(const int num_entry,
                                                uint32_t* total_bits,
                                                uint32_t* num_lines) {
-  assert(bits_per_key_);
+  terarkdb_assert(bits_per_key_);
   if (num_entry != 0) {
     uint32_t total_bits_tmp = num_entry * static_cast<uint32_t>(bits_per_key_);
 
     *total_bits = GetTotalBitsForLocality(total_bits_tmp);
     *num_lines = *total_bits / (CACHE_LINE_SIZE * 8);
-    assert(*total_bits > 0 && *total_bits % 8 == 0);
+    terarkdb_assert(*total_bits > 0 && *total_bits % 8 == 0);
   } else {
     // filter is empty, just leave space for metadata
     *total_bits = 0;
@@ -101,8 +101,8 @@ char* FullFilterBitsBuilder::ReserveSpace(const int num_entry,
 }
 
 int FullFilterBitsBuilder::CalculateNumEntry(const uint32_t space) {
-  assert(bits_per_key_);
-  assert(space > 0);
+  terarkdb_assert(bits_per_key_);
+  terarkdb_assert(space > 0);
   uint32_t dont_care1, dont_care2;
   int high = (int)(space * 8 / bits_per_key_ + 1);
   int low = 1;
@@ -113,7 +113,7 @@ int FullFilterBitsBuilder::CalculateNumEntry(const uint32_t space) {
       break;
     }
   }
-  assert(n < high);  // High should be an overestimation
+  terarkdb_assert(n < high);  // High should be an overestimation
   return n;
 }
 
@@ -123,7 +123,7 @@ inline void FullFilterBitsBuilder::AddHash(uint32_t h, char* data,
 #ifdef NDEBUG
   (void)total_bits;
 #endif
-  assert(num_lines > 0 && total_bits > 0);
+  terarkdb_assert(num_lines > 0 && total_bits > 0);
 
   const uint32_t delta = (h >> 17) | (h << 15);  // Rotate right 17 bits
   uint32_t b = (h % num_lines) * (CACHE_LINE_SIZE * 8);
@@ -147,7 +147,7 @@ class FullFilterBitsReader : public FilterBitsReader {
         num_probes_(0),
         num_lines_(0),
         log2_cache_line_size_(0) {
-    assert(data_);
+    terarkdb_assert(data_);
     GetFilterMeta(contents, &num_probes_, &num_lines_);
     // Sanitize broken parameter
     if (num_lines_ != 0 && (data_len_ - 5) % num_lines_ != 0) {
@@ -160,7 +160,7 @@ class FullFilterBitsReader : public FilterBitsReader {
         if (num_lines_at_curr_cache_size == 0) {
           // The cache line size seems not a power of two. It's not supported
           // and indicates a corruption so disable using this filter.
-          assert(false);
+          terarkdb_assert(false);
           num_lines_ = 0;
           num_probes_ = 0;
           break;
@@ -241,8 +241,8 @@ bool FullFilterBitsReader::HashMayMatch(const uint32_t& hash,
   if (len <= 5) return false;  // remain the same with original filter
 
   // It is ensured the params are valid before calling it
-  assert(num_probes != 0);
-  assert(num_lines != 0 && (len - 5) % num_lines == 0);
+  terarkdb_assert(num_probes != 0);
+  terarkdb_assert(num_lines != 0 && (len - 5) % num_lines == 0);
   const char* data = filter.data();
 
   uint32_t h = hash;

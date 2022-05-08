@@ -292,10 +292,10 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
     FileType type;
     // If we cannot parse the file name, we skip;
     if (ParseFileName(manifest_to_del, &number, &type)) {
-      assert(type == kDescriptorFile);
+      terarkdb_assert(type == kDescriptorFile);
       job_context->files_grabbed_for_purge.emplace_back(number);
     } else {
-      assert(false);
+      terarkdb_assert(false);
     }
   }
 
@@ -339,7 +339,7 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
       }
       // Current log should always stay alive since it can't have
       // number < MinLogNumber().
-      assert(alive_log_files_.size());
+      terarkdb_assert(alive_log_files_.size());
     }
     while (!logs_.empty() && logs_.front().number < min_log_number) {
       auto& log = logs_.front();
@@ -355,11 +355,11 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
       }
     }
     // Current log cannot be obsolete.
-    assert(!logs_.empty());
+    terarkdb_assert(!logs_.empty());
   }
 
   // We're just cleaning up for DB::Write().
-  assert(job_context->logs_to_free.empty());
+  terarkdb_assert(job_context->logs_to_free.empty());
   job_context->logs_to_free = logs_to_free_;
   job_context->log_recycle_files.assign(log_recycle_files_.begin(),
                                         log_recycle_files_.end());
@@ -437,10 +437,10 @@ void DBImpl::DeleteObsoleteFileImpl(
 void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
   TEST_SYNC_POINT("DBImpl::PurgeObsoleteFiles:Begin");
   // we'd better have sth to delete
-  assert(state.HaveSomethingToDelete());
+  terarkdb_assert(state.HaveSomethingToDelete());
 
   // FindObsoleteFiles() should've populated this so nonzero
-  assert(state.manifest_file_number != 0);
+  terarkdb_assert(state.manifest_file_number != 0);
 
   // Now, convert live list to an unordered map, WITHOUT mutex held;
   // set is slow.
@@ -539,7 +539,7 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
     uint64_t number;
     FileType type;
     if (!ParseFileName(to_delete, &number, info_log_prefix.prefix, &type)) {
-      assert(false);
+      terarkdb_assert(false);
       continue;
     }
 
@@ -735,7 +735,7 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
     delete_obsolete_files_lock_ = false;
   }
   --pending_purge_obsolete_files_;
-  assert(pending_purge_obsolete_files_ >= 0);
+  terarkdb_assert(pending_purge_obsolete_files_ >= 0);
   if (pending_purge_obsolete_files_ == 0) {
     bg_cv_.SignalAll();
   }
@@ -790,8 +790,8 @@ uint64_t PrecomputeMinLogNumberToKeep(
     autovector<VersionEdit*> edit_list,
     const autovector<MemTable*>& memtables_to_flush,
     LogsWithPrepTracker* prep_tracker) {
-  assert(vset != nullptr);
-  assert(prep_tracker != nullptr);
+  terarkdb_assert(vset != nullptr);
+  terarkdb_assert(prep_tracker != nullptr);
   // Calculate updated min_log_number_to_keep
   // Since the function should only be called in 2pc mode, log number in
   // the version edit should be sufficient.

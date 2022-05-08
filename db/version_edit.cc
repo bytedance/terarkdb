@@ -83,7 +83,7 @@ enum CustomTag : uint32_t {
 uint32_t kCustomTagNonSafeIgnoreMask = 1 << 6;
 
 uint64_t PackFileNumberAndPathId(uint64_t number, uint64_t path_id) {
-  assert(number <= kFileNumberMask);
+  terarkdb_assert(number <= kFileNumberMask);
   return number | (path_id * (kFileNumberMask + 1));
 }
 
@@ -413,6 +413,11 @@ const char* VersionEdit::DecodeNewFile4From(Slice* input) {
               f.need_upgrade = false;
             }
           }
+          terarkdb_assert(std::is_sorted(f.prop.dependence.begin(),
+                                         f.prop.dependence.end(),
+                                         TERARK_CMP(file_number, <)));
+          terarkdb_assert(std::is_sorted(f.prop.inheritance.begin(),
+                                         f.prop.inheritance.end()));
           break;
         default:
           if ((custom_tag & kCustomTagNonSafeIgnoreMask) != 0) {

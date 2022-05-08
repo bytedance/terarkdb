@@ -59,7 +59,7 @@ class BlockReadAmpBitmap {
         rnd_(Random::GetTLSInstance()->Uniform(
             static_cast<int>(bytes_per_bit))) {
     TEST_SYNC_POINT_CALLBACK("BlockReadAmpBitmap:rnd", &rnd_);
-    assert(block_size > 0 && bytes_per_bit > 0);
+    terarkdb_assert(block_size > 0 && bytes_per_bit > 0);
 
     // convert bytes_per_bit to be a power of 2
     while (bytes_per_bit >>= 1) {
@@ -68,7 +68,7 @@ class BlockReadAmpBitmap {
 
     // num_bits_needed = ceil(block_size / bytes_per_bit)
     size_t num_bits_needed = ((block_size - 1) >> bytes_per_bit_pow_) + 1;
-    assert(num_bits_needed > 0);
+    terarkdb_assert(num_bits_needed > 0);
 
     // bitmap_size = ceil(num_bits_needed / kBitsPerEntry)
     size_t bitmap_size = (num_bits_needed - 1) / kBitsPerEntry + 1;
@@ -82,7 +82,7 @@ class BlockReadAmpBitmap {
   ~BlockReadAmpBitmap() { delete[] bitmap_; }
 
   void Mark(uint32_t start_offset, uint32_t end_offset) {
-    assert(end_offset >= start_offset);
+    terarkdb_assert(end_offset >= start_offset);
     // Index of first bit in mask
     uint32_t start_bit =
         (start_offset + (1 << bytes_per_bit_pow_) - rnd_ - 1) >>
@@ -93,7 +93,7 @@ class BlockReadAmpBitmap {
     if (start_bit >= exclusive_end_bit) {
       return;
     }
-    assert(exclusive_end_bit > 0);
+    terarkdb_assert(exclusive_end_bit > 0);
 
     if (GetAndSet(start_bit) == 0) {
       uint32_t new_useful_bytes = (exclusive_end_bit - start_bit)
@@ -227,8 +227,8 @@ class BlockIter : public InternalIteratorBase<TValue> {
   void InitializeBase(const Comparator* comparator, const char* data,
                       uint32_t restarts, uint32_t num_restarts,
                       SequenceNumber global_seqno, bool block_contents_pinned) {
-    assert(data_ == nullptr);  // Ensure it is called only once
-    assert(num_restarts > 0);  // Ensure the param is valid
+    terarkdb_assert(data_ == nullptr);  // Ensure it is called only once
+    terarkdb_assert(num_restarts > 0);  // Ensure the param is valid
 
     comparator_ = comparator;
     data_ = data;
@@ -242,7 +242,7 @@ class BlockIter : public InternalIteratorBase<TValue> {
 
   ~BlockIter() {
     if (cache_handle_ != nullptr) {
-      assert(cache_ != nullptr);
+      terarkdb_assert(cache_ != nullptr);
       cache_->Release(cache_handle_, cache_force_release_);
     }
   }
@@ -256,7 +256,7 @@ class BlockIter : public InternalIteratorBase<TValue> {
     status_ = s;
 
     if (cache_handle_ != nullptr) {
-      assert(cache_ != nullptr);
+      terarkdb_assert(cache_ != nullptr);
       cache_->Release(cache_handle_, cache_force_release_);
       cache_handle_ = nullptr;
     }
@@ -266,8 +266,8 @@ class BlockIter : public InternalIteratorBase<TValue> {
 
   void SetReleaseCache(Cache* cache, Cache::Handle* cache_handle,
                        bool force_release) {
-    assert(cache != nullptr);
-    assert(cache_handle != nullptr);
+    terarkdb_assert(cache != nullptr);
+    terarkdb_assert(cache_handle != nullptr);
     cache_ = cache;
     cache_handle_ = cache_handle;
     cache_force_release_ = force_release;
@@ -277,7 +277,7 @@ class BlockIter : public InternalIteratorBase<TValue> {
         !cache_->Ref(cache_handle_)) {
       return Cleanable();
     }
-    assert(cache_ != nullptr);
+    terarkdb_assert(cache_ != nullptr);
     if (cache_force_release_) {
       return Cleanable(
           [](void* c, void* h) {
@@ -298,7 +298,7 @@ class BlockIter : public InternalIteratorBase<TValue> {
   virtual bool Valid() const override { return current_ < restarts_; }
   virtual Status status() const override { return status_; }
   virtual Slice key() const override {
-    assert(Valid());
+    terarkdb_assert(Valid());
     return key_.GetKey();
   }
 
@@ -347,7 +347,7 @@ class BlockIter : public InternalIteratorBase<TValue> {
   }
 
   uint32_t GetRestartPoint(uint32_t index) {
-    assert(index < num_restarts_);
+    terarkdb_assert(index < num_restarts_);
     return DecodeFixed32(data_ + restarts_ + index * sizeof(uint32_t));
   }
 
@@ -399,7 +399,7 @@ class DataBlockIter final : public BlockIter<Slice> {
   }
 
   virtual Slice value() const override {
-    assert(Valid());
+    terarkdb_assert(Valid());
     if (read_amp_bitmap_ && current_ < restarts_ &&
         current_ != last_bitmap_offset_) {
       read_amp_bitmap_->Mark(current_ /* current entry offset */,
@@ -484,7 +484,7 @@ class IndexBlockIter final : public BlockIter<BlockHandle> {
   IndexBlockIter() : BlockIter(), prefix_index_(nullptr) {}
 
   virtual Slice key() const override {
-    assert(Valid());
+    terarkdb_assert(Valid());
     return key_.GetKey();
   }
   // key_includes_seq, default true, means that the keys are in internal key
@@ -518,14 +518,14 @@ class IndexBlockIter final : public BlockIter<BlockHandle> {
   }
 
   virtual BlockHandle value() const override {
-    assert(Valid());
+    terarkdb_assert(Valid());
     if (value_delta_encoded_) {
       return decoded_value_;
     } else {
       BlockHandle handle;
       Slice v = value_;
       Status decode_s __attribute__((__unused__)) = handle.DecodeFrom(&v);
-      assert(decode_s.ok());
+      terarkdb_assert(decode_s.ok());
       return handle;
     }
   }
@@ -533,7 +533,7 @@ class IndexBlockIter final : public BlockIter<BlockHandle> {
   virtual void Seek(const Slice& target) override;
 
   virtual void SeekForPrev(const Slice&) override {
-    assert(false);
+    terarkdb_assert(false);
     current_ = restarts_;
     restart_index_ = num_restarts_;
     status_ = Status::InvalidArgument(

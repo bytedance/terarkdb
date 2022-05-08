@@ -44,6 +44,9 @@ static Status IOError(const std::string& context, const std::string& file_name,
                              strerror(err_number));
     case ESTALE:
       return Status::IOError(Status::kStaleFile);
+    case EFAULT:
+      InvokeDebugCallback(kDebugCoreDump, strerror(err_number));
+      // fall through
     default:
       return Status::IOError(IOErrorMsg(context, file_name),
                              strerror(err_number));
@@ -196,7 +199,7 @@ class PosixMmapFile : public WritableFile {
 
   size_t TruncateToPageBoundary(size_t s) {
     s -= (s & (page_size_ - 1));
-    assert((s % page_size_) == 0);
+    terarkdb_assert((s % page_size_) == 0);
     return s;
   }
 

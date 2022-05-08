@@ -101,7 +101,7 @@ void GetSmallestLargestSeqno(const std::vector<FileMetaData*>& files,
                              SequenceNumber* largest_seqno) {
   bool is_first = true;
   for (FileMetaData* f : files) {
-    assert(f->fd.smallest_seqno <= f->fd.largest_seqno);
+    terarkdb_assert(f->fd.smallest_seqno <= f->fd.largest_seqno);
     if (is_first) {
       is_first = false;
       *smallest_seqno = f->fd.smallest_seqno;
@@ -145,8 +145,8 @@ bool UniversalCompactionPicker::IsInputFilesNonOverlapping(Compaction* c) {
         // found overlapping files, return false
         return false;
       }
-      assert(icmp_->Compare(curr.f->largest.Encode(),
-                            prev.f->largest.Encode()) > 0);
+      terarkdb_assert(icmp_->Compare(curr.f->largest.Encode(),
+                                     prev.f->largest.Encode()) > 0);
       prev = curr;
     }
 
@@ -190,7 +190,7 @@ void UniversalCompactionPicker::SortedRun::Dump(char* out_buf,
                                                 size_t out_buf_size,
                                                 bool print_path) const {
   if (level == 0) {
-    assert(file != nullptr);
+    terarkdb_assert(file != nullptr);
     if (file->fd.GetPathId() == 0 || !print_path) {
       snprintf(out_buf, out_buf_size, "file %" PRIu64, file->fd.GetNumber());
     } else {
@@ -208,7 +208,7 @@ void UniversalCompactionPicker::SortedRun::Dump(char* out_buf,
 void UniversalCompactionPicker::SortedRun::DumpSizeInfo(
     char* out_buf, size_t out_buf_size, size_t sorted_run_count) const {
   if (level == 0) {
-    assert(file != nullptr);
+    terarkdb_assert(file != nullptr);
     snprintf(out_buf, out_buf_size,
              "file %" PRIu64 "[%" ROCKSDB_PRIszt
              "] "
@@ -343,9 +343,10 @@ Compaction* UniversalCompactionPicker::PickCompaction(
         // compaction without looking at filesize ratios and try to reduce
         // the number of files to fewer than level0_file_num_compaction_trigger.
         // This is guaranteed by NeedsCompaction()
-        assert(sorted_runs.size() >=
-               static_cast<size_t>(
-                   mutable_cf_options.level0_file_num_compaction_trigger));
+        terarkdb_assert(
+            sorted_runs.size() >=
+            static_cast<size_t>(
+                mutable_cf_options.level0_file_num_compaction_trigger));
         // Get the total number of sorted runs that are not being compacted
         int num_sr_not_compacted = 0;
         for (size_t i = 0; i < sorted_runs.size(); i++) {
@@ -402,8 +403,9 @@ Compaction* UniversalCompactionPicker::PickCompaction(
   }
   if (allow_trivial_move) {
     c->set_is_trivial_move(IsInputFilesNonOverlapping(c));
-    assert(c->compaction_reason() != CompactionReason::kTrivialMoveLevel ||
-           c->is_trivial_move());
+    terarkdb_assert(c->compaction_reason() !=
+                        CompactionReason::kTrivialMoveLevel ||
+                    c->is_trivial_move());
   }
 
 // validate that all the chosen files of L0 are non overlapping in time
@@ -430,10 +432,10 @@ Compaction* UniversalCompactionPicker::PickCompaction(
             SortedRunDebug{true, i, nullptr, smallest_seqno, largest_seqno});
       }
     }
-    assert(std::is_sorted(sr_debug.begin(), sr_debug.end(),
-                          TERARK_CMP(smallest, >)));
-    assert(std::is_sorted(sr_debug.begin(), sr_debug.end(),
-                          TERARK_CMP(largest, >)));
+    terarkdb_assert(std::is_sorted(sr_debug.begin(), sr_debug.end(),
+                                   TERARK_CMP(smallest, >)));
+    terarkdb_assert(std::is_sorted(sr_debug.begin(), sr_debug.end(),
+                                   TERARK_CMP(largest, >)));
     SortedRunDebug o{false, c->output_level(), nullptr,
                      std::numeric_limits<SequenceNumber>::max(), 0U};
     for (auto& input_level : *c->inputs()) {
@@ -451,7 +453,7 @@ Compaction* UniversalCompactionPicker::PickCompaction(
               break;
             }
           }
-          assert(it != sr_debug.end());
+          terarkdb_assert(it != sr_debug.end());
           o.smallest = std::min(o.smallest, f->fd.smallest_seqno);
           o.largest = std::max(o.largest, f->fd.largest_seqno);
           sr_debug.erase(it);
@@ -466,26 +468,27 @@ Compaction* UniversalCompactionPicker::PickCompaction(
             break;
           }
         }
-        assert(it != sr_debug.end());
-        assert(vstorage->LevelFiles(input_level.level).size() ==
-                   input_level.size() &&
-               input_level.files.end() ==
-                   std::mismatch(
-                       input_level.files.begin(), input_level.files.end(),
-                       vstorage->LevelFiles(input_level.level).begin())
-                       .first);
+        terarkdb_assert(it != sr_debug.end());
+        terarkdb_assert(
+            vstorage->LevelFiles(input_level.level).size() ==
+                input_level.size() &&
+            input_level.files.end() ==
+                std::mismatch(input_level.files.begin(),
+                              input_level.files.end(),
+                              vstorage->LevelFiles(input_level.level).begin())
+                    .first);
         o.smallest = std::min(o.smallest, it->smallest);
         o.largest = std::max(o.largest, it->largest);
         sr_debug.erase(it);
       }
     }
-    assert(o.smallest != std::numeric_limits<SequenceNumber>::max());
+    terarkdb_assert(o.smallest != std::numeric_limits<SequenceNumber>::max());
     sr_debug.emplace_back(o);
     std::sort(sr_debug.begin(), sr_debug.end(),
               TERARK_CMP(smallest, >, level, <));
-    assert(std::is_sorted(sr_debug.begin(), sr_debug.end(),
-                          TERARK_CMP(largest, >)));
-    assert(
+    terarkdb_assert(std::is_sorted(sr_debug.begin(), sr_debug.end(),
+                                   TERARK_CMP(largest, >)));
+    terarkdb_assert(
         std::is_sorted(sr_debug.begin(), sr_debug.end(), TERARK_CMP(level, >)));
   }
 #endif
@@ -551,20 +554,20 @@ Compaction* UniversalCompactionPicker::CompactRange(
     }
   }
   if (input_level == ColumnFamilyData::kCompactAllLevels) {
-    assert(ioptions_.compaction_style == kCompactionStyleUniversal);
+    terarkdb_assert(ioptions_.compaction_style == kCompactionStyleUniversal);
 
     // Universal compaction with more than one level always compacts all the
     // files together to the last level.
-    assert(vstorage->num_levels() > 1);
+    terarkdb_assert(vstorage->num_levels() > 1);
     // DBImpl::CompactRange() set output level to be the last level
     if (ioptions_.allow_ingest_behind) {
-      assert(output_level == vstorage->num_levels() - 2);
+      terarkdb_assert(output_level == vstorage->num_levels() - 2);
     } else {
-      assert(output_level == vstorage->num_levels() - 1);
+      terarkdb_assert(output_level == vstorage->num_levels() - 1);
     }
     // DBImpl::RunManualCompaction will make full range for universal compaction
-    assert(begin == nullptr);
-    assert(end == nullptr);
+    terarkdb_assert(begin == nullptr);
+    terarkdb_assert(end == nullptr);
 
     int start_level = 0;
     for (; start_level < vstorage->num_levels() &&
@@ -664,7 +667,7 @@ uint32_t UniversalCompactionPicker::GetPathId(
       file_size *
       (100 - mutable_cf_options.compaction_options_universal.size_ratio) / 100;
   uint32_t p = 0;
-  assert(!ioptions.cf_paths.empty());
+  terarkdb_assert(!ioptions.cf_paths.empty());
   for (; p < ioptions.cf_paths.size() - 1; p++) {
     uint64_t target_size = ioptions.cf_paths[p].target_size;
     if (target_size > file_size &&
@@ -762,7 +765,7 @@ Compaction* UniversalCompactionPicker::PickCompactionToReduceSortedRunsOld(
   // Caller checks the size before executing this function. This invariant is
   // important because otherwise we may have a possible integer underflow when
   // dealing with unsigned types.
-  assert(sorted_runs.size() > 0);
+  terarkdb_assert(sorted_runs.size() > 0);
 
   // Considers a candidate file only if it is smaller than the
   // total size accumulated so far.
@@ -894,7 +897,7 @@ Compaction* UniversalCompactionPicker::PickCompactionToReduceSortedRunsOld(
   // last level is reserved for the files ingested behind
   if (ioptions_.allow_ingest_behind &&
       (output_level == vstorage->num_levels() - 1)) {
-    assert(output_level > 1);
+    terarkdb_assert(output_level > 1);
     output_level--;
   }
 
@@ -1030,7 +1033,7 @@ Compaction* UniversalCompactionPicker::PickCompactionToReduceSizeAmp(
         " earliest-file-size %" PRIu64,
         cf_name.c_str(), candidate_size, earliest_file_size);
   }
-  assert(start_index < sorted_runs.size() - 1);
+  terarkdb_assert(start_index < sorted_runs.size() - 1);
 
   // Estimate total file size
   uint64_t estimated_total_size = 0;
@@ -1067,7 +1070,7 @@ Compaction* UniversalCompactionPicker::PickCompactionToReduceSizeAmp(
   int output_level = vstorage->num_levels() - 1;
   // last level is reserved for the files ingested behind
   if (ioptions_.allow_ingest_behind) {
-    assert(output_level > 1);
+    terarkdb_assert(output_level > 1);
     output_level--;
   }
 
@@ -1158,7 +1161,7 @@ Compaction* UniversalCompactionPicker::PickDeleteTriggeredCompaction(
     }
     if (ioptions_.allow_ingest_behind &&
         output_level == vstorage->num_levels() - 1) {
-      assert(output_level > 1);
+      terarkdb_assert(output_level > 1);
       output_level--;
     }
 
@@ -1280,16 +1283,17 @@ Compaction* UniversalCompactionPicker::PickTrivialMoveCompaction(
   uint32_t path_id = 0;
   if (start_level == 0) {
     auto& level0_files = vstorage->LevelFiles(0);
-    assert(!level0_files.empty() && !level0_files.back()->being_compacted);
+    terarkdb_assert(!level0_files.empty() &&
+                    !level0_files.back()->being_compacted);
     FileMetaData* meta = level0_files.back();
     inputs.files = {meta};
     path_id = meta->fd.GetPathId();
   } else {
-    assert(!AreFilesInCompaction(vstorage->LevelFiles(start_level)));
+    terarkdb_assert(!AreFilesInCompaction(vstorage->LevelFiles(start_level)));
     inputs.files = vstorage->LevelFiles(start_level);
     path_id = inputs.files.front()->fd.GetPathId();
   }
-  assert(!AreFilesInCompaction(inputs.files));
+  terarkdb_assert(!AreFilesInCompaction(inputs.files));
   CompactionParams params(vstorage, ioptions_, mutable_cf_options);
   params.inputs = {std::move(inputs)};
   params.output_level = output_level;
@@ -1402,7 +1406,7 @@ Compaction* UniversalCompactionPicker::PickCompactionToReduceSortedRuns(
   // last level is reserved for the files ingested behind
   if (ioptions_.allow_ingest_behind &&
       (output_level == vstorage->num_levels() - 1)) {
-    assert(output_level > 1);
+    terarkdb_assert(output_level > 1);
     output_level--;
   }
 

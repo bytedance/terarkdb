@@ -33,8 +33,6 @@
 
 #include "table/block_builder.h"
 
-#include <assert.h>
-
 #include <algorithm>
 
 #include "db/dbformat.h"
@@ -64,9 +62,9 @@ BlockBuilder::BlockBuilder(
           data_block_hash_table_util_ratio);
       break;
     default:
-      assert(0);
+      terarkdb_assert(0);
   }
-  assert(block_restart_interval_ >= 1);
+  terarkdb_assert(block_restart_interval_ >= 1);
   restarts_.push_back(0);  // First restart point is at offset 0
   estimate_ = sizeof(uint32_t) + sizeof(uint32_t);
 }
@@ -137,9 +135,9 @@ Slice BlockBuilder::Finish() {
 
 void BlockBuilder::Add(const Slice& key, const Slice& value,
                        const Slice* const delta_value) {
-  assert(!finished_);
-  assert(counter_ <= block_restart_interval_);
-  assert(!use_value_delta_encoding_ || delta_value);
+  terarkdb_assert(!finished_);
+  terarkdb_assert(counter_ <= block_restart_interval_);
+  terarkdb_assert(!use_value_delta_encoding_ || delta_value);
   size_t shared = 0;  // number of bytes shared with prev key
   if (counter_ >= block_restart_interval_) {
     // Restart compression

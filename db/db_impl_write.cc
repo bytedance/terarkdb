@@ -81,7 +81,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
   write_throughput_reporter_.AddCount(WriteBatchInternal::ByteSize(my_batch));
   write_batch_size_reporter_.AddRecord(WriteBatchInternal::ByteSize(my_batch));
 
-  assert(!seq_per_batch_ || batch_cnt != 0);
+  terarkdb_assert(!seq_per_batch_ || batch_cnt != 0);
   if (my_batch == nullptr) {
     return Status::Corruption("Batch is nullptr!");
   }
@@ -104,8 +104,8 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
         "pipelined_writes is not compatible with seq_per_batch");
   }
   // Otherwise IsLatestPersistentState optimization does not make sense
-  assert(!WriteBatchInternal::IsLatestPersistentState(my_batch) ||
-         disable_memtable);
+  terarkdb_assert(!WriteBatchInternal::IsLatestPersistentState(my_batch) ||
+                  disable_memtable);
 
   Status status;
   if (write_options.low_pri) {
@@ -157,7 +157,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
       // we're responsible for exit batch group
       for (auto* writer : *(w.write_group)) {
         if (!writer->CallbackFailed() && writer->pre_release_callback) {
-          assert(writer->sequence != kMaxSequenceNumber);
+          terarkdb_assert(writer->sequence != kMaxSequenceNumber);
           Status ws = writer->pre_release_callback->Callback(writer->sequence,
                                                              disable_memtable);
           if (!ws.ok()) {
@@ -172,7 +172,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
       MemTableInsertStatusCheck(w.status);
       write_thread_.ExitAsBatchGroupFollower(&w);
     }
-    assert(w.state == WriteThread::STATE_COMPLETED);
+    terarkdb_assert(w.state == WriteThread::STATE_COMPLETED);
     // STATE_COMPLETED conditional below handles exit
 
     status = w.FinalStatus();
@@ -188,7 +188,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
     return w.FinalStatus();
   }
   // else we are the leader of the write batch group
-  assert(w.state == WriteThread::STATE_GROUP_LEADER);
+  terarkdb_assert(w.state == WriteThread::STATE_GROUP_LEADER);
 
   // Once reaches this point, the current writer "w" will try to do its write
   // job.  It may also pick up some of the remaining writers in the "writers_"
@@ -314,7 +314,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
         last_sequence = versions_->FetchAddLastAllocatedSequence(seq_inc);
       }
     }
-    assert(last_sequence != kMaxSequenceNumber);
+    terarkdb_assert(last_sequence != kMaxSequenceNumber);
     const SequenceNumber current_sequence = last_sequence + 1;
     last_sequence += seq_inc;
 
@@ -340,7 +340,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
           }
           writer->sequence = next_sequence;
           if (seq_per_batch_) {
-            assert(writer->batch_cnt);
+            terarkdb_assert(writer->batch_cnt);
             next_sequence += writer->batch_cnt;
           } else if (writer->ShouldWriteToMemtable()) {
             next_sequence += WriteBatchInternal::Count(writer->batch);
@@ -355,7 +355,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
         if (w.ShouldWriteToMemtable()) {
           ColumnFamilyMemTablesImpl column_family_memtables(
               versions_->GetColumnFamilySet());
-          assert(w.sequence == current_sequence);
+          terarkdb_assert(w.sequence == current_sequence);
           w.status = WriteBatchInternal::InsertInto(
               &w, w.sequence, &column_family_memtables, &flush_scheduler_,
               write_options.ignore_missing_column_families, 0 /*log_number*/,
@@ -399,7 +399,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
     if (status.ok()) {
       for (auto* writer : write_group) {
         if (!writer->CallbackFailed() && writer->pre_release_callback) {
-          assert(writer->sequence != kMaxSequenceNumber);
+          terarkdb_assert(writer->sequence != kMaxSequenceNumber);
           Status ws = writer->pre_release_callback->Callback(writer->sequence,
                                                              disable_memtable);
           if (!ws.ok()) {
@@ -511,7 +511,7 @@ Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
   WriteThread::WriteGroup memtable_write_group;
   if (w.state == WriteThread::STATE_MEMTABLE_WRITER_LEADER) {
     PERF_TIMER_GUARD(write_memtable_time);
-    assert(w.ShouldWriteToMemtable());
+    terarkdb_assert(w.ShouldWriteToMemtable());
     write_thread_.EnterAsMemTableWriter(&w, &memtable_write_group);
     if (memtable_write_group.size > 1 &&
         immutable_db_options_.allow_concurrent_memtable_write) {
@@ -528,7 +528,7 @@ Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
   }
 
   if (w.state == WriteThread::STATE_PARALLEL_MEMTABLE_WRITER) {
-    assert(w.ShouldWriteToMemtable());
+    terarkdb_assert(w.ShouldWriteToMemtable());
     ColumnFamilyMemTablesImpl column_family_memtables(
         versions_->GetColumnFamilySet());
     w.status = WriteBatchInternal::InsertInto(
@@ -545,7 +545,7 @@ Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
     *seq_used = w.sequence;
   }
 
-  assert(w.state == WriteThread::STATE_COMPLETED);
+  terarkdb_assert(w.state == WriteThread::STATE_COMPLETED);
   return w.FinalStatus();
 }
 
@@ -566,7 +566,7 @@ Status DBImpl::WriteImplWALOnly(const WriteOptions& write_options,
   StopWatch write_sw(env_, immutable_db_options_.statistics.get(), DB_WRITE);
 
   nonmem_write_thread_.JoinBatchGroup(&w);
-  assert(w.state != WriteThread::STATE_PARALLEL_MEMTABLE_WRITER);
+  terarkdb_assert(w.state != WriteThread::STATE_PARALLEL_MEMTABLE_WRITER);
   if (w.state == WriteThread::STATE_COMPLETED) {
     if (log_used != nullptr) {
       *log_used = w.log_used;
@@ -577,7 +577,7 @@ Status DBImpl::WriteImplWALOnly(const WriteOptions& write_options,
     return w.FinalStatus();
   }
   // else we are the leader of the write batch group
-  assert(w.state == WriteThread::STATE_GROUP_LEADER);
+  terarkdb_assert(w.state == WriteThread::STATE_GROUP_LEADER);
   WriteThread::WriteGroup write_group;
   uint64_t last_sequence;
   nonmem_write_thread_.EnterAsBatchGroupLeader(&w, &write_group);
@@ -620,7 +620,7 @@ Status DBImpl::WriteImplWALOnly(const WriteOptions& write_options,
   if (seq_per_batch_) {
     size_t total_batch_cnt = 0;
     for (auto* writer : write_group) {
-      assert(writer->batch_cnt);
+      terarkdb_assert(writer->batch_cnt);
       total_batch_cnt += writer->batch_cnt;
     }
     seq_inc = total_batch_cnt;
@@ -639,13 +639,13 @@ Status DBImpl::WriteImplWALOnly(const WriteOptions& write_options,
     }
     writer->sequence = curr_seq;
     if (seq_per_batch_) {
-      assert(writer->batch_cnt);
+      terarkdb_assert(writer->batch_cnt);
       curr_seq += writer->batch_cnt;
     }
     // else seq advances only by memtable writes
   }
   if (status.ok() && write_options.sync) {
-    assert(!write_options.disableWAL);
+    terarkdb_assert(!write_options.disableWAL);
     // Requesting sync with two_write_queues_ is expected to be very rare. We
     // hance provide a simple implementation that is not necessarily efficient.
     if (manual_wal_flush_) {
@@ -662,7 +662,7 @@ Status DBImpl::WriteImplWALOnly(const WriteOptions& write_options,
   if (status.ok()) {
     for (auto* writer : write_group) {
       if (!writer->CallbackFailed() && writer->pre_release_callback) {
-        assert(writer->sequence != kMaxSequenceNumber);
+        terarkdb_assert(writer->sequence != kMaxSequenceNumber);
         const bool DISABLE_MEMTABLE = true;
         Status ws = writer->pre_release_callback->Callback(writer->sequence,
                                                            DISABLE_MEMTABLE);
@@ -702,7 +702,7 @@ void DBImpl::MemTableInsertStatusCheck(const Status& status) {
   // ignore_missing_column_families.
   if (!status.ok()) {
     mutex_.Lock();
-    assert(!error_handler_.IsBGWorkStopped());
+    terarkdb_assert(!error_handler_.IsBGWorkStopped());
     error_handler_.SetBGError(status, BackgroundErrorReason::kMemTable);
     mutex_.Unlock();
   }
@@ -712,7 +712,7 @@ Status DBImpl::PreprocessWrite(const WriteOptions& write_options,
                                bool* need_log_sync,
                                WriteContext* write_context) {
   mutex_.AssertHeld();
-  assert(write_context != nullptr && need_log_sync != nullptr);
+  terarkdb_assert(write_context != nullptr && need_log_sync != nullptr);
   Status status;
 
   if (error_handler_.IsDBStopped()) {
@@ -721,8 +721,9 @@ Status DBImpl::PreprocessWrite(const WriteOptions& write_options,
 
   PERF_TIMER_GUARD(write_scheduling_flushes_compactions_time);
 
-  assert(!single_column_family_mode_ ||
-         versions_->GetColumnFamilySet()->NumberOfColumnFamilies() == 1);
+  terarkdb_assert(!single_column_family_mode_ ||
+                  versions_->GetColumnFamilySet()->NumberOfColumnFamilies() ==
+                      1);
 
   if (UNLIKELY(status.ok() && !single_column_family_mode_ &&
                total_log_size_ > GetMaxTotalWalSize())) {
@@ -774,7 +775,7 @@ Status DBImpl::PreprocessWrite(const WriteOptions& write_options,
       log_sync_cv_.Wait();
     }
     for (auto& log : logs_) {
-      assert(!log.getting_synced);
+      terarkdb_assert(!log.getting_synced);
       // This is just to prevent the logs to be synced by a parallel SyncWAL
       // call. We will do the actual syncing later after we will write to the
       // WAL.
@@ -792,13 +793,14 @@ Status DBImpl::PreprocessWrite(const WriteOptions& write_options,
 WriteBatch* DBImpl::MergeBatch(const WriteThread::WriteGroup& write_group,
                                WriteBatch* tmp_batch, size_t* write_with_wal,
                                WriteBatch** to_be_cached_state) {
-  assert(write_with_wal != nullptr);
-  assert(tmp_batch != nullptr);
-  assert(*to_be_cached_state == nullptr);
+  terarkdb_assert(write_with_wal != nullptr);
+  terarkdb_assert(tmp_batch != nullptr);
+  terarkdb_assert(*to_be_cached_state == nullptr);
   WriteBatch* merged_batch = nullptr;
   *write_with_wal = 0;
   auto* leader = write_group.leader;
-  assert(!leader->disable_wal);  // Same holds for all in the batch group
+  terarkdb_assert(
+      !leader->disable_wal);  // Same holds for all in the batch group
   if (write_group.size == 1 && !leader->CallbackFailed() &&
       leader->batch->GetWalTerminationPoint().is_cleared()) {
     // we simply write the first WriteBatch to WAL if the group only
@@ -834,7 +836,7 @@ WriteBatch* DBImpl::MergeBatch(const WriteThread::WriteGroup& write_group,
 Status DBImpl::WriteToWAL(const WriteBatch& merged_batch,
                           log::Writer* log_writer, uint64_t* log_used,
                           uint64_t* log_size) {
-  assert(log_size != nullptr);
+  terarkdb_assert(log_size != nullptr);
   Slice log_entry = WriteBatchInternal::Contents(&merged_batch);
   *log_size = log_entry.size();
   // When two_write_queues_ WriteToWAL has to be protected from concurretn calls
@@ -869,7 +871,7 @@ Status DBImpl::WriteToWAL(const WriteThread::WriteGroup& write_group,
                           SequenceNumber sequence) {
   Status status;
 
-  assert(!write_group.leader->disable_wal);
+  terarkdb_assert(!write_group.leader->disable_wal);
   // Same holds for all in the batch group
   size_t write_with_wal = 0;
   WriteBatch* to_be_cached_state = nullptr;
@@ -944,7 +946,7 @@ Status DBImpl::ConcurrentWriteToWAL(const WriteThread::WriteGroup& write_group,
                                     size_t seq_inc) {
   Status status;
 
-  assert(!write_group.leader->disable_wal);
+  terarkdb_assert(!write_group.leader->disable_wal);
   // Same holds for all in the batch group
   WriteBatch tmp_batch;
   size_t write_with_wal = 0;
@@ -1035,7 +1037,7 @@ Status DBImpl::WriteRecoverableState() {
 
 Status DBImpl::SwitchWAL(WriteContext* write_context) {
   mutex_.AssertHeld();
-  assert(write_context != nullptr);
+  terarkdb_assert(write_context != nullptr);
   Status status;
 
   if (alive_log_files_.begin()->getting_flushed) {
@@ -1049,8 +1051,8 @@ Status DBImpl::SwitchWAL(WriteContext* write_context) {
     auto oldest_log_with_uncommited_prep =
         logs_with_prep_tracker_.FindMinLogContainingOutstandingPrep();
 
-    assert(oldest_log_with_uncommited_prep == 0 ||
-           oldest_log_with_uncommited_prep >= oldest_alive_log);
+    terarkdb_assert(oldest_log_with_uncommited_prep == 0 ||
+                    oldest_log_with_uncommited_prep >= oldest_alive_log);
     if (oldest_log_with_uncommited_prep > 0 &&
         oldest_log_with_uncommited_prep == oldest_alive_log) {
       if (unable_to_release_oldest_log_) {
@@ -1113,12 +1115,12 @@ Status DBImpl::SwitchWAL(WriteContext* write_context) {
     if (!status.ok()) {
       break;
     }
-    assert(std::find(cfds_flush_only.begin(), cfds_flush_only.end(), cfd) ==
-           cfds_flush_only.end());
+    terarkdb_assert(std::find(cfds_flush_only.begin(), cfds_flush_only.end(),
+                              cfd) == cfds_flush_only.end());
   }
   if (status.ok()) {
     for (auto cfd : cfds_flush_only) {
-      assert(cfd->ioptions()->atomic_flush_group == nullptr);
+      terarkdb_assert(cfd->ioptions()->atomic_flush_group == nullptr);
       cfds.push_back(cfd);
       flush_req_vec.emplace_back();
       auto& flush_req = flush_req_vec.back();
@@ -1144,7 +1146,7 @@ Status DBImpl::SwitchWAL(WriteContext* write_context) {
 
 Status DBImpl::HandleWriteBufferFull(WriteContext* write_context) {
   mutex_.AssertHeld();
-  assert(write_context != nullptr);
+  terarkdb_assert(write_context != nullptr);
   Status status;
 
   // Before a new memtable is added in SwitchMemtable(),
@@ -1175,7 +1177,7 @@ Status DBImpl::HandleWriteBufferFull(WriteContext* write_context) {
           seq_num_for_cf_picked = seq;
         }
       } else if (!cfd->queued_for_flush()) {
-        assert(flush_pri == kFlushLargest);
+        terarkdb_assert(flush_pri == kFlushLargest);
         size_t cfd_size = cfd->mem()->ApproximateMemoryUsage();
         if (cfd_picked == nullptr || cfd_size > largest_cfd_size) {
           cfd_picked = cfd;
@@ -1222,7 +1224,7 @@ Status DBImpl::HandleWriteBufferFull(WriteContext* write_context) {
 
 Status DBImpl::HandleMaxWalSize(WriteContext* write_context) {
   mutex_.AssertHeld();
-  assert(write_context != nullptr);
+  terarkdb_assert(write_context != nullptr);
 
   ColumnFamilyData* cfd_picked = nullptr;
   SequenceNumber seq_num_for_cf_picked = kMaxSequenceNumber;
@@ -1324,7 +1326,7 @@ Status DBImpl::DelayWrite(uint64_t num_bytes,
       write_thread_.EndWriteStall();
     }
   }
-  assert(!delayed || !write_options.no_slowdown);
+  terarkdb_assert(!delayed || !write_options.no_slowdown);
   if (delayed) {
     default_cf_internal_stats_->AddDBStats(InternalStats::WRITE_STALL_MICROS,
                                            time_delayed);
@@ -1348,7 +1350,7 @@ Status DBImpl::DelayWrite(uint64_t num_bytes,
 
 Status DBImpl::ThrottleLowPriWritesIfNeeded(const WriteOptions& write_options,
                                             WriteBatch* my_batch) {
-  assert(write_options.low_pri);
+  terarkdb_assert(write_options.low_pri);
   // This is called outside the DB mutex. Although it is safe to make the call,
   // the consistency condition is not guaranteed to hold. It's OK to live with
   // it in this case.
@@ -1362,7 +1364,7 @@ Status DBImpl::ThrottleLowPriWritesIfNeeded(const WriteOptions& write_options,
     if (write_options.no_slowdown) {
       return Status::Incomplete();
     } else {
-      assert(my_batch != nullptr);
+      terarkdb_assert(my_batch != nullptr);
       // Rate limit those writes. The reason that we don't completely wait
       // is that in case the write is heavy, low pri writes may never have
       // a chance to run. Now we guarantee we are still slowly making
@@ -1430,8 +1432,8 @@ Status DBImpl::NewLogWriter(std::unique_ptr<log::Writer>* new_log,
                             uint64_t recycle_log_number,
                             const DBOptions& db_options,
                             Env::WriteLifeTimeHint write_hint) {
-  assert(new_log != nullptr);
-  assert(*new_log == nullptr);
+  terarkdb_assert(new_log != nullptr);
+  terarkdb_assert(*new_log == nullptr);
 
   std::unique_ptr<WritableFile> lfile;
   uint64_t new_log_number = versions_->NewFileNumber();
@@ -1483,7 +1485,7 @@ void DBImpl::FillLogWriterPool() {
     Status s =
         NewLogWriter(&new_writer, recycle_log_number, db_options, write_hint);
     if (s.ok()) {
-      assert(new_writer != nullptr);
+      terarkdb_assert(new_writer != nullptr);
       ROCKS_LOG_INFO(immutable_db_options_.info_log,
                      "Pre-create log writer: %" PRIu64,
                      new_writer->get_log_number());
@@ -1540,7 +1542,7 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
 
   // Attempt to switch to a new memtable and trigger flush of old.
   // Do this without holding the dbmutex lock.
-  assert(versions_->prev_log_number() == 0);
+  terarkdb_assert(versions_->prev_log_number() == 0);
   if (two_write_queues_) {
     log_write_mutex_.Lock();
   }
@@ -1567,7 +1569,7 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
     new_log = log_writer_pool_.front().release();
     log_writer_pool_.pop_front();
     new_log_number = new_log->get_log_number();
-    assert(new_log_number > logfile_number_);
+    terarkdb_assert(new_log_number > logfile_number_);
 
   } else if (creating_new_log &&
              log_writer_pool_state_ == kLogWriterPoolWorking) {
@@ -1581,7 +1583,7 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
       new_log = log_writer_pool_.front().release();
       log_writer_pool_.pop_front();
       new_log_number = new_log->get_log_number();
-      assert(new_log_number > logfile_number_);
+      terarkdb_assert(new_log_number > logfile_number_);
       log_writer_pool_state_ = kLogWriterPoolIdle;
     }
     ROCKS_LOG_BUFFER(
@@ -1591,8 +1593,8 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
         timer.ElapsedNanos() / 1000);
   }
   if (creating_new_log && new_log == nullptr) {
-    assert(log_writer_pool_state_ == kLogWriterPoolIdle ||
-           log_writer_pool_state_ == kLogWriterPoolError);
+    terarkdb_assert(log_writer_pool_state_ == kLogWriterPoolIdle ||
+                    log_writer_pool_state_ == kLogWriterPoolError);
     log_writer_pool_state_ = kLogWriterPoolWorking;
     uint64_t recycle_log_number = 0;
     if (!log_recycle_files_.empty()) {
@@ -1621,7 +1623,7 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
                            : ", prepare_log_writer_num should be increased.");
     }
     mutex_.Lock();
-    assert(log_writer_pool_state_ == kLogWriterPoolWorking);
+    terarkdb_assert(log_writer_pool_state_ == kLogWriterPoolWorking);
     log_writer_pool_state_ = s.ok() ? kLogWriterPoolIdle : kLogWriterPoolError;
   }
   // PLEASE NOTE: We assume that there are no failable operations
@@ -1637,7 +1639,7 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
 #ifndef ROCKSDB_LITE
     wal_manager_.AddLogNumber(new_log_number);
 #endif
-    assert(new_log != nullptr);
+    terarkdb_assert(new_log != nullptr);
     const auto preallocate_block_size =
         GetWalPreallocateBlockSize(mutable_cf_options.write_buffer_size);
 
@@ -1691,8 +1693,8 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
 
   if (!s.ok()) {
     // how do we fail if we're not creating new log?
-    assert(creating_new_log);
-    assert(!new_log);
+    terarkdb_assert(creating_new_log);
+    terarkdb_assert(!new_log);
     if (two_write_queues_) {
       nonmem_write_thread_.ExitUnbatched(&nonmem_w);
     }

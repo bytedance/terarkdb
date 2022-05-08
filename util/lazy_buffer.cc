@@ -111,7 +111,7 @@ class BufferLazyBufferState : public LazyBufferState {
       }
       context->status = Status::OK();
       set_slice(buffer, Slice());
-      assert(buffer->data() != nullptr);
+      terarkdb_assert(buffer->data() != nullptr);
     } else if (context->status.ok()) {
       void* ptr;
       if (context->buffer.uninitialized_resize == nullptr) {
@@ -130,7 +130,7 @@ class BufferLazyBufferState : public LazyBufferState {
         set_slice(buffer, Slice::Invalid());
       }
     } else {
-      assert(!buffer->valid());
+      terarkdb_assert(!buffer->valid());
     }
   }
 
@@ -138,7 +138,8 @@ class BufferLazyBufferState : public LazyBufferState {
     if (buffer->valid() && slice.data() >= buffer->data() &&
         slice.data() < buffer->data() + buffer->size()) {
       // Self assign
-      assert(slice.data() + slice.size() <= buffer->data() + buffer->size());
+      terarkdb_assert(slice.data() + slice.size() <=
+                      buffer->data() + buffer->size());
       char* ptr = (char*)buffer->data();
       ::memmove(ptr, slice.data(), slice.size());
       set_slice(buffer, Slice(ptr, slice.size()));
@@ -147,8 +148,8 @@ class BufferLazyBufferState : public LazyBufferState {
       context->status = Status::OK();
       BufferLazyBufferState::uninitialized_resize(buffer, slice.size());
       if (context->status.ok() && !slice.empty()) {
-        assert(buffer->data() != nullptr);
-        assert(buffer->size() == slice.size());
+        terarkdb_assert(buffer->data() != nullptr);
+        terarkdb_assert(buffer->size() == slice.size());
         char* ptr = (char*)buffer->data();
         ::memcpy(ptr, slice.data(), slice.size());
       }
@@ -168,11 +169,11 @@ class BufferLazyBufferState : public LazyBufferState {
   Status dump_buffer(LazyBuffer* buffer, LazyBuffer* target) const override {
     auto context = union_cast<Context>(get_context(buffer));
     if (context->status.ok()) {
-      assert(buffer->valid());
+      terarkdb_assert(buffer->valid());
       target->reset(buffer->slice(), true, buffer->file_number());
       return Status::OK();
     } else {
-      assert(!buffer->valid());
+      terarkdb_assert(!buffer->valid());
       return std::move(context->status);
     }
   }
@@ -213,7 +214,7 @@ struct StringLazyBufferState : public LazyBufferState {
       }
       set_slice(buffer, Slice::Invalid());
     } else {
-      assert(!buffer->valid());
+      terarkdb_assert(!buffer->valid());
     }
   }
 
@@ -248,7 +249,7 @@ struct StringLazyBufferState : public LazyBufferState {
       target->reset(*context->string, true, buffer->file_number());
       return Status::OK();
     } else {
-      assert(!buffer->valid());
+      terarkdb_assert(!buffer->valid());
       return std::move(context->status);
     }
   }
@@ -297,14 +298,14 @@ struct CleanableLazyBufferState : public LazyBufferState {
   }
 
   Status fetch_buffer(LazyBuffer* /*buffer*/) const override {
-    assert(false);
+    terarkdb_assert(false);
     return Status::OK();
   }
 };
 
 void LazyBufferState::uninitialized_resize(LazyBuffer* buffer,
                                            size_t size) const {
-  assert(buffer->valid());
+  terarkdb_assert(buffer->valid());
   size_t copy_size = std::min(buffer->size_, size);
   if (size <= sizeof(LazyBufferContext)) {
     LightLazyBufferState::Context tmp_context{};
@@ -362,7 +363,7 @@ Status LazyBufferState::dump_buffer(LazyBuffer* buffer,
     }
   }
   target->state_->assign_slice(target, buffer->slice_);
-  assert(target->slice_ == buffer->slice_);
+  terarkdb_assert(target->slice_ == buffer->slice_);
   target->file_number_ = buffer->file_number_;
   destroy(buffer);
   return Status::OK();
@@ -420,8 +421,8 @@ bool LazyBufferState::reserve_buffer(LazyBuffer* buffer, size_t size) {
 }
 
 void LazyBuffer::fix_light_state(const LazyBuffer& other) {
-  assert(state_ == LazyBufferState::light_state());
-  assert(other.size_ <= sizeof(LazyBufferContext));
+  terarkdb_assert(state_ == LazyBufferState::light_state());
+  terarkdb_assert(other.size_ <= sizeof(LazyBufferContext));
   data_ = union_cast<LightLazyBufferState::Context>(&context_)->data;
   size_ = other.size_;
   if (!other.empty()) {
@@ -461,8 +462,8 @@ LazyBuffer::LazyBuffer(LazyBufferCustomizeBuffer _buffer) noexcept
       context_{reinterpret_cast<uint64_t>(_buffer.handle),
                reinterpret_cast<uint64_t>(_buffer.uninitialized_resize)},
       file_number_(uint64_t(-1)) {
-  assert(_buffer.handle != nullptr);
-  assert(_buffer.uninitialized_resize != nullptr);
+  terarkdb_assert(_buffer.handle != nullptr);
+  terarkdb_assert(_buffer.uninitialized_resize != nullptr);
   ::new (&union_cast<BufferLazyBufferState::Context>(&context_)->status) Status;
 }
 
@@ -471,7 +472,7 @@ LazyBuffer::LazyBuffer(std::string* _string) noexcept
       state_(LazyBufferState::string_state()),
       context_{reinterpret_cast<uint64_t>(_string)},
       file_number_(uint64_t(-1)) {
-  assert(_string != nullptr);
+  terarkdb_assert(_string != nullptr);
   ::new (&union_cast<StringLazyBufferState::Context>(&context_)->status) Status;
 }
 
@@ -498,8 +499,8 @@ void LazyBuffer::reset(const SliceParts& _slice_parts, uint64_t _file_number) {
 }
 
 void LazyBuffer::reset(LazyBufferCustomizeBuffer _buffer) {
-  assert(_buffer.handle != nullptr);
-  assert(_buffer.uninitialized_resize != nullptr);
+  terarkdb_assert(_buffer.handle != nullptr);
+  terarkdb_assert(_buffer.uninitialized_resize != nullptr);
   destroy();
   state_ = LazyBufferState::buffer_state();
   auto context = union_cast<BufferLazyBufferState::Context>(&context_);
@@ -510,7 +511,7 @@ void LazyBuffer::reset(LazyBufferCustomizeBuffer _buffer) {
 }
 
 void LazyBuffer::reset(std::string* _string) {
-  assert(_string != nullptr);
+  terarkdb_assert(_string != nullptr);
   slice_ = *_string;
   auto context = union_cast<StringLazyBufferState::Context>(&context_);
   if (state_ == LazyBufferState::string_state()) {
@@ -539,12 +540,12 @@ void LazyBuffer::assign(const LazyBuffer& source) {
     reset(source.slice(), true, source.file_number());
   } else {
     state_->assign_error(this, std::move(std::move(s)));
-    assert(!slice_.valid());
+    terarkdb_assert(!slice_.valid());
   }
 }
 
 LazyBufferBuilder* LazyBuffer::get_builder() {
-  assert(state_ != nullptr);
+  terarkdb_assert(state_ != nullptr);
   file_number_ = uint64_t(-1);
   auto s = state_->fetch_buffer(this);
   if (s.ok()) {
@@ -556,12 +557,12 @@ LazyBufferBuilder* LazyBuffer::get_builder() {
 }
 
 std::string* LazyBuffer::trans_to_string() {
-  assert(state_ != nullptr);
+  terarkdb_assert(state_ != nullptr);
   file_number_ = uint64_t(-1);
   if (state_ == LazyBufferState::string_state()) {
     auto context = union_cast<StringLazyBufferState::Context>(&context_);
-    assert(!slice_.valid() || (data_ == context->string->data() &&
-                               size_ == context->string->size()));
+    terarkdb_assert(!slice_.valid() || (data_ == context->string->data() &&
+                                        size_ == context->string->size()));
     slice_ = Slice::Invalid();
     return context->string;
   } else {
@@ -597,16 +598,16 @@ void LazyBuffer::pin(LazyBufferPinLevel level) {
     s = state_->dump_buffer(this, &tmp);
     if (s.ok()) {
       *this = std::move(tmp);
-      assert(valid());
+      terarkdb_assert(valid());
       return;
     }
   }
   assign_error(std::move(s));
-  assert(!valid());
+  terarkdb_assert(!valid());
 }
 
 Status LazyBuffer::dump(LazyBufferCustomizeBuffer _buffer) && {
-  assert(state_ != nullptr);
+  terarkdb_assert(state_ != nullptr);
   if (slice_.valid()) {
     if (state_ != LazyBufferState::buffer_state() ||
         reinterpret_cast<std::string*>(context_.data[0]) != _buffer.handle) {
@@ -618,34 +619,34 @@ Status LazyBuffer::dump(LazyBufferCustomizeBuffer _buffer) && {
         ::memcpy(ptr, slice_.data(), slice_.size());
       }
     } else {
-      assert(context_.data[1] ==
-             reinterpret_cast<uint64_t>(_buffer.uninitialized_resize));
+      terarkdb_assert(context_.data[1] ==
+                      reinterpret_cast<uint64_t>(_buffer.uninitialized_resize));
     }
   } else {
-    assert(state_ != LazyBufferState::buffer_state());
+    terarkdb_assert(state_ != LazyBufferState::buffer_state());
     LazyBuffer buffer(_buffer);
     auto s = state_->dump_buffer(this, &buffer);
     if (!s.ok()) {
       return s;
     }
-    assert(buffer.state_ == LazyBufferState::buffer_state());
-    assert(buffer.context_.data[0] ==
-           reinterpret_cast<uint64_t>(_buffer.handle));
-    assert(buffer.context_.data[1] ==
-           reinterpret_cast<uint64_t>(_buffer.uninitialized_resize));
+    terarkdb_assert(buffer.state_ == LazyBufferState::buffer_state());
+    terarkdb_assert(buffer.context_.data[0] ==
+                    reinterpret_cast<uint64_t>(_buffer.handle));
+    terarkdb_assert(buffer.context_.data[1] ==
+                    reinterpret_cast<uint64_t>(_buffer.uninitialized_resize));
   }
   return Status::OK();
 }
 
 Status LazyBuffer::dump(std::string* _string) && {
-  assert(state_ != nullptr);
+  terarkdb_assert(state_ != nullptr);
   if (state_ == LazyBufferState::string_state()) {
     auto context = union_cast<StringLazyBufferState::Context>(&context_);
     if (!context->status.ok()) {
       return std::move(context->status);
     }
-    assert(!valid() || (data_ == context->string->data() &&
-                        size_ == context->string->size()));
+    terarkdb_assert(!valid() || (data_ == context->string->data() &&
+                                 size_ == context->string->size()));
     if (context->string != _string) {
       *_string = std::move(*context->string);
     }
@@ -663,22 +664,23 @@ Status LazyBuffer::dump(std::string* _string) && {
     if (!s.ok()) {
       return s;
     }
-    assert(buffer.state_ == LazyBufferState::string_state());
-    assert(reinterpret_cast<std::string*>(buffer.context_.data[0]) == _string);
+    terarkdb_assert(buffer.state_ == LazyBufferState::string_state());
+    terarkdb_assert(reinterpret_cast<std::string*>(buffer.context_.data[0]) ==
+                    _string);
   }
   return Status::OK();
 }
 
 Status LazyBuffer::dump(LazyBuffer& _target) && {
-  assert(state_ != nullptr);
-  assert(this != &_target);
+  terarkdb_assert(state_ != nullptr);
+  terarkdb_assert(this != &_target);
   auto s = state_->pin_buffer(this);
   if (s.ok()) {
     _target.reset(std::move(*this));
     s = _target.fetch();
   } else if (s.IsNotSupported()) {
     s = state_->dump_buffer(this, &_target);
-    assert(!s.ok() || _target.valid());
+    terarkdb_assert(!s.ok() || _target.valid());
   }
   return s;
 }
@@ -686,9 +688,9 @@ Status LazyBuffer::dump(LazyBuffer& _target) && {
 bool LazyBufferBuilder::resize(size_t _size) {
   size_t old_size = slice_.valid() ? size_ : 0;
   state_->uninitialized_resize(this, _size);
-  assert(size_ != 0 || data_ != nullptr);
+  terarkdb_assert(size_ != 0 || data_ != nullptr);
   if (data_ == nullptr) {
-    assert(size_ == size_t(-1));
+    terarkdb_assert(size_ == size_t(-1));
     return false;
   }
   if (_size > old_size) {
@@ -699,9 +701,9 @@ bool LazyBufferBuilder::resize(size_t _size) {
 
 bool LazyBufferBuilder::uninitialized_resize(size_t _size) {
   state_->uninitialized_resize(this, _size);
-  assert(size_ != 0 || data_ != nullptr);
+  terarkdb_assert(size_ != 0 || data_ != nullptr);
   if (data_ == nullptr) {
-    assert(size_ == size_t(-1));
+    terarkdb_assert(size_ == size_t(-1));
     return false;
   }
   return true;
@@ -738,7 +740,7 @@ LazyBuffer LazyBufferRemoveSuffix(const LazyBuffer* buffer, size_t fixed_len) {
     }
   };
   static RemoveSuffixLazyBufferState static_state;
-  assert(buffer != nullptr);
+  terarkdb_assert(buffer != nullptr);
   if (buffer->valid()) {
     return LazyBuffer(Slice(buffer->data(), buffer->size() - fixed_len));
   } else {

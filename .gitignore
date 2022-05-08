@@ -80,7 +80,7 @@ vs2017
 /terark-core
 terark-core.got
 
-cmake-build-debug
+cmake-build-*
 pkg
 .DS_Store
 .clangd/

@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <assert.h>
-
 #include <string>
 #include <utility>
 
@@ -178,28 +176,28 @@ class LazyBuffer {
   // Get inner slice
   // REQUIRES: valid()
   const Slice& slice() const {
-    assert(valid());
+    terarkdb_assert(valid());
     return slice_;
   }
 
   // Return a pointer to the beginning of the referenced data
   // REQUIRES: valid()
   const char* data() const {
-    assert(valid());
+    terarkdb_assert(valid());
     return data_;
   }
 
   // Return the length (in bytes) of the referenced data
   // REQUIRES: valid()
   size_t size() const {
-    assert(valid());
+    terarkdb_assert(valid());
     return size_;
   }
 
   // Return true iff the length of the referenced data is zero
   // REQUIRES: valid()
   bool empty() const {
-    assert(valid());
+    terarkdb_assert(valid());
     return slice_.empty();
   }
 
@@ -210,7 +208,7 @@ class LazyBuffer {
   // REQUIRES: n < size()
   // REQUIRES: valid()
   char operator[](size_t n) const {
-    assert(valid());
+    terarkdb_assert(valid());
     return slice_[n];
   }
 
@@ -218,7 +216,7 @@ class LazyBuffer {
   // when hex is true, returns a string of twice the length hex encoded (0-9A-F)
   // REQUIRES: valid()
   std::string ToString(bool hex = false) const {
-    assert(valid());
+    terarkdb_assert(valid());
     return slice_.ToString(hex);
   }
 
@@ -226,7 +224,7 @@ class LazyBuffer {
   // Return a string_view that references the same data as this slice.
   // REQUIRES: valid()
   std::string_view ToStringView() const {
-    assert(valid());
+    terarkdb_assert(valid());
     return slice_.ToStringView();
   }
 #endif
@@ -238,21 +236,21 @@ class LazyBuffer {
   // also accepts lowercase (a-f)
   // REQUIRES: valid()
   bool DecodeHex(std::string* result) const {
-    assert(valid());
+    terarkdb_assert(valid());
     return slice_.DecodeHex(result);
   }
 
   // Return true iff "x" is a prefix of "*this"
   // REQUIRES: valid()
   bool starts_with(const Slice& x) const {
-    assert(valid());
+    terarkdb_assert(valid());
     return slice_.starts_with(x);
   }
 
   // Return true iff "x" is a prefix of "*this"
   // REQUIRES: valid()
   bool ends_with(const Slice& x) const {
-    assert(valid());
+    terarkdb_assert(valid());
     return slice_.ends_with(x);
   }
 
@@ -381,7 +379,7 @@ inline LazyBuffer::LazyBuffer(const Slice& _slice, bool _copy,
       state_(LazyBufferState::light_state()),
       context_{},
       file_number_(_file_number) {
-  assert(_slice.valid());
+  terarkdb_assert(_slice.valid());
   if (_copy) {
     state_->assign_slice(this, _slice);
   }
@@ -393,7 +391,7 @@ inline LazyBuffer::LazyBuffer(const Slice& _slice, Cleanable&& _cleanable,
       state_(LazyBufferState::cleanable_state()),
       context_{},
       file_number_(_file_number) {
-  assert(_slice.valid());
+  terarkdb_assert(_slice.valid());
   static_assert(sizeof _cleanable == sizeof context_, "");
   static_assert(alignof(Cleanable) == alignof(LazyBufferContext), "");
   ::new (&context_) Cleanable(std::move(_cleanable));
@@ -407,7 +405,7 @@ inline LazyBuffer::LazyBuffer(const LazyBufferState* _state,
       state_(_state),
       context_(_context),
       file_number_(_file_number) {
-  assert(_state != nullptr);
+  terarkdb_assert(_state != nullptr);
 }
 
 #ifdef __GNUC__
@@ -425,7 +423,7 @@ inline void LazyBuffer::assign_error(Status&& _status) {
     state_->assign_slice(this, Slice());
   } else {
     state_->assign_error(this, std::move(_status));
-    assert(!slice_.valid());
+    terarkdb_assert(!slice_.valid());
   }
   file_number_ = uint64_t(-1);
 }
@@ -435,7 +433,7 @@ inline void LazyBuffer::clear() {
     state_ = LazyBufferState::light_state();
   }
   state_->assign_slice(this, Slice());
-  assert(size_ == 0);
+  terarkdb_assert(size_ == 0);
   file_number_ = uint64_t(-1);
 }
 
@@ -466,10 +464,10 @@ inline void LazyBuffer::reset(LazyBuffer&& _buffer) {
 
 inline void LazyBuffer::reset(const Slice& _slice, bool _copy,
                               uint64_t _file_number) {
-  assert(_slice.valid());
+  terarkdb_assert(_slice.valid());
   if (_copy) {
     state_->assign_slice(this, _slice);
-    assert(slice_ == _slice);
+    terarkdb_assert(slice_ == _slice);
   } else {
     destroy();
     slice_ = _slice;
@@ -480,7 +478,7 @@ inline void LazyBuffer::reset(const Slice& _slice, bool _copy,
 
 inline void LazyBuffer::reset(const Slice& _slice, Cleanable&& _cleanable,
                               uint64_t _file_number) {
-  assert(_slice.valid());
+  terarkdb_assert(_slice.valid());
   destroy();
   state_ = LazyBufferState::cleanable_state();
   slice_ = _slice;
@@ -491,7 +489,7 @@ inline void LazyBuffer::reset(const Slice& _slice, Cleanable&& _cleanable,
 inline void LazyBuffer::reset(const LazyBufferState* _state,
                               const LazyBufferContext& _context,
                               const Slice& _slice, uint64_t _file_number) {
-  assert(_state != nullptr);
+  terarkdb_assert(_state != nullptr);
   destroy();
   slice_ = _slice;
   state_ = _state;
@@ -500,7 +498,7 @@ inline void LazyBuffer::reset(const LazyBufferState* _state,
 }
 
 inline Status LazyBuffer::fetch() const {
-  assert(state_ != nullptr);
+  terarkdb_assert(state_ != nullptr);
   if (slice_.valid()) {
     return Status::OK();
   }

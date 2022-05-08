@@ -147,7 +147,7 @@ size_t TailPrefetchStats::GetSuggestedPrefetchSize() {
   // reality, it may not be the case when a partial block is inside the range,
   // or there are data in the middle that is not read. We ignore those cases
   // for simplicity.
-  assert(!sorted.empty());
+  terarkdb_assert(!sorted.empty());
   size_t prev_size = sorted[0];
   size_t max_qualified_size = sorted[0];
   size_t wasted = 0;
@@ -402,7 +402,7 @@ bool SerializeSingleBlockBasedTableOption(
 
 Status BlockBasedTableFactory::GetOptionString(
     std::string* opt_string, const std::string& delimiter) const {
-  assert(opt_string);
+  terarkdb_assert(opt_string);
   opt_string->clear();
   for (auto iter = block_based_table_type_info.begin();
        iter != block_based_table_type_info.end(); ++iter) {
@@ -414,7 +414,7 @@ Status BlockBasedTableFactory::GetOptionString(
     std::string single_output;
     bool result = SerializeSingleBlockBasedTableOption(
         &single_output, table_options_, iter->first, delimiter);
-    assert(result);
+    terarkdb_assert(result);
     if (result) {
       opt_string->append(single_output);
     }
@@ -526,7 +526,7 @@ Status GetBlockBasedTableOptionsFromMap(
     const std::unordered_map<std::string, std::string>& opts_map,
     BlockBasedTableOptions* new_table_options, bool input_strings_escaped,
     bool ignore_unknown_options) {
-  assert(new_table_options);
+  terarkdb_assert(new_table_options);
   *new_table_options = table_options;
   for (const auto& o : opts_map) {
     auto error_message = ParseBlockBasedTableOption(
@@ -566,7 +566,7 @@ Status VerifyBlockBasedTableFactory(
   if (base_tf == nullptr) {
     return Status::OK();
   }
-  assert(file_tf != nullptr);
+  terarkdb_assert(file_tf != nullptr);
 
   const auto& base_opt = base_tf->table_options();
   const auto& file_opt = file_tf->table_options();

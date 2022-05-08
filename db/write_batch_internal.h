@@ -50,7 +50,7 @@ class ColumnFamilyMemTablesDefault : public ColumnFamilyMemTables {
   uint64_t GetLogNumber() const override { return 0; }
 
   MemTable* GetMemTable() const override {
-    assert(ok_);
+    terarkdb_assert(ok_);
     return mem_;
   }
 
@@ -207,7 +207,7 @@ class LocalSavePoint {
   }
 
 #ifndef NDEBUG
-  ~LocalSavePoint() { assert(committed_); }
+  ~LocalSavePoint() { terarkdb_assert(committed_); }
 #endif
   Status commit() {
 #ifndef NDEBUG

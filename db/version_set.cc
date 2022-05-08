@@ -167,7 +167,7 @@ class FilePicker {
           // Check if key is within a file's range. If search left bound and
           // right bound point to the same find, we are sure key falls in
           // range.
-          assert(curr_level_ == 0 ||
+          terarkdb_assert(curr_level_ == 0 ||
                  curr_index_in_curr_level_ == start_index_in_curr_level_ ||
                  user_comparator_->Compare(
                      user_key_, ExtractUserKey(f->smallest_key)) <= 0);
@@ -203,12 +203,12 @@ class FilePicker {
           if (curr_level_ != 0) {
             int comp_sign = internal_comparator_->Compare(
                 prev_file_->largest_key, f->smallest_key);
-            assert(comp_sign < 0);
+            terarkdb_assert(comp_sign < 0);
           } else {
             // level == 0, the current file cannot be newer than the previous
             // one. Use compressed data structure, has no attribute seqNo
-            assert(curr_index_in_curr_level_ > 0);
-            assert(
+            terarkdb_assert(curr_index_in_curr_level_ > 0);
+            terarkdb_assert(
                 !NewestFirstBySeqNo(files_[0][curr_index_in_curr_level_],
                                     files_[0][curr_index_in_curr_level_ - 1]));
           }
@@ -274,8 +274,8 @@ class FilePicker {
         // When current level is empty, the search bound generated from upper
         // level must be [0, -1] or [0, FileIndexer::kLevelMaxIndex] if it is
         // also empty.
-        assert(search_left_bound_ == 0);
-        assert(search_right_bound_ == -1 ||
+        terarkdb_assert(search_left_bound_ == 0);
+        terarkdb_assert(search_right_bound_ == -1 ||
                search_right_bound_ == FileIndexer::kLevelMaxIndex);
         // Since current level is empty, it will need to search all files in
         // the next level
@@ -382,7 +382,7 @@ struct MarkedFilesComp {
 VersionStorageInfo::~VersionStorageInfo() { delete[](files_ - 1); }
 
 Version::~Version() {
-  assert(refs_ == 0);
+  terarkdb_assert(refs_ == 0);
 
   // Remove from linked list
   prev_->next_ = next_;
@@ -396,9 +396,9 @@ Version::~Version() {
     for (size_t i = 0; i < storage_info_.files_[level].size(); i++) {
       FileMetaData* f = storage_info_.files_[level][i];
       if (f->Unref()) {
-        assert(cfd_ != nullptr);
+        terarkdb_assert(cfd_ != nullptr);
         uint32_t path_id = f->fd.GetPathId();
-        assert(path_id < cfd_->ioptions()->cf_paths.size());
+        terarkdb_assert(path_id < cfd_->ioptions()->cf_paths.size());
         vset_->obsolete_files_.emplace_back(
             f, cfd_->ioptions()->cf_paths[path_id].path,
             cfd_->table_cache_shared_ptr());
@@ -416,8 +416,8 @@ int FindFile(const InternalKeyComparator& icmp,
 void DoGenerateLevelFilesBrief(LevelFilesBrief* file_level,
                                const std::vector<FileMetaData*>& files,
                                Arena* arena) {
-  assert(file_level);
-  assert(arena);
+  terarkdb_assert(file_level);
+  terarkdb_assert(arena);
 
   size_t num = files.size();
   file_level->num_files = num;
@@ -522,7 +522,7 @@ class LevelIterator final : public InternalIterator, public Snapshot {
         level_(level),
         range_del_agg_(range_del_agg) {
     // Empty level is not supported.
-    assert(flevel_ != nullptr && flevel_->num_files > 0);
+    terarkdb_assert(flevel_ != nullptr && flevel_->num_files > 0);
     if (read_options_.snapshot != nullptr) {
       snapshot_ = read_options_.snapshot->GetSequenceNumber();
       read_options_.snapshot = this;
@@ -542,11 +542,11 @@ class LevelIterator final : public InternalIterator, public Snapshot {
 
   virtual bool Valid() const override { return file_iter_.Valid(); }
   virtual Slice key() const override {
-    assert(file_iter_.Valid());
+    terarkdb_assert(file_iter_.Valid());
     return file_iter_.key();
   }
   virtual LazyBuffer value() const override {
-    assert(file_iter_.Valid());
+    terarkdb_assert(file_iter_.Valid());
     return file_iter_.value();
   }
   virtual Status status() const override {
@@ -560,7 +560,7 @@ class LevelIterator final : public InternalIterator, public Snapshot {
   void InitFileIterator(size_t new_file_index);
 
   const Slice& file_smallest_key(size_t file_index) {
-    assert(file_index < flevel_->num_files);
+    terarkdb_assert(file_index < flevel_->num_files);
     return flevel_->files[file_index].smallest_key;
   }
 
@@ -572,7 +572,7 @@ class LevelIterator final : public InternalIterator, public Snapshot {
   }
 
   InternalIterator* NewFileIterator() {
-    assert(file_index_ < flevel_->num_files);
+    terarkdb_assert(file_index_ < flevel_->num_files);
     auto file_meta = flevel_->files[file_index_];
     if (should_sample_) {
       sample_file_read_inc(file_meta.file_metadata);
@@ -644,13 +644,13 @@ void LevelIterator::SeekToLast() {
 }
 
 void LevelIterator::Next() {
-  assert(Valid());
+  terarkdb_assert(Valid());
   file_iter_.Next();
   SkipEmptyFileForward();
 }
 
 void LevelIterator::Prev() {
-  assert(Valid());
+  terarkdb_assert(Valid());
   file_iter_.Prev();
   SkipEmptyFileBackward();
 }
@@ -967,8 +967,8 @@ double Version::GetGarbageCollectionLoad() const {
 }
 
 void Version::GetColumnFamilyMetaData(ColumnFamilyMetaData* cf_meta) {
-  assert(cf_meta);
-  assert(cfd_);
+  terarkdb_assert(cf_meta);
+  terarkdb_assert(cfd_);
 
   cf_meta->name = cfd_->GetName();
   cf_meta->size = 0;
@@ -988,7 +988,7 @@ void Version::GetColumnFamilyMetaData(ColumnFamilyMetaData* cf_meta) {
       if (path_id < ioptions->cf_paths.size()) {
         file_path = ioptions->cf_paths[path_id].path;
       } else {
-        assert(!ioptions->cf_paths.empty());
+        terarkdb_assert(!ioptions->cf_paths.empty());
         file_path = ioptions->cf_paths.back().path;
       }
       files.emplace_back(SstFileMetaData{
@@ -1031,7 +1031,7 @@ uint64_t VersionStorageInfo::GetEstimatedActiveKeys() const {
 
 double VersionStorageInfo::GetEstimatedCompressionRatioAtLevel(
     int level) const {
-  assert(level < num_levels_);
+  terarkdb_assert(level < num_levels_);
 
   struct {
     std::pair<uint64_t, uint64_t> (*callback)(void* args, const FileMetaData* f,
@@ -1050,7 +1050,7 @@ double VersionStorageInfo::GetEstimatedCompressionRatioAtLevel(
       }
       f = find->second;
     } else {
-      assert(file_number == uint64_t(-1));
+      terarkdb_assert(file_number == uint64_t(-1));
     }
     uint64_t file_size = f->fd.GetFileSize();
     uint64_t data_size = f->prop.raw_key_size + f->prop.raw_value_size;
@@ -1084,7 +1084,7 @@ void Version::AddIterators(const ReadOptions& read_options,
                            const EnvOptions& soptions,
                            MergeIteratorBuilder* merge_iter_builder,
                            RangeDelAggregator* range_del_agg) {
-  assert(storage_info_.finalized_);
+  terarkdb_assert(storage_info_.finalized_);
 
   for (int level = 0; level < storage_info_.num_non_empty_levels(); level++) {
     AddIteratorsForLevel(read_options, soptions, merge_iter_builder, level,
@@ -1097,7 +1097,7 @@ void Version::AddIteratorsForLevel(const ReadOptions& read_options,
                                    MergeIteratorBuilder* merge_iter_builder,
                                    int level,
                                    RangeDelAggregator* range_del_agg) {
-  assert(storage_info_.finalized_);
+  terarkdb_assert(storage_info_.finalized_);
   if (level >= storage_info_.num_non_empty_levels()) {
     // This is an empty level
     return;
@@ -1152,7 +1152,7 @@ Status Version::OverlapWithLevelIterator(const ReadOptions& read_options,
                                          const Slice& smallest_user_key,
                                          const Slice& largest_user_key,
                                          int level, bool* overlap) {
-  assert(storage_info_.finalized_);
+  terarkdb_assert(storage_info_.finalized_);
 
   auto icmp = cfd_->internal_comparator();
   auto ucmp = icmp.user_comparator();
@@ -1316,7 +1316,7 @@ Status Version::fetch_buffer(LazyBuffer* buffer) const {
       return Status::Corruption("Separate value missing", buf);
     }
   }
-  assert(buffer->file_number() == pair.second->fd.GetNumber());
+  terarkdb_assert(buffer->file_number() == pair.second->fd.GetNumber());
   return Status::OK();
 }
 
@@ -1348,7 +1348,7 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
                   ReadCallback* callback) {
   Slice ikey = k.internal_key();
 
-  assert(status->ok() || status->IsMergeInProgress());
+  terarkdb_assert(status->ok() || status->IsMergeInProgress());
 
   if (key_exists != nullptr) {
     // will falsify below if not found
@@ -1578,7 +1578,7 @@ void VersionStorageInfo::ComputeBlobOverlapScore() {
     while (idx < hidden_files.size() && !hidden_files[idx]->is_gc_forbidden()) {
       idx++;
     }
-    assert(idx == blob_file_count_);
+    terarkdb_assert(idx == blob_file_count_);
     while (idx < hidden_files.size()) {
       if (!hidden_files[idx]->is_gc_forbidden()) {
         return false;
@@ -1587,7 +1587,7 @@ void VersionStorageInfo::ComputeBlobOverlapScore() {
     }
     return true;
   };
-  assert(hiden_file_sort_valid());
+  terarkdb_assert(hiden_file_sort_valid());
 #endif
 
   auto end_queue = make_heap<int>(indirect_cmp);
@@ -1614,7 +1614,7 @@ void VersionStorageInfo::ComputeBlobOverlapScore() {
       end_queue.pop();
     }
   }
-  assert(blob_file_count_ == blob_overlap_scores_.size());
+  terarkdb_assert(blob_file_count_ == blob_overlap_scores_.size());
 }
 
 void VersionStorageInfo::ComputeCompensatedSizes() {
@@ -1637,7 +1637,7 @@ void VersionStorageInfo::ComputeCompensatedSizes() {
       }
       f = find->second;
     } else {
-      assert(file_number == uint64_t(-1));
+      terarkdb_assert(file_number == uint64_t(-1));
     }
     uint64_t file_size = 0;
     if (f->prop.is_map_sst()) {
@@ -1682,7 +1682,7 @@ int VersionStorageInfo::MaxInputLevel() const {
 
 int VersionStorageInfo::MaxOutputLevel(bool allow_ingest_behind) const {
   if (allow_ingest_behind) {
-    assert(num_levels() > 1);
+    terarkdb_assert(num_levels() > 1);
     return num_levels() - 2;
   }
   return num_levels() - 1;
@@ -1733,7 +1733,7 @@ void VersionStorageInfo::EstimateCompactionBytesNeeded(
       for (auto* f : files_[level]) {
         level_size2 += f->fd.GetFileSize();
       }
-      assert(level_size2 == bytes_next_level);
+      terarkdb_assert(level_size2 == bytes_next_level);
 #endif
       level_size = bytes_next_level;
       bytes_next_level = 0;
@@ -1755,14 +1755,14 @@ void VersionStorageInfo::EstimateCompactionBytesNeeded(
       // Estimate the actual compaction fan-out ratio as size ratio between
       // the two levels.
 
-      assert(bytes_next_level == 0);
+      terarkdb_assert(bytes_next_level == 0);
       if (level + 1 < num_levels_) {
         for (auto* f : files_[level + 1]) {
           bytes_next_level += f->fd.GetFileSize();
         }
       }
       if (bytes_next_level > 0) {
-        assert(level_size > 0);
+        terarkdb_assert(level_size > 0);
         estimated_compaction_needed_bytes_ += static_cast<uint64_t>(
             static_cast<double>(bytes_compact_to_next_level) *
             (static_cast<double>(bytes_next_level) /
@@ -1928,7 +1928,7 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f,
             f2->largest.DebugString(true).c_str());
       LogFlush(info_log);
     }
-    assert(false);
+    terarkdb_assert(false);
   }
 #else
   (void)info_log;
@@ -1942,12 +1942,12 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f,
     // file's property.
     if (exists == nullptr) {
       for (auto file_number : f->prop.inheritance) {
-        assert(dependence_map_.count(file_number) == 0);
+        terarkdb_assert(dependence_map_.count(file_number) == 0);
         dependence_map_.emplace(file_number, f);
       }
     } else {
       for (auto file_number : f->prop.inheritance) {
-        assert(dependence_map_.count(file_number) == 0);
+        terarkdb_assert(dependence_map_.count(file_number) == 0);
         if (exists(exists_args, file_number)) {
           dependence_map_.emplace(file_number, f);
         }
@@ -1974,7 +1974,7 @@ uint64_t VersionStorageInfo::FileSize(const FileMetaData* f,
     }
     f = find->second;
   } else {
-    assert(file_number == uint64_t(-1));
+    terarkdb_assert(file_number == uint64_t(-1));
   }
   uint64_t file_size = f->fd.GetFileSize();
   if (f->prop.is_map_sst()) {
@@ -1983,7 +1983,7 @@ uint64_t VersionStorageInfo::FileSize(const FileMetaData* f,
           FileSize(nullptr, dependence.file_number, dependence.entry_count);
     }
   }
-  assert(entry_count <= std::max<uint64_t>(1, f->prop.num_entries));
+  terarkdb_assert(entry_count <= std::max<uint64_t>(1, f->prop.num_entries));
   return entry_count == 0
              ? file_size
              : uint64_t(double(file_size) * entry_count /
@@ -2028,33 +2028,33 @@ void VersionStorageInfo::SetFinalized() {
     // Not level based compaction.
     return;
   }
-  assert(base_level_ < 0 || num_levels() == 1 ||
+  terarkdb_assert(base_level_ < 0 || num_levels() == 1 ||
          (base_level_ >= 1 && base_level_ < num_levels()));
   // Verify all levels newer than base_level are empty except L0
   for (int level = 1; level < base_level(); level++) {
-    assert(NumLevelBytes(level) == 0);
+    terarkdb_assert(NumLevelBytes(level) == 0);
   }
   uint64_t max_bytes_prev_level = 0;
   for (int level = base_level(); level < num_levels() - 1; level++) {
     if (LevelFiles(level).size() == 0) {
       continue;
     }
-    assert(MaxBytesForLevel(level) >= max_bytes_prev_level);
+    terarkdb_assert(MaxBytesForLevel(level) >= max_bytes_prev_level);
     max_bytes_prev_level = MaxBytesForLevel(level);
   }
   int num_empty_non_l0_level = 0;
   for (int level = 0; level < num_levels(); level++) {
-    assert(LevelFiles(level).size() == 0 ||
+    terarkdb_assert(LevelFiles(level).size() == 0 ||
            LevelFiles(level).size() == LevelFilesBrief(level).num_files);
     if (level > 0 && NumLevelBytes(level) > 0) {
       num_empty_non_l0_level++;
     }
     if (LevelFiles(level).size() > 0) {
-      assert(level < num_non_empty_levels());
+      terarkdb_assert(level < num_non_empty_levels());
     }
   }
-  assert(compaction_level_.size() > 0);
-  assert(compaction_level_.size() == compaction_score_.size());
+  terarkdb_assert(compaction_level_.size() > 0);
+  terarkdb_assert(compaction_level_.size() == compaction_score_.size());
 #endif
 }
 
@@ -2097,7 +2097,7 @@ void SortFileByOverlappingRatio(
       next_level_it++;
     }
 
-    assert(file->fd.file_size != 0);
+    terarkdb_assert(file->fd.file_size != 0);
     file_to_order[file->fd.GetNumber()] =
         overlapping_bytes * 1024u / file->fd.file_size;
   }
@@ -2119,7 +2119,7 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
   for (int level = 0; level < num_levels() - 1; level++) {
     const std::vector<FileMetaData*>& files = files_[level];
     auto& files_by_compaction_pri = files_by_compaction_pri_[level];
-    assert(files_by_compaction_pri.size() == 0);
+    terarkdb_assert(files_by_compaction_pri.size() == 0);
 
     // populate a temp vector for sorting based on size
     std::vector<Fsize> temp(files.size());
@@ -2149,9 +2149,9 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
                                    files_[level + 1], &temp);
         break;
       default:
-        assert(false);
+        terarkdb_assert(false);
     }
-    assert(temp.size() == files.size());
+    terarkdb_assert(temp.size() == files.size());
 
     // initialize files_by_compaction_pri_
     std::stable_sort(
@@ -2175,12 +2175,12 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
       files_by_compaction_pri.push_back(static_cast<int>(temp[i].index));
     }
     next_file_to_compact_by_size_[level] = 0;
-    assert(files_[level].size() == files_by_compaction_pri_[level].size());
+    terarkdb_assert(files_[level].size() == files_by_compaction_pri_[level].size());
   }
 }
 
 void VersionStorageInfo::GenerateLevel0NonOverlapping() {
-  assert(!finalized_);
+  terarkdb_assert(!finalized_);
   level0_non_overlapping_ = true;
   if (level_files_brief_.size() == 0) {
     return;
@@ -2204,8 +2204,8 @@ void VersionStorageInfo::GenerateLevel0NonOverlapping() {
 }
 
 void VersionStorageInfo::GenerateBottommostFiles() {
-  assert(!finalized_);
-  assert(bottommost_files_.empty());
+  terarkdb_assert(!finalized_);
+  terarkdb_assert(bottommost_files_.empty());
   for (size_t level = 0; level < level_files_brief_.size(); ++level) {
     for (size_t file_idx = 0; file_idx < level_files_brief_[level].num_files;
          ++file_idx) {
@@ -2229,7 +2229,7 @@ void VersionStorageInfo::GenerateBottommostFiles() {
 }
 
 void VersionStorageInfo::UpdateOldestSnapshot(SequenceNumber seqnum) {
-  assert(seqnum >= oldest_snapshot_seqnum_);
+  terarkdb_assert(seqnum >= oldest_snapshot_seqnum_);
   oldest_snapshot_seqnum_ = seqnum;
   if (oldest_snapshot_seqnum_ > bottommost_files_mark_threshold_) {
     ComputeBottommostFilesMarkedForCompaction();
@@ -2268,7 +2268,7 @@ void VersionStorageInfo::ComputeBottommostFilesMarkedForCompaction() {
 void Version::Ref() { ++refs_; }
 
 bool Version::Unref() {
-  assert(refs_ >= 1);
+  terarkdb_assert(refs_ >= 1);
   --refs_;
   if (refs_ == 0) {
     delete this;
@@ -2418,7 +2418,7 @@ void VersionStorageInfo::GetOverlappingInputsRangeBinarySearch(
     int level, const InternalKey* begin, const InternalKey* end,
     std::vector<FileMetaData*>* inputs, int hint_index, int* file_index,
     bool within_interval, InternalKey** next_smallest) const {
-  assert(level > 0);
+  terarkdb_assert(level > 0);
   int min = 0;
   int mid = 0;
   int max = static_cast<int>(files_[level].size()) - 1;
@@ -2470,7 +2470,7 @@ void VersionStorageInfo::GetOverlappingInputsRangeBinarySearch(
   } else {
     ExtendFileRangeOverlappingInterval(level, begin, end, mid, &start_index,
                                        &end_index);
-    assert(end_index >= start_index);
+    terarkdb_assert(end_index >= start_index);
   }
   // insert overlapping files into vector
   for (int i = start_index; i <= end_index; i++) {
@@ -2501,12 +2501,12 @@ void VersionStorageInfo::ExtendFileRangeOverlappingInterval(
 #ifndef NDEBUG
   {
     // assert that the file at mid_index overlaps with the range
-    assert(mid_index < level_files_brief_[level].num_files);
+    terarkdb_assert(mid_index < level_files_brief_[level].num_files);
     const FdWithKeyRange* f = &files[mid_index];
     auto& smallest = f->file_metadata->smallest;
     auto& largest = f->file_metadata->largest;
     if (sstableKeyCompare(user_cmp, begin, smallest) <= 0) {
-      assert(sstableKeyCompare(user_cmp, smallest, end) <= 0);
+      terarkdb_assert(sstableKeyCompare(user_cmp, smallest, end) <= 0);
     } else {
       // fprintf(stderr, "ExtendFileRangeOverlappingInterval\n%s - %s\n%s"
       //                 " - %s\n%d %d\n",
@@ -2516,7 +2516,7 @@ void VersionStorageInfo::ExtendFileRangeOverlappingInterval(
       //         largest->DebugString().c_str(),
       //         sstableKeyCompare(user_cmp, smallest, begin),
       //         sstableKeyCompare(user_cmp, largest, begin));
-      assert(sstableKeyCompare(user_cmp, begin, largest) <= 0);
+      terarkdb_assert(sstableKeyCompare(user_cmp, begin, largest) <= 0);
     }
   }
 #endif
@@ -2531,7 +2531,7 @@ void VersionStorageInfo::ExtendFileRangeOverlappingInterval(
     auto& largest = f->file_metadata->largest;
     if (sstableKeyCompare(user_cmp, begin, largest) <= 0) {
       *start_index = i;
-      assert((count++, true));
+      terarkdb_assert((count++, true));
     } else {
       break;
     }
@@ -2542,13 +2542,13 @@ void VersionStorageInfo::ExtendFileRangeOverlappingInterval(
     const FdWithKeyRange* f = &files[i];
     auto& smallest = f->file_metadata->smallest;
     if (sstableKeyCompare(user_cmp, smallest, end) <= 0) {
-      assert((count++, true));
+      terarkdb_assert((count++, true));
       *end_index = i;
     } else {
       break;
     }
   }
-  assert(count == *end_index - *start_index + 1);
+  terarkdb_assert(count == *end_index - *start_index + 1);
 }
 
 // Store in *start_index and *end_index the clean range of all files in
@@ -2561,17 +2561,17 @@ void VersionStorageInfo::ExtendFileRangeOverlappingInterval(
 void VersionStorageInfo::ExtendFileRangeWithinInterval(
     int level, const InternalKey* begin, const InternalKey* end,
     unsigned int mid_index, int* start_index, int* end_index) const {
-  assert(level != 0);
+  terarkdb_assert(level != 0);
   auto* user_cmp = user_comparator_;
   const FdWithKeyRange* files = level_files_brief_[level].files;
 #ifndef NDEBUG
   {
     // assert that the file at mid_index is within the range
-    assert(mid_index < level_files_brief_[level].num_files);
+    terarkdb_assert(mid_index < level_files_brief_[level].num_files);
     const FdWithKeyRange* f = &files[mid_index];
     auto& smallest = f->file_metadata->smallest;
     auto& largest = f->file_metadata->largest;
-    assert(sstableKeyCompare(user_cmp, begin, smallest) <= 0 &&
+    terarkdb_assert(sstableKeyCompare(user_cmp, begin, smallest) <= 0 &&
            sstableKeyCompare(user_cmp, largest, end) <= 0);
   }
 #endif
@@ -2619,21 +2619,21 @@ void VersionStorageInfo::ExtendFileRangeWithinInterval(
 }
 
 uint64_t VersionStorageInfo::NumLevelBytes(int level) const {
-  assert(level >= -1);
-  assert(level < num_levels());
+  terarkdb_assert(level >= -1);
+  terarkdb_assert(level < num_levels());
   return TotalFileSize(files_[level]);
 }
 
 uint64_t VersionStorageInfo::NumLevelCompensatedBytes(int level) const {
-  assert(level >= -1);
-  assert(level < num_levels());
+  terarkdb_assert(level >= -1);
+  terarkdb_assert(level < num_levels());
   return TotalCompensatedSize(files_[level]);
 }
 const char* VersionStorageInfo::LevelSummary(
     LevelSummaryStorage* scratch) const {
   int len = 0;
   if (compaction_style_ == kCompactionStyleLevel && num_levels() > 1) {
-    assert(base_level_ < static_cast<int>(level_max_bytes_.size()));
+    terarkdb_assert(base_level_ < static_cast<int>(level_max_bytes_.size()));
     if (level_multiplier_ != 0.0) {
       len = snprintf(
           scratch->buffer, sizeof(scratch->buffer),
@@ -2707,8 +2707,8 @@ int64_t VersionStorageInfo::MaxNextLevelOverlappingBytes() {
 uint64_t VersionStorageInfo::MaxBytesForLevel(int level) const {
   // Note: the result for level zero is not really used since we set
   // the level-0 compaction threshold based on number of files.
-  assert(level >= 0);
-  assert(level < static_cast<int>(level_max_bytes_.size()));
+  terarkdb_assert(level >= 0);
+  terarkdb_assert(level < static_cast<int>(level_max_bytes_.size()));
   return level_max_bytes_[level];
 }
 
@@ -2816,14 +2816,14 @@ void VersionStorageInfo::CalculateBaseBytes(const ImmutableCFOptions& ioptions,
         }
         if (cur_level_size > base_bytes_max) {
           // Even L1 will be too large
-          assert(base_level_ == 1);
+          terarkdb_assert(base_level_ == 1);
           base_level_size = base_bytes_max;
         } else {
           base_level_size = cur_level_size;
         }
       }
 
-      assert(base_level_size > 0);
+      terarkdb_assert(base_level_size > 0);
       base_level_size = std::max(base_level_size, l0_size);
 
       if (base_level_ == num_levels_ - 1) {
@@ -2866,7 +2866,7 @@ uint64_t VersionStorageInfo::EstimateLiveDataSize() const {
 bool VersionStorageInfo::RangeMightExistAfterSortedRun(
     const Slice& smallest_user_key, const Slice& largest_user_key,
     int last_level, int last_l0_idx) {
-  assert((last_l0_idx != -1) == (last_level == 0));
+  terarkdb_assert((last_l0_idx != -1) == (last_level == 0));
   // TODO(ajkr): this preserves earlier behavior where we considered an L0 file
   // bottommost only if it's the oldest L0 file and there are no files on older
   // levels. It'd be better to consider it bottommost if there's no overlap in
@@ -3030,11 +3030,11 @@ void VersionSet::AppendVersion(ColumnFamilyData* column_family_data,
   v->storage_info_.SetFinalized();
 
   // Make "v" current
-  assert(v->refs_ == 0);
+  terarkdb_assert(v->refs_ == 0);
   Version* current = column_family_data->current();
-  assert(v != current);
+  terarkdb_assert(v != current);
   if (current != nullptr) {
-    assert(current->refs_ > 0);
+    terarkdb_assert(current->refs_ > 0);
     current->Unref();
   }
   column_family_data->SetCurrent(v);
@@ -3051,12 +3051,12 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
                                          InstrumentedMutex* mu,
                                          Directory* db_directory,
                                          bool new_descriptor_log) {
-  assert(!writers.empty());
+  terarkdb_assert(!writers.empty());
   ManifestWriter& first_writer = writers.front();
   ManifestWriter* last_writer = &first_writer;
 
-  assert(!manifest_writers_.empty());
-  assert(manifest_writers_.front() == &first_writer);
+  terarkdb_assert(!manifest_writers_.empty());
+  terarkdb_assert(manifest_writers_.front() == &first_writer);
 
   autovector<VersionEdit*> batch_edits;
   autovector<Version*> versions;
@@ -3089,8 +3089,8 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
         break;
       }
       last_writer = *(it++);
-      assert(last_writer != nullptr);
-      assert(last_writer->cfd != nullptr);
+      terarkdb_assert(last_writer != nullptr);
+      terarkdb_assert(last_writer->cfd != nullptr);
       if (last_writer->cfd->IsDropped()) {
         // If we detect a dropped CF at this point, and the corresponding
         // version edits belong to an atomic group, then we need to find out
@@ -3102,7 +3102,7 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
         if (!batch_edits.empty()) {
           if (batch_edits.back()->is_in_atomic_group_ &&
               batch_edits.back()->remaining_entries_ > 0) {
-            assert(group_start < batch_edits.size());
+            terarkdb_assert(group_start < batch_edits.size());
             const auto& edit_list = last_writer->edit_list;
             size_t k = 0;
             while (k < edit_list.size()) {
@@ -3115,7 +3115,7 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
               ++k;
             }
             for (auto i = group_start; i < batch_edits.size(); ++i) {
-              assert(static_cast<uint32_t>(k) <=
+              terarkdb_assert(static_cast<uint32_t>(k) <=
                      batch_edits.back()->remaining_entries_);
               batch_edits[i]->remaining_entries_ -= static_cast<uint32_t>(k);
             }
@@ -3129,7 +3129,7 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
       for (int i = 0; i != static_cast<int>(versions.size()); ++i) {
         uint32_t cf_id = last_writer->cfd->GetID();
         if (versions[i]->cfd()->GetID() == cf_id) {
-          assert(!builder_guards.empty() &&
+          terarkdb_assert(!builder_guards.empty() &&
                  builder_guards.size() == versions.size());
           builder = builder_guards[i].get();
           TEST_SYNC_POINT_CALLBACK(
@@ -3147,7 +3147,7 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
             new BaseReferencedVersionBuilder(last_writer->cfd));
         builder = builder_guards.back().get();
       }
-      assert(builder != nullptr);  // make checker happy
+      terarkdb_assert(builder != nullptr);  // make checker happy
       for (const auto& e : last_writer->edit_list) {
         if (e->is_in_atomic_group_) {
           if (batch_edits.empty() || !batch_edits.back()->is_in_atomic_group_ ||
@@ -3180,7 +3180,7 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
       if (!batch_edits[i]->is_in_atomic_group_) {
         break;
       }
-      assert(i - k + batch_edits[i]->remaining_entries_ ==
+      terarkdb_assert(i - k + batch_edits[i]->remaining_entries_ ==
              batch_edits[k]->remaining_entries_);
       if (batch_edits[i]->remaining_entries_ == 0) {
         ++i;
@@ -3188,8 +3188,8 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
       }
       ++i;
     }
-    assert(batch_edits[i - 1]->is_in_atomic_group_);
-    assert(0 == batch_edits[i - 1]->remaining_entries_);
+    terarkdb_assert(batch_edits[i - 1]->is_in_atomic_group_);
+    terarkdb_assert(0 == batch_edits[i - 1]->remaining_entries_);
     std::vector<VersionEdit*> tmp;
     for (size_t j = k; j != i; ++j) {
       tmp.emplace_back(batch_edits[j]);
@@ -3203,7 +3203,7 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
   uint64_t new_manifest_file_size = 0;
   Status s;
 
-  assert(pending_manifest_file_number_ == 0);
+  terarkdb_assert(pending_manifest_file_number_ == 0);
   if (!descriptor_log_ ||
       manifest_file_size_ > db_options_->max_manifest_file_size ||
       manifest_edit_count_ > db_options_->max_manifest_edit_count) {
@@ -3230,7 +3230,7 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
     if (!first_writer.edit_list.front()->IsColumnFamilyManipulation()) {
       StopWatch sw(env_, db_options_->statistics.get(), BUILD_VERSION_TIME);
       for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
-        assert(!builder_guards.empty() &&
+        terarkdb_assert(!builder_guards.empty() &&
                builder_guards.size() == versions.size());
         builder_guards[i]->DoApplyAndSaveTo(
             versions[i]->storage_info(),
@@ -3245,9 +3245,9 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
           column_family_set_->get_table_cache()->GetCapacity() ==
           TableCache::kInfiniteCapacity;
       for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
-        assert(!builder_guards.empty() &&
+        terarkdb_assert(!builder_guards.empty() &&
                builder_guards.size() == versions.size());
-        assert(!mutable_cf_options_ptrs.empty() &&
+        terarkdb_assert(!mutable_cf_options_ptrs.empty() &&
                builder_guards.size() == versions.size());
         ColumnFamilyData* cfd = versions[i]->cfd_;
         builder_guards[i]->version_builder()->LoadTableHandlers(
@@ -3350,7 +3350,7 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
       ManifestWriter* writer;
       do {
         writer = *it++;
-        assert(writer->new_cf_options != nullptr);
+        terarkdb_assert(writer->new_cf_options != nullptr);
         CreateColumnFamily(*writer->new_cf_options, writer->edit_list.front());
       } while (writer != last_writer);
     } else if (first_writer.edit_list.front()->is_column_family_drop_) {
@@ -3377,7 +3377,7 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
           }
         }
         if (max_log_number_in_batch != 0) {
-          assert(version->cfd_->GetLogNumber() <= max_log_number_in_batch);
+          terarkdb_assert(version->cfd_->GetLogNumber() <= max_log_number_in_batch);
           version->cfd_->SetLogNumber(max_log_number_in_batch);
         }
       }
@@ -3480,17 +3480,17 @@ Status VersionSet::LogAndApply(
   } else if (num_edits > 1) {
 #ifndef NDEBUG
     if (column_family_datas[0] == nullptr) {
-      assert(column_family_datas.size() == edit_lists.size());
-      assert(column_family_datas.size() == new_cf_options_list.size());
+      terarkdb_assert(column_family_datas.size() == edit_lists.size());
+      terarkdb_assert(column_family_datas.size() == new_cf_options_list.size());
       for (int i = 0; i < num_cfds; ++i) {
-        assert(edit_lists[i].size() == 1);
-        assert(edit_lists[i][0]->is_column_family_add_);
-        assert(new_cf_options_list[i] != nullptr);
+        terarkdb_assert(edit_lists[i].size() == 1);
+        terarkdb_assert(edit_lists[i][0]->is_column_family_add_);
+        terarkdb_assert(new_cf_options_list[i] != nullptr);
       }
     } else {
       for (const auto& edit_list : edit_lists) {
         for (const auto& edit : edit_list) {
-          assert(!edit->IsColumnFamilyManipulation());
+          terarkdb_assert(!edit->IsColumnFamilyManipulation());
         }
       }
     }
@@ -3499,8 +3499,8 @@ Status VersionSet::LogAndApply(
 
   std::deque<ManifestWriter> writers;
   if (num_cfds > 0) {
-    assert(static_cast<size_t>(num_cfds) == mutable_cf_options_list.size());
-    assert(static_cast<size_t>(num_cfds) == edit_lists.size());
+    terarkdb_assert(static_cast<size_t>(num_cfds) == mutable_cf_options_list.size());
+    terarkdb_assert(static_cast<size_t>(num_cfds) == edit_lists.size());
   }
   for (int i = 0; i < num_cfds; ++i) {
     writers.emplace_back(
@@ -3508,7 +3508,7 @@ Status VersionSet::LogAndApply(
         column_family_datas[i] != nullptr ? nullptr : new_cf_options_list[i]);
     manifest_writers_.push_back(&writers[i]);
   }
-  assert(!writers.empty());
+  terarkdb_assert(!writers.empty());
   ManifestWriter& first_writer = writers.front();
   while (!first_writer.done && &first_writer != manifest_writers_.front()) {
     first_writer.cv.Wait();
@@ -3519,7 +3519,7 @@ Status VersionSet::LogAndApply(
 // the first manifest writer.
 #ifndef NDEBUG
     for (const auto& writer : writers) {
-      assert(writer.done);
+      terarkdb_assert(writer.done);
     }
 #endif /* !NDEBUG */
     return first_writer.status;
@@ -3552,7 +3552,7 @@ Status VersionSet::LogAndApply(
 }
 
 void VersionSet::LogAndApplyCFHelper(VersionEdit* edit) {
-  assert(edit->IsColumnFamilyManipulation());
+  terarkdb_assert(edit->IsColumnFamilyManipulation());
   edit->SetNextFile(next_file_number_.load());
   // The log might have data that is not visible to memtbale and hence have not
   // updated the last_sequence_ yet. It is also possible that the log has is
@@ -3576,11 +3576,11 @@ void VersionSet::LogAndApplyHelper(ColumnFamilyData* cfd,
   (void)cfd;
 #endif
   mu->AssertHeld();
-  assert(!edit->IsColumnFamilyManipulation());
+  terarkdb_assert(!edit->IsColumnFamilyManipulation());
 
   if (edit->has_log_number_) {
-    assert(edit->log_number_ >= cfd->GetLogNumber());
-    assert(edit->log_number_ < next_file_number_.load());
+    terarkdb_assert(edit->log_number_ >= cfd->GetLogNumber());
+    terarkdb_assert(edit->log_number_ < next_file_number_.load());
   }
 
   if (!edit->has_prev_log_number_) {
@@ -3622,7 +3622,7 @@ Status VersionSet::ApplyOneVersionEdit(
   bool cf_in_builders = builders.find(edit.column_family_) != builders.end();
 
   // they can't both be true
-  assert(!(cf_in_not_found && cf_in_builders));
+  terarkdb_assert(!(cf_in_not_found && cf_in_builders));
 
   ColumnFamilyData* cfd = nullptr;
 
@@ -3657,17 +3657,17 @@ Status VersionSet::ApplyOneVersionEdit(
   } else if (edit.is_column_family_drop_) {
     if (cf_in_builders) {
       auto builder = builders.find(edit.column_family_);
-      assert(builder != builders.end());
+      terarkdb_assert(builder != builders.end());
       delete builder->second;
       builders.erase(builder);
       cfd = column_family_set_->GetColumnFamily(edit.column_family_);
-      assert(cfd != nullptr);
+      terarkdb_assert(cfd != nullptr);
       if (cfd->Unref()) {
         delete cfd;
         cfd = nullptr;
       } else {
         // who else can have reference to cfd!?
-        assert(false);
+        terarkdb_assert(false);
       }
     } else if (cf_in_not_found) {
       column_families_not_found.erase(edit.column_family_);
@@ -3683,13 +3683,13 @@ Status VersionSet::ApplyOneVersionEdit(
 
     cfd = column_family_set_->GetColumnFamily(edit.column_family_);
     // this should never happen since cf_in_builders is true
-    assert(cfd != nullptr);
+    terarkdb_assert(cfd != nullptr);
 
     // if it is not column family add or column family drop,
     // then it's a file add/delete, which should be forwarded
     // to builder
     auto builder = builders.find(edit.column_family_);
-    assert(builder != builders.end());
+    terarkdb_assert(builder != builders.end());
     builder->second->version_builder()->Apply(&edit);
   }
 
@@ -3930,7 +3930,7 @@ Status VersionSet::Recover(
 
   if (s.ok()) {
     for (auto cfd : *column_family_set_) {
-      assert(builders.count(cfd->GetID()) > 0);
+      terarkdb_assert(builders.count(cfd->GetID()) > 0);
       auto* builder = builders[cfd->GetID()]->version_builder();
       if (!builder->CheckConsistencyForNumLevels()) {
         s = Status::InvalidArgument(
@@ -3948,9 +3948,9 @@ Status VersionSet::Recover(
       if (read_only) {
         cfd->table_cache()->SetTablesAreImmortal();
       }
-      assert(cfd->initialized());
+      terarkdb_assert(cfd->initialized());
       auto builders_iter = builders.find(cfd->GetID());
-      assert(builders_iter != builders.end());
+      terarkdb_assert(builders_iter != builders.end());
       auto* builder = builders_iter->second->version_builder();
 
       bool load_essence_sst =
@@ -4262,7 +4262,7 @@ Status VersionSet::DumpManifest(Options& options, std::string& dscname,
         builders.erase(builder_iter);
         comparators.erase(edit.column_family_);
         cfd = column_family_set_->GetColumnFamily(edit.column_family_);
-        assert(cfd != nullptr);
+        terarkdb_assert(cfd != nullptr);
         cfd->Unref();
         delete cfd;
         cfd = nullptr;
@@ -4275,13 +4275,13 @@ Status VersionSet::DumpManifest(Options& options, std::string& dscname,
 
         cfd = column_family_set_->GetColumnFamily(edit.column_family_);
         // this should never happen since cf_in_builders is true
-        assert(cfd != nullptr);
+        terarkdb_assert(cfd != nullptr);
 
         // if it is not column family add or column family drop,
         // then it's a file add/delete, which should be forwarded
         // to builder
         auto builder = builders.find(edit.column_family_);
-        assert(builder != builders.end());
+        terarkdb_assert(builder != builders.end());
         builder->second->version_builder()->Apply(&edit);
       }
 
@@ -4335,7 +4335,7 @@ Status VersionSet::DumpManifest(Options& options, std::string& dscname,
         continue;
       }
       auto builders_iter = builders.find(cfd->GetID());
-      assert(builders_iter != builders.end());
+      terarkdb_assert(builders_iter != builders.end());
       auto builder = builders_iter->second->version_builder();
 
       Version* v = new Version(cfd, this, env_options_,
@@ -4408,7 +4408,7 @@ Status VersionSet::WriteSnapshot(log::Writer* log) {
     if (cfd->IsDropped()) {
       continue;
     }
-    assert(cfd->initialized());
+    terarkdb_assert(cfd->initialized());
     {
       // Store column family info
       VersionEdit edit;
@@ -4471,7 +4471,7 @@ uint64_t VersionSet::ApproximateSize(Version* v, const Slice& start,
                                      const Slice& end, int start_level,
                                      int end_level) {
   // pre-condition
-  assert(v->cfd_->internal_comparator().Compare(start, end) <= 0);
+  terarkdb_assert(v->cfd_->internal_comparator().Compare(start, end) <= 0);
 
   uint64_t size = 0;
   const auto* vstorage = v->storage_info();
@@ -4479,7 +4479,7 @@ uint64_t VersionSet::ApproximateSize(Version* v, const Slice& start,
                   ? vstorage->num_non_empty_levels()
                   : std::min(end_level, vstorage->num_non_empty_levels());
 
-  assert(start_level <= end_level);
+  terarkdb_assert(start_level <= end_level);
 
   for (int level = start_level; level < end_level; level++) {
     const LevelFilesBrief& files_brief = vstorage->LevelFilesBrief(level);
@@ -4494,14 +4494,14 @@ uint64_t VersionSet::ApproximateSize(Version* v, const Slice& start,
       continue;
     }
 
-    assert(level > 0);
-    assert(files_brief.num_files > 0);
+    terarkdb_assert(level > 0);
+    terarkdb_assert(files_brief.num_files > 0);
 
     // identify the file position for starting key
     const uint64_t idx_start = FindFileInRange(
         v->cfd_->internal_comparator(), files_brief, start,
         /*start=*/0, static_cast<uint32_t>(files_brief.num_files - 1));
-    assert(idx_start < files_brief.num_files);
+    terarkdb_assert(idx_start < files_brief.num_files);
 
     // scan all files from the starting position until the ending position
     // inferred from the sorted order
@@ -4519,7 +4519,7 @@ uint64_t VersionSet::ApproximateSize(Version* v, const Slice& start,
         // subtract the bytes needed to be scanned to get to the starting
         // key
         val = ApproximateSize(v, files_brief.files[i], start);
-        assert(size >= val);
+        terarkdb_assert(size >= val);
         size -= val;
       }
     }
@@ -4538,7 +4538,7 @@ uint64_t VersionSet::ApproximateSizeLevel0(Version* v,
   for (size_t i = 0; i < files_brief.num_files; i++) {
     const uint64_t start = ApproximateSize(v, files_brief.files[i], key_start);
     const uint64_t end = ApproximateSize(v, files_brief.files[i], key_end);
-    assert(end >= start);
+    terarkdb_assert(end >= start);
     size += end - start;
   }
   return size;
@@ -4547,7 +4547,7 @@ uint64_t VersionSet::ApproximateSizeLevel0(Version* v,
 uint64_t VersionSet::ApproximateSize(Version* v, const FdWithKeyRange& f,
                                      const Slice& key) {
   // pre-condition
-  assert(v);
+  terarkdb_assert(v);
 
   struct {
     uint64_t (*callback)(void*, const FileMetaData*, uint64_t);
@@ -4648,7 +4648,7 @@ void VersionSet::AddLiveFiles(std::vector<FileDescriptor>* live_list) {
     }
     if (!found_current && current != nullptr) {
       // Should never happen unless it is a bug.
-      assert(false);
+      terarkdb_assert(false);
       current->AddLiveFiles(live_list);
     }
   }
@@ -4703,7 +4703,7 @@ InternalIterator* VersionSet::MakeInputIterator(
       }
     }
   }
-  assert(num <= space);
+  terarkdb_assert(num <= space);
   InternalIterator* result =
       NewMergingIterator(&c->column_family_data()->internal_comparator(), list,
                          static_cast<int>(num));
@@ -4801,7 +4801,7 @@ void VersionSet::GetLiveFilesMetaData(std::vector<LiveFileMetaData>* metadata) {
         if (path_id < cfd->ioptions()->cf_paths.size()) {
           filemetadata.db_path = cfd->ioptions()->cf_paths[path_id].path;
         } else {
-          assert(!cfd->ioptions()->cf_paths.empty());
+          terarkdb_assert(!cfd->ioptions()->cf_paths.empty());
           filemetadata.db_path = cfd->ioptions()->cf_paths.back().path;
         }
         filemetadata.name = MakeTableFileName("", file->fd.GetNumber());
@@ -4825,7 +4825,7 @@ void VersionSet::GetLiveFilesMetaData(std::vector<LiveFileMetaData>* metadata) {
 void VersionSet::GetObsoleteFiles(chash_map<uint64_t, ObsoleteFileInfo>* files,
                                   std::vector<std::string>* manifest_filenames,
                                   uint64_t min_pending_output) {
-  assert(manifest_filenames->empty());
+  terarkdb_assert(manifest_filenames->empty());
   obsolete_manifests_.swap(*manifest_filenames);
   std::vector<ObsoleteFileInfo> pending_files;
   for (auto& f : obsolete_files_) {
@@ -4843,7 +4843,7 @@ void VersionSet::GetObsoleteFiles(chash_map<uint64_t, ObsoleteFileInfo>* files,
 
 ColumnFamilyData* VersionSet::CreateColumnFamily(
     const ColumnFamilyOptions& cf_options, VersionEdit* edit) {
-  assert(edit->is_column_family_add_);
+  terarkdb_assert(edit->is_column_family_add_);
 
   MutableCFOptions dummy_cf_options;
   Version* dummy_versions =
@@ -4920,7 +4920,7 @@ void VersionStorageInfo::CalculateBlobInfo() {
   }
   for (auto f : file_map) {
     auto depend_it = dependence_map_.find(f.first);
-    assert(depend_it != dependence_map_.end());
+    terarkdb_assert(depend_it != dependence_map_.end());
     if (depend_it == dependence_map_.end()) {
       std::abort();
     }

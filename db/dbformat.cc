@@ -33,8 +33,8 @@ const ValueType kValueTypeForSeek = kTypeMergeIndex;
 const ValueType kValueTypeForSeekForPrev = kTypeDeletion;
 
 uint64_t PackSequenceAndType(uint64_t seq, ValueType t) {
-  assert(seq <= kMaxSequenceNumber);
-  assert(IsExtendedValueType(t));
+  terarkdb_assert(seq <= kMaxSequenceNumber);
+  terarkdb_assert(IsExtendedValueType(t));
   return (seq << 8) | t;
 }
 
@@ -74,8 +74,8 @@ void UnPackSequenceAndType(uint64_t packed, uint64_t* seq, ValueType* t) {
   *seq = packed >> 8;
   *t = static_cast<ValueType>(packed & 0xff);
 
-  assert(*seq <= kMaxSequenceNumber);
-  assert(IsExtendedValueType(*t));
+  terarkdb_assert(*seq <= kMaxSequenceNumber);
+  terarkdb_assert(IsExtendedValueType(*t));
 }
 
 void AppendInternalKey(std::string* result, const ParsedInternalKey& key) {
@@ -147,8 +147,8 @@ void InternalKeyComparator::FindShortestSeparator(std::string* start,
     // Tack on the earliest possible number to the shortened user key.
     PutFixed64(&tmp,
                PackSequenceAndType(kMaxSequenceNumber, kValueTypeForSeek));
-    assert(this->Compare(*start, tmp) < 0);
-    assert(this->Compare(tmp, limit) < 0);
+    terarkdb_assert(this->Compare(*start, tmp) < 0);
+    terarkdb_assert(this->Compare(tmp, limit) < 0);
     start->swap(tmp);
   }
 }
@@ -163,7 +163,7 @@ void InternalKeyComparator::FindShortSuccessor(std::string* key) const {
     // Tack on the earliest possible number to the shortened user key.
     PutFixed64(&tmp,
                PackSequenceAndType(kMaxSequenceNumber, kValueTypeForSeek));
-    assert(this->Compare(*key, tmp) < 0);
+    terarkdb_assert(this->Compare(*key, tmp) < 0);
     key->swap(tmp);
   }
 }
@@ -191,7 +191,7 @@ LookupKey::LookupKey(const Slice& _user_key, SequenceNumber s) {
 void IterKey::EnlargeBuffer(size_t key_size) {
   // If size is smaller than buffer size, continue using current buffer,
   // or the static allocated one, as default
-  assert(key_size > buf_size_);
+  terarkdb_assert(key_size > buf_size_);
   // Need to enlarge the buffer.
   ResetBuffer();
   buf_ = new char[key_size];
@@ -202,7 +202,7 @@ Status SeparateHelper::TransToSeparate(
     const Slice& internal_key, LazyBuffer& value, uint64_t file_number,
     const Slice& meta, bool is_merge, bool is_index,
     const ValueExtractor* value_meta_extractor) {
-  assert(file_number != uint64_t(-1));
+  terarkdb_assert(file_number != uint64_t(-1));
   if (value_meta_extractor == nullptr || is_merge) {
     value.reset(EncodeFileNumber(file_number), true, file_number);
     return Status::OK();

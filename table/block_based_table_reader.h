@@ -591,7 +591,7 @@ class BlockBasedTableIteratorBase : public InternalIteratorBase<TValue> {
            block_iter_.Valid();
   }
   Slice key() const override {
-    assert(Valid());
+    terarkdb_assert(Valid());
     return block_iter_.key();
   }
   Status status() const override {
@@ -684,7 +684,7 @@ class BlockBasedTableIterator
   using Base::Base;
 
   TValue value() const override {
-    assert(Valid());
+    terarkdb_assert(Valid());
     return block_iter_.value();
   }
 };
@@ -711,7 +711,7 @@ class BlockBasedTableIterator<DataBlockIter, LazyBuffer>
   }
 
   LazyBuffer value() const override {
-    assert(Valid());
+    terarkdb_assert(Valid());
     return LazyBuffer(this, {}, block_iter_.value(), table_->FileNumber());
   }
 };

@@ -136,7 +136,7 @@ struct VersionBuilderContextImpl : VersionBuilder::Context {
   void UnrefFile(FileMetaData* f) {
     if (f->Unref()) {
       if (f->table_reader_handle) {
-        assert(table_cache != nullptr);
+        terarkdb_assert(table_cache != nullptr);
         table_cache->ReleaseHandle(f->table_reader_handle);
         f->table_reader_handle = nullptr;
       }
@@ -178,7 +178,7 @@ class VersionBuilder::Rep {
         case kLevelNon0:
           return BySmallestKey(f1, f2, internal_comparator);
       }
-      assert(false);
+      terarkdb_assert(false);
       return false;
     }
   };
@@ -240,7 +240,7 @@ class VersionBuilder::Rep {
     auto& inheritance_counter = context_->inheritance_counter;
     auto erase = [&](uint64_t file_number) {
       auto find = inheritance_counter.find(file_number);
-      assert(find != inheritance_counter.end());
+      terarkdb_assert(find != inheritance_counter.end());
       if (--find->second.count == 0) {
         inheritance_counter.erase(find);
       }
@@ -272,8 +272,8 @@ class VersionBuilder::Rep {
 
   void DelSst(uint64_t file_number, int level) {
     auto& dependence_map = context_->dependence_map;
-    assert(dependence_map.count(file_number) > 0);
-    assert(level >= 0);
+    terarkdb_assert(dependence_map.count(file_number) > 0);
+    terarkdb_assert(level >= 0);
     dependence_map[file_number].level = -1;
     context_->levels[level].erase(file_number);
   }
@@ -301,12 +301,12 @@ class VersionBuilder::Rep {
         }
         continue;
       }
-      assert(dependence_map.pos(find->second.item_pos) != dependence_map.end());
+      terarkdb_assert(dependence_map.pos(find->second.item_pos) != dependence_map.end());
       auto item = &dependence_map.pos(find->second.item_pos)->second;
       if (finish) {
         find->second.depended = true;
         item->is_estimation |= is_estimation;
-        assert(is_map || dependence.entry_count > 0);
+        terarkdb_assert(is_map || dependence.entry_count > 0);
         item->entry_depended += dependence.entry_count * ratio;
       }
       item->dependence_version = dependence_version;
@@ -334,10 +334,10 @@ class VersionBuilder::Rep {
     for (int level = 0; level < num_levels_; ++level) {
       for (auto& pair : context_->levels[level]) {
         auto file_number = pair.first;
-        assert(dependence_map.count(file_number) > 0);
-        assert(inheritance_counter.count(file_number) > 0);
+        terarkdb_assert(dependence_map.count(file_number) > 0);
+        terarkdb_assert(inheritance_counter.count(file_number) > 0);
         auto& item = dependence_map[file_number];
-        assert(item.level >= 0);
+        terarkdb_assert(item.level >= 0);
         item.dependence_version = dependence_version;
         item.gc_forbidden_version = dependence_version;
         if (!item.f->prop.dependence.empty()) {
@@ -372,7 +372,7 @@ class VersionBuilder::Rep {
     for (auto it = dependence_map.begin(); it != dependence_map.end();) {
       auto& item = it->second;
       if (item.dependence_version == dependence_version) {
-        assert(inheritance_counter.count(it->first) > 0 &&
+        terarkdb_assert(inheritance_counter.count(it->first) > 0 &&
                inheritance_counter.find(it->first)->second.item_pos ==
                    it.pos());
         if (finish) {
@@ -403,14 +403,14 @@ class VersionBuilder::Rep {
               }
               break;
             case FileMetaData::kGarbageCollectionCandidate:
-              assert(item.gc_forbidden_version != dependence_version);
+              terarkdb_assert(item.gc_forbidden_version != dependence_version);
               if (!item.is_estimation ||
                   num_antiquation != item.f->num_antiquation) {
                 item.f->gc_status = FileMetaData::kGarbageCollectionPermitted;
               }
               break;
             case FileMetaData::kGarbageCollectionPermitted:
-              assert(item.gc_forbidden_version != dependence_version);
+              terarkdb_assert(item.gc_forbidden_version != dependence_version);
               break;
           }
           item.f->num_antiquation = num_antiquation;
@@ -612,7 +612,7 @@ class VersionBuilder::Rep {
       CheckConsistency(base_vstorage_, true);
     } else {
       context_.reset(static_cast<VersionBuilderContextImpl*>(base_context));
-      assert(context_->table_cache == table_cache_);
+      terarkdb_assert(context_->table_cache == table_cache_);
 
       for (auto& pair : context_->dependence_map) {
         pair.second.is_estimation = false;
@@ -644,7 +644,7 @@ class VersionBuilder::Rep {
       auto file_number = pair.second;
       if (level < num_levels_) {
         CheckConsistencyForDeletes(edit, file_number, level);
-        assert(context_->levels[level].count(file_number) > 0);
+        terarkdb_assert(context_->levels[level].count(file_number) > 0);
         DelSst(file_number, level);
       } else {
         auto exising = invalid_levels_[level].find(file_number);
@@ -662,8 +662,8 @@ class VersionBuilder::Rep {
       int level = pair.first;
       if (level < num_levels_) {
         FileMetaData* f = new FileMetaData(pair.second);
-        assert(f->table_reader_handle == nullptr);
-        assert(level < 0 ||
+        terarkdb_assert(f->table_reader_handle == nullptr);
+        terarkdb_assert(level < 0 ||
                context_->levels[level].count(f->fd.GetNumber()) == 0);
         PutSst(f, level);
       } else {
@@ -689,7 +689,7 @@ class VersionBuilder::Rep {
     CalculateDependence(true, false, maintainer_job_ratio);
     auto exists = [&](uint64_t file_number) {
       auto find = context_->inheritance_counter.find(file_number);
-      assert(find != context_->inheritance_counter.end());
+      terarkdb_assert(find != context_->inheritance_counter.end());
       return bool(find->second.depended);
     };
 
@@ -744,7 +744,7 @@ class VersionBuilder::Rep {
                          bool prefetch_index_and_filter_in_cache,
                          const SliceTransform* prefix_extractor,
                          bool load_essence_sst, int max_threads) {
-    assert(table_cache_ != nullptr);
+    terarkdb_assert(table_cache_ != nullptr);
     Init();
     // <file metadata, level>
     std::vector<std::pair<FileMetaData*, int>> files_meta;
@@ -808,7 +808,7 @@ class VersionBuilder::Rep {
   void UpgradeFileMetaData(const SliceTransform* prefix_extractor,
                            int max_threads) {
     Init();
-    assert(table_cache_ != nullptr);
+    terarkdb_assert(table_cache_ != nullptr);
     std::vector<FileMetaData*> files_meta;
     auto dependence_version = context_->dependence_version;
     for (auto& pair : context_->dependence_map) {

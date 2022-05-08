@@ -70,12 +70,12 @@ BlockBasedFilterBlockBuilder::BlockBasedFilterBlockBuilder(
       prev_prefix_start_(0),
       prev_prefix_size_(0),
       num_added_(0) {
-  assert(policy_);
+  terarkdb_assert(policy_);
 }
 
 void BlockBasedFilterBlockBuilder::StartBlock(uint64_t block_offset) {
   uint64_t filter_index = (block_offset / kFilterBase);
-  assert(filter_index >= filter_offsets_.size());
+  terarkdb_assert(filter_index >= filter_offsets_.size());
   while (filter_index > filter_offsets_.size()) {
     GenerateFilter();
   }
@@ -175,7 +175,7 @@ BlockBasedFilterBlockReader::BlockBasedFilterBlockReader(
       num_(0),
       base_lg_(0),
       contents_(std::move(contents)) {
-  assert(policy_);
+  terarkdb_assert(policy_);
   size_t n = contents_.data.size();
   if (n < 5) return;  // 1 byte for base_lg_ and 4 for start of offset array
   base_lg_ = contents_.data[n - 1];
@@ -190,7 +190,7 @@ bool BlockBasedFilterBlockReader::KeyMayMatch(
     const Slice& key, const SliceTransform* /* prefix_extractor */,
     uint64_t block_offset, const bool /*no_io*/,
     const Slice* const /*const_ikey_ptr*/) {
-  assert(block_offset != kNotValid);
+  terarkdb_assert(block_offset != kNotValid);
   if (!whole_key_filtering_) {
     return true;
   }
@@ -201,7 +201,7 @@ bool BlockBasedFilterBlockReader::PrefixMayMatch(
     const Slice& prefix, const SliceTransform* /* prefix_extractor */,
     uint64_t block_offset, const bool /*no_io*/,
     const Slice* const /*const_ikey_ptr*/) {
-  assert(block_offset != kNotValid);
+  terarkdb_assert(block_offset != kNotValid);
   return MayMatch(prefix, block_offset);
 }
 

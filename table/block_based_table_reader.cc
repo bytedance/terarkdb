@@ -132,36 +132,33 @@ void ReleaseCachedEntry(void* arg, void* h) {
 Slice GetCacheKeyFromOffset(const char* cache_key_prefix,
                             size_t cache_key_prefix_size, uint64_t offset,
                             char* cache_key) {
-  assert(cache_key != nullptr);
-  assert(cache_key_prefix_size != 0);
-  assert(cache_key_prefix_size <= BlockBasedTable::kMaxCacheKeyPrefixSize);
+  terarkdb_assert(cache_key != nullptr);
+  terarkdb_assert(cache_key_prefix_size != 0);
+  terarkdb_assert(cache_key_prefix_size <=
+                  BlockBasedTable::kMaxCacheKeyPrefixSize);
   memcpy(cache_key, cache_key_prefix, cache_key_prefix_size);
   char* end = EncodeVarint64(cache_key + cache_key_prefix_size, offset);
   return Slice(cache_key, static_cast<size_t>(end - cache_key));
 }
 
-Cache::Handle* GetEntryFromCache(Cache* block_cache, const Slice& key,
-                                 Tickers cf_block_cache_miss_ticker,
-                                 Tickers cf_block_cache_hit_ticker,
-                                 Tickers db_block_cache_miss_ticker,
-                                 Tickers db_block_cache_hit_ticker,
-                                 uint64_t* block_cache_miss_stats,
-                                 uint64_t* block_cache_hit_stats,
-                                 Statistics* db_statistics,
-                                 Statistics* cf_statistics,
-                                 GetContext* get_context) {
+Cache::Handle* GetEntryFromCache(
+    Cache* block_cache, const Slice& key, Tickers cf_block_cache_miss_ticker,
+    Tickers cf_block_cache_hit_ticker, Tickers db_block_cache_miss_ticker,
+    Tickers db_block_cache_hit_ticker, uint64_t* block_cache_miss_stats,
+    uint64_t* block_cache_hit_stats, Statistics* db_statistics,
+    Statistics* cf_statistics, GetContext* get_context) {
   auto cache_handle = block_cache->Lookup(key, db_statistics);
   if (cache_handle != nullptr) {
     PERF_COUNTER_ADD(block_cache_hit_count, 1);
     if (get_context != nullptr) {
-      if(is_foreground_operation()){
+      if (is_foreground_operation()) {
         // overall cache hit
         get_context->get_context_stats_.num_cache_hit_fg++;
         // total bytes read from cache
         get_context->get_context_stats_.num_cache_bytes_read_fg +=
             block_cache->GetUsage(cache_handle);
         // block-type specific cache hit
-      }else{
+      } else {
         // overall cache hit
         get_context->get_context_stats_.num_cache_hit_bg++;
         // total bytes read from cache
@@ -172,14 +169,14 @@ Cache::Handle* GetEntryFromCache(Cache* block_cache, const Slice& key,
 
       (*block_cache_hit_stats)++;
     } else {
-      if(is_foreground_operation()){
+      if (is_foreground_operation()) {
         // overall cache hit
         RecordTick(cf_statistics, BLOCK_CACHE_HIT_FG);
         // total bytes read from cache
         RecordTick(cf_statistics, BLOCK_CACHE_BYTES_READ_FG,
                    block_cache->GetUsage(cache_handle));
 
-      }else{
+      } else {
         // overall cache hit
         RecordTick(cf_statistics, BLOCK_CACHE_HIT_BG);
         // total bytes read from cache
@@ -192,19 +189,19 @@ Cache::Handle* GetEntryFromCache(Cache* block_cache, const Slice& key,
     }
   } else {
     if (get_context != nullptr) {
-      if(is_foreground_operation()){
+      if (is_foreground_operation()) {
         // overall cache miss
         get_context->get_context_stats_.num_cache_miss_fg++;
-      }else{
+      } else {
         // overall cache miss
         get_context->get_context_stats_.num_cache_miss_bg++;
       }
       // block-type specific cache miss
       (*block_cache_miss_stats)++;
     } else {
-      if(is_foreground_operation()){
+      if (is_foreground_operation()) {
         RecordTick(cf_statistics, BLOCK_CACHE_MISS_FG);
-      }else{
+      } else {
         RecordTick(cf_statistics, BLOCK_CACHE_MISS_BG);
       }
       RecordTick(cf_statistics, cf_block_cache_miss_ticker);
@@ -262,9 +259,9 @@ class PartitionIndexReader : public IndexReader, public Cleanable {
     auto s = ReadBlockFromFile(
         file, prefetch_buffer, footer, ReadOptions(), index_handle,
         &index_block, ioptions, true /* decompress */,
-        true /*maybe_compressed*/, dummy_comp_dict /*compression dict*/, cache_options,
-        kDisableGlobalSequenceNumber, 0 /* read_amp_bytes_per_bit */,
-        memory_allocator);
+        true /*maybe_compressed*/, dummy_comp_dict /*compression dict*/,
+        cache_options, kDisableGlobalSequenceNumber,
+        0 /* read_amp_bytes_per_bit */, memory_allocator);
 
     if (s.ok()) {
       *index_reader = new PartitionIndexReader(
@@ -365,7 +362,7 @@ class PartitionIndexReader : public IndexReader, public Cleanable {
           prefetch_buffer.get(), rep, ro, handle, compression_dict, &block,
           is_index, nullptr /* get_context */);
 
-      assert(s.ok() || block.value == nullptr);
+      terarkdb_assert(s.ok() || block.value == nullptr);
       if (s.ok() && block.value != nullptr) {
         if (block.cache_handle != nullptr) {
           if (pin) {
@@ -440,7 +437,7 @@ class PartitionIndexReader : public IndexReader, public Cleanable {
   }
 
   virtual size_t ApproximateMemoryUsage() const override {
-    assert(index_block_);
+    terarkdb_assert(index_block_);
     size_t usage = index_block_->ApproximateMemoryUsage();
 #ifdef ROCKSDB_MALLOC_USABLE_SIZE
     usage += malloc_usable_size((void*)this);
@@ -462,7 +459,7 @@ class PartitionIndexReader : public IndexReader, public Cleanable {
         index_block_(std::move(index_block)),
         index_key_includes_seq_(index_key_includes_seq),
         index_value_is_full_(index_value_is_full) {
-    assert(index_block_ != nullptr);
+    terarkdb_assert(index_block_ != nullptr);
   }
   BlockBasedTable* table_;
   std::unique_ptr<Block> index_block_;
@@ -496,9 +493,9 @@ class BinarySearchIndexReader : public IndexReader {
     auto s = ReadBlockFromFile(
         file, prefetch_buffer, footer, ReadOptions(), index_handle,
         &index_block, ioptions, true /* decompress */,
-        true /*maybe_compressed*/, dummy_comp_dict /*compression dict*/, cache_options,
-        kDisableGlobalSequenceNumber, 0 /* read_amp_bytes_per_bit */,
-        memory_allocator);
+        true /*maybe_compressed*/, dummy_comp_dict /*compression dict*/,
+        cache_options, kDisableGlobalSequenceNumber,
+        0 /* read_amp_bytes_per_bit */, memory_allocator);
 
     if (s.ok()) {
       *index_reader = new BinarySearchIndexReader(
@@ -526,7 +523,7 @@ class BinarySearchIndexReader : public IndexReader {
   }
 
   virtual size_t ApproximateMemoryUsage() const override {
-    assert(index_block_);
+    terarkdb_assert(index_block_);
     size_t usage = index_block_->ApproximateMemoryUsage();
 #ifdef ROCKSDB_MALLOC_USABLE_SIZE
     usage += malloc_usable_size((void*)this);
@@ -545,7 +542,7 @@ class BinarySearchIndexReader : public IndexReader {
         index_block_(std::move(index_block)),
         index_key_includes_seq_(index_key_includes_seq),
         index_value_is_full_(index_value_is_full) {
-    assert(index_block_ != nullptr);
+    terarkdb_assert(index_block_ != nullptr);
   }
   std::unique_ptr<Block> index_block_;
   const bool index_key_includes_seq_;
@@ -571,9 +568,9 @@ class HashIndexReader : public IndexReader {
     auto s = ReadBlockFromFile(
         file, prefetch_buffer, footer, ReadOptions(), index_handle,
         &index_block, ioptions, true /* decompress */,
-        true /*maybe_compressed*/, dummy_comp_dict /*compression dict*/, cache_options,
-        kDisableGlobalSequenceNumber, 0 /* read_amp_bytes_per_bit */,
-        memory_allocator);
+        true /*maybe_compressed*/, dummy_comp_dict /*compression dict*/,
+        cache_options, kDisableGlobalSequenceNumber,
+        0 /* read_amp_bytes_per_bit */, memory_allocator);
 
     if (!s.ok()) {
       return s;
@@ -658,7 +655,7 @@ class HashIndexReader : public IndexReader {
   }
 
   virtual size_t ApproximateMemoryUsage() const override {
-    assert(index_block_);
+    terarkdb_assert(index_block_);
     size_t usage = index_block_->ApproximateMemoryUsage();
     usage += prefixes_contents_.usable_size();
 #ifdef ROCKSDB_MALLOC_USABLE_SIZE
@@ -681,7 +678,7 @@ class HashIndexReader : public IndexReader {
         index_block_(std::move(index_block)),
         index_key_includes_seq_(index_key_includes_seq),
         index_value_is_full_(index_value_is_full) {
-    assert(index_block_ != nullptr);
+    terarkdb_assert(index_block_ != nullptr);
   }
 
   ~HashIndexReader() {}
@@ -695,7 +692,7 @@ class HashIndexReader : public IndexReader {
 
 // Helper function to setup the cache key's prefix for the Table.
 void BlockBasedTable::SetupCacheKeyPrefix(Rep* rep, uint64_t file_size) {
-  assert(kMaxCacheKeyPrefixSize >= 10);
+  terarkdb_assert(kMaxCacheKeyPrefixSize >= 10);
   rep->cache_key_prefix_size = 0;
   rep->compressed_cache_key_prefix_size = 0;
   if (rep->table_options.block_cache != nullptr) {
@@ -833,9 +830,9 @@ Status GetGlobalSequenceNumber(const TableProperties& table_properties,
 Slice BlockBasedTable::GetCacheKey(const char* cache_key_prefix,
                                    size_t cache_key_prefix_size,
                                    const BlockHandle& handle, char* cache_key) {
-  assert(cache_key != nullptr);
-  assert(cache_key_prefix_size != 0);
-  assert(cache_key_prefix_size <= kMaxCacheKeyPrefixSize);
+  terarkdb_assert(cache_key != nullptr);
+  terarkdb_assert(cache_key_prefix_size != 0);
+  terarkdb_assert(cache_key_prefix_size <= kMaxCacheKeyPrefixSize);
   memcpy(cache_key, cache_key_prefix, cache_key_prefix_size);
   char* end =
       EncodeVarint64(cache_key + cache_key_prefix_size, handle.offset());
@@ -961,7 +958,7 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
           prefix = kFilterBlockPrefix;
           break;
         default:
-          assert(0);
+          terarkdb_assert(0);
       }
       std::string filter_block_key = prefix;
       filter_block_key.append(rep->filter_policy->Name());
@@ -997,7 +994,7 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
                      "block %s",
                      s.ToString().c_str());
     } else {
-      assert(table_properties != nullptr);
+      terarkdb_assert(table_properties != nullptr);
       rep->table_properties.reset(table_properties);
       rep->blocks_maybe_compressed =
           rep->table_properties_base.compression_name !=
@@ -1089,7 +1086,7 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
     std::unique_ptr<InternalIteratorBase<Slice>> iter(
         NewDataBlockIterator<DataBlockIter>(rep, read_options,
                                             range_del_handle));
-    assert(iter != nullptr);
+    terarkdb_assert(iter != nullptr);
     s = iter->status();
     if (!s.ok()) {
       ROCKS_LOG_WARN(
@@ -1118,7 +1115,7 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
       prefetch_all || (table_options.pin_top_level_index_and_filter &&
                        rep->filter_type == Rep::FilterType::kPartitionedFilter);
   // Partition fitlers cannot be enabled without partition indexes
-  assert(!prefetch_filter || prefetch_index);
+  terarkdb_assert(!prefetch_filter || prefetch_index);
   // pin both index and filters, down to all partitions
   const bool pin_all =
       rep->table_options.pin_l0_filter_and_index_blocks_in_cache && level == 0;
@@ -1134,7 +1131,7 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
   // Will use block cache for index/filter blocks access
   // Always prefetch index and filter for level 0
   if (table_options.cache_index_and_filter_blocks) {
-    assert(table_options.block_cache != nullptr);
+    terarkdb_assert(table_options.block_cache != nullptr);
     if (prefetch_index) {
       // Hack: Call NewIndexIterator() to implicitly add index to the
       // block_cache
@@ -1151,7 +1148,7 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
         // This is the first call to NewIndexIterator() since we're in Open().
         // On success it should give us ownership of the `CachableEntry` by
         // populating `index_entry`.
-        assert(index_entry.value != nullptr);
+        terarkdb_assert(index_entry.value != nullptr);
         if (prefetch_all) {
           index_entry.value->CacheDependencies(pin_all);
         }
@@ -1214,9 +1211,9 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
   }
 
   if (s.ok()) {
-    assert(prefetch_buffer.get() != nullptr);
+    terarkdb_assert(prefetch_buffer.get() != nullptr);
     if (tail_prefetch_stats != nullptr) {
-      assert(prefetch_buffer->min_offset_read() < file_size);
+      terarkdb_assert(prefetch_buffer->min_offset_read() < file_size);
       tail_prefetch_stats->RecordEffectiveSize(
           static_cast<size_t>(file_size) - prefetch_buffer->min_offset_read());
     }
@@ -1244,7 +1241,7 @@ void BlockBasedTable::SetupForCompaction() {
       rep_->file->file()->Hint(RandomAccessFile::WILLNEED);
       break;
     default:
-      assert(false);
+      terarkdb_assert(false);
   }
 }
 
@@ -1267,7 +1264,7 @@ std::shared_ptr<const TableProperties> BlockBasedTable::GetTableProperties()
     if (!s.ok()) {
       return nullptr;
     }
-    assert(props != nullptr);
+    terarkdb_assert(props != nullptr);
     return std::shared_ptr<const TableProperties>(props);
   }
 }
@@ -1332,7 +1329,7 @@ Status BlockBasedTable::GetDataBlockFromCache(
 
   // Lookup uncompressed cache first
   if (block_cache != nullptr) {
-    if(is_foreground_operation()){
+    if (is_foreground_operation()) {
       block->cache_handle = GetEntryFromCache(
           block_cache, block_cache_key,
           is_index ? BLOCK_CACHE_INDEX_MISS_FG : BLOCK_CACHE_DATA_MISS_FG,
@@ -1341,7 +1338,8 @@ Status BlockBasedTable::GetDataBlockFromCache(
           is_index ? BLOCK_CACHE_INDEX_HIT : BLOCK_CACHE_DATA_HIT,
           get_context
               ? (is_index
-                     ? (&get_context->get_context_stats_.num_cache_index_miss_fg)
+                     ? (&get_context->get_context_stats_
+                             .num_cache_index_miss_fg)
                      : &get_context->get_context_stats_.num_cache_data_miss_fg)
               : nullptr,
           get_context
@@ -1350,7 +1348,7 @@ Status BlockBasedTable::GetDataBlockFromCache(
                      : (&get_context->get_context_stats_.num_cache_data_hit_fg))
               : nullptr,
           db_statistics, cf_statistics, get_context);
-    }else{
+    } else {
       block->cache_handle = GetEntryFromCache(
           block_cache, block_cache_key,
           is_index ? BLOCK_CACHE_INDEX_MISS_BG : BLOCK_CACHE_DATA_MISS_BG,
@@ -1367,7 +1365,7 @@ Status BlockBasedTable::GetDataBlockFromCache(
                      ? &get_context->get_context_stats_.num_cache_index_hit_bg
                      : &get_context->get_context_stats_.num_cache_data_hit_bg)
               : nullptr,
-          db_statistics,cf_statistics, get_context);
+          db_statistics, cf_statistics, get_context);
     }
     if (block->cache_handle != nullptr) {
       block->value =
@@ -1377,13 +1375,13 @@ Status BlockBasedTable::GetDataBlockFromCache(
   }
 
   // If not found, search from the compressed block cache.
-  assert(block->cache_handle == nullptr && block->value == nullptr);
+  terarkdb_assert(block->cache_handle == nullptr && block->value == nullptr);
 
   if (block_cache_compressed == nullptr) {
     return s;
   }
 
-  assert(!compressed_block_cache_key.empty());
+  terarkdb_assert(!compressed_block_cache_key.empty());
   block_cache_compressed_handle =
       block_cache_compressed->Lookup(compressed_block_cache_key);
   // if we found in the compressed cache, then uncompress and insert into
@@ -1398,7 +1396,7 @@ Status BlockBasedTable::GetDataBlockFromCache(
   compressed_block = reinterpret_cast<BlockContents*>(
       block_cache_compressed->Value(block_cache_compressed_handle));
   CompressionType compression_type = compressed_block->get_compression_type();
-  assert(compression_type != kNoCompression);
+  terarkdb_assert(compression_type != kNoCompression);
 
   // Retrieve the uncompressed contents into a new buffer
   BlockContents contents;
@@ -1424,7 +1422,7 @@ Status BlockBasedTable::GetDataBlockFromCache(
       block_cache->TEST_mark_as_data_block(block_cache_key, charge);
 #endif  // NDEBUG
       if (s.ok()) {
-        if(is_foreground_operation()){
+        if (is_foreground_operation()) {
           if (get_context != nullptr) {
             get_context->get_context_stats_.num_cache_add_fg++;
             get_context->get_context_stats_.num_cache_bytes_write_fg += charge;
@@ -1434,7 +1432,7 @@ Status BlockBasedTable::GetDataBlockFromCache(
             RecordTick(db_statistics, BLOCK_CACHE_ADD);
             RecordTick(db_statistics, BLOCK_CACHE_BYTES_WRITE, charge);
           }
-        }else{
+        } else {
           if (get_context != nullptr) {
             get_context->get_context_stats_.num_cache_add_bg++;
             get_context->get_context_stats_.num_cache_bytes_write_bg += charge;
@@ -1446,60 +1444,63 @@ Status BlockBasedTable::GetDataBlockFromCache(
           }
         }
         if (is_index) {
-          if(is_foreground_operation()){
+          if (is_foreground_operation()) {
             if (get_context != nullptr) {
               get_context->get_context_stats_.num_cache_index_add_fg++;
               get_context->get_context_stats_.num_cache_index_bytes_insert_fg +=
                   charge;
             } else {
               RecordTick(cf_statistics, BLOCK_CACHE_INDEX_ADD_FG);
-              RecordTick(cf_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT_FG, charge);
+              RecordTick(cf_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT_FG,
+                         charge);
               RecordTick(db_statistics, BLOCK_CACHE_INDEX_ADD);
               RecordTick(db_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT, charge);
             }
-          }else{
+          } else {
             if (get_context != nullptr) {
               get_context->get_context_stats_.num_cache_index_add_bg++;
               get_context->get_context_stats_.num_cache_index_bytes_insert_bg +=
                   charge;
             } else {
               RecordTick(cf_statistics, BLOCK_CACHE_INDEX_ADD_BG);
-              RecordTick(cf_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT_BG, charge);
+              RecordTick(cf_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT_BG,
+                         charge);
               RecordTick(db_statistics, BLOCK_CACHE_INDEX_ADD);
               RecordTick(db_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT, charge);
             }
           }
         } else {
-          if(is_foreground_operation()){
+          if (is_foreground_operation()) {
             if (get_context != nullptr) {
               get_context->get_context_stats_.num_cache_data_add_fg++;
               get_context->get_context_stats_.num_cache_data_bytes_insert_fg +=
                   charge;
             } else {
               RecordTick(cf_statistics, BLOCK_CACHE_DATA_ADD_FG);
-              RecordTick(cf_statistics, BLOCK_CACHE_DATA_BYTES_INSERT_FG, charge);
+              RecordTick(cf_statistics, BLOCK_CACHE_DATA_BYTES_INSERT_FG,
+                         charge);
               RecordTick(db_statistics, BLOCK_CACHE_DATA_ADD);
               RecordTick(db_statistics, BLOCK_CACHE_DATA_BYTES_INSERT, charge);
             }
-          }else{
+          } else {
             if (get_context != nullptr) {
               get_context->get_context_stats_.num_cache_data_add_bg++;
               get_context->get_context_stats_.num_cache_data_bytes_insert_bg +=
                   charge;
             } else {
               RecordTick(cf_statistics, BLOCK_CACHE_DATA_ADD_BG);
-              RecordTick(cf_statistics, BLOCK_CACHE_DATA_BYTES_INSERT_BG, charge);
+              RecordTick(cf_statistics, BLOCK_CACHE_DATA_BYTES_INSERT_BG,
+                         charge);
               RecordTick(db_statistics, BLOCK_CACHE_DATA_ADD);
               RecordTick(db_statistics, BLOCK_CACHE_DATA_BYTES_INSERT, charge);
             }
           }
         }
       } else {
-        if(is_foreground_operation()){
+        if (is_foreground_operation()) {
           RecordTick(cf_statistics, BLOCK_CACHE_ADD_FAILURES_FG);
-        }{
-          RecordTick(cf_statistics, BLOCK_CACHE_ADD_FAILURES_BG);
         }
+        { RecordTick(cf_statistics, BLOCK_CACHE_ADD_FAILURES_BG); }
         RecordTick(db_statistics, BLOCK_CACHE_ADD_FAILURES);
         delete block->value;
         block->value = nullptr;
@@ -1521,8 +1522,8 @@ Status BlockBasedTable::PutDataBlockToCache(
     const Slice& compression_dict, SequenceNumber seq_no,
     size_t read_amp_bytes_per_bit, MemoryAllocator* memory_allocator,
     bool is_index, Cache::Priority priority, GetContext* get_context) {
-  assert(raw_block_comp_type == kNoCompression ||
-         block_cache_compressed != nullptr);
+  terarkdb_assert(raw_block_comp_type == kNoCompression ||
+                  block_cache_compressed != nullptr);
 
   Status s;
   // Retrieve the uncompressed contents into a new buffer
@@ -1557,7 +1558,7 @@ Status BlockBasedTable::PutDataBlockToCache(
       raw_block_comp_type != kNoCompression && raw_block_contents != nullptr &&
       raw_block_contents->own_bytes()) {
 #ifndef NDEBUG
-    assert(raw_block_contents->is_raw_block);
+    terarkdb_assert(raw_block_contents->is_raw_block);
 #endif  // NDEBUG
 
     // We cannot directly put raw_block_contents because this could point to
@@ -1587,8 +1588,8 @@ Status BlockBasedTable::PutDataBlockToCache(
     block_cache->TEST_mark_as_data_block(block_cache_key, charge);
 #endif  // NDEBUG
     if (s.ok()) {
-      assert(cached_block->cache_handle != nullptr);
-      if(is_foreground_operation()){
+      terarkdb_assert(cached_block->cache_handle != nullptr);
+      if (is_foreground_operation()) {
         if (get_context != nullptr) {
           get_context->get_context_stats_.num_cache_add_fg++;
           get_context->get_context_stats_.num_cache_bytes_write_fg += charge;
@@ -1598,7 +1599,7 @@ Status BlockBasedTable::PutDataBlockToCache(
           RecordTick(db_statistics, BLOCK_CACHE_ADD);
           RecordTick(db_statistics, BLOCK_CACHE_BYTES_WRITE, charge);
         }
-      }else{
+      } else {
         if (get_context != nullptr) {
           get_context->get_context_stats_.num_cache_add_bg++;
           get_context->get_context_stats_.num_cache_bytes_write_bg += charge;
@@ -1610,44 +1611,48 @@ Status BlockBasedTable::PutDataBlockToCache(
         }
       }
       if (is_index) {
-        if(is_foreground_operation()){
+        if (is_foreground_operation()) {
           if (get_context != nullptr) {
             get_context->get_context_stats_.num_cache_index_add_fg++;
             get_context->get_context_stats_.num_cache_index_bytes_insert_fg +=
                 charge;
           } else {
             RecordTick(cf_statistics, BLOCK_CACHE_INDEX_ADD_FG);
-            RecordTick(cf_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT_FG, charge);
+            RecordTick(cf_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT_FG,
+                       charge);
             RecordTick(db_statistics, BLOCK_CACHE_INDEX_ADD);
             RecordTick(db_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT, charge);
           }
-        }else{
+        } else {
           if (get_context != nullptr) {
             get_context->get_context_stats_.num_cache_index_add_bg++;
             get_context->get_context_stats_.num_cache_index_bytes_insert_bg +=
                 charge;
           } else {
             RecordTick(cf_statistics, BLOCK_CACHE_INDEX_ADD_BG);
-            RecordTick(cf_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT_BG, charge);
+            RecordTick(cf_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT_BG,
+                       charge);
             RecordTick(db_statistics, BLOCK_CACHE_INDEX_ADD);
             RecordTick(db_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT, charge);
           }
         }
       } else {
-        if(is_foreground_operation()){
+        if (is_foreground_operation()) {
           if (get_context != nullptr) {
             get_context->get_context_stats_.num_cache_data_add_fg++;
-            get_context->get_context_stats_.num_cache_data_bytes_insert_fg += charge;
+            get_context->get_context_stats_.num_cache_data_bytes_insert_fg +=
+                charge;
           } else {
             RecordTick(cf_statistics, BLOCK_CACHE_DATA_ADD_FG);
             RecordTick(cf_statistics, BLOCK_CACHE_DATA_BYTES_INSERT_FG, charge);
             RecordTick(db_statistics, BLOCK_CACHE_DATA_ADD);
             RecordTick(db_statistics, BLOCK_CACHE_DATA_BYTES_INSERT, charge);
           }
-        }else{
+        } else {
           if (get_context != nullptr) {
             get_context->get_context_stats_.num_cache_data_add_bg++;
-            get_context->get_context_stats_.num_cache_data_bytes_insert_bg += charge;
+            get_context->get_context_stats_.num_cache_data_bytes_insert_bg +=
+                charge;
           } else {
             RecordTick(cf_statistics, BLOCK_CACHE_DATA_ADD_BG);
             RecordTick(cf_statistics, BLOCK_CACHE_DATA_BYTES_INSERT_BG, charge);
@@ -1656,13 +1661,13 @@ Status BlockBasedTable::PutDataBlockToCache(
           }
         }
       }
-      assert(reinterpret_cast<Block*>(block_cache->Value(
-                 cached_block->cache_handle)) == cached_block->value);
+      terarkdb_assert(reinterpret_cast<Block*>(block_cache->Value(
+                          cached_block->cache_handle)) == cached_block->value);
     } else {
-      if(is_foreground_operation()){
+      if (is_foreground_operation()) {
         RecordTick(cf_statistics, BLOCK_CACHE_ADD_FAILURES_FG);
 
-      }else{
+      } else {
         RecordTick(cf_statistics, BLOCK_CACHE_ADD_FAILURES_BG);
       }
       RecordTick(db_statistics, BLOCK_CACHE_ADD_FAILURES);
@@ -1700,7 +1705,7 @@ FilterBlockReader* BlockBasedTable::ReadFilter(
     return nullptr;
   }
 
-  assert(rep->filter_policy);
+  terarkdb_assert(rep->filter_policy);
 
   auto filter_type = rep->filter_type;
   if (rep->filter_type == Rep::FilterType::kPartitionedFilter &&
@@ -1729,7 +1734,7 @@ FilterBlockReader* BlockBasedTable::ReadFilter(
     case Rep::FilterType::kFullFilter: {
       auto filter_bits_reader =
           rep->filter_policy->GetFilterBitsReader(block.data);
-      assert(filter_bits_reader != nullptr);
+      terarkdb_assert(filter_bits_reader != nullptr);
       return new FullFilterBlockReader(
           rep->prefix_filtering ? prefix_extractor : nullptr,
           rep->whole_key_filtering, std::move(block), filter_bits_reader,
@@ -1739,7 +1744,7 @@ FilterBlockReader* BlockBasedTable::ReadFilter(
     default:
       // filter_type is either kNoFilter (exited the function at the first if),
       // or it must be covered in this switch block
-      assert(false);
+      terarkdb_assert(false);
       return nullptr;
   }
 }
@@ -1787,7 +1792,7 @@ BlockBasedTable::CachableEntry<FilterBlockReader> BlockBasedTable::GetFilter(
   Statistics* cf_statistics = rep_->ioptions.cf_statistics;
 
   Cache::Handle* cache_handle;
-  if(is_foreground_operation()){
+  if (is_foreground_operation()) {
     cache_handle = GetEntryFromCache(
         block_cache, key, BLOCK_CACHE_FILTER_MISS_FG, BLOCK_CACHE_FILTER_HIT_FG,
         BLOCK_CACHE_FILTER_MISS, BLOCK_CACHE_FILTER_HIT,
@@ -1795,8 +1800,8 @@ BlockBasedTable::CachableEntry<FilterBlockReader> BlockBasedTable::GetFilter(
                     : nullptr,
         get_context ? &get_context->get_context_stats_.num_cache_filter_hit_fg
                     : nullptr,
-        db_statistics,cf_statistics, get_context);
-  }else{
+        db_statistics, cf_statistics, get_context);
+  } else {
     cache_handle = GetEntryFromCache(
         block_cache, key, BLOCK_CACHE_FILTER_MISS_BG, BLOCK_CACHE_FILTER_HIT_BG,
         BLOCK_CACHE_FILTER_MISS, BLOCK_CACHE_FILTER_HIT,
@@ -1825,7 +1830,7 @@ BlockBasedTable::CachableEntry<FilterBlockReader> BlockBasedTable::GetFilter(
               ? Cache::Priority::HIGH
               : Cache::Priority::LOW);
       if (s.ok()) {
-        if(is_foreground_operation()){
+        if (is_foreground_operation()) {
           if (get_context != nullptr) {
             get_context->get_context_stats_.num_cache_add_fg++;
             get_context->get_context_stats_.num_cache_bytes_write_fg += usage;
@@ -1836,13 +1841,14 @@ BlockBasedTable::CachableEntry<FilterBlockReader> BlockBasedTable::GetFilter(
             RecordTick(cf_statistics, BLOCK_CACHE_ADD_FG);
             RecordTick(cf_statistics, BLOCK_CACHE_BYTES_WRITE_FG, usage);
             RecordTick(cf_statistics, BLOCK_CACHE_FILTER_ADD_FG);
-            RecordTick(cf_statistics, BLOCK_CACHE_FILTER_BYTES_INSERT_FG, usage);
+            RecordTick(cf_statistics, BLOCK_CACHE_FILTER_BYTES_INSERT_FG,
+                       usage);
             RecordTick(db_statistics, BLOCK_CACHE_ADD);
             RecordTick(db_statistics, BLOCK_CACHE_BYTES_WRITE, usage);
             RecordTick(db_statistics, BLOCK_CACHE_FILTER_ADD);
             RecordTick(db_statistics, BLOCK_CACHE_FILTER_BYTES_INSERT, usage);
           }
-        }else{
+        } else {
           if (get_context != nullptr) {
             get_context->get_context_stats_.num_cache_add_bg++;
             get_context->get_context_stats_.num_cache_bytes_write_bg += usage;
@@ -1853,7 +1859,8 @@ BlockBasedTable::CachableEntry<FilterBlockReader> BlockBasedTable::GetFilter(
             RecordTick(cf_statistics, BLOCK_CACHE_ADD_BG);
             RecordTick(cf_statistics, BLOCK_CACHE_BYTES_WRITE_BG, usage);
             RecordTick(cf_statistics, BLOCK_CACHE_FILTER_ADD_BG);
-            RecordTick(cf_statistics, BLOCK_CACHE_FILTER_BYTES_INSERT_BG, usage);
+            RecordTick(cf_statistics, BLOCK_CACHE_FILTER_BYTES_INSERT_BG,
+                       usage);
             RecordTick(db_statistics, BLOCK_CACHE_ADD);
             RecordTick(db_statistics, BLOCK_CACHE_BYTES_WRITE, usage);
             RecordTick(db_statistics, BLOCK_CACHE_FILTER_ADD);
@@ -1861,9 +1868,9 @@ BlockBasedTable::CachableEntry<FilterBlockReader> BlockBasedTable::GetFilter(
           }
         }
       } else {
-        if(is_foreground_operation()){
+        if (is_foreground_operation()) {
           RecordTick(cf_statistics, BLOCK_CACHE_ADD_FAILURES_FG);
-        }else{
+        } else {
           RecordTick(cf_statistics, BLOCK_CACHE_ADD_FAILURES_BG);
         }
         RecordTick(db_statistics, BLOCK_CACHE_ADD_FAILURES);
@@ -1910,7 +1917,7 @@ InternalIteratorBase<BlockHandle>* BlockBasedTable::NewIndexIterator(
   Statistics* db_statistics = rep_->ioptions.statistics;
   Statistics* cf_statistics = rep_->ioptions.cf_statistics;
   Cache::Handle* cache_handle;
-  if(is_foreground_operation()){
+  if (is_foreground_operation()) {
     cache_handle = GetEntryFromCache(
         block_cache, key, BLOCK_CACHE_INDEX_MISS_FG, BLOCK_CACHE_INDEX_HIT_FG,
         BLOCK_CACHE_INDEX_MISS, BLOCK_CACHE_INDEX_HIT,
@@ -1919,7 +1926,7 @@ InternalIteratorBase<BlockHandle>* BlockBasedTable::NewIndexIterator(
         get_context ? &get_context->get_context_stats_.num_cache_index_hit_fg
                     : nullptr,
         db_statistics, cf_statistics, get_context);
-  }else{
+  } else {
     cache_handle = GetEntryFromCache(
         block_cache, key, BLOCK_CACHE_INDEX_MISS_BG, BLOCK_CACHE_INDEX_HIT_BG,
         BLOCK_CACHE_INDEX_MISS, BLOCK_CACHE_INDEX_HIT,
@@ -1954,7 +1961,7 @@ InternalIteratorBase<BlockHandle>* BlockBasedTable::NewIndexIterator(
     TEST_SYNC_POINT("BlockBasedTable::NewIndexIterator::thread1:4");
     size_t charge = 0;
     if (s.ok()) {
-      assert(index_reader != nullptr);
+      terarkdb_assert(index_reader != nullptr);
       charge = index_reader->ApproximateMemoryUsage();
       s = block_cache->Insert(
           key, index_reader, charge, &DeleteCachedIndexEntry, &cache_handle,
@@ -1964,7 +1971,7 @@ InternalIteratorBase<BlockHandle>* BlockBasedTable::NewIndexIterator(
     }
 
     if (s.ok()) {
-      if(is_foreground_operation()){
+      if (is_foreground_operation()) {
         if (get_context != nullptr) {
           get_context->get_context_stats_.num_cache_add_fg++;
           get_context->get_context_stats_.num_cache_bytes_write_fg += charge;
@@ -1978,7 +1985,7 @@ InternalIteratorBase<BlockHandle>* BlockBasedTable::NewIndexIterator(
         RecordTick(cf_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT_FG, charge);
         RecordTick(db_statistics, BLOCK_CACHE_INDEX_ADD);
         RecordTick(db_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT, charge);
-      }else{
+      } else {
         if (get_context != nullptr) {
           get_context->get_context_stats_.num_cache_add_bg++;
           get_context->get_context_stats_.num_cache_bytes_write_bg += charge;
@@ -1998,9 +2005,9 @@ InternalIteratorBase<BlockHandle>* BlockBasedTable::NewIndexIterator(
       if (index_reader != nullptr) {
         delete index_reader;
       }
-      if(is_foreground_operation()){
+      if (is_foreground_operation()) {
         RecordTick(cf_statistics, BLOCK_CACHE_ADD_FAILURES_FG);
-      }else{
+      } else {
         RecordTick(cf_statistics, BLOCK_CACHE_ADD_FAILURES_BG);
       }
       RecordTick(db_statistics, BLOCK_CACHE_ADD_FAILURES);
@@ -2014,7 +2021,7 @@ InternalIteratorBase<BlockHandle>* BlockBasedTable::NewIndexIterator(
     }
   }
 
-  assert(cache_handle);
+  terarkdb_assert(cache_handle);
   // We don't return pinned datat from index blocks, so no need
   // to set `block_contents_pinned`.
   auto* iter = index_reader->NewIterator(
@@ -2073,9 +2080,9 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(
     {
       StopWatch sw(rep->ioptions.env, rep->ioptions.statistics,
                    READ_BLOCK_GET_MICROS);
-      Histograms ticker = is_foreground_operation()?  READ_BLOCK_GET_MICROS_FG : READ_BLOCK_GET_MICROS_BG;
-      StopWatch sw_cf(rep->ioptions.env, rep->ioptions.cf_statistics,
-                      ticker);
+      Histograms ticker = is_foreground_operation() ? READ_BLOCK_GET_MICROS_FG
+                                                    : READ_BLOCK_GET_MICROS_BG;
+      StopWatch sw_cf(rep->ioptions.env, rep->ioptions.cf_statistics, ticker);
       s = ReadBlockFromFile(
           rep->file.get(), prefetch_buffer, rep->footer, ro, handle,
           &block_value, rep->ioptions,
@@ -2092,7 +2099,7 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(
   }
 
   if (s.ok()) {
-    assert(block.value != nullptr);
+    terarkdb_assert(block.value != nullptr);
     const bool kTotalOrderSeek = true;
     // Block contents are pinned and it is still pinned after the iterator
     // is destoryed as long as cleanup functions are moved to another object,
@@ -2123,13 +2130,14 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(
         char cache_key[kExtraCacheKeyPrefix + kMaxVarint64Length];
         // Prefix: use rep->cache_key_prefix padded by 0s
         memset(cache_key, 0, kExtraCacheKeyPrefix + kMaxVarint64Length);
-        assert(rep->cache_key_prefix_size != 0);
-        assert(rep->cache_key_prefix_size <= kExtraCacheKeyPrefix);
+        terarkdb_assert(rep->cache_key_prefix_size != 0);
+        terarkdb_assert(rep->cache_key_prefix_size <= kExtraCacheKeyPrefix);
         memcpy(cache_key, rep->cache_key_prefix, rep->cache_key_prefix_size);
         char* end = EncodeVarint64(cache_key + kExtraCacheKeyPrefix,
                                    next_cache_key_id_++);
-        assert(end - cache_key <=
-               static_cast<int>(kExtraCacheKeyPrefix + kMaxVarint64Length));
+        terarkdb_assert(
+            end - cache_key <=
+            static_cast<int>(kExtraCacheKeyPrefix + kMaxVarint64Length));
         Slice unique_key =
             Slice(cache_key, static_cast<size_t>(end - cache_key));
         s = block_cache->Insert(unique_key, nullptr,
@@ -2144,7 +2152,7 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(
       iter->RegisterCleanup(&DeleteHeldResource<Block>, block.value, nullptr);
     }
   } else {
-    assert(block.value == nullptr);
+    terarkdb_assert(block.value == nullptr);
     iter->Invalidate(s);
   }
   return iter;
@@ -2154,7 +2162,7 @@ Status BlockBasedTable::MaybeReadBlockAndLoadToCache(
     FilePrefetchBuffer* prefetch_buffer, Rep* rep, const ReadOptions& ro,
     const BlockHandle& handle, Slice compression_dict,
     CachableEntry<Block>* block_entry, bool is_index, GetContext* get_context) {
-  assert(block_entry != nullptr);
+  terarkdb_assert(block_entry != nullptr);
   const bool no_io = (ro.read_tier == kBlockCacheTier);
   Cache* block_cache = rep->table_options.block_cache.get();
 
@@ -2199,7 +2207,9 @@ Status BlockBasedTable::MaybeReadBlockAndLoadToCache(
       BlockContents raw_block_contents;
       {
         StopWatch sw(rep->ioptions.env, statistics, READ_BLOCK_GET_MICROS);
-        Histograms ticker = is_foreground_operation()?  READ_BLOCK_GET_MICROS_FG : READ_BLOCK_GET_MICROS_BG;
+        Histograms ticker = is_foreground_operation()
+                                ? READ_BLOCK_GET_MICROS_FG
+                                : READ_BLOCK_GET_MICROS_BG;
         StopWatch sw_cf(rep->ioptions.env, rep->ioptions.cf_statistics, ticker);
         BlockFetcher block_fetcher(
             rep->file.get(), prefetch_buffer, rep->footer, ro, handle,
@@ -2230,7 +2240,7 @@ Status BlockBasedTable::MaybeReadBlockAndLoadToCache(
       }
     }
   }
-  assert(s.ok() || block_entry->value == nullptr);
+  terarkdb_assert(s.ok() || block_entry->value == nullptr);
   return s;
 }
 
@@ -2274,7 +2284,7 @@ BlockBasedTable::PartitionedIndexIteratorState::NewSecondaryIterator(
       RecordTick(rep->ioptions.cf_statistics, BLOCK_CACHE_INDEX_HIT_BG);
       RecordTick(rep->ioptions.cf_statistics, BLOCK_CACHE_HIT_BG);
       Cache* block_cache = rep->table_options.block_cache.get();
-      assert(block_cache);
+      terarkdb_assert(block_cache);
       RecordTick(rep->ioptions.cf_statistics, BLOCK_CACHE_BYTES_READ_BG,
                  block_cache->GetUsage(block->second.cache_handle));
       RecordTick(rep->ioptions.statistics, BLOCK_CACHE_INDEX_HIT);
@@ -2424,7 +2434,7 @@ template <class TBlockIter, typename TValue>
 void BlockBasedTableIteratorBase<TBlockIter, TValue>::Seek(
     const Slice& target) {
   Histograms htype = HISTOGRAM_ENUM_MAX;
-  if(is_foreground_operation()){
+  if (is_foreground_operation()) {
     assert(SEEK_ON_L0_TIME_FG + level_ <= SEEK_ON_L6_TIME_FG);
     assert(SEEK_ON_L0_TIME_FG + level_ >= SEEK_ON_L0_TIME_FG);
     htype = static_cast<Histograms>(SEEK_ON_L0_TIME_FG + level_);
@@ -2450,7 +2460,7 @@ void BlockBasedTableIteratorBase<TBlockIter, TValue>::Seek(
   block_iter_.Seek(target);
 
   FindKeyForward();
-  assert(
+  terarkdb_assert(
       !block_iter_.Valid() ||
       (key_includes_seq_ && icomp_.Compare(target, block_iter_.key()) <= 0) ||
       (!key_includes_seq_ &&
@@ -2462,7 +2472,7 @@ template <class TBlockIter, typename TValue>
 void BlockBasedTableIteratorBase<TBlockIter, TValue>::SeekForPrev(
     const Slice& target) {
   Histograms htype = HISTOGRAM_ENUM_MAX;
-  if(is_foreground_operation()){
+  if (is_foreground_operation()) {
     assert(SEEK_ON_L0_TIME_FG + level_ <= SEEK_ON_L6_TIME_FG);
     assert(SEEK_ON_L0_TIME_FG + level_ >= SEEK_ON_L0_TIME_FG);
     htype = static_cast<Histograms>(SEEK_ON_L0_TIME_FG + level_);
@@ -2505,14 +2515,14 @@ void BlockBasedTableIteratorBase<TBlockIter, TValue>::SeekForPrev(
   block_iter_.SeekForPrev(target);
 
   FindKeyBackward();
-  assert(!block_iter_.Valid() ||
-         icomp_.Compare(target, block_iter_.key()) >= 0);
+  terarkdb_assert(!block_iter_.Valid() ||
+                  icomp_.Compare(target, block_iter_.key()) >= 0);
 }
 
 template <class TBlockIter, typename TValue>
 void BlockBasedTableIteratorBase<TBlockIter, TValue>::SeekToFirst() {
   Histograms htype = HISTOGRAM_ENUM_MAX;
-  if(is_foreground_operation()){
+  if (is_foreground_operation()) {
     assert(SEEK_ON_L0_TIME_FG + level_ <= SEEK_ON_L6_TIME_FG);
     assert(SEEK_ON_L0_TIME_FG + level_ >= SEEK_ON_L0_TIME_FG);
     htype = static_cast<Histograms>(SEEK_ON_L0_TIME_FG + level_);
@@ -2533,7 +2543,7 @@ void BlockBasedTableIteratorBase<TBlockIter, TValue>::SeekToFirst() {
 template <class TBlockIter, typename TValue>
 void BlockBasedTableIteratorBase<TBlockIter, TValue>::SeekToLast() {
   Histograms htype = HISTOGRAM_ENUM_MAX;
-  if(is_foreground_operation()){
+  if (is_foreground_operation()) {
     assert(SEEK_ON_L0_TIME_FG + level_ <= SEEK_ON_L6_TIME_FG);
     assert(SEEK_ON_L0_TIME_FG + level_ >= SEEK_ON_L0_TIME_FG);
     htype = static_cast<Histograms>(SEEK_ON_L0_TIME_FG + level_);
@@ -2553,14 +2563,14 @@ void BlockBasedTableIteratorBase<TBlockIter, TValue>::SeekToLast() {
 
 template <class TBlockIter, typename TValue>
 void BlockBasedTableIteratorBase<TBlockIter, TValue>::Next() {
-  assert(block_iter_points_to_real_block_);
+  terarkdb_assert(block_iter_points_to_real_block_);
   block_iter_.Next();
   FindKeyForward();
 }
 
 template <class TBlockIter, typename TValue>
 void BlockBasedTableIteratorBase<TBlockIter, TValue>::Prev() {
-  assert(block_iter_points_to_real_block_);
+  terarkdb_assert(block_iter_points_to_real_block_);
   block_iter_.Prev();
   FindKeyBackward();
 }
@@ -2617,7 +2627,7 @@ void BlockBasedTableIteratorBase<TBlockIter, TValue>::InitDataBlock() {
 
 template <class TBlockIter, typename TValue>
 void BlockBasedTableIteratorBase<TBlockIter, TValue>::FindKeyForward() {
-  assert(!is_out_of_bound_);
+  terarkdb_assert(!is_out_of_bound_);
   // TODO the while loop inherits from two-level-iterator. We don't know
   // whether a block can be empty so it can be replaced by an "if".
   while (!block_iter_.Valid()) {
@@ -2657,7 +2667,7 @@ void BlockBasedTableIteratorBase<TBlockIter, TValue>::FindKeyForward() {
 
 template <class TBlockIter, typename TValue>
 void BlockBasedTableIteratorBase<TBlockIter, TValue>::FindKeyBackward() {
-  assert(!is_out_of_bound_);
+  terarkdb_assert(!is_out_of_bound_);
   while (!block_iter_.Valid()) {
     if (!block_iter_.status().ok()) {
       return;
@@ -2756,13 +2766,12 @@ Status BlockBasedTable::Get(const ReadOptions& read_options, const Slice& key,
                             GetContext* get_context,
                             const SliceTransform* prefix_extractor,
                             bool skip_filters) {
-  assert(key.size() >= 8);  // key must be internal key
+  terarkdb_assert(key.size() >= 8);  // key must be internal key
   Histograms htype = HISTOGRAM_ENUM_MAX;
   if (is_foreground_operation() && rep_->level == -1) {
     htype = GET_ON_BLOB_TIME_FG;
   }
   StopWatch blob_sw(rep_->ioptions.env, rep_->ioptions.cf_statistics, htype);
-
   Status s;
   const bool no_io = read_options.read_tier == kBlockCacheTier;
   CachableEntry<FilterBlockReader> filter_entry;
@@ -2853,7 +2862,7 @@ Status BlockBasedTable::Get(const ReadOptions& read_options, const Slice& key,
             auto context = get_context(buffer);
             DataBlockIter* iter =
                 reinterpret_cast<DataBlockIter*>(context->data[0]);
-            assert(iter != nullptr);
+            terarkdb_assert(iter != nullptr);
             Cleanable release_cached_entry = iter->RefCache();
             if (release_cached_entry.Empty()) {
               return Status::NotSupported();
@@ -3131,12 +3140,12 @@ bool BlockBasedTable::TEST_KeyInCache(const ReadOptions& options,
   std::unique_ptr<InternalIteratorBase<BlockHandle>> iiter(
       NewIndexIterator(options));
   iiter->Seek(key);
-  assert(iiter->Valid());
+  terarkdb_assert(iiter->Valid());
   CachableEntry<Block> block;
 
   BlockHandle handle = iiter->value();
   Cache* block_cache = rep_->table_options.block_cache.get();
-  assert(block_cache != nullptr);
+  terarkdb_assert(block_cache != nullptr);
 
   char cache_key_storage[kMaxCacheKeyPrefixSize + kMaxVarint64Length];
   Slice cache_key =
@@ -3150,7 +3159,7 @@ bool BlockBasedTable::TEST_KeyInCache(const ReadOptions& options,
       rep_->compression_dict_block ? rep_->compression_dict_block->data
                                    : Slice(),
       0 /* read_amp_bytes_per_bit */);
-  assert(s.ok());
+  terarkdb_assert(s.ok());
   bool in_cache = block.value != nullptr;
   if (in_cache) {
     ReleaseCachedEntry(block_cache, block.cache_handle);

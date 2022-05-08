@@ -57,7 +57,7 @@ class BytewiseComparatorImpl : public Comparator {
         // already the shortest possible.
         return;
       }
-      assert(start_byte < limit_byte);
+      terarkdb_assert(start_byte < limit_byte);
 
       if (diff_index < limit.size() - 1 || start_byte + 1 < limit_byte) {
         (*start)[diff_index]++;
@@ -84,7 +84,7 @@ class BytewiseComparatorImpl : public Comparator {
           diff_index++;
         }
       }
-      assert(Compare(*start, limit) < 0);
+      terarkdb_assert(Compare(*start, limit) < 0);
     }
   }
 
@@ -155,7 +155,7 @@ class ReverseBytewiseComparatorImpl : public BytewiseComparatorImpl {
       diff_index++;
     }
 
-    assert(diff_index <= min_length);
+    terarkdb_assert(diff_index <= min_length);
     if (diff_index == min_length) {
       // Do not shorten if one string is a prefix of the other
       //
@@ -185,9 +185,9 @@ class ReverseBytewiseComparatorImpl : public BytewiseComparatorImpl {
 #endif
         start->resize(diff_index + 1);
 #ifndef NDEBUG
-        assert(old_start >= *start);
+        terarkdb_assert(old_start >= *start);
 #endif
-        assert(Slice(*start).compare(limit) > 0);
+        terarkdb_assert(Slice(*start).compare(limit) > 0);
       }
     }
   }

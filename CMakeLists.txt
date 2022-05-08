@@ -48,6 +48,14 @@ option(WITH_BOOSTLIB "build with boost, if WITH_TERARK_ZIP is ON, this will also
 option(WITH_TERARKDB_NAMESPACE "namespace" "terarkdb")
 option(FORCE_TERARKDB_RELEASE_BUILD "ignore outside cmake_build_type" OFF)
 
+IF(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  SET(TERARKDB_DEBUG_LEVEL 2)
+ELSEIF(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+  SET(TERARKDB_DEBUG_LEVEL 1)
+ELSE()
+  SET(TERARKDB_DEBUG_LEVEL 0)
+ENDIF()
+
 # Plugins
 SET(BYTEDANCE_METRICS_PATH "" CACHE STRING "root directory of the metrics library source code")
 
@@ -723,6 +731,7 @@ set(SOURCES
         util/string_util.cc
         util/sync_point.cc
         util/sync_point_impl.cc
+        util/terark_debug.cc
         util/thread_local.cc
         util/threadpool_imp.cc
         util/trace_replay.cc

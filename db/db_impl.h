@@ -656,11 +656,11 @@ class DBImpl : public DB {
 
     void AddBatch(SequenceNumber seq, uint64_t log_number, WriteBatch* batch,
                   size_t batch_cnt, bool unprepared) {
-      assert(batches_.count(seq) == 0);
+      terarkdb_assert(batches_.count(seq) == 0);
       batches_[seq] = {log_number, batch, batch_cnt};
       // Prior state must be unprepared, since the prepare batch must be the
       // last batch.
-      assert(unprepared_);
+      terarkdb_assert(unprepared_);
       unprepared_ = unprepared;
     }
   };
@@ -720,7 +720,7 @@ class DBImpl : public DB {
 
   void DeleteRecoveredTransaction(const std::string& name) {
     auto it = recovered_transactions_.find(name);
-    assert(it != recovered_transactions_.end());
+    terarkdb_assert(it != recovered_transactions_.end());
     auto* trx = it->second;
     recovered_transactions_.erase(it);
     for (const auto& info : trx->batches_) {

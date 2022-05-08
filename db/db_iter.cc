@@ -158,8 +158,8 @@ class DBIter final : public Iterator {
       sv_destruct_callback->Set(
           [](void* arg, SuperVersion* old_sv, SuperVersion* new_sv) {
             auto self = static_cast<DBIter*>(arg);
-            assert(old_sv == nullptr ||
-                   old_sv->current == self->separate_helper_);
+            terarkdb_assert(old_sv == nullptr ||
+                            old_sv->current == self->separate_helper_);
             (void)old_sv;
             self->PinLazyBuffer();
             self->separate_helper_ =
@@ -171,7 +171,7 @@ class DBIter final : public Iterator {
   virtual void SetIter(InternalIterator* iter,
                        SVDestructCallback* sv_destruct_callback,
                        const SeparateHelper* separate_helper) {
-    assert(iter_ == nullptr);
+    terarkdb_assert(iter_ == nullptr);
     iter_ = iter;
     separate_helper_ = separate_helper;
     SetSVDestructCallback(sv_destruct_callback);
@@ -182,7 +182,7 @@ class DBIter final : public Iterator {
 
   virtual bool Valid() const override { return valid_; }
   virtual Slice key() const override {
-    assert(valid_);
+    terarkdb_assert(valid_);
     if (start_seqnum_ > 0) {
       return saved_key_.GetInternalKey();
     } else {
@@ -190,7 +190,7 @@ class DBIter final : public Iterator {
     }
   }
   virtual Slice value() const override {
-    assert(valid_);
+    terarkdb_assert(valid_);
     auto s = value_.fetch();
     if (!s.ok()) {
       valid_ = false;
@@ -203,7 +203,7 @@ class DBIter final : public Iterator {
     if (status_.ok()) {
       return iter_->status();
     } else {
-      assert(!valid_);
+      terarkdb_assert(!valid_);
       return status_;
     }
   }
@@ -357,8 +357,8 @@ void DBIter::Next() {
                              : (db_impl_->next_qps_reporter().AddCount(1),
                                 &db_impl_->next_latency_reporter()));
 
-  assert(valid_);
-  assert(status_.ok());
+  terarkdb_assert(valid_);
+  terarkdb_assert(status_.ok());
 
   ResetValueAndCounter();
   bool ok = true;
@@ -414,9 +414,9 @@ inline bool DBIter::FindNextUserEntry(bool skipping, bool prefix_check) {
 // Actual implementation of DBIter::FindNextUserEntry()
 bool DBIter::FindNextUserEntryInternal(bool skipping, bool prefix_check) {
   // Loop until we hit an acceptable entry to yield
-  assert(iter_->Valid());
-  assert(status_.ok());
-  assert(direction_ == kForward);
+  terarkdb_assert(iter_->Valid());
+  terarkdb_assert(status_.ok());
+  terarkdb_assert(direction_ == kForward);
   current_entry_is_merged_ = false;
 
   // How many times in a row we have skipped an entry with user key less than
@@ -531,7 +531,7 @@ bool DBIter::FindNextUserEntryInternal(bool skipping, bool prefix_check) {
             }
             break;
           default:
-            assert(false);
+            terarkdb_assert(false);
             break;
         }
       }
@@ -655,7 +655,7 @@ bool DBIter::MergeValuesNewToOld() {
       merge_context_.PushOperand(GetValue(ikey, kTypeMergeIndex));
       PERF_COUNTER_ADD(internal_merge_count, 1);
     } else {
-      assert(false);
+      terarkdb_assert(false);
     }
   }
 
@@ -678,7 +678,7 @@ bool DBIter::MergeValuesNewToOld() {
     return false;
   }
 
-  assert(status_.ok());
+  terarkdb_assert(status_.ok());
   return true;
 }
 
@@ -690,8 +690,8 @@ void DBIter::Prev() {
                              : (db_impl_->prev_qps_reporter().AddCount(1),
                                 &db_impl_->prev_latency_reporter()));
 
-  assert(valid_);
-  assert(status_.ok());
+  terarkdb_assert(valid_);
+  terarkdb_assert(status_.ok());
   ResetValueAndCounter();
   bool ok = true;
   if (direction_ == kForward) {
@@ -718,7 +718,7 @@ void DBIter::PinLazyBuffer() {
 }
 
 bool DBIter::ReverseToForward() {
-  assert(iter_->status().ok());
+  terarkdb_assert(iter_->status().ok());
 
   // When moving backwards, iter_ is positioned on _previous_ key, which may
   // not exist or may have different prefix than the current key().
@@ -754,7 +754,7 @@ bool DBIter::ReverseToForward() {
 
 // Move iter_ to the key before saved_key_.
 bool DBIter::ReverseToBackward() {
-  assert(iter_->status().ok());
+  terarkdb_assert(iter_->status().ok());
 
   // When current_entry_is_merged_ is true, iter_ may be positioned on the next
   // key, which may not exist or may have prefix different from current.
@@ -842,7 +842,7 @@ void DBIter::PrevInternal() {
 // POST: iter_ is positioned on one of the entries equal to saved_key_, or on
 //       the entry just before them, or on the entry just after them.
 bool DBIter::FindValueForCurrentKey() {
-  assert(iter_->Valid());
+  terarkdb_assert(iter_->Valid());
   merge_context_.Clear();
   current_entry_is_merged_ = false;
   // last entry before merge (could be kTypeDeletion, kTypeSingleDeletion or
@@ -902,13 +902,13 @@ bool DBIter::FindValueForCurrentKey() {
           last_not_merge_type = last_key_entry_type;
           PERF_COUNTER_ADD(internal_delete_skipped_count, 1);
         } else {
-          assert(merge_operator_ != nullptr);
+          terarkdb_assert(merge_operator_ != nullptr);
           merge_context_.PushOperandBack(GetValue(ikey, kTypeMergeIndex));
           PERF_COUNTER_ADD(internal_merge_count, 1);
         }
         break;
       default:
-        assert(false);
+        terarkdb_assert(false);
     }
 
     PERF_COUNTER_ADD(internal_key_skipped_count, 1);
@@ -940,8 +940,8 @@ bool DBIter::FindValueForCurrentKey() {
                                         merge_context_.GetOperands(), &value_,
                                         logger_, statistics_, env_, true);
       } else {
-        assert(last_not_merge_type == kTypeValue ||
-               last_not_merge_type == kTypeValueIndex);
+        terarkdb_assert(last_not_merge_type == kTypeValue ||
+                        last_not_merge_type == kTypeValueIndex);
         LazyBuffer merge_result(&value_buffer_);
         s = MergeHelper::TimedFullMerge(
             merge_operator_, saved_key_.GetUserKey(), &value_,
@@ -954,7 +954,7 @@ bool DBIter::FindValueForCurrentKey() {
     case kTypeValue:
       break;
     default:
-      assert(false);
+      terarkdb_assert(false);
       break;
   }
   if (!s.ok()) {
@@ -1021,7 +1021,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
 
   // kTypeMerge. We need to collect all kTypeMerge values and save them
   // in operands
-  assert(ikey.type == kTypeMerge || ikey.type == kTypeMergeIndex);
+  terarkdb_assert(ikey.type == kTypeMerge || ikey.type == kTypeMergeIndex);
   current_entry_is_merged_ = true;
   merge_context_.Clear();
   merge_context_.PushOperand(GetValue(ikey, kTypeMergeIndex));
@@ -1065,7 +1065,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
       merge_context_.PushOperand(GetValue(ikey, kTypeMergeIndex));
       PERF_COUNTER_ADD(internal_merge_count, 1);
     } else {
-      assert(false);
+      terarkdb_assert(false);
     }
   }
 
@@ -1102,7 +1102,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
 // Move backwards until the key smaller than saved_key_.
 // Changes valid_ only if return value is false.
 bool DBIter::FindUserKeyBeforeSavedKey() {
-  assert(status_.ok());
+  terarkdb_assert(status_.ok());
   size_t num_skipped = 0;
   while (iter_->Valid()) {
     ParsedInternalKey ikey;
@@ -1118,7 +1118,7 @@ bool DBIter::FindUserKeyBeforeSavedKey() {
       return false;
     }
 
-    assert(ikey.sequence != kMaxSequenceNumber);
+    terarkdb_assert(ikey.sequence != kMaxSequenceNumber);
     if (!IsVisible(ikey.sequence)) {
       PERF_COUNTER_ADD(internal_recent_skipped_count, 1);
     } else {
@@ -1486,7 +1486,7 @@ Status ArenaWrappedDBIter::Refresh() {
   if (cfd_ == nullptr || db_impl_ == nullptr || !allow_refresh_) {
     return Status::NotSupported("Creating renew iterator is not allowed.");
   }
-  assert(db_iter_ != nullptr);
+  terarkdb_assert(db_iter_ != nullptr);
   // TODO(yiwu): For last_seq_same_as_publish_seq_==false, this is not the
   // correct behavior. Will be corrected automatically when we take a snapshot
   // here for the case of WritePreparedTxnDB.
