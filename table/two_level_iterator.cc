@@ -9,7 +9,6 @@
 
 #include "table/two_level_iterator.h"
 
-#include "db/version_edit.h"
 #include "rocksdb/options.h"
 #include "rocksdb/terark_namespace.h"
 #include "table/block.h"
@@ -214,21 +213,18 @@ class MapSstIterator final : public InternalIterator {
   int include_largest_;
   std::vector<uint64_t> link_;
   struct HeapElement {
-    InternalIterator* iter;
+    InternalIterator* iter{};
     Slice key;
   };
   template <bool is_less>
   class HeapComparator {
    public:
     HeapComparator(const InternalKeyComparator& comparator) : c_(comparator) {}
-
     bool operator()(const HeapElement& a, const HeapElement& b) const {
       return is_less ? c_.Compare(a.key, b.key) < 0
                      : c_.Compare(a.key, b.key) > 0;
     }
-
     const InternalKeyComparator& internal_comparator() const { return c_; }
-
    private:
     const InternalKeyComparator& c_;
   };
@@ -488,7 +484,7 @@ class MapSstIterator final : public InternalIterator {
       if (min_heap_.empty() ||
           icomp.Compare(min_heap_.top().key, largest_key_) >=
               include_largest_) {
-        // out of largest bound
+        // out of the largest bound
         first_level_value_.reset();
         first_level_iter_->Next();
         if (InitFirstLevelIter()) {
@@ -521,7 +517,7 @@ class MapSstIterator final : public InternalIterator {
       if (max_heap_.empty() ||
           icomp.Compare(smallest_key_, max_heap_.top().key) >=
               include_smallest_) {
-        // out of smallest bound
+        // out of the smallest bound
         first_level_value_.reset();
         first_level_iter_->Prev();
         if (InitFirstLevelIter()) {
@@ -544,12 +540,29 @@ class MapSstIterator final : public InternalIterator {
   virtual Status status() const override { return status_; }
 };
 
-}  // namespace
+}
 
 InternalIteratorBase<BlockHandle>* NewTwoLevelIterator(
     TwoLevelIteratorState* state,
     InternalIteratorBase<BlockHandle>* first_level_iter) {
   return new TwoLevelIndexIterator(state, first_level_iter);
+}
+
+InternalIterator* NewLinkSstIterator(
+    const FileMetaData* file_meta, InternalIterator* mediate_sst_iter,
+    const DependenceMap& dependence_map, const InternalKeyComparator& icomp,
+    void* callback_arg, const IteratorCache::CreateIterCallback& create_iter,
+    Arena* arena) {
+  assert(file_meta == nullptr || file_meta->prop.is_link_sst());
+  if (arena == nullptr) {
+    return new LinkSstIterator(file_meta, mediate_sst_iter, dependence_map,
+                              icomp, callback_arg, create_iter);
+  } else {
+    void* buffer = arena->AllocateAligned(sizeof(LinkSstIterator));
+    return new (buffer)
+        LinkSstIterator(file_meta, mediate_sst_iter, dependence_map, icomp,
+                       callback_arg, create_iter);
+  }
 }
 
 InternalIterator* NewMapSstIterator(

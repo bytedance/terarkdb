@@ -2200,6 +2200,13 @@ class LevelCompactionBuilder {
   // Pick and return a compaction.
   Compaction* PickCompaction();
 
+  // Gather target files (including blob SST(KV separated) and ordinary SST) and
+  // composite a compaction for future use.
+  // A Link Compaction contains two major objectives:
+  // (1) Link target SST files into a logical linked sst
+  // (2) GC old linked SST files
+  Compaction* PickLinkCompaction();
+
   // Pick lazy compaction
   Compaction* PickLazyCompaction(const std::vector<SequenceNumber>& snapshots);
 
@@ -2298,7 +2305,10 @@ void LevelCompactionBuilder::SetupInitialFiles() {
           // In these cases, to reduce L0 file count and thus reduce likelihood
           // of write stalls, we can attempt compacting a span of files within
           // L0.
-          if (PickIntraL0Compaction()) {
+          //
+          // If link compaction is enabled, we should skip L0 internal compaction
+          // since the link should be finished quite fast.
+          if (!ioptions_.enable_link_compaction && PickIntraL0Compaction()) {
             output_level_ = 0;
             compaction_reason_ = CompactionReason::kLevelL0FilesNum;
             break;
@@ -2429,6 +2439,14 @@ Compaction* LevelCompactionBuilder::PickCompaction() {
   TEST_SYNC_POINT_CALLBACK("LevelCompactionPicker::PickCompaction:Return", c);
 
   return c;
+}
+
+// TODO (guokuankuan@bytedance.com)
+// We could reuse the ordinary compaction picker at the moment, but sooner we should
+// pick link compactions smarter.
+Compaction* LevelCompactionBuilder::PickLinkCompaction() {
+  compaction_type_ = CompactionType::kLinkCompaction;
+  return PickCompaction();
 }
 
 Compaction* LevelCompactionBuilder::PickLazyCompaction(
@@ -2971,7 +2989,7 @@ bool LevelCompactionBuilder::PickFileToCompact() {
   // store where to start the iteration in the next call to PickCompaction
   vstorage_->SetNextCompactionIndex(start_level_, cmp_idx);
 
-  return start_level_inputs_.size() > 0;
+  return !start_level_inputs_.empty();
 }
 
 bool LevelCompactionBuilder::PickIntraL0Compaction() {
@@ -2999,6 +3017,8 @@ Compaction* LevelCompactionPicker::PickCompaction(
                                  mutable_cf_options, ioptions_);
   if (ioptions_.enable_lazy_compaction) {
     return builder.PickLazyCompaction(snapshots);
+  } else if (ioptions_.enable_link_compaction) {
+    return builder.PickLinkCompaction();
   } else {
     return builder.PickCompaction();
   }

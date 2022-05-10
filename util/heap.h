@@ -129,7 +129,7 @@ class BinaryHeap {
     T v = std::move(data_[index]);
 
     size_t picked_child = port::kMaxSizet;
-    while (1) {
+    while (true) {
       const size_t left_child = get_left(index);
       if (get_left(index) >= data_.size()) {
         break;

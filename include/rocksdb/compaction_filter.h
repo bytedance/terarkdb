@@ -200,6 +200,10 @@ class CompactionFilter
 
   // Determines whether value changed by compaction filter were stable.
   // Default as false, which means stability of outcome is not promised.
+  // "Stable" means the changed value will not change after the same
+  // operation is applied multiple times.
+  // Creators of the compaction filter should override this function, or
+  // the behavior of the stability checking is undefined.
   virtual bool IsStableChangeValue() const { return false; }
 
   // Returns a name that identifies this compaction filter.

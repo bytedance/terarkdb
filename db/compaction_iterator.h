@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <deque>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -22,7 +23,28 @@
 
 namespace TERARKDB_NAMESPACE {
 
-class CompactionIterator {
+class CompactionIteratorBase {
+ public:
+  virtual ~CompactionIteratorBase() = 0;
+
+  virtual void ResetRecordCounts() = 0;
+
+  virtual void SeekToFirst() = 0;
+  virtual void Next() = 0;
+
+  // Getters
+  virtual const Slice& key() const = 0;
+  virtual const LazyBuffer& value() const = 0;
+  virtual const Status& status() const = 0;
+  virtual const ParsedInternalKey& ikey() const = 0;
+  virtual bool Valid() const = 0;
+  virtual const Slice& user_key() const = 0;
+  virtual const CompactionIterationStats& iter_stats() const = 0;
+  // for KV Separation or LinkSST, current value may depend on other file numbers
+  virtual const std::vector<uint64_t> depended_file_numbers() const = 0;
+};
+
+class CompactionIterator: public CompactionIteratorBase {
  public:
   friend class CompactionIteratorToInternalIterator;
 
@@ -96,29 +118,33 @@ class CompactionIterator {
                      const SequenceNumber preserve_deletes_seqnum = 0,
                      const chash_set<uint64_t>* b = nullptr);
 
-  ~CompactionIterator();
+  ~CompactionIterator() override;
 
-  void ResetRecordCounts();
+  void ResetRecordCounts() override;
 
   // Seek to the beginning of the compaction iterator output.
   //
   // REQUIRED: Call only once.
-  void SeekToFirst();
+  void SeekToFirst() override;
 
   // Produces the next record in the compaction.
   //
   // REQUIRED: SeekToFirst() has been called.
-  void Next();
+  void Next() override;
 
   // Getters
-  const Slice& key() const { return key_; }
-  const LazyBuffer& value() const { return value_; }
-  const Status& status() const { return status_; }
-  const ParsedInternalKey& ikey() const { return ikey_; }
-  bool Valid() const { return valid_; }
-  const Slice& user_key() const { return current_user_key_; }
-  const CompactionIterationStats& iter_stats() const { return iter_stats_; }
+  const Slice& key() const override { return key_; }
+  const LazyBuffer& value() const override { return value_; }
+  const Status& status() const override { return status_; }
+  const ParsedInternalKey& ikey() const override { return ikey_; }
+  bool Valid() const override { return valid_; }
+  const Slice& user_key() const override { return current_user_key_; }
+  const CompactionIterationStats& iter_stats() const override { return iter_stats_; }
   void SetFilterSampleInterval(size_t filter_sample_interval);
+
+  virtual const std::vector<uint64_t> depended_file_numbers() const {
+    return {value_.file_number()};
+  }
 
  private:
   // Processes the input stream to find the next output
@@ -234,6 +260,120 @@ class CompactionIterator {
     // This is a best-effort facility, so memory_order_relaxed is sufficient.
     return shutting_down_ && shutting_down_->load(std::memory_order_relaxed);
   }
+};
+
+// A LinkCompactionIterator takes a ordinary CompactionIterator as its input and
+// iterate all KVs block by block (refer to LinkBlockRecord).
+class LinkCompactionIterator: public CompactionIteratorBase {
+ public:
+  // @param c_iter Original compaction iterator that combines all underlying SSTs
+  // @param group_sz The total number of the KV items that a LinkBlock contains.
+  // @param hash_bits Total bits a key in LinkBlock will use.
+  explicit LinkCompactionIterator(std::unique_ptr<CompactionIterator> c_iter,
+                                  IteratorCache* iterator_cache,
+                                  int group_sz,
+                                  int hash_bits)
+      : c_iter_(std::move(c_iter)),
+        iterator_cache_(iterator_cache),
+        group_sz_(group_sz),
+        hash_bits_(hash_bits) {}
+
+  ~LinkCompactionIterator() override {
+    c_iter_.reset();
+  }
+
+  void ResetRecordCounts() override {
+    c_iter_->ResetRecordCounts();
+  }
+
+  // We need to construct the first LinkBlockRecord here.
+  void SeekToFirst() override {
+    c_iter_->SeekToFirst();
+    status_ = c_iter_->status();
+    if(!status_.ok()) {
+      return;
+    }
+    Next();
+  }
+
+  // We need to step forward N(LinkBlockRecord's size) times to make sure we can
+  // get the next LinkBlockRecord(LBR)
+  // @see LinkSstIterator
+  void Next() override {
+    // Each time we proceed to next LBR, we refill underlying file numbers.
+    file_numbers_.clear();
+
+    // Obtain the original KV pairs
+    Slice max_key;
+    Slice smallest_key; // TODO need to check if we need smallest key
+    std::vector<uint32_t> hash_values;
+    for(int i = 0; i < group_sz_ && c_iter_->Valid(); ++i) {
+      const LazyBuffer& value = c_iter_->value();
+      hash_values.emplace_back(LinkBlockRecord::hash(c_iter_->user_key(), hash_bits_));
+      file_numbers_.emplace_back(value.file_number());
+      if(i == group_sz_ - 1) {
+        max_key = c_iter_->key();
+      }
+      Next();
+      if(!c_iter_->status().ok()) {
+        status_ = c_iter_->status();
+        return;
+      }
+    }
+    curr_lbr_ = std::make_unique<LinkBlockRecord>(iterator_cache_, max_key,
+                                                  group_sz_, hash_bits_);
+    curr_lbr_->Encode(file_numbers_, hash_values, smallest_key);
+
+    // Parse internal key
+    const Slice& key = curr_lbr_->MaxKey();
+    if(!ParseInternalKey(key, &ikey_)) {
+      status_ = Status::Incomplete("Cannot decode internal key");
+    }
+  }
+
+  // Obtain the LBR's key, aka the largest key of the block range.
+  const Slice& key() const override {
+    return curr_lbr_->MaxKey();
+  }
+
+  const LazyBuffer& value() const override {
+    return curr_lbr_->EncodedValue();
+  }
+
+  const Status& status() const override {
+    return status_;
+  }
+
+  const ParsedInternalKey& ikey() const override {
+    return ikey_;
+  }
+
+  bool Valid() const override {
+    return status_.ok();
+  }
+
+  const Slice& user_key() const override {
+    return c_iter_->user_key();
+  }
+
+  const CompactionIterationStats& iter_stats() const override {
+    return c_iter_->iter_stats();
+  }
+
+  const std::vector<uint64_t> depended_file_numbers() const {
+    return file_numbers_;
+  }
+
+ private:
+  Status status_;
+  std::unique_ptr<LinkBlockRecord> curr_lbr_;
+  ParsedInternalKey ikey_;
+  std::vector<uint64_t> file_numbers_;
+
+  std::unique_ptr<CompactionIterator> c_iter_;
+  IteratorCache* iterator_cache_;
+  int group_sz_ = 0;
+  int hash_bits_ = 0;
 };
 
 InternalIterator* NewCompactionIterator(
