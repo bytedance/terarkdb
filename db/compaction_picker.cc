@@ -2442,7 +2442,8 @@ Compaction* LevelCompactionBuilder::PickCompaction() {
 }
 
 // TODO (guokuankuan@bytedance.com)
-// We could reuse the ordinary compaction picker at the moment, but sooner we should pick link compactions smarter.
+// We could reuse the ordinary compaction picker at the moment, but sooner we should
+// pick link compactions smarter.
 Compaction* LevelCompactionBuilder::PickLinkCompaction() {
   compaction_type_ = CompactionType::kLinkCompaction;
   return PickCompaction();
@@ -3017,7 +3018,7 @@ Compaction* LevelCompactionPicker::PickCompaction(
   if (ioptions_.enable_lazy_compaction) {
     return builder.PickLazyCompaction(snapshots);
   } else if (ioptions_.enable_link_compaction) {
-      return builder.PickLinkCompaction();
+    return builder.PickLinkCompaction();
   } else {
     return builder.PickCompaction();
   }

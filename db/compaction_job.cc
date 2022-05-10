@@ -149,7 +149,7 @@ const char* GetCompactionReasonString(CompactionReason compaction_reason) {
 // Maintains state for each sub-compaction
 struct CompactionJob::SubcompactionState {
   const Compaction* compaction;
-  std::unique_ptr<CompactionIterator> c_iter;
+  std::unique_ptr<CompactionIteratorBase> c_iter;
 
   // The boundaries of the key-range this compaction is interested in. No two
   // subcompactions may have overlapping key-ranges.
@@ -1661,14 +1661,26 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     status = Status::OK();
   }
 
-  sub_compact->c_iter.reset(new CompactionIterator(
+  auto it = std::make_unique<CompactionIterator>(
       input.get(), &separate_helper, end, cfd->user_comparator(), &merge,
       versions_->LastSequence(), &existing_snapshots_,
       earliest_write_conflict_snapshot_, snapshot_checker_, env_,
       ShouldReportDetailedTime(env_, stats_), false, &range_del_agg,
       sub_compact->compaction, mutable_cf_options->get_blob_config(),
       compaction_filter, shutting_down_, preserve_deletes_seqnum_,
-      &rebuild_blobs_info.blobs));
+      &rebuild_blobs_info.blobs);
+
+  // For LinkCompaction, we wrap the old compaction iterator
+  if(!sub_compact->compaction->immutable_cf_options()->enable_link_compaction) {
+    sub_compact->c_iter = std::move(it);
+  } else {
+    // TODO iterator_cache cannot be null
+    sub_compact->c_iter = std::make_unique<LinkCompactionIterator>(
+        std::move(it), nullptr, mutable_cf_options->lbr_group_sz,
+        mutable_cf_options->lbr_hash_bits);
+  }
+  it.reset();
+
   auto c_iter = sub_compact->c_iter.get();
   c_iter->SeekToFirst();
 
@@ -1746,7 +1758,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   }
 
   // Represents how many records in target blob SST that are needed by the key
-  // SST
+  // SST: <file_number, count>
   std::unordered_map<uint64_t, uint64_t> dependence;
 
   size_t yield_count = 0;
@@ -1755,12 +1767,24 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     // returns true.
     const Slice& key = c_iter->key();
     const LazyBuffer& value = c_iter->value();
+    // For KV separation, we need to record all dependencies SSTs
     if (c_iter->ikey().type == kTypeValueIndex ||
         c_iter->ikey().type == kTypeMergeIndex) {
       assert(value.file_number() != uint64_t(-1));
       auto ib = dependence.emplace(value.file_number(), 1);
       if (!ib.second) {
         ++ib.first->second;
+      }
+    }
+    // For LinkSSTs, the dependency decoding is slightly different
+    // TODO(guokuankuan@bytedance.com) We didn't handle MergeIndex yet.
+    if(c_iter->ikey().type == kTypeLinkIndex) {
+      // Decode value to find out all underlying SST file numbers.
+      for(const auto& fn: c_iter->depended_file_numbers()) {
+        auto ib = dependence.emplace(fn, 1);
+        if (!ib.second) {
+          ++ib.first->second;
+        }
       }
     }
 
@@ -1806,6 +1830,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       if (!status.ok()) {
         break;
       }
+      // For compression
       for (const auto& data_elmt : {key, value.slice()}) {
         size_t data_end_offset = data_begin_offset + data_elmt.size();
         while (sample_begin_offset_iter != sample_begin_offsets.cend() &&
@@ -2020,7 +2045,6 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   sub_compact->status = status;
 }
 
-// TODO(guokuankuan@bytedance.com)
 void CompactionJob::ProcessLinkCompaction(SubcompactionState* sub_compact) {
   assert(sub_compact != nullptr);
   return ProcessKeyValueCompaction(sub_compact);

@@ -239,6 +239,10 @@ struct MutableCFOptions {
   std::vector<int> max_bytes_for_level_multiplier_additional;
   CompactionOptionsUniversal compaction_options_universal;
 
+  // Link Compaction related options
+  uint32_t lbr_group_sz = 10;
+  uint32_t lbr_hash_bits = 7;
+
   // Misc options
   uint64_t max_sequential_skip_in_iterations;
   bool paranoid_file_checks;
