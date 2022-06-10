@@ -2859,8 +2859,9 @@ TEST_P(DBCompactionTestWithParam, DeleteMovedFileAfterCompaction) {
     // block compactions
     TERARKDB_NAMESPACE::SyncPoint::GetInstance()->LoadDependency({
         {"DbCompactiontest::DeleteMovedFileAfterCompaction:1",
-         "CompactionJob::Run():OuterStart"},
+         "DBImpl::BGWorkCompaction"},
     });
+    TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
 
     options.max_bytes_for_level_base = 1024 * 1024;  // 1 MB
     Reopen(options);

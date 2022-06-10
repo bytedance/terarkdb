@@ -1755,7 +1755,7 @@ TEST_P(TransactionTest, TwoPhaseLogRollingTest) {
   delete cfb;
 }
 
-TEST_P(TransactionTest, TwoPhaseLogRollingTest2) {
+TEST_P(TransactionTest, DISABLED_TwoPhaseLogRollingTest2) {
   DBImpl* db_impl = reinterpret_cast<DBImpl*>(db->GetRootDB());
 
   Status s;

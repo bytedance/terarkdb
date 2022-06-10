@@ -224,8 +224,8 @@ TEST_F(VersionStorageInfoTest, MaxBytesForLevelDynamic) {
   logger_->log_count = 0;
   vstorage_.CalculateBaseBytes(ioptions_, mutable_cf_options_);
   ASSERT_EQ(1, logger_->log_count);
-  ASSERT_GT(vstorage_.MaxBytesForLevel(4), 1000U);
-  ASSERT_GT(vstorage_.MaxBytesForLevel(3), 1000U);
+  ASSERT_EQ(vstorage_.MaxBytesForLevel(4), 1000U);
+  ASSERT_EQ(vstorage_.MaxBytesForLevel(3), 1000U);
   ASSERT_EQ(vstorage_.MaxBytesForLevel(2), 1000U);
   ASSERT_EQ(vstorage_.MaxBytesForLevel(1), 1000U);
   ASSERT_EQ(vstorage_.base_level(), 1);
@@ -243,9 +243,9 @@ TEST_F(VersionStorageInfoTest, MaxBytesForLevelDynamicLotsOfData) {
   Add(5, 6U, "1", "2", 500U);
 
   vstorage_.CalculateBaseBytes(ioptions_, mutable_cf_options_);
-  ASSERT_EQ(vstorage_.MaxBytesForLevel(4), 800U);
-  ASSERT_EQ(vstorage_.MaxBytesForLevel(3), 400U);
-  ASSERT_EQ(vstorage_.MaxBytesForLevel(2), 200U);
+  ASSERT_EQ(vstorage_.MaxBytesForLevel(4), 836U);
+  ASSERT_EQ(vstorage_.MaxBytesForLevel(3), 412U);
+  ASSERT_EQ(vstorage_.MaxBytesForLevel(2), 203U);
   ASSERT_EQ(vstorage_.MaxBytesForLevel(1), 100U);
   ASSERT_EQ(vstorage_.base_level(), 1);
   ASSERT_EQ(0, logger_->log_count);
