@@ -587,6 +587,7 @@ DEFINE_bool(verify_checksum, true,
 DEFINE_bool(statistics, false, "Database statistics");
 DEFINE_string(statistics_string, "", "Serialized statistics string");
 static class std::shared_ptr<TERARKDB_NAMESPACE::Statistics> dbstats;
+static class std::shared_ptr<TERARKDB_NAMESPACE::Statistics> cf_stats;
 
 DEFINE_int64(writes, -1,
              "Number of write operations to do. If negative, do"
@@ -2971,6 +2972,7 @@ class Benchmark {
 
     if (FLAGS_statistics) {
       fprintf(stdout, "STATISTICS:\n%s\n", dbstats->ToString().c_str());
+      fprintf(stdout, "CF STATISTICS:\n%s\n", cf_stats->ToString().c_str());
     }
     if (FLAGS_simcache_size >= 0) {
       fprintf(stdout, "SIMULATOR CACHE STATISTICS:\n%s\n",
@@ -3542,6 +3544,8 @@ class Benchmark {
 
 #endif
       }
+      options.table_factory.reset(
+          NewBlockBasedTableFactory(block_based_options));
     }
 
 #ifdef WITH_TERARK_ZIP
@@ -3679,6 +3683,7 @@ class Benchmark {
 
     options.create_missing_column_families = FLAGS_num_column_families > 1;
     options.statistics = dbstats;
+    options.engine_statistics = cf_stats;
     options.wal_dir = FLAGS_wal_dir;
     options.create_if_missing = !FLAGS_use_existing_db;
     options.dump_malloc_stats = FLAGS_dump_malloc_stats;
@@ -5878,6 +5883,7 @@ int db_bench_tool(int argc, char** argv) {
 #endif  // ROCKSDB_LITE
   if (FLAGS_statistics) {
     dbstats = TERARKDB_NAMESPACE::CreateDBStatistics();
+    cf_stats = TERARKDB_NAMESPACE::CreateDBStatistics("CF-stats");
   }
   FLAGS_compaction_pri_e =
       (TERARKDB_NAMESPACE::CompactionPri)FLAGS_compaction_pri;

@@ -60,14 +60,16 @@ Status DBImplReadOnly::Get(const ReadOptions& read_options,
   PERF_TIMER_STOP(get_snapshot_time);
   if (super_version->mem->Get(lkey, lazy_val, &s, &merge_context,
                               &max_covering_tombstone_seq, read_options)) {
-    RecordTick(stats_, MEMTABLE_HIT);
+    RecordTick(cfd->ioptions()->cf_statistics, MEMTABLE_HIT);
+    RecordTick(cfd->ioptions()->statistics, MEMTABLE_HIT);
   } else {
     PERF_TIMER_GUARD(get_from_output_files_time);
     super_version->current->Get(read_options, key, lkey, lazy_val, &s,
                                 &merge_context, &max_covering_tombstone_seq);
-    RecordTick(stats_, MEMTABLE_MISS);
+    RecordTick(cfd->ioptions()->cf_statistics, MEMTABLE_MISS);
+    RecordTick(cfd->ioptions()->statistics, MEMTABLE_MISS);
   }
-  RecordTick(stats_, NUMBER_KEYS_READ);
+  RecordTick(cfd->ioptions()->statistics, NUMBER_KEYS_READ);
   if (s.ok()) {
     s = lazy_val->fetch();
   }
@@ -75,8 +77,8 @@ Status DBImplReadOnly::Get(const ReadOptions& read_options,
     return s;
   }
   size_t size = lazy_val->size();
-  RecordTick(stats_, BYTES_READ, size);
-  MeasureTime(stats_, BYTES_PER_READ, size);
+  RecordTick(cfd->ioptions()->statistics, BYTES_READ, size);
+  MeasureTime(cfd->ioptions()->statistics, BYTES_PER_READ, size);
   PERF_COUNTER_ADD(get_read_bytes, size);
   return s;
 }

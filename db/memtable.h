@@ -410,8 +410,9 @@ class MemTable {
 
   friend InternalIteratorBase<Slice>* NewMemTableTombstoneIterator(
       MemTable&, const ReadOptions&, Arena*);
-  friend InternalIterator* NewMemTableIterator(MemTable&, const ReadOptions&,
-                                               Arena*);
+  friend InternalIterator* NewMemTableIterator(Env* env_, MemTable&,
+                                               const ReadOptions&, Arena*,
+                                               Statistics* statistics);
   friend class MemTableBackwardIterator;
   friend class MemTableList;
 

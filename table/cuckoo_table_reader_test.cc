@@ -125,7 +125,7 @@ class CuckooReaderTest : public testing::Test {
     // Assume no merge/deletion
     for (uint32_t i = 0; i < num_items; ++i) {
       LazyBuffer value;
-      GetContext get_context(ucomp, nullptr, nullptr, nullptr,
+      GetContext get_context(ucomp, nullptr, nullptr, nullptr, nullptr,
                              GetContext::kNotFound, Slice(user_keys[i]), &value,
                              nullptr, nullptr, nullptr, nullptr, nullptr);
       ASSERT_OK(
@@ -346,9 +346,9 @@ TEST_F(CuckooReaderTest, WhenKeyNotFound) {
   ParsedInternalKey ikey(not_found_user_key, 1000, kTypeValue);
   AppendInternalKey(&not_found_key, ikey);
   LazyBuffer value;
-  GetContext get_context(ucmp, nullptr, nullptr, nullptr, GetContext::kNotFound,
-                         Slice(not_found_key), &value, nullptr, nullptr,
-                         nullptr, nullptr, nullptr);
+  GetContext get_context(ucmp, nullptr, nullptr, nullptr, nullptr,
+                         GetContext::kNotFound, Slice(not_found_key), &value,
+                         nullptr, nullptr, nullptr, nullptr, nullptr);
   ASSERT_OK(
       reader.Get(ReadOptions(), Slice(not_found_key), &get_context, nullptr));
   ASSERT_TRUE(value.empty());
@@ -360,7 +360,7 @@ TEST_F(CuckooReaderTest, WhenKeyNotFound) {
   std::string not_found_key2;
   AppendInternalKey(&not_found_key2, ikey2);
   value.clear();
-  GetContext get_context2(ucmp, nullptr, nullptr, nullptr,
+  GetContext get_context2(ucmp, nullptr, nullptr, nullptr, nullptr,
                           GetContext::kNotFound, Slice(not_found_key2), &value,
                           nullptr, nullptr, nullptr, nullptr, nullptr);
   ASSERT_OK(
@@ -376,7 +376,7 @@ TEST_F(CuckooReaderTest, WhenKeyNotFound) {
   AddHashLookups(ExtractUserKey(unused_key).ToString(), kNumHashFunc,
                  kNumHashFunc);
   value.clear();
-  GetContext get_context3(ucmp, nullptr, nullptr, nullptr,
+  GetContext get_context3(ucmp, nullptr, nullptr, nullptr, nullptr,
                           GetContext::kNotFound, Slice(unused_key), &value,
                           nullptr, nullptr, nullptr, nullptr, nullptr);
   ASSERT_OK(
@@ -451,7 +451,7 @@ void WriteFile(const std::vector<std::string>& keys, const uint64_t num,
   ReadOptions r_options;
   LazyBuffer value;
   // Assume only the fast path is triggered
-  GetContext get_context(nullptr, nullptr, nullptr, nullptr,
+  GetContext get_context(nullptr, nullptr, nullptr, nullptr, nullptr,
                          GetContext::kNotFound, Slice(), &value, nullptr,
                          nullptr, nullptr, nullptr, nullptr);
   for (uint64_t i = 0; i < num; ++i) {
@@ -501,7 +501,7 @@ void ReadKeys(uint64_t num, uint32_t batch_size) {
 
   LazyBuffer value;
   // Assume only the fast path is triggered
-  GetContext get_context(nullptr, nullptr, nullptr, nullptr,
+  GetContext get_context(nullptr, nullptr, nullptr, nullptr, nullptr,
                          GetContext::kNotFound, Slice(), &value, nullptr,
                          nullptr, nullptr, nullptr, nullptr);
   uint64_t start_time = env->NowMicros();

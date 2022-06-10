@@ -866,11 +866,41 @@ const Status DBImpl::CreateArchivalDirectory() {
   }
   return Status::OK();
 }
-
 void DBImpl::PrintStatistics() {
   auto dbstats = immutable_db_options_.statistics.get();
   if (dbstats) {
     ROCKS_LOG_WARN(immutable_db_options_.info_log, "STATISTICS:\n %s",
+                   dbstats->ToString().c_str());
+  }
+  std::set<Statistics*> stats;
+  std::vector<ColumnFamilyData*> cfds;
+  InstrumentedMutexLock l(&mutex_);
+  for (auto cfd : *versions_->GetColumnFamilySet()) {
+    if (!cfd->IsDropped() && cfd->initialized()) {
+      cfd->Ref();
+      cfds.push_back(cfd);
+    }
+  }
+  mutex_.Unlock();
+  for (auto cfd : cfds) {
+    auto engine_statistics = cfd->ioptions()->cf_statistics;
+    if (engine_statistics && engine_statistics != dbstats) {
+      // cfname = []
+      stats.insert(engine_statistics);
+    }
+  }
+  for (auto& stat : stats) {
+    ROCKS_LOG_WARN(immutable_db_options_.info_log,
+                   "Statistic(Tag=%s) STATISTICS(%p):\n %s",
+                   stat->tag().c_str(), static_cast<void*>(stat),
+                   stat->ToString().c_str());
+  }
+  mutex_.Lock();
+  for (auto cfd : cfds) {
+    cfd->Unref();
+  }
+  if (dbstats) {
+    ROCKS_LOG_WARN(immutable_db_options_.info_log, "REPEAT STATISTICS:\n %s",
                    dbstats->ToString().c_str());
   }
 }
@@ -2047,6 +2077,11 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
 
   auto cfh = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family);
   auto cfd = cfh->cfd();
+  DBOperationTypeGuard op_guard(kOpTypeFG);
+
+  StopWatch sw_cf(env_, cfd->ioptions()->cf_statistics, DB_GET);
+
+
 
   if (tracer_) {
     // TODO: This mutex should be removed later, to improve performance when
@@ -2114,13 +2149,13 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
     if (sv->mem->Get(lkey, lazy_val, &s, &merge_context,
                      &max_covering_tombstone_seq, read_options, callback)) {
       done = true;
-      RecordTick(stats_, MEMTABLE_HIT);
+      RecordTick(cfd->ioptions()->statistics, MEMTABLE_HIT);
     } else if ((s.ok() || s.IsMergeInProgress()) &&
                sv->imm->Get(lkey, lazy_val, &s, &merge_context,
                             &max_covering_tombstone_seq, read_options,
                             callback)) {
       done = true;
-      RecordTick(stats_, MEMTABLE_HIT);
+      RecordTick(cfd->ioptions()->statistics, MEMTABLE_HIT);
     }
     if (!done && !s.ok() && !s.IsMergeInProgress()) {
       ReturnAndCleanupSuperVersion(cfd, sv);
@@ -2132,7 +2167,7 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
     sv->current->Get(read_options, key, lkey, lazy_val, &s, &merge_context,
                      &max_covering_tombstone_seq, value_found, nullptr, nullptr,
                      callback);
-    RecordTick(stats_, MEMTABLE_MISS);
+    RecordTick(cfd->ioptions()->statistics, MEMTABLE_MISS);
   }
 
   if (s.ok() && lazy_val != nullptr) {
@@ -2145,7 +2180,7 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
 
     ReturnAndCleanupSuperVersion(cfd, sv);
 
-    RecordTick(stats_, NUMBER_KEYS_READ);
+    RecordTick(cfd->ioptions()->statistics, NUMBER_KEYS_READ);
     // size_t size = lazy_val->size();
     // RecordTick(stats_, BYTES_READ, size);
     // MeasureTime(stats_, BYTES_PER_READ, size);
@@ -2313,6 +2348,7 @@ std::vector<Status> DBImpl::MultiGet(
 
     LookupKey lkey(keys[i], snapshot);
     auto cfh = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family[i]);
+    auto cfd = cfh->cfd();
     SequenceNumber max_covering_tombstone_seq = 0;
     auto mgd_iter = multiget_cf_data.find(cfh->cfd()->GetID());
     assert(mgd_iter != multiget_cf_data.end());
@@ -2326,19 +2362,19 @@ std::vector<Status> DBImpl::MultiGet(
       if (super_version->mem->Get(lkey, &lazy_val, &s, &merge_context,
                                   &max_covering_tombstone_seq, read_options)) {
         done = true;
-        RecordTick(stats_, MEMTABLE_HIT);
+        RecordTick(cfd->ioptions()->statistics, MEMTABLE_HIT);
       } else if (super_version->imm->Get(lkey, &lazy_val, &s, &merge_context,
                                          &max_covering_tombstone_seq,
                                          read_options)) {
         done = true;
-        RecordTick(stats_, MEMTABLE_HIT);
+        RecordTick(cfd->ioptions()->statistics, MEMTABLE_HIT);
       }
     }
     if (!done) {
       PERF_TIMER_GUARD(get_from_output_files_time);
       super_version->current->Get(read_options, keys[i], lkey, &lazy_val, &s,
                                   &merge_context, &max_covering_tombstone_seq);
-      RecordTick(stats_, MEMTABLE_MISS);
+      RecordTick(cfd->ioptions()->statistics, MEMTABLE_MISS);
     }
     if (s.ok()) {
       s = std::move(lazy_val).dump(value);
@@ -3680,7 +3716,7 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
       deleted_range.resize(c + 1);
       MapBuilder map_builder(job_context.job_id, immutable_db_options_,
                              env_options_, versions_.get(),
-                             stats_, dbname_);
+                             cfd->ioptions()->statistics, dbname_);
       auto level_being_compacted = [vstorage, &auto_release](int level) {
         for (auto f : vstorage->LevelFiles(level)) {
           if (auto_release.file_marked.count(f) == 0) {

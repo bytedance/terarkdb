@@ -21,6 +21,33 @@ thread_local PerfContext perf_context;
 #endif
 #endif
 
+#if defined(NPERF_CONTEXT) || !defined(ROCKSDB_SUPPORT_THREAD_LOCAL)
+DBOperationType db_operation_type = kOpTypeUndefined;
+#else
+#if defined(OS_SOLARIS)
+__thread DBOperationType db_operation_type = kOpTypeUndefined;
+#else
+thread_local DBOperationType db_operation_type = kOpTypeUndefined;
+#endif
+#endif
+
+DBOperationType get_db_operation_type() {
+  return db_operation_type;
+}
+
+bool is_foreground_operation() {
+  return db_operation_type == kOpTypeFG;
+}
+
+DBOperationTypeGuard::DBOperationTypeGuard(
+    const DBOperationType& _db_operation_type) {
+  db_operation_type = _db_operation_type;
+}
+
+DBOperationTypeGuard::~DBOperationTypeGuard() {
+  db_operation_type = kOpTypeUndefined;
+}
+
 PerfContext* get_perf_context() {
 #if defined(NPERF_CONTEXT) || !defined(ROCKSDB_SUPPORT_THREAD_LOCAL)
   return &perf_context;

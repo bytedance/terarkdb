@@ -806,6 +806,7 @@ class Version : public SeparateHelper, private LazyBufferState {
 
   ColumnFamilyData* cfd_;  // ColumnFamilyData to which this Version belongs
   Logger* info_log_;
+  Statistics* statistics_;
   Statistics* db_statistics_;
   TableCache* table_cache_;
   const MergeOperator* merge_operator_;

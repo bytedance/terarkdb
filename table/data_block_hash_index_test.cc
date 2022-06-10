@@ -634,8 +634,8 @@ TEST(DataBlockHashIndex, BlockBoundary) {
     std::string seek_ukey("axy");
     InternalKey seek_ikey(seek_ukey, 60, kTypeValue);
     GetContext get_context(options.comparator, nullptr, nullptr, nullptr,
-                           GetContext::kNotFound, seek_ukey, &value, nullptr,
-                           nullptr, nullptr, nullptr, nullptr);
+                           nullptr, GetContext::kNotFound, seek_ukey, &value,
+                           nullptr, nullptr, nullptr, nullptr, nullptr);
 
     TestBoundary(ik1, v1, ik2, v2, seek_ikey, get_context, options);
     ASSERT_EQ(get_context.State(), GetContext::kFound);
@@ -660,8 +660,8 @@ TEST(DataBlockHashIndex, BlockBoundary) {
     std::string seek_ukey("axy");
     InternalKey seek_ikey(seek_ukey, 60, kTypeValue);
     GetContext get_context(options.comparator, nullptr, nullptr, nullptr,
-                           GetContext::kNotFound, seek_ukey, &value, nullptr,
-                           nullptr, nullptr, nullptr, nullptr);
+                           nullptr, GetContext::kNotFound, seek_ukey, &value,
+                           nullptr, nullptr, nullptr, nullptr, nullptr);
 
     TestBoundary(ik1, v1, ik2, v2, seek_ikey, get_context, options);
     ASSERT_EQ(get_context.State(), GetContext::kFound);
@@ -686,8 +686,8 @@ TEST(DataBlockHashIndex, BlockBoundary) {
     std::string seek_ukey("axy");
     InternalKey seek_ikey(seek_ukey, 120, kTypeValue);
     GetContext get_context(options.comparator, nullptr, nullptr, nullptr,
-                           GetContext::kNotFound, seek_ukey, &value, nullptr,
-                           nullptr, nullptr, nullptr, nullptr);
+                           nullptr, GetContext::kNotFound, seek_ukey, &value,
+                           nullptr, nullptr, nullptr, nullptr, nullptr);
 
     TestBoundary(ik1, v1, ik2, v2, seek_ikey, get_context, options);
     ASSERT_EQ(get_context.State(), GetContext::kFound);
@@ -712,8 +712,8 @@ TEST(DataBlockHashIndex, BlockBoundary) {
     std::string seek_ukey("axy");
     InternalKey seek_ikey(seek_ukey, 5, kTypeValue);
     GetContext get_context(options.comparator, nullptr, nullptr, nullptr,
-                           GetContext::kNotFound, seek_ukey, &value, nullptr,
-                           nullptr, nullptr, nullptr, nullptr);
+                           nullptr, GetContext::kNotFound, seek_ukey, &value,
+                           nullptr, nullptr, nullptr, nullptr, nullptr);
 
     TestBoundary(ik1, v1, ik2, v2, seek_ikey, get_context, options);
     ASSERT_EQ(get_context.State(), GetContext::kNotFound);

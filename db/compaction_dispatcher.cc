@@ -632,8 +632,8 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
     bool value_found = false;
     SequenceNumber context_seq;
     GetContext get_context(ucmp, nullptr, immutable_cf_options.info_log,
-                           nullptr, GetContext::kNotFound, user_key, buffer,
-                           &value_found, nullptr, nullptr, nullptr, env,
+                           nullptr, nullptr, GetContext::kNotFound, user_key,
+                           buffer, &value_found, nullptr, nullptr, nullptr, env,
                            &context_seq);
     IterKey iter_key;
     iter_key.SetInternalKey(user_key, sequence, kValueTypeForSeek);

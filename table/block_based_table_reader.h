@@ -560,7 +560,8 @@ class BlockBasedTableIteratorBase : public InternalIteratorBase<TValue> {
                               const SliceTransform* prefix_extractor,
                               bool is_index, bool key_includes_seq = true,
                               bool index_key_is_full = true,
-                              bool for_compaction = false)
+                              bool for_compaction = false, Env* _env = nullptr,
+                              Statistics* statistic = nullptr, int level = -1)
       : table_(table),
         read_options_(read_options),
         icomp_(icomp),
@@ -572,7 +573,10 @@ class BlockBasedTableIteratorBase : public InternalIteratorBase<TValue> {
         is_index_(is_index),
         key_includes_seq_(key_includes_seq),
         index_key_is_full_(index_key_is_full),
-        for_compaction_(for_compaction) {}
+        for_compaction_(for_compaction),
+        statistics_(statistic),
+        env_(_env),
+        level_(level) {}
 
   ~BlockBasedTableIteratorBase() { delete index_iter_; }
 
@@ -664,6 +668,9 @@ class BlockBasedTableIteratorBase : public InternalIteratorBase<TValue> {
   size_t readahead_limit_ = 0;
   int num_file_reads_ = 0;
   std::unique_ptr<FilePrefetchBuffer> prefetch_buffer_;
+  Statistics* statistics_;
+  Env* env_;
+  int level_;
 };
 
 template <class TBlockIter, typename TValue = Slice>

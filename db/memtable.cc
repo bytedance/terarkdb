@@ -54,7 +54,7 @@ ImmutableMemTableOptions::ImmutableMemTableOptions(
       inplace_update_num_locks(mutable_cf_options.inplace_update_num_locks),
       inplace_callback(ioptions.inplace_callback),
       max_successive_merges(mutable_cf_options.max_successive_merges),
-      statistics(ioptions.statistics),
+      statistics(ioptions.cf_statistics),
       merge_operator(ioptions.merge_operator),
       info_log(ioptions.info_log) {}
 
@@ -338,11 +338,11 @@ template <bool UseBloom>
 class MemTableIterator : public InternalIteratorBase<LazyBuffer>,
                          public LazyBufferState {
  public:
-  MemTableIterator(MemTable& mem, DynamicBloom* bloom,
+  MemTableIterator(Env* _env, MemTable& mem, DynamicBloom* bloom,
                    const SliceTransform* prefix_extractor,
                    const InternalKeyComparator& icmp,
                    MemTableRep::Iterator* iter, const ReadOptions& read_options,
-                   Arena* arena)
+                   Arena* arena, Statistics* statistic = nullptr)
       : mem_(mem),
         bloom_(bloom),
         prefix_extractor_(prefix_extractor),
@@ -352,7 +352,9 @@ class MemTableIterator : public InternalIteratorBase<LazyBuffer>,
         arena_mode_(arena != nullptr),
         value_pinned_(
             !mem.GetImmutableMemTableOptions()->inplace_update_support ||
-            mem.IsImmutable()) {
+            mem.IsImmutable()),
+        statistics_(statistic),
+        env_(_env) {
     assert(UseBloom == (bloom != nullptr));
     is_seek_for_prev_supported_ = iter_->IsSeekForPrevSupported();
   }
@@ -416,6 +418,7 @@ class MemTableIterator : public InternalIteratorBase<LazyBuffer>,
         PERF_COUNTER_ADD(bloom_memtable_hit_count, 1);
       }
     }
+    StopWatch sw(env_, statistics_, SEEK_ON_MEMTABLE_TIME);
     iter_->Seek(k, nullptr);
     valid_ = iter_->Valid();
   }
@@ -432,6 +435,7 @@ class MemTableIterator : public InternalIteratorBase<LazyBuffer>,
         PERF_COUNTER_ADD(bloom_memtable_hit_count, 1);
       }
     }
+    StopWatch sw(env_, statistics_, SEEK_ON_MEMTABLE_TIME);
     if (is_seek_for_prev_supported_) {
       iter_->SeekForPrev(k, nullptr);
       valid_ = iter_->Valid();
@@ -447,10 +451,12 @@ class MemTableIterator : public InternalIteratorBase<LazyBuffer>,
     }
   }
   virtual void SeekToFirst() override {
+    StopWatch sw(env_, statistics_, SEEK_ON_MEMTABLE_TIME);
     iter_->SeekToFirst();
     valid_ = iter_->Valid();
   }
   virtual void SeekToLast() override {
+    StopWatch sw(env_, statistics_, SEEK_ON_MEMTABLE_TIME);
     iter_->SeekToLast();
     valid_ = iter_->Valid();
   }
@@ -483,6 +489,8 @@ class MemTableIterator : public InternalIteratorBase<LazyBuffer>,
   bool arena_mode_;
   bool value_pinned_;
   bool is_seek_for_prev_supported_;
+  Statistics* statistics_;
+  Env* const env_;
 
   // No copying allowed
   MemTableIterator(const MemTableIterator&) = delete;
@@ -500,9 +508,9 @@ InternalIteratorBase<Slice>* NewMemTableTombstoneIterator(
   }
 }
 
-InternalIterator* NewMemTableIterator(MemTable& mem,
+InternalIterator* NewMemTableIterator(Env* _env, MemTable& mem,
                                       const ReadOptions& read_options,
-                                      Arena* arena) {
+                                      Arena* arena, Statistics* statistic) {
   DynamicBloom* bloom = nullptr;
   const SliceTransform* prefix_extractor = mem.prefix_extractor_;
   const InternalKeyComparator& icmp = mem.comparator_.comparator;
@@ -517,29 +525,29 @@ InternalIterator* NewMemTableIterator(MemTable& mem,
   if (bloom != nullptr) {
     using IteratorType = MemTableIterator<true>;
     if (arena == nullptr) {
-      return new IteratorType(mem, bloom, prefix_extractor, icmp, iter,
-                              read_options, arena);
+      return new IteratorType(_env, mem, bloom, prefix_extractor, icmp, iter,
+                              read_options, arena, statistic);
     } else {
       auto buffer = arena->AllocateAligned(sizeof(IteratorType));
-      return new (buffer) IteratorType(mem, bloom, prefix_extractor, icmp, iter,
-                                       read_options, arena);
+      return new (buffer) IteratorType(_env, mem, bloom, prefix_extractor, icmp,
+                                       iter, read_options, arena, statistic);
     }
   } else {
     using IteratorType = MemTableIterator<false>;
     if (arena == nullptr) {
-      return new IteratorType(mem, bloom, prefix_extractor, icmp, iter,
-                              read_options, arena);
+      return new IteratorType(_env, mem, bloom, prefix_extractor, icmp, iter,
+                              read_options, arena, statistic);
     } else {
       auto buffer = arena->AllocateAligned(sizeof(IteratorType));
-      return new (buffer) IteratorType(mem, bloom, prefix_extractor, icmp, iter,
-                                       read_options, arena);
+      return new (buffer) IteratorType(_env, mem, bloom, prefix_extractor, icmp,
+                                       iter, read_options, arena, statistic);
     }
   }
 }
 
 InternalIterator* MemTable::NewIterator(const ReadOptions& read_options,
                                         Arena* arena) {
-  return NewMemTableIterator(*this, read_options, arena);
+  return NewMemTableIterator(env_,*this, read_options, arena,moptions_.statistics);
 }
 
 FragmentedRangeTombstoneIterator* MemTable::NewRangeTombstoneIterator(

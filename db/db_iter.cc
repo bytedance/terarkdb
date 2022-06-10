@@ -125,7 +125,7 @@ class DBIter final : public Iterator {
         direction_(kForward),
         valid_(false),
         current_entry_is_merged_(false),
-        statistics_(cf_options.statistics),
+        statistics_(cf_options.cf_statistics),
         num_internal_keys_skipped_(0),
         iterate_lower_bound_(read_options.iterate_lower_bound),
         iterate_upper_bound_(read_options.iterate_upper_bound),
@@ -351,6 +351,7 @@ static std::string metrics_test_dbname = "metrics_test_dbname";
 
 void DBIter::Next() {
   static const std::string metric_name = "dbiter_next";
+  DBOperationTypeGuard op_guard(kOpTypeFG);
   LatencyHistGuard guard(db_impl_ == nullptr
                              ? DummyHistReporterHandle()
                              : (db_impl_->next_qps_reporter().AddCount(1),
@@ -682,6 +683,7 @@ bool DBIter::MergeValuesNewToOld() {
 }
 
 void DBIter::Prev() {
+  DBOperationTypeGuard op_guard(kOpTypeFG);
   static const std::string metric_name = "dbiter_prev";
   LatencyHistGuard guard(db_impl_ == nullptr
                              ? DummyHistReporterHandle()
@@ -1182,6 +1184,7 @@ SequenceNumber DBIter::MaxVisibleSequenceNumber() {
 
 static const std::string seek_metric_name = "dbiter_seek";
 void DBIter::Seek(const Slice& target) {
+  DBOperationTypeGuard op_guard(kOpTypeFG);
   LatencyHistGuard guard(db_impl_ == nullptr
                              ? DummyHistReporterHandle()
                              : (db_impl_->seek_qps_reporter().AddCount(1),
@@ -1246,6 +1249,7 @@ void DBIter::Seek(const Slice& target) {
 
 static const std::string seekforprev_metric_name = "dbiter_seekforprev";
 void DBIter::SeekForPrev(const Slice& target) {
+  DBOperationTypeGuard op_guard(kOpTypeFG);
   LatencyHistGuard guard(
       db_impl_ == nullptr ? DummyHistReporterHandle()
                           : (db_impl_->seekforprev_qps_reporter().AddCount(1),
@@ -1308,6 +1312,7 @@ void DBIter::SeekForPrev(const Slice& target) {
 }
 
 void DBIter::SeekToFirst() {
+  DBOperationTypeGuard op_guard(kOpTypeFG);
   LatencyHistGuard guard(db_impl_ == nullptr
                              ? DummyHistReporterHandle()
                              : (db_impl_->seek_qps_reporter().AddCount(1),
@@ -1356,6 +1361,7 @@ void DBIter::SeekToFirst() {
 }
 
 void DBIter::SeekToLast() {
+  DBOperationTypeGuard op_guard(kOpTypeFG);
   LatencyHistGuard guard(
       db_impl_ == nullptr ? DummyHistReporterHandle()
                           : (db_impl_->seekforprev_qps_reporter().AddCount(1),

@@ -19,23 +19,40 @@ namespace TERARKDB_NAMESPACE {
 class MergeContext;
 
 struct GetContextStats {
-  uint64_t num_cache_hit = 0;
-  uint64_t num_cache_index_hit = 0;
-  uint64_t num_cache_data_hit = 0;
-  uint64_t num_cache_filter_hit = 0;
-  uint64_t num_cache_index_miss = 0;
-  uint64_t num_cache_filter_miss = 0;
-  uint64_t num_cache_data_miss = 0;
-  uint64_t num_cache_bytes_read = 0;
-  uint64_t num_cache_miss = 0;
-  uint64_t num_cache_add = 0;
-  uint64_t num_cache_bytes_write = 0;
-  uint64_t num_cache_index_add = 0;
-  uint64_t num_cache_index_bytes_insert = 0;
-  uint64_t num_cache_data_add = 0;
-  uint64_t num_cache_data_bytes_insert = 0;
-  uint64_t num_cache_filter_add = 0;
-  uint64_t num_cache_filter_bytes_insert = 0;
+  uint64_t num_cache_hit_fg = 0;
+  uint64_t num_cache_index_hit_fg = 0;
+  uint64_t num_cache_data_hit_fg = 0;
+  uint64_t num_cache_filter_hit_fg = 0;
+  uint64_t num_cache_index_miss_fg = 0;
+  uint64_t num_cache_filter_miss_fg = 0;
+  uint64_t num_cache_data_miss_fg = 0;
+  uint64_t num_cache_bytes_read_fg = 0;
+  uint64_t num_cache_miss_fg = 0;
+  uint64_t num_cache_add_fg = 0;
+  uint64_t num_cache_bytes_write_fg = 0;
+  uint64_t num_cache_index_add_fg = 0;
+  uint64_t num_cache_index_bytes_insert_fg = 0;
+  uint64_t num_cache_data_add_fg = 0;
+  uint64_t num_cache_data_bytes_insert_fg = 0;
+  uint64_t num_cache_filter_add_fg = 0;
+  uint64_t num_cache_filter_bytes_insert_fg = 0;
+  uint64_t num_cache_hit_bg = 0;
+  uint64_t num_cache_index_hit_bg = 0;
+  uint64_t num_cache_data_hit_bg = 0;
+  uint64_t num_cache_filter_hit_bg = 0;
+  uint64_t num_cache_index_miss_bg = 0;
+  uint64_t num_cache_filter_miss_bg = 0;
+  uint64_t num_cache_data_miss_bg = 0;
+  uint64_t num_cache_bytes_read_bg = 0;
+  uint64_t num_cache_miss_bg = 0;
+  uint64_t num_cache_add_bg = 0;
+  uint64_t num_cache_bytes_write_bg = 0;
+  uint64_t num_cache_index_add_bg = 0;
+  uint64_t num_cache_index_bytes_insert_bg = 0;
+  uint64_t num_cache_data_add_bg = 0;
+  uint64_t num_cache_data_bytes_insert_bg = 0;
+  uint64_t num_cache_filter_add_bg = 0;
+  uint64_t num_cache_filter_bytes_insert_bg = 0;
 };
 
 class GetContext {
@@ -50,7 +67,8 @@ class GetContext {
   GetContextStats get_context_stats_;
 
   GetContext(const Comparator* ucmp, const MergeOperator* merge_operator,
-             Logger* logger, Statistics* statistics, GetState init_state,
+             Logger* logger, Statistics* db_statistics,
+             Statistics* cf_statistics, GetState init_state,
              const Slice& user_key, LazyBuffer* value, bool* value_found,
              MergeContext* merge_context, const SeparateHelper* separate_helper,
              SequenceNumber* max_covering_tombstone_seq, Env* env,
@@ -105,7 +123,8 @@ class GetContext {
   const MergeOperator* merge_operator_;
   // the merge operations encountered;
   Logger* logger_;
-  Statistics* statistics_;
+  Statistics* cf_statistics_;
+  Statistics* db_statistics_;
 
   GetState state_;
   Slice user_key_;

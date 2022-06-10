@@ -79,6 +79,96 @@ enum Tickers : uint32_t {
   // # of times bloom FullFilter has not avoided the reads and data actually
   // exist.
   BLOOM_FILTER_FULL_TRUE_POSITIVE,
+  BLOCK_CACHE_MISS_FG,
+  // total block cache hit
+  // REQUIRES: BLOCK_CACHE_HIT == BLOCK_CACHE_INDEX_HIT +
+  //                              BLOCK_CACHE_FILTER_HIT +
+  //                              BLOCK_CACHE_DATA_HIT;
+  BLOCK_CACHE_HIT_FG,
+  // # of blocks added to block cache.
+  BLOCK_CACHE_ADD_FG,
+  // # of failures when adding blocks to block cache.
+  BLOCK_CACHE_ADD_FAILURES_FG,
+  // # of times cache miss when accessing index block from block cache.
+  BLOCK_CACHE_INDEX_MISS_FG,
+  // # of times cache hit when accessing index block from block cache.
+  BLOCK_CACHE_INDEX_HIT_FG,
+  // # of index blocks added to block cache.
+  BLOCK_CACHE_INDEX_ADD_FG,
+  // # of bytes of index blocks inserted into cache
+  BLOCK_CACHE_INDEX_BYTES_INSERT_FG,
+  // # of bytes of index block erased from cache
+  BLOCK_CACHE_INDEX_BYTES_EVICT_FG,
+  // # of times cache miss when accessing filter block from block cache.
+  BLOCK_CACHE_FILTER_MISS_FG,
+  // # of times cache hit when accessing filter block from block cache.
+  BLOCK_CACHE_FILTER_HIT_FG,
+  // # of filter blocks added to block cache.
+  BLOCK_CACHE_FILTER_ADD_FG,
+  // # of bytes of bloom filter blocks inserted into cache
+  BLOCK_CACHE_FILTER_BYTES_INSERT_FG,
+  // # of bytes of bloom filter block erased from cache
+  BLOCK_CACHE_FILTER_BYTES_EVICT_FG,
+  // # of times cache miss when accessing data block from block cache.
+  BLOCK_CACHE_DATA_MISS_FG,
+  // # of times cache hit when accessing data block from block cache.
+  BLOCK_CACHE_DATA_HIT_FG,
+  // # of data blocks added to block cache.
+  BLOCK_CACHE_DATA_ADD_FG,
+  // # of bytes of data blocks inserted into cache
+  BLOCK_CACHE_DATA_BYTES_INSERT_FG,
+  // # of bytes read from cache.
+  BLOCK_CACHE_BYTES_READ_FG,
+  // # of bytes written into cache.
+  BLOCK_CACHE_BYTES_WRITE_FG,
+
+  // # of times bloom filter has avoided file reads, i.e., negatives.
+  BLOOM_FILTER_USEFUL_FG,
+  // # of times bloom FullFilter has not avoided the reads.
+  BLOOM_FILTER_FULL_POSITIVE_FG,
+  // # of times bloom FullFilter has not avoided the reads and data actually
+  // exist.
+  BLOOM_FILTER_FULL_TRUE_POSITIVE_FG,
+
+  BLOCK_CACHE_MISS_BG,
+
+  BLOCK_CACHE_HIT_BG,
+  // # of blocks added to block cache.
+  BLOCK_CACHE_ADD_BG,
+  // # of failures when adding blocks to block cache.
+  BLOCK_CACHE_ADD_FAILURES_BG,
+
+  BLOCK_CACHE_INDEX_MISS_BG,
+
+  BLOCK_CACHE_INDEX_HIT_BG,
+  // # of index blocks added to block cache.
+  BLOCK_CACHE_INDEX_ADD_BG,
+  // # of bytes of index blocks inserted into cache
+  BLOCK_CACHE_INDEX_BYTES_INSERT_BG,
+  // # of bytes of index block erased from cache
+  BLOCK_CACHE_INDEX_BYTES_EVICT_BG,
+  BLOCK_CACHE_FILTER_MISS_BG,
+  // # of times cache hit when accessing filter block from block cache.
+  BLOCK_CACHE_FILTER_HIT_BG,
+  // # of filter blocks added to block cache.
+  BLOCK_CACHE_FILTER_ADD_BG,
+  // # of bytes of bloom filter blocks inserted into cache
+  BLOCK_CACHE_FILTER_BYTES_INSERT_BG,
+  // # of bytes of bloom filter block erased from cache
+  BLOCK_CACHE_FILTER_BYTES_EVICT_BG,
+
+  BLOCK_CACHE_DATA_MISS_BG,
+  // # of times cache hit when accessing data block from block cache.
+  BLOCK_CACHE_DATA_HIT_BG,
+  // # of data blocks added to block cache.
+  BLOCK_CACHE_DATA_ADD_BG,
+  // # of bytes of data blocks inserted into cache
+  BLOCK_CACHE_DATA_BYTES_INSERT_BG,
+  // # of bytes read from cache.
+  BLOCK_CACHE_BYTES_READ_BG,
+  // # of bytes written into cache.
+  BLOCK_CACHE_BYTES_WRITE_BG,
+
 
   // # persistent cache hit
   PERSISTENT_CACHE_HIT,
@@ -270,6 +360,8 @@ enum Tickers : uint32_t {
 // the order listed in TickersNameMap
 extern const std::vector<std::pair<Tickers, std::string>> TickersNameMap;
 
+extern const std::vector<std::pair<Tickers, std::string>> CFTickersNameMap;
+
 /**
  * Keep adding histogram's here.
  * Any histogram should have value less than HISTOGRAM_ENUM_MAX
@@ -292,6 +384,8 @@ enum Histograms : uint32_t {
   DB_MULTIGET,
   READ_BLOCK_COMPACTION_MICROS,
   READ_BLOCK_GET_MICROS,
+  READ_BLOCK_GET_MICROS_FG,
+  READ_BLOCK_GET_MICROS_BG,
   WRITE_RAW_BLOCK_MICROS,
   STALL_L0_SLOWDOWN_COUNT,
   STALL_MEMTABLE_COMPACTION_COUNT,
@@ -300,6 +394,16 @@ enum Histograms : uint32_t {
   SOFT_RATE_LIMIT_DELAY_COUNT,
   NUM_FILES_IN_SINGLE_COMPACTION,
   DB_SEEK,
+  SEEK_ON_MEMTABLE_TIME,
+  SEEK_ON_L0_TIME_FG,
+  SEEK_ON_L1_TIME_FG,
+  SEEK_ON_L2_TIME_FG,
+  SEEK_ON_L3_TIME_FG,
+  SEEK_ON_L4_TIME_FG,
+  SEEK_ON_L5_TIME_FG,
+  SEEK_ON_L6_TIME_FG,
+  GET_ON_BLOB_TIME_FG,
+
   WRITE_STALL,
   SST_READ_MICROS,
   // The number of subcompactions actually scheduled during a compaction
@@ -330,6 +434,7 @@ enum Histograms : uint32_t {
 };
 
 extern const std::vector<std::pair<Histograms, std::string>> HistogramsNameMap;
+extern const std::vector<std::pair<Histograms, std::string>> CFHistogramsNameMap;
 
 struct HistogramData {
   double median;
@@ -390,11 +495,19 @@ class Statistics {
   virtual bool HistEnabledForType(uint32_t type) const {
     return type < HISTOGRAM_ENUM_MAX;
   }
+  const std::string& tag() const { return tag_; }
+  void setTag(const std::string& tag) { tag_ = tag; }
 
   StatsLevel stats_level_ = kExceptDetailedTimers;
+
+ private:
+  std::string tag_ = "default";
 };
 
 // Create a concrete DBStatistics object
 std::shared_ptr<Statistics> CreateDBStatistics();
+
+// Create a concrete DBStatistics object
+std::shared_ptr<Statistics> CreateDBStatistics(const std::string& tag);
 
 }  // namespace TERARKDB_NAMESPACE

@@ -141,40 +141,75 @@ Slice GetCacheKeyFromOffset(const char* cache_key_prefix,
 }
 
 Cache::Handle* GetEntryFromCache(Cache* block_cache, const Slice& key,
-                                 Tickers block_cache_miss_ticker,
-                                 Tickers block_cache_hit_ticker,
+                                 Tickers cf_block_cache_miss_ticker,
+                                 Tickers cf_block_cache_hit_ticker,
+                                 Tickers db_block_cache_miss_ticker,
+                                 Tickers db_block_cache_hit_ticker,
                                  uint64_t* block_cache_miss_stats,
                                  uint64_t* block_cache_hit_stats,
-                                 Statistics* statistics,
+                                 Statistics* db_statistics,
+                                 Statistics* cf_statistics,
                                  GetContext* get_context) {
-  auto cache_handle = block_cache->Lookup(key, statistics);
+  auto cache_handle = block_cache->Lookup(key, db_statistics);
   if (cache_handle != nullptr) {
     PERF_COUNTER_ADD(block_cache_hit_count, 1);
     if (get_context != nullptr) {
-      // overall cache hit
-      get_context->get_context_stats_.num_cache_hit++;
-      // total bytes read from cache
-      get_context->get_context_stats_.num_cache_bytes_read +=
-          block_cache->GetUsage(cache_handle);
-      // block-type specific cache hit
+      if(is_foreground_operation()){
+        // overall cache hit
+        get_context->get_context_stats_.num_cache_hit_fg++;
+        // total bytes read from cache
+        get_context->get_context_stats_.num_cache_bytes_read_fg +=
+            block_cache->GetUsage(cache_handle);
+        // block-type specific cache hit
+      }else{
+        // overall cache hit
+        get_context->get_context_stats_.num_cache_hit_bg++;
+        // total bytes read from cache
+        get_context->get_context_stats_.num_cache_bytes_read_bg +=
+            block_cache->GetUsage(cache_handle);
+        // block-type specific cache hit
+      }
+
       (*block_cache_hit_stats)++;
     } else {
-      // overall cache hit
-      RecordTick(statistics, BLOCK_CACHE_HIT);
-      // total bytes read from cache
-      RecordTick(statistics, BLOCK_CACHE_BYTES_READ,
-                 block_cache->GetUsage(cache_handle));
-      RecordTick(statistics, block_cache_hit_ticker);
+      if(is_foreground_operation()){
+        // overall cache hit
+        RecordTick(cf_statistics, BLOCK_CACHE_HIT_FG);
+        // total bytes read from cache
+        RecordTick(cf_statistics, BLOCK_CACHE_BYTES_READ_FG,
+                   block_cache->GetUsage(cache_handle));
+
+      }else{
+        // overall cache hit
+        RecordTick(cf_statistics, BLOCK_CACHE_HIT_BG);
+        // total bytes read from cache
+        RecordTick(cf_statistics, BLOCK_CACHE_BYTES_READ_BG,
+                   block_cache->GetUsage(cache_handle));
+      }
+      RecordTick(cf_statistics, cf_block_cache_hit_ticker);
+      RecordTick(db_statistics, db_block_cache_hit_ticker);
+      RecordTick(db_statistics, BLOCK_CACHE_HIT);
     }
   } else {
     if (get_context != nullptr) {
-      // overall cache miss
-      get_context->get_context_stats_.num_cache_miss++;
+      if(is_foreground_operation()){
+        // overall cache miss
+        get_context->get_context_stats_.num_cache_miss_fg++;
+      }else{
+        // overall cache miss
+        get_context->get_context_stats_.num_cache_miss_bg++;
+      }
       // block-type specific cache miss
       (*block_cache_miss_stats)++;
     } else {
-      RecordTick(statistics, BLOCK_CACHE_MISS);
-      RecordTick(statistics, block_cache_miss_ticker);
+      if(is_foreground_operation()){
+        RecordTick(cf_statistics, BLOCK_CACHE_MISS_FG);
+      }else{
+        RecordTick(cf_statistics, BLOCK_CACHE_MISS_BG);
+      }
+      RecordTick(cf_statistics, cf_block_cache_miss_ticker);
+      RecordTick(db_statistics, db_block_cache_miss_ticker);
+      RecordTick(db_statistics, BLOCK_CACHE_MISS);
     }
   }
 
@@ -1292,23 +1327,48 @@ Status BlockBasedTable::GetDataBlockFromCache(
   Status s;
   BlockContents* compressed_block = nullptr;
   Cache::Handle* block_cache_compressed_handle = nullptr;
-  Statistics* statistics = rep->ioptions.statistics;
+  Statistics* db_statistics = rep->ioptions.statistics;
+  Statistics* cf_statistics = rep->ioptions.cf_statistics;
 
   // Lookup uncompressed cache first
   if (block_cache != nullptr) {
-    block->cache_handle = GetEntryFromCache(
-        block_cache, block_cache_key,
-        is_index ? BLOCK_CACHE_INDEX_MISS : BLOCK_CACHE_DATA_MISS,
-        is_index ? BLOCK_CACHE_INDEX_HIT : BLOCK_CACHE_DATA_HIT,
-        get_context
-            ? (is_index ? &get_context->get_context_stats_.num_cache_index_miss
-                        : &get_context->get_context_stats_.num_cache_data_miss)
-            : nullptr,
-        get_context
-            ? (is_index ? &get_context->get_context_stats_.num_cache_index_hit
-                        : &get_context->get_context_stats_.num_cache_data_hit)
-            : nullptr,
-        statistics, get_context);
+    if(is_foreground_operation()){
+      block->cache_handle = GetEntryFromCache(
+          block_cache, block_cache_key,
+          is_index ? BLOCK_CACHE_INDEX_MISS_FG : BLOCK_CACHE_DATA_MISS_FG,
+          is_index ? BLOCK_CACHE_INDEX_HIT_FG : BLOCK_CACHE_DATA_HIT_FG,
+          is_index ? BLOCK_CACHE_INDEX_MISS : BLOCK_CACHE_DATA_MISS,
+          is_index ? BLOCK_CACHE_INDEX_HIT : BLOCK_CACHE_DATA_HIT,
+          get_context
+              ? (is_index
+                     ? (&get_context->get_context_stats_.num_cache_index_miss_fg)
+                     : &get_context->get_context_stats_.num_cache_data_miss_fg)
+              : nullptr,
+          get_context
+              ? (is_index
+                     ? (&get_context->get_context_stats_.num_cache_index_hit_fg)
+                     : (&get_context->get_context_stats_.num_cache_data_hit_fg))
+              : nullptr,
+          db_statistics, cf_statistics, get_context);
+    }else{
+      block->cache_handle = GetEntryFromCache(
+          block_cache, block_cache_key,
+          is_index ? BLOCK_CACHE_INDEX_MISS_BG : BLOCK_CACHE_DATA_MISS_BG,
+          is_index ? BLOCK_CACHE_INDEX_HIT_BG : BLOCK_CACHE_DATA_HIT_BG,
+          is_index ? BLOCK_CACHE_INDEX_MISS : BLOCK_CACHE_DATA_MISS,
+          is_index ? BLOCK_CACHE_INDEX_HIT : BLOCK_CACHE_DATA_HIT,
+          get_context
+              ? (is_index
+                     ? &get_context->get_context_stats_.num_cache_index_miss_bg
+                     : &get_context->get_context_stats_.num_cache_data_miss_bg)
+              : nullptr,
+          get_context
+              ? (is_index
+                     ? &get_context->get_context_stats_.num_cache_index_hit_bg
+                     : &get_context->get_context_stats_.num_cache_data_hit_bg)
+              : nullptr,
+          db_statistics,cf_statistics, get_context);
+    }
     if (block->cache_handle != nullptr) {
       block->value =
           reinterpret_cast<Block*>(block_cache->Value(block->cache_handle));
@@ -1329,12 +1389,12 @@ Status BlockBasedTable::GetDataBlockFromCache(
   // if we found in the compressed cache, then uncompress and insert into
   // uncompressed cache
   if (block_cache_compressed_handle == nullptr) {
-    RecordTick(statistics, BLOCK_CACHE_COMPRESSED_MISS);
+    RecordTick(db_statistics, BLOCK_CACHE_COMPRESSED_MISS);
     return s;
   }
 
   // found compressed block
-  RecordTick(statistics, BLOCK_CACHE_COMPRESSED_HIT);
+  RecordTick(db_statistics, BLOCK_CACHE_COMPRESSED_HIT);
   compressed_block = reinterpret_cast<BlockContents*>(
       block_cache_compressed->Value(block_cache_compressed_handle));
   CompressionType compression_type = compressed_block->get_compression_type();
@@ -1353,7 +1413,7 @@ Status BlockBasedTable::GetDataBlockFromCache(
     block->value =
         new Block(std::move(contents), rep->get_global_seqno(is_index),
                   read_amp_bytes_per_bit,
-                  statistics);  // uncompressed block
+                  db_statistics);  // uncompressed block
     if (block_cache != nullptr && block->value->own_bytes() &&
         read_options.fill_cache) {
       size_t charge = block->value->ApproximateMemoryUsage();
@@ -1364,34 +1424,83 @@ Status BlockBasedTable::GetDataBlockFromCache(
       block_cache->TEST_mark_as_data_block(block_cache_key, charge);
 #endif  // NDEBUG
       if (s.ok()) {
-        if (get_context != nullptr) {
-          get_context->get_context_stats_.num_cache_add++;
-          get_context->get_context_stats_.num_cache_bytes_write += charge;
-        } else {
-          RecordTick(statistics, BLOCK_CACHE_ADD);
-          RecordTick(statistics, BLOCK_CACHE_BYTES_WRITE, charge);
+        if(is_foreground_operation()){
+          if (get_context != nullptr) {
+            get_context->get_context_stats_.num_cache_add_fg++;
+            get_context->get_context_stats_.num_cache_bytes_write_fg += charge;
+          } else {
+            RecordTick(cf_statistics, BLOCK_CACHE_ADD_FG);
+            RecordTick(cf_statistics, BLOCK_CACHE_BYTES_WRITE_FG, charge);
+            RecordTick(db_statistics, BLOCK_CACHE_ADD);
+            RecordTick(db_statistics, BLOCK_CACHE_BYTES_WRITE, charge);
+          }
+        }else{
+          if (get_context != nullptr) {
+            get_context->get_context_stats_.num_cache_add_bg++;
+            get_context->get_context_stats_.num_cache_bytes_write_bg += charge;
+          } else {
+            RecordTick(cf_statistics, BLOCK_CACHE_ADD_BG);
+            RecordTick(cf_statistics, BLOCK_CACHE_BYTES_WRITE_BG, charge);
+            RecordTick(db_statistics, BLOCK_CACHE_ADD);
+            RecordTick(db_statistics, BLOCK_CACHE_BYTES_WRITE, charge);
+          }
         }
         if (is_index) {
-          if (get_context != nullptr) {
-            get_context->get_context_stats_.num_cache_index_add++;
-            get_context->get_context_stats_.num_cache_index_bytes_insert +=
-                charge;
-          } else {
-            RecordTick(statistics, BLOCK_CACHE_INDEX_ADD);
-            RecordTick(statistics, BLOCK_CACHE_INDEX_BYTES_INSERT, charge);
+          if(is_foreground_operation()){
+            if (get_context != nullptr) {
+              get_context->get_context_stats_.num_cache_index_add_fg++;
+              get_context->get_context_stats_.num_cache_index_bytes_insert_fg +=
+                  charge;
+            } else {
+              RecordTick(cf_statistics, BLOCK_CACHE_INDEX_ADD_FG);
+              RecordTick(cf_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT_FG, charge);
+              RecordTick(db_statistics, BLOCK_CACHE_INDEX_ADD);
+              RecordTick(db_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT, charge);
+            }
+          }else{
+            if (get_context != nullptr) {
+              get_context->get_context_stats_.num_cache_index_add_bg++;
+              get_context->get_context_stats_.num_cache_index_bytes_insert_bg +=
+                  charge;
+            } else {
+              RecordTick(cf_statistics, BLOCK_CACHE_INDEX_ADD_BG);
+              RecordTick(cf_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT_BG, charge);
+              RecordTick(db_statistics, BLOCK_CACHE_INDEX_ADD);
+              RecordTick(db_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT, charge);
+            }
           }
         } else {
-          if (get_context != nullptr) {
-            get_context->get_context_stats_.num_cache_data_add++;
-            get_context->get_context_stats_.num_cache_data_bytes_insert +=
-                charge;
-          } else {
-            RecordTick(statistics, BLOCK_CACHE_DATA_ADD);
-            RecordTick(statistics, BLOCK_CACHE_DATA_BYTES_INSERT, charge);
+          if(is_foreground_operation()){
+            if (get_context != nullptr) {
+              get_context->get_context_stats_.num_cache_data_add_fg++;
+              get_context->get_context_stats_.num_cache_data_bytes_insert_fg +=
+                  charge;
+            } else {
+              RecordTick(cf_statistics, BLOCK_CACHE_DATA_ADD_FG);
+              RecordTick(cf_statistics, BLOCK_CACHE_DATA_BYTES_INSERT_FG, charge);
+              RecordTick(db_statistics, BLOCK_CACHE_DATA_ADD);
+              RecordTick(db_statistics, BLOCK_CACHE_DATA_BYTES_INSERT, charge);
+            }
+          }else{
+            if (get_context != nullptr) {
+              get_context->get_context_stats_.num_cache_data_add_bg++;
+              get_context->get_context_stats_.num_cache_data_bytes_insert_bg +=
+                  charge;
+            } else {
+              RecordTick(cf_statistics, BLOCK_CACHE_DATA_ADD_BG);
+              RecordTick(cf_statistics, BLOCK_CACHE_DATA_BYTES_INSERT_BG, charge);
+              RecordTick(db_statistics, BLOCK_CACHE_DATA_ADD);
+              RecordTick(db_statistics, BLOCK_CACHE_DATA_BYTES_INSERT, charge);
+            }
           }
         }
       } else {
-        RecordTick(statistics, BLOCK_CACHE_ADD_FAILURES);
+        if(is_foreground_operation()){
+          RecordTick(cf_statistics, BLOCK_CACHE_ADD_FAILURES_FG);
+        }{
+          RecordTick(cf_statistics, BLOCK_CACHE_ADD_FAILURES_BG);
+        }
+        RecordTick(db_statistics, BLOCK_CACHE_ADD_FAILURES);
         delete block->value;
         block->value = nullptr;
       }
@@ -1418,7 +1527,8 @@ Status BlockBasedTable::PutDataBlockToCache(
   Status s;
   // Retrieve the uncompressed contents into a new buffer
   BlockContents uncompressed_block_contents;
-  Statistics* statistics = ioptions.statistics;
+  Statistics* db_statistics = ioptions.statistics;
+  Statistics* cf_statistics = ioptions.cf_statistics;
   if (raw_block_comp_type != kNoCompression) {
     UncompressionContext uncompression_ctx(raw_block_comp_type,
                                            compression_dict);
@@ -1434,7 +1544,7 @@ Status BlockBasedTable::PutDataBlockToCache(
   if (raw_block_comp_type != kNoCompression) {
     cached_block->value = new Block(std::move(uncompressed_block_contents),
                                     seq_no, read_amp_bytes_per_bit,
-                                    statistics);  // uncompressed block
+                                    db_statistics);  // uncompressed block
   } else {
     cached_block->value =
         new Block(std::move(*raw_block_contents), seq_no,
@@ -1460,9 +1570,9 @@ Status BlockBasedTable::PutDataBlockToCache(
         &DeleteCachedEntry<BlockContents>);
     if (s.ok()) {
       // Avoid the following code to delete this cached block.
-      RecordTick(statistics, BLOCK_CACHE_COMPRESSED_ADD);
+      RecordTick(db_statistics, BLOCK_CACHE_COMPRESSED_ADD);
     } else {
-      RecordTick(statistics, BLOCK_CACHE_COMPRESSED_ADD_FAILURES);
+      RecordTick(db_statistics, BLOCK_CACHE_COMPRESSED_ADD_FAILURES);
       delete block_cont_for_comp_cache;
     }
   }
@@ -1478,35 +1588,84 @@ Status BlockBasedTable::PutDataBlockToCache(
 #endif  // NDEBUG
     if (s.ok()) {
       assert(cached_block->cache_handle != nullptr);
-      if (get_context != nullptr) {
-        get_context->get_context_stats_.num_cache_add++;
-        get_context->get_context_stats_.num_cache_bytes_write += charge;
-      } else {
-        RecordTick(statistics, BLOCK_CACHE_ADD);
-        RecordTick(statistics, BLOCK_CACHE_BYTES_WRITE, charge);
+      if(is_foreground_operation()){
+        if (get_context != nullptr) {
+          get_context->get_context_stats_.num_cache_add_fg++;
+          get_context->get_context_stats_.num_cache_bytes_write_fg += charge;
+        } else {
+          RecordTick(cf_statistics, BLOCK_CACHE_ADD_FG);
+          RecordTick(cf_statistics, BLOCK_CACHE_BYTES_WRITE_FG, charge);
+          RecordTick(db_statistics, BLOCK_CACHE_ADD);
+          RecordTick(db_statistics, BLOCK_CACHE_BYTES_WRITE, charge);
+        }
+      }else{
+        if (get_context != nullptr) {
+          get_context->get_context_stats_.num_cache_add_bg++;
+          get_context->get_context_stats_.num_cache_bytes_write_bg += charge;
+        } else {
+          RecordTick(cf_statistics, BLOCK_CACHE_ADD_BG);
+          RecordTick(cf_statistics, BLOCK_CACHE_BYTES_WRITE_BG, charge);
+          RecordTick(db_statistics, BLOCK_CACHE_ADD);
+          RecordTick(db_statistics, BLOCK_CACHE_BYTES_WRITE, charge);
+        }
       }
       if (is_index) {
-        if (get_context != nullptr) {
-          get_context->get_context_stats_.num_cache_index_add++;
-          get_context->get_context_stats_.num_cache_index_bytes_insert +=
-              charge;
-        } else {
-          RecordTick(statistics, BLOCK_CACHE_INDEX_ADD);
-          RecordTick(statistics, BLOCK_CACHE_INDEX_BYTES_INSERT, charge);
+        if(is_foreground_operation()){
+          if (get_context != nullptr) {
+            get_context->get_context_stats_.num_cache_index_add_fg++;
+            get_context->get_context_stats_.num_cache_index_bytes_insert_fg +=
+                charge;
+          } else {
+            RecordTick(cf_statistics, BLOCK_CACHE_INDEX_ADD_FG);
+            RecordTick(cf_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT_FG, charge);
+            RecordTick(db_statistics, BLOCK_CACHE_INDEX_ADD);
+            RecordTick(db_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT, charge);
+          }
+        }else{
+          if (get_context != nullptr) {
+            get_context->get_context_stats_.num_cache_index_add_bg++;
+            get_context->get_context_stats_.num_cache_index_bytes_insert_bg +=
+                charge;
+          } else {
+            RecordTick(cf_statistics, BLOCK_CACHE_INDEX_ADD_BG);
+            RecordTick(cf_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT_BG, charge);
+            RecordTick(db_statistics, BLOCK_CACHE_INDEX_ADD);
+            RecordTick(db_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT, charge);
+          }
         }
       } else {
-        if (get_context != nullptr) {
-          get_context->get_context_stats_.num_cache_data_add++;
-          get_context->get_context_stats_.num_cache_data_bytes_insert += charge;
-        } else {
-          RecordTick(statistics, BLOCK_CACHE_DATA_ADD);
-          RecordTick(statistics, BLOCK_CACHE_DATA_BYTES_INSERT, charge);
+        if(is_foreground_operation()){
+          if (get_context != nullptr) {
+            get_context->get_context_stats_.num_cache_data_add_fg++;
+            get_context->get_context_stats_.num_cache_data_bytes_insert_fg += charge;
+          } else {
+            RecordTick(cf_statistics, BLOCK_CACHE_DATA_ADD_FG);
+            RecordTick(cf_statistics, BLOCK_CACHE_DATA_BYTES_INSERT_FG, charge);
+            RecordTick(db_statistics, BLOCK_CACHE_DATA_ADD);
+            RecordTick(db_statistics, BLOCK_CACHE_DATA_BYTES_INSERT, charge);
+          }
+        }else{
+          if (get_context != nullptr) {
+            get_context->get_context_stats_.num_cache_data_add_bg++;
+            get_context->get_context_stats_.num_cache_data_bytes_insert_bg += charge;
+          } else {
+            RecordTick(cf_statistics, BLOCK_CACHE_DATA_ADD_BG);
+            RecordTick(cf_statistics, BLOCK_CACHE_DATA_BYTES_INSERT_BG, charge);
+            RecordTick(db_statistics, BLOCK_CACHE_DATA_ADD);
+            RecordTick(db_statistics, BLOCK_CACHE_DATA_BYTES_INSERT, charge);
+          }
         }
       }
       assert(reinterpret_cast<Block*>(block_cache->Value(
                  cached_block->cache_handle)) == cached_block->value);
     } else {
-      RecordTick(statistics, BLOCK_CACHE_ADD_FAILURES);
+      if(is_foreground_operation()){
+        RecordTick(cf_statistics, BLOCK_CACHE_ADD_FAILURES_FG);
+
+      }else{
+        RecordTick(cf_statistics, BLOCK_CACHE_ADD_FAILURES_BG);
+      }
+      RecordTick(db_statistics, BLOCK_CACHE_ADD_FAILURES);
       delete cached_block->value;
       cached_block->value = nullptr;
     }
@@ -1624,14 +1783,29 @@ BlockBasedTable::CachableEntry<FilterBlockReader> BlockBasedTable::GetFilter(
   auto key = GetCacheKey(rep_->cache_key_prefix, rep_->cache_key_prefix_size,
                          filter_blk_handle, cache_key);
 
-  Statistics* statistics = rep_->ioptions.statistics;
-  auto cache_handle = GetEntryFromCache(
-      block_cache, key, BLOCK_CACHE_FILTER_MISS, BLOCK_CACHE_FILTER_HIT,
-      get_context ? &get_context->get_context_stats_.num_cache_filter_miss
-                  : nullptr,
-      get_context ? &get_context->get_context_stats_.num_cache_filter_hit
-                  : nullptr,
-      statistics, get_context);
+  Statistics* db_statistics = rep_->ioptions.statistics;
+  Statistics* cf_statistics = rep_->ioptions.cf_statistics;
+
+  Cache::Handle* cache_handle;
+  if(is_foreground_operation()){
+    cache_handle = GetEntryFromCache(
+        block_cache, key, BLOCK_CACHE_FILTER_MISS_FG, BLOCK_CACHE_FILTER_HIT_FG,
+        BLOCK_CACHE_FILTER_MISS, BLOCK_CACHE_FILTER_HIT,
+        get_context ? &get_context->get_context_stats_.num_cache_filter_miss_fg
+                    : nullptr,
+        get_context ? &get_context->get_context_stats_.num_cache_filter_hit_fg
+                    : nullptr,
+        db_statistics,cf_statistics, get_context);
+  }else{
+    cache_handle = GetEntryFromCache(
+        block_cache, key, BLOCK_CACHE_FILTER_MISS_BG, BLOCK_CACHE_FILTER_HIT_BG,
+        BLOCK_CACHE_FILTER_MISS, BLOCK_CACHE_FILTER_HIT,
+        get_context ? &get_context->get_context_stats_.num_cache_filter_miss_bg
+                    : nullptr,
+        get_context ? &get_context->get_context_stats_.num_cache_filter_hit_bg
+                    : nullptr,
+        db_statistics, cf_statistics, get_context);
+  }
 
   FilterBlockReader* filter = nullptr;
   if (cache_handle != nullptr) {
@@ -1651,20 +1825,48 @@ BlockBasedTable::CachableEntry<FilterBlockReader> BlockBasedTable::GetFilter(
               ? Cache::Priority::HIGH
               : Cache::Priority::LOW);
       if (s.ok()) {
-        if (get_context != nullptr) {
-          get_context->get_context_stats_.num_cache_add++;
-          get_context->get_context_stats_.num_cache_bytes_write += usage;
-          get_context->get_context_stats_.num_cache_filter_add++;
-          get_context->get_context_stats_.num_cache_filter_bytes_insert +=
-              usage;
-        } else {
-          RecordTick(statistics, BLOCK_CACHE_ADD);
-          RecordTick(statistics, BLOCK_CACHE_BYTES_WRITE, usage);
-          RecordTick(statistics, BLOCK_CACHE_FILTER_ADD);
-          RecordTick(statistics, BLOCK_CACHE_FILTER_BYTES_INSERT, usage);
+        if(is_foreground_operation()){
+          if (get_context != nullptr) {
+            get_context->get_context_stats_.num_cache_add_fg++;
+            get_context->get_context_stats_.num_cache_bytes_write_fg += usage;
+            get_context->get_context_stats_.num_cache_filter_add_fg++;
+            get_context->get_context_stats_.num_cache_filter_bytes_insert_fg +=
+                usage;
+          } else {
+            RecordTick(cf_statistics, BLOCK_CACHE_ADD_FG);
+            RecordTick(cf_statistics, BLOCK_CACHE_BYTES_WRITE_FG, usage);
+            RecordTick(cf_statistics, BLOCK_CACHE_FILTER_ADD_FG);
+            RecordTick(cf_statistics, BLOCK_CACHE_FILTER_BYTES_INSERT_FG, usage);
+            RecordTick(db_statistics, BLOCK_CACHE_ADD);
+            RecordTick(db_statistics, BLOCK_CACHE_BYTES_WRITE, usage);
+            RecordTick(db_statistics, BLOCK_CACHE_FILTER_ADD);
+            RecordTick(db_statistics, BLOCK_CACHE_FILTER_BYTES_INSERT, usage);
+          }
+        }else{
+          if (get_context != nullptr) {
+            get_context->get_context_stats_.num_cache_add_bg++;
+            get_context->get_context_stats_.num_cache_bytes_write_bg += usage;
+            get_context->get_context_stats_.num_cache_filter_add_bg++;
+            get_context->get_context_stats_.num_cache_filter_bytes_insert_bg +=
+                usage;
+          } else {
+            RecordTick(cf_statistics, BLOCK_CACHE_ADD_BG);
+            RecordTick(cf_statistics, BLOCK_CACHE_BYTES_WRITE_BG, usage);
+            RecordTick(cf_statistics, BLOCK_CACHE_FILTER_ADD_BG);
+            RecordTick(cf_statistics, BLOCK_CACHE_FILTER_BYTES_INSERT_BG, usage);
+            RecordTick(db_statistics, BLOCK_CACHE_ADD);
+            RecordTick(db_statistics, BLOCK_CACHE_BYTES_WRITE, usage);
+            RecordTick(db_statistics, BLOCK_CACHE_FILTER_ADD);
+            RecordTick(db_statistics, BLOCK_CACHE_FILTER_BYTES_INSERT, usage);
+          }
         }
       } else {
-        RecordTick(statistics, BLOCK_CACHE_ADD_FAILURES);
+        if(is_foreground_operation()){
+          RecordTick(cf_statistics, BLOCK_CACHE_ADD_FAILURES_FG);
+        }else{
+          RecordTick(cf_statistics, BLOCK_CACHE_ADD_FAILURES_BG);
+        }
+        RecordTick(db_statistics, BLOCK_CACHE_ADD_FAILURES);
         delete filter;
         return CachableEntry<FilterBlockReader>();
       }
@@ -1705,14 +1907,28 @@ InternalIteratorBase<BlockHandle>* BlockBasedTable::NewIndexIterator(
   auto key =
       GetCacheKeyFromOffset(rep_->cache_key_prefix, rep_->cache_key_prefix_size,
                             rep_->dummy_index_reader_offset, cache_key);
-  Statistics* statistics = rep_->ioptions.statistics;
-  auto cache_handle = GetEntryFromCache(
-      block_cache, key, BLOCK_CACHE_INDEX_MISS, BLOCK_CACHE_INDEX_HIT,
-      get_context ? &get_context->get_context_stats_.num_cache_index_miss
-                  : nullptr,
-      get_context ? &get_context->get_context_stats_.num_cache_index_hit
-                  : nullptr,
-      statistics, get_context);
+  Statistics* db_statistics = rep_->ioptions.statistics;
+  Statistics* cf_statistics = rep_->ioptions.cf_statistics;
+  Cache::Handle* cache_handle;
+  if(is_foreground_operation()){
+    cache_handle = GetEntryFromCache(
+        block_cache, key, BLOCK_CACHE_INDEX_MISS_FG, BLOCK_CACHE_INDEX_HIT_FG,
+        BLOCK_CACHE_INDEX_MISS, BLOCK_CACHE_INDEX_HIT,
+        get_context ? &get_context->get_context_stats_.num_cache_index_miss_fg
+                    : nullptr,
+        get_context ? &get_context->get_context_stats_.num_cache_index_hit_fg
+                    : nullptr,
+        db_statistics, cf_statistics, get_context);
+  }else{
+    cache_handle = GetEntryFromCache(
+        block_cache, key, BLOCK_CACHE_INDEX_MISS_BG, BLOCK_CACHE_INDEX_HIT_BG,
+        BLOCK_CACHE_INDEX_MISS, BLOCK_CACHE_INDEX_HIT,
+        get_context ? &get_context->get_context_stats_.num_cache_index_miss_bg
+                    : nullptr,
+        get_context ? &get_context->get_context_stats_.num_cache_index_hit_bg
+                    : nullptr,
+        db_statistics, cf_statistics, get_context);
+  }
 
   if (cache_handle == nullptr && no_io) {
     if (input_iter != nullptr) {
@@ -1748,20 +1964,46 @@ InternalIteratorBase<BlockHandle>* BlockBasedTable::NewIndexIterator(
     }
 
     if (s.ok()) {
-      if (get_context != nullptr) {
-        get_context->get_context_stats_.num_cache_add++;
-        get_context->get_context_stats_.num_cache_bytes_write += charge;
-      } else {
-        RecordTick(statistics, BLOCK_CACHE_ADD);
-        RecordTick(statistics, BLOCK_CACHE_BYTES_WRITE, charge);
+      if(is_foreground_operation()){
+        if (get_context != nullptr) {
+          get_context->get_context_stats_.num_cache_add_fg++;
+          get_context->get_context_stats_.num_cache_bytes_write_fg += charge;
+        } else {
+          RecordTick(cf_statistics, BLOCK_CACHE_ADD_FG);
+          RecordTick(cf_statistics, BLOCK_CACHE_BYTES_WRITE_FG, charge);
+          RecordTick(db_statistics, BLOCK_CACHE_ADD);
+          RecordTick(db_statistics, BLOCK_CACHE_BYTES_WRITE, charge);
+        }
+        RecordTick(cf_statistics, BLOCK_CACHE_INDEX_ADD_FG);
+        RecordTick(cf_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT_FG, charge);
+        RecordTick(db_statistics, BLOCK_CACHE_INDEX_ADD);
+        RecordTick(db_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT, charge);
+      }else{
+        if (get_context != nullptr) {
+          get_context->get_context_stats_.num_cache_add_bg++;
+          get_context->get_context_stats_.num_cache_bytes_write_bg += charge;
+        } else {
+          RecordTick(cf_statistics, BLOCK_CACHE_ADD_BG);
+          RecordTick(cf_statistics, BLOCK_CACHE_BYTES_WRITE_BG, charge);
+          RecordTick(db_statistics, BLOCK_CACHE_ADD);
+          RecordTick(db_statistics, BLOCK_CACHE_BYTES_WRITE, charge);
+        }
+        RecordTick(cf_statistics, BLOCK_CACHE_INDEX_ADD_BG);
+        RecordTick(cf_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT_BG, charge);
+        RecordTick(db_statistics, BLOCK_CACHE_INDEX_ADD);
+        RecordTick(db_statistics, BLOCK_CACHE_INDEX_BYTES_INSERT, charge);
       }
-      RecordTick(statistics, BLOCK_CACHE_INDEX_ADD);
-      RecordTick(statistics, BLOCK_CACHE_INDEX_BYTES_INSERT, charge);
+
     } else {
       if (index_reader != nullptr) {
         delete index_reader;
       }
-      RecordTick(statistics, BLOCK_CACHE_ADD_FAILURES);
+      if(is_foreground_operation()){
+        RecordTick(cf_statistics, BLOCK_CACHE_ADD_FAILURES_FG);
+      }else{
+        RecordTick(cf_statistics, BLOCK_CACHE_ADD_FAILURES_BG);
+      }
+      RecordTick(db_statistics, BLOCK_CACHE_ADD_FAILURES);
       // make sure if something goes wrong, index_reader shall remain intact.
       if (input_iter != nullptr) {
         input_iter->Invalidate(s);
@@ -1831,6 +2073,9 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(
     {
       StopWatch sw(rep->ioptions.env, rep->ioptions.statistics,
                    READ_BLOCK_GET_MICROS);
+      Histograms ticker = is_foreground_operation()?  READ_BLOCK_GET_MICROS_FG : READ_BLOCK_GET_MICROS_BG;
+      StopWatch sw_cf(rep->ioptions.env, rep->ioptions.cf_statistics,
+                      ticker);
       s = ReadBlockFromFile(
           rep->file.get(), prefetch_buffer, rep->footer, ro, handle,
           &block_value, rep->ioptions,
@@ -1954,6 +2199,8 @@ Status BlockBasedTable::MaybeReadBlockAndLoadToCache(
       BlockContents raw_block_contents;
       {
         StopWatch sw(rep->ioptions.env, statistics, READ_BLOCK_GET_MICROS);
+        Histograms ticker = is_foreground_operation()?  READ_BLOCK_GET_MICROS_FG : READ_BLOCK_GET_MICROS_BG;
+        StopWatch sw_cf(rep->ioptions.env, rep->ioptions.cf_statistics, ticker);
         BlockFetcher block_fetcher(
             rep->file.get(), prefetch_buffer, rep->footer, ro, handle,
             &raw_block_contents, rep->ioptions,
@@ -2010,13 +2257,31 @@ BlockBasedTable::PartitionedIndexIteratorState::NewSecondaryIterator(
   // This is a possible scenario since block cache might not have had space
   // for the partition
   if (block != block_map_->end()) {
-    PERF_COUNTER_ADD(block_cache_hit_count, 1);
-    RecordTick(rep->ioptions.statistics, BLOCK_CACHE_INDEX_HIT);
-    RecordTick(rep->ioptions.statistics, BLOCK_CACHE_HIT);
-    Cache* block_cache = rep->table_options.block_cache.get();
-    assert(block_cache);
-    RecordTick(rep->ioptions.statistics, BLOCK_CACHE_BYTES_READ,
-               block_cache->GetUsage(block->second.cache_handle));
+    if (is_foreground_operation()) {
+      PERF_COUNTER_ADD(block_cache_hit_count, 1);
+      RecordTick(rep->ioptions.cf_statistics, BLOCK_CACHE_INDEX_HIT_FG);
+      RecordTick(rep->ioptions.cf_statistics, BLOCK_CACHE_HIT_FG);
+      Cache* block_cache = rep->table_options.block_cache.get();
+      assert(block_cache);
+      RecordTick(rep->ioptions.cf_statistics, BLOCK_CACHE_BYTES_READ_FG,
+                 block_cache->GetUsage(block->second.cache_handle));
+      RecordTick(rep->ioptions.statistics, BLOCK_CACHE_INDEX_HIT);
+      RecordTick(rep->ioptions.statistics, BLOCK_CACHE_HIT);
+      RecordTick(rep->ioptions.statistics, BLOCK_CACHE_BYTES_READ,
+                 block_cache->GetUsage(block->second.cache_handle));
+    } else {
+      PERF_COUNTER_ADD(block_cache_hit_count, 1);
+      RecordTick(rep->ioptions.cf_statistics, BLOCK_CACHE_INDEX_HIT_BG);
+      RecordTick(rep->ioptions.cf_statistics, BLOCK_CACHE_HIT_BG);
+      Cache* block_cache = rep->table_options.block_cache.get();
+      assert(block_cache);
+      RecordTick(rep->ioptions.cf_statistics, BLOCK_CACHE_BYTES_READ_BG,
+                 block_cache->GetUsage(block->second.cache_handle));
+      RecordTick(rep->ioptions.statistics, BLOCK_CACHE_INDEX_HIT);
+      RecordTick(rep->ioptions.statistics, BLOCK_CACHE_HIT);
+      RecordTick(rep->ioptions.statistics, BLOCK_CACHE_BYTES_READ,
+                 block_cache->GetUsage(block->second.cache_handle));
+    }
     Statistics* kNullStats = nullptr;
     // We don't return pinned datat from index blocks, so no need
     // to set `block_contents_pinned`.
@@ -2158,12 +2423,19 @@ bool BlockBasedTable::PrefixMayMatch(
 template <class TBlockIter, typename TValue>
 void BlockBasedTableIteratorBase<TBlockIter, TValue>::Seek(
     const Slice& target) {
+  Histograms htype = HISTOGRAM_ENUM_MAX;
+  if(is_foreground_operation()){
+    assert(SEEK_ON_L0_TIME_FG + level_ <= SEEK_ON_L6_TIME_FG);
+    assert(SEEK_ON_L0_TIME_FG + level_ >= SEEK_ON_L0_TIME_FG);
+    htype = static_cast<Histograms>(SEEK_ON_L0_TIME_FG + level_);
+  }
   is_out_of_bound_ = false;
   if (!CheckPrefixMayMatch(target)) {
     ResetDataIter();
     return;
   }
 
+  StopWatch sw(env_, statistics_, htype);
   SavePrevIndexValue();
 
   index_iter_->Seek(target);
@@ -2189,11 +2461,18 @@ void BlockBasedTableIteratorBase<TBlockIter, TValue>::Seek(
 template <class TBlockIter, typename TValue>
 void BlockBasedTableIteratorBase<TBlockIter, TValue>::SeekForPrev(
     const Slice& target) {
+  Histograms htype = HISTOGRAM_ENUM_MAX;
+  if(is_foreground_operation()){
+    assert(SEEK_ON_L0_TIME_FG + level_ <= SEEK_ON_L6_TIME_FG);
+    assert(SEEK_ON_L0_TIME_FG + level_ >= SEEK_ON_L0_TIME_FG);
+    htype = static_cast<Histograms>(SEEK_ON_L0_TIME_FG + level_);
+  }
   is_out_of_bound_ = false;
   if (!CheckPrefixMayMatch(target)) {
     ResetDataIter();
     return;
   }
+  StopWatch sw(env_, statistics_, htype);
 
   SavePrevIndexValue();
 
@@ -2232,6 +2511,13 @@ void BlockBasedTableIteratorBase<TBlockIter, TValue>::SeekForPrev(
 
 template <class TBlockIter, typename TValue>
 void BlockBasedTableIteratorBase<TBlockIter, TValue>::SeekToFirst() {
+  Histograms htype = HISTOGRAM_ENUM_MAX;
+  if(is_foreground_operation()){
+    assert(SEEK_ON_L0_TIME_FG + level_ <= SEEK_ON_L6_TIME_FG);
+    assert(SEEK_ON_L0_TIME_FG + level_ >= SEEK_ON_L0_TIME_FG);
+    htype = static_cast<Histograms>(SEEK_ON_L0_TIME_FG + level_);
+  }
+  StopWatch sw(env_, statistics_, htype);
   is_out_of_bound_ = false;
   SavePrevIndexValue();
   index_iter_->SeekToFirst();
@@ -2246,6 +2532,13 @@ void BlockBasedTableIteratorBase<TBlockIter, TValue>::SeekToFirst() {
 
 template <class TBlockIter, typename TValue>
 void BlockBasedTableIteratorBase<TBlockIter, TValue>::SeekToLast() {
+  Histograms htype = HISTOGRAM_ENUM_MAX;
+  if(is_foreground_operation()){
+    assert(SEEK_ON_L0_TIME_FG + level_ <= SEEK_ON_L6_TIME_FG);
+    assert(SEEK_ON_L0_TIME_FG + level_ >= SEEK_ON_L0_TIME_FG);
+    htype = static_cast<Histograms>(SEEK_ON_L0_TIME_FG + level_);
+  }
+  StopWatch sw(env_, statistics_, htype);
   is_out_of_bound_ = false;
   SavePrevIndexValue();
   index_iter_->SeekToLast();
@@ -2401,7 +2694,8 @@ InternalIterator* BlockBasedTable::NewIterator(
         !skip_filters && !read_options.total_order_seek &&
             prefix_extractor != nullptr,
         need_upper_bound_check, prefix_extractor, kIsNotIndex,
-        true /*key_includes_seq*/, for_compaction);
+        true /*key_includes_seq*/, true, for_compaction, rep_->ioptions.env,
+        rep_->ioptions.cf_statistics, rep_->level);
   } else {
     auto* mem = arena->AllocateAligned(
         sizeof(BlockBasedTableIterator<DataBlockIter, LazyBuffer>));
@@ -2411,7 +2705,8 @@ InternalIterator* BlockBasedTable::NewIterator(
         !skip_filters && !read_options.total_order_seek &&
             prefix_extractor != nullptr,
         need_upper_bound_check, prefix_extractor, kIsNotIndex,
-        true /*key_includes_seq*/, for_compaction);
+        true /*key_includes_seq*/, true, for_compaction, rep_->ioptions.env,
+        rep_->ioptions.cf_statistics, rep_->level);
   }
 }
 
@@ -2462,6 +2757,12 @@ Status BlockBasedTable::Get(const ReadOptions& read_options, const Slice& key,
                             const SliceTransform* prefix_extractor,
                             bool skip_filters) {
   assert(key.size() >= 8);  // key must be internal key
+  Histograms htype = HISTOGRAM_ENUM_MAX;
+  if (is_foreground_operation() && rep_->level == -1) {
+    htype = GET_ON_BLOB_TIME_FG;
+  }
+  StopWatch blob_sw(rep_->ioptions.env, rep_->ioptions.cf_statistics, htype);
+
   Status s;
   const bool no_io = read_options.read_tier == kBlockCacheTier;
   CachableEntry<FilterBlockReader> filter_entry;

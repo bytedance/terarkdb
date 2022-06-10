@@ -190,6 +190,8 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
 
   std::shared_ptr<CompactionDispatcher> compaction_dispatcher = nullptr;
 
+  // If non-null, then we should collect metrics about lavakv engine operations
+  std::shared_ptr<Statistics> engine_statistics = nullptr;
   // -------------------
   // Parameters that affect performance
 

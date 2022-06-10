@@ -1255,6 +1255,8 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
     : env_(vset->env_),
       cfd_(column_family_data),
       info_log_((cfd_ == nullptr) ? nullptr : cfd_->ioptions()->info_log),
+      statistics_((cfd_ == nullptr) ? nullptr
+                                    : cfd_->ioptions()->cf_statistics),
       db_statistics_((cfd_ == nullptr) ? nullptr
                                        : cfd_->ioptions()->statistics),
       table_cache_((cfd_ == nullptr) ? nullptr : cfd_->table_cache()),
@@ -1282,16 +1284,17 @@ Status Version::fetch_buffer(LazyBuffer* buffer) const {
   uint64_t sequence = context->data[2];
   auto pair = *reinterpret_cast<DependenceMap::value_type*>(context->data[3]);
   if (pair.second->fd.GetNumber() != pair.first) {
-    RecordTick(db_statistics_, READ_BLOB_INVALID);
+    RecordTick(statistics_, READ_BLOB_INVALID);
   } else {
-    RecordTick(db_statistics_, READ_BLOB_VALID);
+    RecordTick(statistics_, READ_BLOB_VALID);
   }
   bool value_found = false;
   SequenceNumber context_seq;
   GetContext get_context(cfd_->internal_comparator().user_comparator(), nullptr,
                          cfd_->ioptions()->info_log, db_statistics_,
-                         GetContext::kNotFound, user_key, buffer, &value_found,
-                         nullptr, nullptr, nullptr, env_, &context_seq);
+                         statistics_, GetContext::kNotFound, user_key, buffer,
+                         &value_found, nullptr, nullptr, nullptr, env_,
+                         &context_seq);
   IterKey iter_key;
   iter_key.SetInternalKey(user_key, sequence, kValueTypeForSeek);
   auto s = table_cache_->Get(
@@ -1354,9 +1357,9 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
 
   GetContext get_context(
       user_comparator(), merge_operator_, info_log_, db_statistics_,
-      status->ok() ? GetContext::kNotFound : GetContext::kMerge, user_key,
-      value, value_found, merge_context, this, max_covering_tombstone_seq,
-      this->env_, seq, callback);
+      statistics_, status->ok() ? GetContext::kNotFound : GetContext::kMerge,
+      user_key, value, value_found, merge_context, this,
+      max_covering_tombstone_seq, this->env_, seq, callback);
 
   FilePicker fp(
       storage_info_.files_, user_key, ikey, &storage_info_.level_files_brief_,
@@ -1396,8 +1399,7 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
 
     // report the counters before returning
     if (get_context.State() != GetContext::kNotFound &&
-        get_context.State() != GetContext::kMerge &&
-        db_statistics_ != nullptr) {
+        get_context.State() != GetContext::kMerge && statistics_ != nullptr) {
       get_context.ReportCounters();
     }
     switch (get_context.State()) {
@@ -1409,11 +1411,11 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
         break;
       case GetContext::kFound:
         if (fp.GetHitFileLevel() == 0) {
-          RecordTick(db_statistics_, GET_HIT_L0);
+          RecordTick(statistics_, GET_HIT_L0);
         } else if (fp.GetHitFileLevel() == 1) {
-          RecordTick(db_statistics_, GET_HIT_L1);
+          RecordTick(statistics_, GET_HIT_L1);
         } else if (fp.GetHitFileLevel() >= 2) {
-          RecordTick(db_statistics_, GET_HIT_L2_AND_UP);
+          RecordTick(statistics_, GET_HIT_L2_AND_UP);
         }
         PERF_COUNTER_BY_LEVEL_ADD(user_key_return_count, 1,
                                   fp.GetHitFileLevel());
@@ -1429,7 +1431,7 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
     f = fp.GetNextFile();
   }
 
-  if (db_statistics_ != nullptr) {
+  if (statistics_ != nullptr) {
     get_context.ReportCounters();
   }
   if (GetContext::kMerge == get_context.State()) {
@@ -1441,9 +1443,9 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
     // merge_operands are in saver and we hit the beginning of the key history
     // do a final merge of nullptr and operands;
     if (value != nullptr) {
-      *status = MergeHelper::TimedFullMerge(
-          merge_operator_, user_key, nullptr, merge_context->GetOperands(),
-          value, info_log_, db_statistics_, env_, true);
+      *status = MergeHelper::TimedFullMerge(merge_operator_, user_key, nullptr,
+                                            merge_context->GetOperands(), value,
+                                            info_log_, statistics_, env_, true);
       if (status->ok()) {
         value->pin(LazyBufferPinLevel::Internal);
       }
@@ -1463,8 +1465,8 @@ void Version::GetKey(const Slice& user_key, const Slice& ikey, Status* status,
   bool value_found;
   GetContext get_context(cfd_->internal_comparator().user_comparator(), nullptr,
                          cfd_->ioptions()->info_log, db_statistics_,
-                         GetContext::kNotFound, user_key, value, &value_found,
-                         nullptr, nullptr, nullptr, env_, seq);
+                         statistics_, GetContext::kNotFound, user_key, value,
+                         &value_found, nullptr, nullptr, nullptr, env_, seq);
   ReadOptions options;
 
   FilePicker fp(

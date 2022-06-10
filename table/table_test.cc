@@ -1908,8 +1908,9 @@ TEST_P(BlockBasedTableTest, BlockCacheDisabledTest) {
 
   {
     GetContext get_context(options.comparator, nullptr, nullptr, nullptr,
-                           GetContext::kNotFound, Slice(), nullptr, nullptr,
-                           nullptr, nullptr, nullptr, nullptr, nullptr);
+                           nullptr, GetContext::kNotFound, Slice(), nullptr,
+                           nullptr, nullptr, nullptr, nullptr, nullptr,
+                           nullptr);
     // a hack that just to trigger BlockBasedTable::GetFilter.
     reader->Get(ReadOptions(), "non-exist-key", &get_context,
                 moptions.prefix_extractor.get());
@@ -2078,7 +2079,7 @@ TEST_P(BlockBasedTableTest, FilterBlockInBlockCache) {
   reader = dynamic_cast<BlockBasedTable*>(c3.GetTableReader());
   ASSERT_TRUE(!reader->TEST_filter_block_preloaded());
   LazyBuffer value;
-  GetContext get_context(options.comparator, nullptr, nullptr, nullptr,
+  GetContext get_context(options.comparator, nullptr, nullptr, nullptr, nullptr,
                          GetContext::kNotFound, user_key, &value, nullptr,
                          nullptr, nullptr, nullptr, nullptr, nullptr);
   ASSERT_OK(reader->Get(ReadOptions(), internal_key.Encode(), &get_context,
@@ -2165,8 +2166,9 @@ TEST_P(BlockBasedTableTest, BlockReadCountTest) {
       auto reader = c.GetTableReader();
       LazyBuffer value;
       GetContext get_context(options.comparator, nullptr, nullptr, nullptr,
-                             GetContext::kNotFound, user_key, &value, nullptr,
-                             nullptr, nullptr, nullptr, nullptr, nullptr);
+                             nullptr, GetContext::kNotFound, user_key, &value,
+                             nullptr, nullptr, nullptr, nullptr, nullptr,
+                             nullptr);
       get_perf_context()->Reset();
       ASSERT_OK(reader->Get(ReadOptions(), encoded_key, &get_context,
                             moptions.prefix_extractor.get()));
@@ -2187,9 +2189,10 @@ TEST_P(BlockBasedTableTest, BlockReadCountTest) {
       encoded_key = internal_key.Encode().ToString();
 
       value.clear();
-      get_context = GetContext(options.comparator, nullptr, nullptr, nullptr,
-                               GetContext::kNotFound, user_key, &value, nullptr,
-                               nullptr, nullptr, nullptr, nullptr, nullptr);
+      get_context =
+          GetContext(options.comparator, nullptr, nullptr, nullptr, nullptr,
+                     GetContext::kNotFound, user_key, &value, nullptr, nullptr,
+                     nullptr, nullptr, nullptr, nullptr);
       get_perf_context()->Reset();
       ASSERT_OK(reader->Get(ReadOptions(), encoded_key, &get_context,
                             moptions.prefix_extractor.get()));
@@ -2326,9 +2329,9 @@ TEST_P(BlockBasedTableTest, NoObjectInCacheAfterTableClose) {
                     dynamic_cast<BlockBasedTable*>(c.GetTableReader());
                 LazyBuffer value;
                 GetContext get_context(opt.comparator, nullptr, nullptr,
-                                       nullptr, GetContext::kNotFound, user_key,
-                                       &value, nullptr, nullptr, nullptr,
-                                       nullptr, nullptr, nullptr);
+                                       nullptr, nullptr, GetContext::kNotFound,
+                                       user_key, &value, nullptr, nullptr,
+                                       nullptr, nullptr, nullptr, nullptr);
                 InternalKey ikey(user_key, 0, kTypeValue);
                 auto s = table_reader->Get(ReadOptions(), key, &get_context,
                                            moptions.prefix_extractor.get());
@@ -3595,8 +3598,9 @@ TEST_P(BlockBasedTableTest, DataBlockHashIndex) {
         LazyBuffer value;
         std::string user_key = ExtractUserKey(kv.first).ToString();
         GetContext get_context(options.comparator, nullptr, nullptr, nullptr,
-                               GetContext::kNotFound, user_key, &value, nullptr,
-                               nullptr, nullptr, nullptr, nullptr, nullptr);
+                               nullptr, GetContext::kNotFound, user_key, &value,
+                               nullptr, nullptr, nullptr, nullptr, nullptr,
+                               nullptr);
         ASSERT_OK(reader->Get(ro, kv.first, &get_context,
                               moptions.prefix_extractor.get()));
         ASSERT_OK(value.fetch());
@@ -3622,8 +3626,9 @@ TEST_P(BlockBasedTableTest, DataBlockHashIndex) {
       } else {  // Search using Get()
         LazyBuffer value;
         GetContext get_context(options.comparator, nullptr, nullptr, nullptr,
-                               GetContext::kNotFound, user_key, &value, nullptr,
-                               nullptr, nullptr, nullptr, nullptr, nullptr);
+                               nullptr, GetContext::kNotFound, user_key, &value,
+                               nullptr, nullptr, nullptr, nullptr, nullptr,
+                               nullptr);
         ASSERT_OK(reader->Get(ro, encoded_key, &get_context,
                               moptions.prefix_extractor.get()));
         ASSERT_EQ(get_context.State(), GetContext::kNotFound);

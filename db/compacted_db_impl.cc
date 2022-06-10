@@ -49,7 +49,7 @@ size_t CompactedDBImpl::FindFile(const Slice& key) {
 
 Status CompactedDBImpl::Get(const ReadOptions& options, ColumnFamilyHandle*,
                             const Slice& key, LazyBuffer* value) {
-  GetContext get_context(user_comparator_, nullptr, nullptr, nullptr,
+  GetContext get_context(user_comparator_, nullptr, nullptr, nullptr,nullptr,
                          GetContext::kNotFound, key, value, nullptr, nullptr,
                          version_, nullptr, nullptr);
   SequenceNumber snapshot;
@@ -97,8 +97,9 @@ std::vector<Status> CompactedDBImpl::MultiGet(
       std::string& value = (*values)[idx];
       LazyBuffer lazy_val(&value);
       GetContext get_context(user_comparator_, nullptr, nullptr, nullptr,
-                             GetContext::kNotFound, keys[idx], &lazy_val,
-                             nullptr, nullptr, version_, nullptr, nullptr);
+                             nullptr, GetContext::kNotFound, keys[idx],
+                             &lazy_val, nullptr, nullptr, version_, nullptr,
+                             nullptr);
       LookupKey lkey(keys[idx], kMaxSequenceNumber);
       r->Get(options, lkey.internal_key(), &get_context, nullptr);
       if (get_context.State() == GetContext::kFound) {

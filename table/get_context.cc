@@ -34,16 +34,18 @@ static void DeleteEntry(const Slice& /*key*/, void* value) {
 
 GetContext::GetContext(const Comparator* ucmp,
                        const MergeOperator* merge_operator, Logger* logger,
-                       Statistics* statistics, GetState init_state,
-                       const Slice& user_key, LazyBuffer* lazy_val,
-                       bool* value_found, MergeContext* merge_context,
+                       Statistics* db_statistics, Statistics* cf_statistics,
+                       GetState init_state, const Slice& user_key,
+                       LazyBuffer* lazy_val, bool* value_found,
+                       MergeContext* merge_context,
                        const SeparateHelper* separate_helper,
                        SequenceNumber* _max_covering_tombstone_seq, Env* env,
                        SequenceNumber* seq, ReadCallback* callback)
     : ucmp_(ucmp),
       merge_operator_(merge_operator),
       logger_(logger),
-      statistics_(statistics),
+      cf_statistics_(cf_statistics),
+      db_statistics_(db_statistics),
       state_(init_state),
       user_key_(user_key),
       lazy_val_(lazy_val),
@@ -77,71 +79,209 @@ void GetContext::MarkKeyMayExist() {
 }
 
 void GetContext::ReportCounters() {
-  if (get_context_stats_.num_cache_hit > 0) {
-    RecordTick(statistics_, BLOCK_CACHE_HIT, get_context_stats_.num_cache_hit);
+  if (get_context_stats_.num_cache_hit_fg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_HIT_FG,
+               get_context_stats_.num_cache_hit_fg);
+    RecordTick(db_statistics_, BLOCK_CACHE_HIT,
+               get_context_stats_.num_cache_hit_fg);
   }
-  if (get_context_stats_.num_cache_index_hit > 0) {
-    RecordTick(statistics_, BLOCK_CACHE_INDEX_HIT,
-               get_context_stats_.num_cache_index_hit);
+  if (get_context_stats_.num_cache_index_hit_fg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_INDEX_HIT_FG,
+               get_context_stats_.num_cache_index_hit_fg);
+    RecordTick(db_statistics_, BLOCK_CACHE_INDEX_HIT,
+               get_context_stats_.num_cache_index_hit_fg);
   }
-  if (get_context_stats_.num_cache_data_hit > 0) {
-    RecordTick(statistics_, BLOCK_CACHE_DATA_HIT,
-               get_context_stats_.num_cache_data_hit);
+  if (get_context_stats_.num_cache_data_hit_fg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_DATA_HIT_FG,
+               get_context_stats_.num_cache_data_hit_fg);
+    RecordTick(db_statistics_, BLOCK_CACHE_DATA_HIT,
+               get_context_stats_.num_cache_data_hit_fg);
   }
-  if (get_context_stats_.num_cache_filter_hit > 0) {
-    RecordTick(statistics_, BLOCK_CACHE_FILTER_HIT,
-               get_context_stats_.num_cache_filter_hit);
+  if (get_context_stats_.num_cache_filter_hit_fg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_FILTER_HIT_FG,
+               get_context_stats_.num_cache_filter_hit_fg);
+    RecordTick(db_statistics_, BLOCK_CACHE_FILTER_HIT,
+               get_context_stats_.num_cache_filter_hit_fg);
   }
-  if (get_context_stats_.num_cache_index_miss > 0) {
-    RecordTick(statistics_, BLOCK_CACHE_INDEX_MISS,
-               get_context_stats_.num_cache_index_miss);
+  if (get_context_stats_.num_cache_index_miss_fg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_INDEX_MISS_FG,
+               get_context_stats_.num_cache_index_miss_fg);
+    RecordTick(db_statistics_, BLOCK_CACHE_INDEX_MISS,
+               get_context_stats_.num_cache_index_miss_fg);
   }
-  if (get_context_stats_.num_cache_filter_miss > 0) {
-    RecordTick(statistics_, BLOCK_CACHE_FILTER_MISS,
-               get_context_stats_.num_cache_filter_miss);
+  if (get_context_stats_.num_cache_filter_miss_fg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_FILTER_MISS_FG,
+               get_context_stats_.num_cache_filter_miss_fg);
+    RecordTick(db_statistics_, BLOCK_CACHE_FILTER_MISS,
+               get_context_stats_.num_cache_filter_miss_fg);
   }
-  if (get_context_stats_.num_cache_data_miss > 0) {
-    RecordTick(statistics_, BLOCK_CACHE_DATA_MISS,
-               get_context_stats_.num_cache_data_miss);
+  if (get_context_stats_.num_cache_data_miss_fg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_DATA_MISS_FG,
+               get_context_stats_.num_cache_data_miss_fg);
+    RecordTick(db_statistics_, BLOCK_CACHE_DATA_MISS,
+               get_context_stats_.num_cache_data_miss_fg);
   }
-  if (get_context_stats_.num_cache_bytes_read > 0) {
-    RecordTick(statistics_, BLOCK_CACHE_BYTES_READ,
-               get_context_stats_.num_cache_bytes_read);
+  if (get_context_stats_.num_cache_bytes_read_fg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_BYTES_READ_FG,
+               get_context_stats_.num_cache_bytes_read_fg);
+    RecordTick(db_statistics_, BLOCK_CACHE_BYTES_READ,
+               get_context_stats_.num_cache_bytes_read_fg);
   }
-  if (get_context_stats_.num_cache_miss > 0) {
-    RecordTick(statistics_, BLOCK_CACHE_MISS,
-               get_context_stats_.num_cache_miss);
+  if (get_context_stats_.num_cache_miss_fg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_MISS_FG,
+               get_context_stats_.num_cache_miss_fg);
+    RecordTick(db_statistics_, BLOCK_CACHE_MISS,
+               get_context_stats_.num_cache_miss_fg);
   }
-  if (get_context_stats_.num_cache_add > 0) {
-    RecordTick(statistics_, BLOCK_CACHE_ADD, get_context_stats_.num_cache_add);
+  if (get_context_stats_.num_cache_add_fg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_ADD_FG,
+               get_context_stats_.num_cache_add_fg);
+    RecordTick(db_statistics_, BLOCK_CACHE_ADD,
+               get_context_stats_.num_cache_add_fg);
   }
-  if (get_context_stats_.num_cache_bytes_write > 0) {
-    RecordTick(statistics_, BLOCK_CACHE_BYTES_WRITE,
-               get_context_stats_.num_cache_bytes_write);
+  if (get_context_stats_.num_cache_bytes_write_fg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_BYTES_WRITE_FG,
+               get_context_stats_.num_cache_bytes_write_fg);
+    RecordTick(db_statistics_, BLOCK_CACHE_BYTES_WRITE,
+               get_context_stats_.num_cache_bytes_write_fg);
   }
-  if (get_context_stats_.num_cache_index_add > 0) {
-    RecordTick(statistics_, BLOCK_CACHE_INDEX_ADD,
-               get_context_stats_.num_cache_index_add);
+  if (get_context_stats_.num_cache_index_add_fg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_INDEX_ADD_FG,
+               get_context_stats_.num_cache_index_add_fg);
+    RecordTick(db_statistics_, BLOCK_CACHE_INDEX_ADD,
+               get_context_stats_.num_cache_index_add_fg);
   }
-  if (get_context_stats_.num_cache_index_bytes_insert > 0) {
-    RecordTick(statistics_, BLOCK_CACHE_INDEX_BYTES_INSERT,
-               get_context_stats_.num_cache_index_bytes_insert);
+  if (get_context_stats_.num_cache_index_bytes_insert_fg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_INDEX_BYTES_INSERT_FG,
+               get_context_stats_.num_cache_index_bytes_insert_fg);
+    RecordTick(db_statistics_, BLOCK_CACHE_INDEX_BYTES_INSERT,
+               get_context_stats_.num_cache_index_bytes_insert_fg);
   }
-  if (get_context_stats_.num_cache_data_add > 0) {
-    RecordTick(statistics_, BLOCK_CACHE_DATA_ADD,
-               get_context_stats_.num_cache_data_add);
+  if (get_context_stats_.num_cache_data_add_fg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_DATA_ADD_FG,
+               get_context_stats_.num_cache_data_add_fg);
+    RecordTick(db_statistics_, BLOCK_CACHE_DATA_ADD,
+               get_context_stats_.num_cache_data_add_fg);
   }
-  if (get_context_stats_.num_cache_data_bytes_insert > 0) {
-    RecordTick(statistics_, BLOCK_CACHE_DATA_BYTES_INSERT,
-               get_context_stats_.num_cache_data_bytes_insert);
+  if (get_context_stats_.num_cache_data_bytes_insert_fg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_DATA_BYTES_INSERT_FG,
+               get_context_stats_.num_cache_data_bytes_insert_fg);
+    RecordTick(db_statistics_, BLOCK_CACHE_DATA_BYTES_INSERT,
+               get_context_stats_.num_cache_data_bytes_insert_fg);
   }
-  if (get_context_stats_.num_cache_filter_add > 0) {
-    RecordTick(statistics_, BLOCK_CACHE_FILTER_ADD,
-               get_context_stats_.num_cache_filter_add);
+  if (get_context_stats_.num_cache_filter_add_fg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_FILTER_ADD_FG,
+               get_context_stats_.num_cache_filter_add_fg);
+    RecordTick(db_statistics_, BLOCK_CACHE_FILTER_ADD,
+               get_context_stats_.num_cache_filter_add_fg);
   }
-  if (get_context_stats_.num_cache_filter_bytes_insert > 0) {
-    RecordTick(statistics_, BLOCK_CACHE_FILTER_BYTES_INSERT,
-               get_context_stats_.num_cache_filter_bytes_insert);
+  if (get_context_stats_.num_cache_filter_bytes_insert_fg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_FILTER_BYTES_INSERT_FG,
+               get_context_stats_.num_cache_filter_bytes_insert_fg);
+    RecordTick(db_statistics_, BLOCK_CACHE_FILTER_BYTES_INSERT,
+               get_context_stats_.num_cache_filter_bytes_insert_fg);
+  }
+  if (get_context_stats_.num_cache_hit_bg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_HIT_BG,
+               get_context_stats_.num_cache_hit_bg);
+    RecordTick(db_statistics_, BLOCK_CACHE_HIT,
+               get_context_stats_.num_cache_hit_bg);
+  }
+  if (get_context_stats_.num_cache_index_hit_bg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_INDEX_HIT_BG,
+               get_context_stats_.num_cache_index_hit_bg);
+    RecordTick(db_statistics_, BLOCK_CACHE_INDEX_HIT,
+               get_context_stats_.num_cache_index_hit_bg);
+  }
+  if (get_context_stats_.num_cache_data_hit_bg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_DATA_HIT_BG,
+               get_context_stats_.num_cache_data_hit_bg);
+    RecordTick(db_statistics_, BLOCK_CACHE_DATA_HIT,
+               get_context_stats_.num_cache_data_hit_bg);
+  }
+  if (get_context_stats_.num_cache_filter_hit_bg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_FILTER_HIT_BG,
+               get_context_stats_.num_cache_filter_hit_bg);
+    RecordTick(db_statistics_, BLOCK_CACHE_FILTER_HIT,
+               get_context_stats_.num_cache_filter_hit_bg);
+  }
+  if (get_context_stats_.num_cache_index_miss_bg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_INDEX_MISS_BG,
+               get_context_stats_.num_cache_index_miss_bg);
+    RecordTick(db_statistics_, BLOCK_CACHE_INDEX_MISS,
+               get_context_stats_.num_cache_index_miss_bg);
+  }
+  if (get_context_stats_.num_cache_filter_miss_bg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_FILTER_MISS_BG,
+               get_context_stats_.num_cache_filter_miss_bg);
+    RecordTick(db_statistics_, BLOCK_CACHE_FILTER_MISS,
+               get_context_stats_.num_cache_filter_miss_bg);
+  }
+  if (get_context_stats_.num_cache_data_miss_bg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_DATA_MISS_BG,
+               get_context_stats_.num_cache_data_miss_bg);
+    RecordTick(db_statistics_, BLOCK_CACHE_DATA_MISS,
+               get_context_stats_.num_cache_data_miss_bg);
+  }
+  if (get_context_stats_.num_cache_bytes_read_bg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_BYTES_READ_BG,
+               get_context_stats_.num_cache_bytes_read_bg);
+    RecordTick(db_statistics_, BLOCK_CACHE_BYTES_READ,
+               get_context_stats_.num_cache_bytes_read_bg);
+  }
+  if (get_context_stats_.num_cache_miss_bg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_MISS_BG,
+               get_context_stats_.num_cache_miss_bg);
+    RecordTick(db_statistics_, BLOCK_CACHE_MISS,
+               get_context_stats_.num_cache_miss_bg);
+  }
+  if (get_context_stats_.num_cache_add_bg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_ADD_BG,
+               get_context_stats_.num_cache_add_bg);
+    RecordTick(db_statistics_, BLOCK_CACHE_ADD,
+               get_context_stats_.num_cache_add_bg);
+  }
+  if (get_context_stats_.num_cache_bytes_write_bg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_BYTES_WRITE_BG,
+               get_context_stats_.num_cache_bytes_write_bg);
+    RecordTick(db_statistics_, BLOCK_CACHE_BYTES_WRITE,
+               get_context_stats_.num_cache_bytes_write_bg);
+  }
+  if (get_context_stats_.num_cache_index_add_bg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_INDEX_ADD_BG,
+               get_context_stats_.num_cache_index_add_bg);
+    RecordTick(db_statistics_, BLOCK_CACHE_INDEX_ADD,
+               get_context_stats_.num_cache_index_add_bg);
+  }
+  if (get_context_stats_.num_cache_index_bytes_insert_bg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_INDEX_BYTES_INSERT_BG,
+               get_context_stats_.num_cache_index_bytes_insert_bg);
+    RecordTick(db_statistics_, BLOCK_CACHE_INDEX_BYTES_INSERT,
+               get_context_stats_.num_cache_index_bytes_insert_bg);
+  }
+  if (get_context_stats_.num_cache_data_add_bg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_DATA_ADD_BG,
+               get_context_stats_.num_cache_data_add_bg);
+    RecordTick(db_statistics_, BLOCK_CACHE_DATA_ADD,
+               get_context_stats_.num_cache_data_add_bg);
+  }
+  if (get_context_stats_.num_cache_data_bytes_insert_bg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_DATA_BYTES_INSERT_BG,
+               get_context_stats_.num_cache_data_bytes_insert_bg);
+    RecordTick(db_statistics_, BLOCK_CACHE_DATA_BYTES_INSERT,
+               get_context_stats_.num_cache_data_bytes_insert_bg);
+  }
+  if (get_context_stats_.num_cache_filter_add_bg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_FILTER_ADD_BG,
+               get_context_stats_.num_cache_filter_add_bg);
+    RecordTick(db_statistics_, BLOCK_CACHE_FILTER_ADD,
+               get_context_stats_.num_cache_filter_add_bg);
+  }
+  if (get_context_stats_.num_cache_filter_bytes_insert_bg > 0) {
+    RecordTick(cf_statistics_, BLOCK_CACHE_FILTER_BYTES_INSERT_BG,
+               get_context_stats_.num_cache_filter_bytes_insert_bg);
+    RecordTick(db_statistics_, BLOCK_CACHE_FILTER_BYTES_INSERT,
+               get_context_stats_.num_cache_filter_bytes_insert_bg);
   }
 }
 
@@ -227,7 +367,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
             if (OK(MergeHelper::TimedFullMerge(
                     merge_operator_, user_key_, &value,
                     merge_context_->GetOperands(), lazy_val_, logger_,
-                    statistics_, env_))) {
+                    db_statistics_, env_))) {
               lazy_val_->pin(LazyBufferPinLevel::Internal);
             }
           }
@@ -248,7 +388,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
             if (OK(MergeHelper::TimedFullMerge(
                     merge_operator_, user_key_, nullptr,
                     merge_context_->GetOperands(), lazy_val_, logger_,
-                    statistics_, env_))) {
+                    db_statistics_, env_))) {
               lazy_val_->pin(LazyBufferPinLevel::Internal);
             }
           }
@@ -288,7 +428,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
             if (OK(MergeHelper::TimedFullMerge(
                     merge_operator_, user_key_, nullptr,
                     merge_context_->GetOperands(), lazy_val_, logger_,
-                    statistics_, env_))) {
+                    db_statistics_, env_))) {
               lazy_val_->pin(LazyBufferPinLevel::Internal);
             }
           }

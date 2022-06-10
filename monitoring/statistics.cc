@@ -73,13 +73,6 @@ const std::vector<std::pair<Tickers, std::string>> TickersNameMap = {
     {NUMBER_KEYS_UPDATED, "rocksdb.number.keys.updated"},
     {BYTES_WRITTEN, "rocksdb.bytes.written"},
     {BYTES_READ, "rocksdb.bytes.read"},
-    {NUMBER_DB_SEEK, "rocksdb.number.db.seek"},
-    {NUMBER_DB_NEXT, "rocksdb.number.db.next"},
-    {NUMBER_DB_PREV, "rocksdb.number.db.prev"},
-    {NUMBER_DB_SEEK_FOUND, "rocksdb.number.db.seek.found"},
-    {NUMBER_DB_NEXT_FOUND, "rocksdb.number.db.next.found"},
-    {NUMBER_DB_PREV_FOUND, "rocksdb.number.db.prev.found"},
-    {ITER_BYTES_READ, "rocksdb.db.iter.bytes.read"},
     {NO_FILE_CLOSES, "rocksdb.no.file.closes"},
     {NO_FILE_OPENS, "rocksdb.no.file.opens"},
     {NO_FILE_ERRORS, "rocksdb.no.file.errors"},
@@ -97,7 +90,6 @@ const std::vector<std::pair<Tickers, std::string>> TickersNameMap = {
     {NUMBER_MERGE_FAILURES, "rocksdb.number.merge.failures"},
     {BLOOM_FILTER_PREFIX_CHECKED, "rocksdb.bloom.filter.prefix.checked"},
     {BLOOM_FILTER_PREFIX_USEFUL, "rocksdb.bloom.filter.prefix.useful"},
-    {NUMBER_OF_RESEEKS_IN_ITERATION, "rocksdb.number.reseeks.iteration"},
     {GET_UPDATES_SINCE_CALLS, "rocksdb.getupdatessince.calls"},
     {BLOCK_CACHE_COMPRESSED_MISS, "rocksdb.block.cachecompressed.miss"},
     {BLOCK_CACHE_COMPRESSED_HIT, "rocksdb.block.cachecompressed.hit"},
@@ -142,9 +134,79 @@ const std::vector<std::pair<Tickers, std::string>> TickersNameMap = {
     {READ_BLOB_VALID, "rocksdb.num.read.blob_valid"},
     {READ_BLOB_INVALID, "rocksdb.num.read.blob_invalid"},
 };
+const std::vector<std::pair<Tickers, std::string>> CFTickersNameMap = {
+    {NUMBER_DB_SEEK, "rocksdb.number.db.seek"},
+    {NUMBER_DB_NEXT, "rocksdb.number.db.next"},
+    {NUMBER_DB_PREV, "rocksdb.number.db.prev"},
+    {NUMBER_DB_SEEK_FOUND, "rocksdb.number.db.seek.found"},
+    {NUMBER_DB_NEXT_FOUND, "rocksdb.number.db.next.found"},
+    {NUMBER_DB_PREV_FOUND, "rocksdb.number.db.prev.found"},
+    {ITER_BYTES_READ, "rocksdb.db.iter.bytes.read"},
+    {NUMBER_OF_RESEEKS_IN_ITERATION, "rocksdb.number.reseeks.iteration"},
+    {MEMTABLE_HIT, "rocksdb.memtable.hit"},
+    {MEMTABLE_MISS, "rocksdb.memtable.miss"},
+    {BLOCK_CACHE_MISS_FG, "rocksdb.block.cache.miss.fg"},
+    {BLOCK_CACHE_HIT_FG, "rocksdb.block.cache.hit.fg"},
+    {BLOCK_CACHE_ADD_FG, "rocksdb.block.cache.add.fg"},
+    {BLOCK_CACHE_ADD_FAILURES_FG, "rocksdb.block.cache.add.failures.fg"},
+    {BLOCK_CACHE_INDEX_MISS_FG, "rocksdb.block.cache.index.miss.fg"},
+    {BLOCK_CACHE_INDEX_HIT_FG, "rocksdb.block.cache.index.hit.fg"},
+    {BLOCK_CACHE_INDEX_ADD_FG, "rocksdb.block.cache.index.add.fg"},
+    {BLOCK_CACHE_INDEX_BYTES_INSERT_FG, "rocksdb.block.cache.index.bytes.insert.fg"},
+    {BLOCK_CACHE_INDEX_BYTES_EVICT_FG, "rocksdb.block.cache.index.bytes.evict.fg"},
+    {BLOCK_CACHE_FILTER_MISS_FG, "rocksdb.block.cache.filter.miss.fg"},
+    {BLOCK_CACHE_FILTER_HIT_FG, "rocksdb.block.cache.filter.hit.fg"},
+    {BLOCK_CACHE_FILTER_ADD_FG, "rocksdb.block.cache.filter.add.fg"},
+    {BLOCK_CACHE_FILTER_BYTES_INSERT_FG,
+        "rocksdb.block.cache.filter.bytes.insert.fg"},
+    {BLOCK_CACHE_FILTER_BYTES_EVICT_FG, "rocksdb.block.cache.filter.bytes.evict.fg"},
+    {BLOCK_CACHE_DATA_MISS_FG, "rocksdb.block.cache.data.miss.fg"},
+    {BLOCK_CACHE_DATA_HIT_FG, "rocksdb.block.cache.data.hit.fg"},
+    {BLOCK_CACHE_DATA_ADD_FG, "rocksdb.block.cache.data.add.fg"},
+    {BLOCK_CACHE_DATA_BYTES_INSERT_FG, "rocksdb.block.cache.data.bytes.insert.fg"},
+    {BLOCK_CACHE_BYTES_READ_FG, "rocksdb.block.cache.bytes.read.fg"},
+    {BLOCK_CACHE_BYTES_WRITE_FG, "rocksdb.block.cache.bytes.write.fg"},
+
+    {BLOCK_CACHE_MISS_BG, "rocksdb.block.cache.miss.bg"},
+    {BLOCK_CACHE_HIT_BG, "rocksdb.block.cache.hit.bg"},
+    {BLOCK_CACHE_ADD_BG, "rocksdb.block.cache.add.bg"},
+    {BLOCK_CACHE_ADD_FAILURES_BG, "rocksdb.block.cache.add.failures.bg"},
+    {BLOCK_CACHE_INDEX_MISS_BG, "rocksdb.block.cache.index.miss.bg"},
+    {BLOCK_CACHE_INDEX_HIT_BG, "rocksdb.block.cache.index.hit.bg"},
+    {BLOCK_CACHE_INDEX_ADD_BG, "rocksdb.block.cache.index.add.bg"},
+    {BLOCK_CACHE_INDEX_BYTES_INSERT_BG, "rocksdb.block.cache.index.bytes.insert.bg"},
+    {BLOCK_CACHE_INDEX_BYTES_EVICT_BG, "rocksdb.block.cache.index.bytes.evict.bg"},
+    {BLOCK_CACHE_FILTER_MISS_BG, "rocksdb.block.cache.filter.miss.bg"},
+    {BLOCK_CACHE_FILTER_HIT_BG, "rocksdb.block.cache.filter.hit.bg"},
+    {BLOCK_CACHE_FILTER_ADD_BG, "rocksdb.block.cache.filter.add.bg"},
+    {BLOCK_CACHE_FILTER_BYTES_INSERT_BG,
+        "rocksdb.block.cache.filter.bytes.insert.bg"},
+    {BLOCK_CACHE_FILTER_BYTES_EVICT_BG, "rocksdb.block.cache.filter.bytes.evict.bg"},
+    {BLOCK_CACHE_DATA_MISS_BG, "rocksdb.block.cache.data.miss.bg"},
+    {BLOCK_CACHE_DATA_HIT_BG, "rocksdb.block.cache.data.hit.bg"},
+    {BLOCK_CACHE_DATA_ADD_BG, "rocksdb.block.cache.data.add.bg"},
+    {BLOCK_CACHE_DATA_BYTES_INSERT_BG, "rocksdb.block.cache.data.bytes.insert.bg"},
+    {BLOCK_CACHE_BYTES_READ_BG, "rocksdb.block.cache.bytes.read.bg"},
+    {BLOCK_CACHE_BYTES_WRITE_BG, "rocksdb.block.cache.bytes.write.bg"}
+};
+
+const std::vector<std::pair<Histograms, std::string>> CFHistogramsNameMap = {
+    {DB_GET, "rocksdb.db.get.micros"},
+    {DB_SEEK, "rocksdb.db.seek.micros"},
+    {READ_BLOCK_GET_MICROS_FG, "rocksdb.read.block.get.micros.fg"},
+    {READ_BLOCK_GET_MICROS_BG, "rocksdb.read.block.get.micros.bg"},
+    {SEEK_ON_MEMTABLE_TIME, "rocksdb.seek.memtable.micros"},
+    {SEEK_ON_L0_TIME_FG, "rocksdb.seek.l0.micros.fg"},
+    {SEEK_ON_L1_TIME_FG, "rocksdb.seek.l1.micros.fg"},
+    {SEEK_ON_L2_TIME_FG, "rocksdb.seek.l2.micros.fg"},
+    {SEEK_ON_L3_TIME_FG, "rocksdb.seek.l3.micros.fg"},
+    {SEEK_ON_L4_TIME_FG, "rocksdb.seek.l4.micros.fg"},
+    {SEEK_ON_L5_TIME_FG, "rocksdb.seek.l5.micros.fg"},
+    {SEEK_ON_L6_TIME_FG, "rocksdb.seek.l6.micros.fg"},
+    {GET_ON_BLOB_TIME_FG,"rocksdb.get.blob.micros.fg"}
+};
 
 const std::vector<std::pair<Histograms, std::string>> HistogramsNameMap = {
-    {DB_GET, "rocksdb.db.get.micros"},
     {DB_WRITE, "rocksdb.db.write.micros"},
     {COMPACTION_TIME, "rocksdb.compaction.times.micros"},
     {SUBCOMPACTION_SETUP_TIME, "rocksdb.subcompaction.setup.times.micros"},
@@ -163,7 +225,6 @@ const std::vector<std::pair<Histograms, std::string>> HistogramsNameMap = {
     {HARD_RATE_LIMIT_DELAY_COUNT, "rocksdb.hard.rate.limit.delay.count"},
     {SOFT_RATE_LIMIT_DELAY_COUNT, "rocksdb.soft.rate.limit.delay.count"},
     {NUM_FILES_IN_SINGLE_COMPACTION, "rocksdb.numfiles.in.singlecompaction"},
-    {DB_SEEK, "rocksdb.db.seek.micros"},
     {WRITE_STALL, "rocksdb.db.write.stall"},
     {SST_READ_MICROS, "rocksdb.sst.read.micros"},
     {NUM_SUBCOMPACTIONS_SCHEDULED, "rocksdb.num.subcompactions.scheduled"},
@@ -184,6 +245,12 @@ const std::vector<std::pair<Histograms, std::string>> HistogramsNameMap = {
 
 std::shared_ptr<Statistics> CreateDBStatistics() {
   return std::make_shared<StatisticsImpl>(nullptr);
+}
+
+std::shared_ptr<Statistics> CreateDBStatistics(const std::string& tag) {
+  std::shared_ptr<Statistics> res = std::make_shared<StatisticsImpl>(nullptr);
+  res->setTag(tag);
+  return res;
 }
 
 StatisticsImpl::StatisticsImpl(std::shared_ptr<Statistics> stats)
@@ -306,32 +373,42 @@ std::string StatisticsImpl::ToString() const {
   MutexLock lock(&aggregate_lock_);
   std::string res;
   res.reserve(20000);
-  for (const auto& t : TickersNameMap) {
-    assert(t.first < TICKER_ENUM_MAX);
-    char buffer[kTmpStrBufferSize];
-    snprintf(buffer, kTmpStrBufferSize, "%s COUNT : %" PRIu64 "\n",
-             t.second.c_str(), getTickerCountLocked(t.first));
-    res.append(buffer);
-  }
-  for (const auto& h : HistogramsNameMap) {
-    assert(h.first < HISTOGRAM_ENUM_MAX);
-    char buffer[kTmpStrBufferSize];
-    HistogramData hData;
-    getHistogramImplLocked(h.first)->Data(&hData);
-    // don't handle failures - buffer should always be big enough and arguments
-    // should be provided correctly
-    int ret = snprintf(
-        buffer, kTmpStrBufferSize,
-        "%s P50 : %f P95 : %f P99 : %f P99.9 : %f P100 : %f COUNT : %" PRIu64
-        " SUM : %" PRIu64 "\n",
-        h.second.c_str(), hData.median, hData.percentile95, hData.percentile99,
-        hData.percentile999, hData.max, hData.count, hData.sum);
-    if (ret < 0 || ret >= kTmpStrBufferSize) {
-      assert(false);
-      continue;
+  auto ticker = [&](const std::vector<std::pair<Tickers, std::string>> & TickersNameMap){
+    for (const auto& t : TickersNameMap) {
+      assert(t.first < TICKER_ENUM_MAX);
+      char buffer[kTmpStrBufferSize];
+      snprintf(buffer, kTmpStrBufferSize, "%s COUNT : %" PRIu64 "\n",
+               t.second.c_str(), getTickerCountLocked(t.first));
+      res.append(buffer);
     }
-    res.append(buffer);
-  }
+  };
+  ticker(TickersNameMap);
+  ticker(CFTickersNameMap);
+
+  auto histogram = [&](const std::vector<std::pair<Histograms, std::string>> &HistogramsNameMap){
+    for (const auto& h : HistogramsNameMap) {
+      assert(h.first < HISTOGRAM_ENUM_MAX);
+      char buffer[kTmpStrBufferSize];
+      HistogramData hData;
+      getHistogramImplLocked(h.first)->Data(&hData);
+      // don't handle failures - buffer should always be big enough and arguments
+      // should be provided correctly
+      int ret = snprintf(
+          buffer, kTmpStrBufferSize,
+          "%s P50 : %f P95 : %f P99 : %f P99.9 : %f P100 : %f COUNT : %" PRIu64
+          " SUM : %" PRIu64 "\n",
+          h.second.c_str(), hData.median, hData.percentile95, hData.percentile99,
+          hData.percentile999, hData.max, hData.count, hData.sum);
+      if (ret < 0 || ret >= kTmpStrBufferSize) {
+        assert(false);
+        continue;
+      }
+      res.append(buffer);
+    }
+  };
+  histogram(HistogramsNameMap);
+  histogram(CFHistogramsNameMap);
+
   res.shrink_to_fit();
   return res;
 }
