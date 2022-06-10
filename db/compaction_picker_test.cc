@@ -791,7 +791,7 @@ TEST_F(CompactionPickerTest, ParentIndexResetBug) {
   Add(2, 7U, "400", "500");  // <- being compacted
 
   vstorage_->LevelFiles(2)[3]->being_compacted = true;
-  vstorage_->LevelFiles(0)[0]->marked_for_compaction = true;
+  vstorage_->LevelFiles(0)[0]->marked_for_compaction = FileMetaData::kMarkedFromUser;
 
   UpdateVersionStorageInfo();
 
@@ -927,8 +927,8 @@ TEST_F(CompactionPickerTest, OverlappingUserKeys6) {
   Add(2, 6U, "460", "600", 1U, 0, 0);
   Add(2, 7U, "600", "700", 1U, 0, 0);
 
-  vstorage_->LevelFiles(1)[0]->marked_for_compaction = true;
-  vstorage_->LevelFiles(1)[1]->marked_for_compaction = true;
+  vstorage_->LevelFiles(1)[0]->marked_for_compaction = FileMetaData::kMarkedFromUser;
+  vstorage_->LevelFiles(1)[1]->marked_for_compaction = FileMetaData::kMarkedFromUser;
 
   UpdateVersionStorageInfo();
 
@@ -1307,7 +1307,7 @@ TEST_F(CompactionPickerTest, EstimateCompactionBytesNeededDynamicLevel) {
 
   // Merging to the second last level: (5200 / 2100 + 1) * 1100
   // Merging to the last level: (50000 / 6300 + 1) * 1300
-  ASSERT_EQ(2100u + 3823u + 11617u,
+  ASSERT_EQ(2100u + 3823u,
             vstorage_->estimated_compaction_needed_bytes());
 }
 
