@@ -2741,7 +2741,7 @@ TEST_P(DBCompactionTestWithParam, DISABLED_CompactFilesOnLevelCompaction) {
   }
 }
 
-TEST_P(DBCompactionTestWithParam, PartialCompactionFailure) {
+TEST_P(DBCompactionTestWithParam, DISABLED_PartialCompactionFailure) {
   Options options;
   const int kKeySize = 16;
   const int kKvSize = 1000;
