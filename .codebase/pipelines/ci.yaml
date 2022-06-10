@@ -51,7 +51,10 @@ jobs:
           - cmake -E make_directory build || true
           - cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=`pwd` -DWITH_COVERAGE=ON -DCMAKE_BUILD_TYPE=Debug -DWITH_TESTS=ON -DWITH_TOOLS=ON -DWITH_TERARK_ZIP=ON -DWITH_BYTEDANCE_METRICS=ON -DBYTEDANCE_METRICS_PATH=`pwd`/../third-party/metrics2-cmake
           - make -j4
-          - ctest -E "db_block_cache_test|db_compaction_test|transaction_test|db_test2" -j $(nproc) -V
+          - ctest -R "db_compaction_test" -V
+          - ctest -R "db_test2" -V
+          - ctest -R "db_sst_test" -V
+          - ctest -E "db_block_cache_test|transaction_test|db_flush_test|db_compaction_test|db_test2|db_sst_test" -j $(nproc) -V
           - GCC_VERSION=`gcc -dumpversion | awk -F '.' '{print $1}')`
           - lcov --gcov-tool /usr/bin/gcov-$GCC_VERSION --directory . --capture --output-file code_coverage.info
           - genhtml code_coverage.info --output=cov_html

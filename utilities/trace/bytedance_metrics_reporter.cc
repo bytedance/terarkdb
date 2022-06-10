@@ -1,7 +1,9 @@
 #include "bytedance_metrics_reporter.h"
 
 #include <cassert>
+#include <memory>
 #include <mutex>
+#include <vector>
 #ifdef WITH_BYTEDANCE_METRICS
 #include "metrics.h"
 #endif
@@ -17,29 +19,32 @@ static const char default_namespace[] = "terarkdb.engine.stats";
 #ifdef WITH_BYTEDANCE_METRICS
 static std::mutex metrics_mtx;
 static std::atomic<bool> metrics_init{false};
+static std::mutex metrics_thread_id_mutex;
+static std::shared_ptr<std::vector<bool>> metrics_thread_id_pool(
+    new std::vector<bool>());
 
 static int GetThreadID() {
-  static std::mutex mutex;
-  static std::vector<bool> pool;
   static __thread int id;
 
   struct ID {
+    std::shared_ptr<std::vector<bool>> pool_ptr;
     ID() {
       id = 0;
-      std::lock_guard<std::mutex> guard(mutex);
-      for (const auto& empty : pool) {
+      std::lock_guard<std::mutex> guard(metrics_thread_id_mutex);
+      pool_ptr = metrics_thread_id_pool;
+      for (const auto& empty : *metrics_thread_id_pool.get()) {
         if (empty) {
-          pool[id] = false;
+          (*pool_ptr)[id] = false;
           return;
         }
         ++id;
       }
-      pool.emplace_back();
+      metrics_thread_id_pool->emplace_back();
     }
 
     ~ID() {
-      std::lock_guard<std::mutex> guard(mutex);
-      pool[id] = true;
+      std::lock_guard<std::mutex> guard(metrics_thread_id_mutex);
+      (*pool_ptr)[id] = true;
     }
   };
   static thread_local ID _;
