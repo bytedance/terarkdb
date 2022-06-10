@@ -215,7 +215,7 @@ TEST_F(VersionStorageInfoTest, MaxBytesForLevelDynamic) {
   Add(3, 5U, "5", "7", 300U);
   vstorage_.CalculateBaseBytes(ioptions_, mutable_cf_options_);
   ASSERT_EQ(1, logger_->log_count);
-  ASSERT_EQ(vstorage_.MaxBytesForLevel(4), 1005U);
+  ASSERT_EQ(vstorage_.MaxBytesForLevel(4), 1000U);
   ASSERT_EQ(vstorage_.MaxBytesForLevel(3), 1000U);
   ASSERT_EQ(vstorage_.base_level(), 3);
 
@@ -224,9 +224,9 @@ TEST_F(VersionStorageInfoTest, MaxBytesForLevelDynamic) {
   logger_->log_count = 0;
   vstorage_.CalculateBaseBytes(ioptions_, mutable_cf_options_);
   ASSERT_EQ(1, logger_->log_count);
-  ASSERT_GT(vstorage_.MaxBytesForLevel(4), 1005U);
-  ASSERT_GT(vstorage_.MaxBytesForLevel(3), 1005U);
-  ASSERT_EQ(vstorage_.MaxBytesForLevel(2), 1005U);
+  ASSERT_GT(vstorage_.MaxBytesForLevel(4), 1000U);
+  ASSERT_GT(vstorage_.MaxBytesForLevel(3), 1000U);
+  ASSERT_EQ(vstorage_.MaxBytesForLevel(2), 1000U);
   ASSERT_EQ(vstorage_.MaxBytesForLevel(1), 1000U);
   ASSERT_EQ(vstorage_.base_level(), 1);
 }
@@ -262,10 +262,10 @@ TEST_F(VersionStorageInfoTest, MaxBytesForLevelDynamicLargeLevel) {
   Add(5, 6U, "1", "2", 3000U * kOneGB);
 
   vstorage_.CalculateBaseBytes(ioptions_, mutable_cf_options_);
-  ASSERT_EQ(vstorage_.MaxBytesForLevel(5), 3000U * kOneGB);
-  ASSERT_EQ(vstorage_.MaxBytesForLevel(4), 300U * kOneGB);
-  ASSERT_EQ(vstorage_.MaxBytesForLevel(3), 30U * kOneGB);
-  ASSERT_EQ(vstorage_.MaxBytesForLevel(2), 10U * kOneGB);
+  ASSERT_EQ(vstorage_.MaxBytesForLevel(5), 2999999999889);
+  ASSERT_EQ(vstorage_.MaxBytesForLevel(4), 299999999989);
+  ASSERT_EQ(vstorage_.MaxBytesForLevel(3), 29999999999);
+  ASSERT_EQ(vstorage_.MaxBytesForLevel(2), 10000000000);
   ASSERT_EQ(vstorage_.base_level(), 2);
   ASSERT_EQ(0, logger_->log_count);
 }
@@ -289,11 +289,11 @@ TEST_F(VersionStorageInfoTest, MaxBytesForLevelDynamicWithLargeL0_1) {
   ASSERT_EQ(0, logger_->log_count);
   ASSERT_EQ(2, vstorage_.base_level());
   // level multiplier should be 3.5
-  ASSERT_EQ(vstorage_.level_multiplier(), 5.0);
+  ASSERT_DOUBLE_EQ(vstorage_.level_multiplier(), 3.5);
   // Level size should be around 30,000, 105,000, 367,500
   ASSERT_EQ(40000U, vstorage_.MaxBytesForLevel(2));
-  ASSERT_EQ(51450U, vstorage_.MaxBytesForLevel(3));
-  ASSERT_EQ(257250U, vstorage_.MaxBytesForLevel(4));
+  ASSERT_EQ(104999, vstorage_.MaxBytesForLevel(3));
+  ASSERT_EQ(367496, vstorage_.MaxBytesForLevel(4));
 }
 
 TEST_F(VersionStorageInfoTest, MaxBytesForLevelDynamicWithLargeL0_2) {
