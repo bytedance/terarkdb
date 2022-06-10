@@ -54,7 +54,7 @@ jobs:
           - ctest -R "db_compaction_test" -V
           - ctest -R "db_test2" -V
           - ctest -R "db_sst_test" -V
-          - ctest -E "db_block_cache_test|transaction_test|db_flush_test|db_compaction_test|db_test2|db_sst_test" -j $(nproc) -V
+          - ctest -E "db_block_cache_test|transaction_test|db_compaction_test|db_test2|db_sst_test" -j $(nproc) -V
           - GCC_VERSION=`gcc -dumpversion | awk -F '.' '{print $1}')`
           - lcov --gcov-tool /usr/bin/gcov-$GCC_VERSION --directory . --capture --output-file code_coverage.info
           - genhtml code_coverage.info --output=cov_html

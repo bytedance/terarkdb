@@ -512,6 +512,7 @@ TEST_P(DBAtomicFlushTest, PickMemtablesRaceWithBackgroundFlush) {
   ASSERT_OK(dbfull()->DestroyColumnFamilyHandle(handles_[1]));
   handles_[1] = nullptr;
   ASSERT_OK(dbfull()->ContinueBackgroundWork());
+  ASSERT_OK(dbfull()->Flush(flush_opts));
   ASSERT_OK(dbfull()->TEST_WaitForFlushMemTable(handles_[0]));
   delete handles_[0];
   handles_.clear();
