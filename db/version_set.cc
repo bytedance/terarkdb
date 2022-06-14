@@ -2996,12 +2996,15 @@ VersionSet::~VersionSet() {
   // VersionSet
   Cache* table_cache = column_family_set_->get_table_cache();
   column_family_set_.reset();
+  int evict_type = table_evict_type();
   for (auto& file : obsolete_files_) {
     if (file.metadata->table_reader_handle) {
       table_cache->Release(file.metadata->table_reader_handle);
     }
-    if (file.table_cache) {
-      file.table_cache->ForceEvict(file.metadata->fd.GetNumber(), nullptr);
+    if (file.table_cache && evict_type != kSkipForceEvict) {
+      file.table_cache->ForceEvict(
+          file.metadata->fd.GetNumber(),
+          evict_type == kAlwaysForceEvict ? file.metadata : nullptr);
     } else {
       TableCache::Evict(table_cache, file.metadata->fd.GetNumber());
     }

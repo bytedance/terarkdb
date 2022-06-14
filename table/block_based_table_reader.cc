@@ -3209,9 +3209,13 @@ void BlockBasedTable::Close() {
                                 rep_->dummy_index_reader_offset, cache_key);
     erased_count += rep_->table_options.block_cache.get()->Erase(key);
 
-    RecordTick(rep_->ioptions.statistics, BLOCK_CACHE_ERASE, 2);
-    RecordTick(rep_->ioptions.statistics, BLOCK_CACHE_ERASE_FAILURES,
-               2 - erased_count);
+    auto life_cycle = rep_->cf_life_cycle.lock();
+
+    if (life_cycle) {
+      RecordTick(rep_->ioptions.statistics, BLOCK_CACHE_ERASE, 2);
+      RecordTick(rep_->ioptions.statistics, BLOCK_CACHE_ERASE_FAILURES,
+                 2 - erased_count);
+    }
   }
   rep_->closed = true;
 }

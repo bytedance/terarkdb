@@ -135,6 +135,8 @@ struct ImmutableCFOptions {
 
   std::shared_ptr<std::vector<std::unique_ptr<IntTblPropCollectorFactory>>>
       int_tbl_prop_collector_factories_for_blob;
+
+  std::weak_ptr<LifeCycle> life_cycle;
 };
 
 struct BlobConfig {

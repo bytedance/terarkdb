@@ -10,6 +10,7 @@
 #pragma once
 #include <stdio.h>
 
+#include <memory>
 #include <numeric>
 #include <string>
 #include <utility>
@@ -612,6 +613,8 @@ extern bool ReadKeyFromWriteBatchEntry(Slice* input, Slice* key,
 extern Status ReadRecordFromWriteBatch(Slice* input, char* tag,
                                        uint32_t* column_family, Slice* key,
                                        Slice* value, Slice* blob, Slice* xid);
+
+class LifeCycle : public std::enable_shared_from_this<LifeCycle> {};
 
 // When user call DeleteRange() to delete a range of keys,
 // we will store a serialized RangeTombstone in MemTable and SST.

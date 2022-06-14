@@ -445,7 +445,7 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
     }
     ++i;
   }
-  int table_evict_type = table_evict_type_;
+  int table_evict_type = versions_->table_evict_type();
 
   for (const auto& candidate_file : candidate_files) {
     const std::string& to_delete = candidate_file.file_name;

@@ -450,6 +450,8 @@ ColumnFamilyData::ColumnFamilyData(
       last_memtable_id_(0) {
   Ref();
 
+  table_cache_->bind_life_cycle();
+
   // if _dummy_versions is nullptr, then this is a dummy column family.
   if (_dummy_versions != nullptr) {
     internal_stats_.reset(

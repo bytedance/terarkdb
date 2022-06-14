@@ -1121,6 +1121,9 @@ class VersionSet {
         new_options.writable_file_max_buffer_size;
   }
 
+  int table_evict_type() const { return table_evict_type_; }
+  void set_table_evict_type(int type) { table_evict_type_ = type; }
+
   const ImmutableDBOptions* db_options() const { return db_options_; }
 
   static uint64_t GetNumLiveVersions(Version* dummy_versions);
@@ -1223,6 +1226,7 @@ class VersionSet {
   std::vector<std::string> obsolete_manifests_;
 
   const bool seq_per_batch_;
+  std::atomic<int> table_evict_type_{0};
 
   // env options for all reads and writes except compactions
   EnvOptions env_options_;
