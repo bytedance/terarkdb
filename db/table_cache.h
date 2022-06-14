@@ -35,12 +35,14 @@ struct FileDescriptor;
 class GetContext;
 class HistogramImpl;
 
-class TableCache {
+class TableCache : public LifeCycle {
  public:
   TableCache(const ColumnFamilyOptions& initial_cf_options,
              const ImmutableDBOptions& db_options,
              const EnvOptions* storage_options, Cache* cache);
   ~TableCache();
+
+  void bind_life_cycle() { ioptions_.life_cycle = shared_from_this(); }
 
   // Return an iterator for the specified file number (the corresponding
   // file length must be exactly "file_size" bytes).  If "tableptr" is
@@ -164,8 +166,8 @@ class TableCache {
                             bool prefetch_index_and_filter_in_cache,
                             bool for_compaction, bool force_memory);
 
-  const ColumnFamilyOptions initial_cf_options_;
-  const ImmutableCFOptions ioptions_;
+  ColumnFamilyOptions initial_cf_options_;
+  ImmutableCFOptions ioptions_;
   const EnvOptions& env_options_;
   Cache* const cache_;
   bool immortal_tables_;

@@ -445,6 +445,7 @@ struct BlockBasedTable::Rep {
       const InternalKeyComparator& _internal_comparator, bool skip_filters,
       int _level, const bool _immortal_table)
       : ioptions(_ioptions),
+        cf_life_cycle(_ioptions.life_cycle),
         env_options(_env_options),
         table_options(_table_opt),
         filter_policy(skip_filters ? nullptr : _table_opt.filter_policy.get()),
@@ -460,6 +461,7 @@ struct BlockBasedTable::Rep {
         immortal_table(_immortal_table) {}
 
   const ImmutableCFOptions& ioptions;
+  std::weak_ptr<LifeCycle> cf_life_cycle;
   const EnvOptions& env_options;
   const BlockBasedTableOptions table_options;
   const FilterPolicy* const filter_policy;
