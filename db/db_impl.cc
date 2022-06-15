@@ -133,8 +133,13 @@ class TablePropertiesCollectionIteratorImpl
     version_->Ref();
     prefix_extractor_ = cfd->GetLatestMutableCFOptions()->prefix_extractor;
     impl_->mutex()->Unlock();
-    for (auto pair : version_->storage_info()->dependence_map()) {
-      file_meta_.emplace(pair.second);
+    for (int level = -1; level < version_->storage_info()->num_levels();
+         level++) {
+      const std::vector<FileMetaData*>& files =
+          version_->storage_info()->LevelFiles(level);
+      for (const auto& file : files) {
+        file_meta_.emplace_back(level, file);
+      }
     }
   }
   ~TablePropertiesCollectionIteratorImpl() override {
@@ -166,6 +171,11 @@ class TablePropertiesCollectionIteratorImpl
 
   size_t size() const override { return file_meta_.size(); }
 
+  int32_t level() const override {
+    assert(Valid());
+    return iter_->first;
+  }
+
   const std::string& filename() const override {
     assert(Valid());
     return filename_;
@@ -179,9 +189,10 @@ class TablePropertiesCollectionIteratorImpl
   Status status() const override { return status_; }
 
  private:
-  void Update(chash_set<FileMetaData*>::const_iterator where) {
+  void Update(
+      std::vector<std::pair<int, FileMetaData*>>::const_iterator where) {
     if (where != file_meta_.end()) {
-      FileMetaData* f = *where;
+      FileMetaData* f = where->second;
       filename_ = TableFileName(cfd_->ioptions()->cf_paths, f->fd.GetNumber(),
                                 f->fd.GetPathId());
       status_ = cfd_->table_cache()->GetTableProperties(
@@ -199,8 +210,8 @@ class TablePropertiesCollectionIteratorImpl
   ColumnFamilyData* cfd_;
   Version* version_;
   std::shared_ptr<const SliceTransform> prefix_extractor_;
-  chash_set<FileMetaData*> file_meta_;
-  chash_set<FileMetaData*>::const_iterator iter_;
+  std::vector<std::pair<int, FileMetaData*>> file_meta_;
+  std::vector<std::pair<int, FileMetaData*>>::const_iterator iter_;
   Status status_;
   std::string filename_;
   std::shared_ptr<const TableProperties> properties_;

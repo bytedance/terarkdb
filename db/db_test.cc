@@ -2497,6 +2497,7 @@ class ModelDB : public DB {
       Status status() const override {
         return Status::NotSupported("Not implemented.");
       }
+      int32_t level() const override { return 0; };
     };
     return new EmptyTablePropertiesCollectionIterator();
   }

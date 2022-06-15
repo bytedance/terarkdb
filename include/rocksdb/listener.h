@@ -32,6 +32,7 @@ class TablePropertiesCollectionIterator {
 
   virtual size_t size() const = 0;
 
+  virtual int32_t level() const = 0;
   virtual const std::string& filename() const = 0;
   virtual const std::shared_ptr<const TableProperties>& properties() const = 0;
 
