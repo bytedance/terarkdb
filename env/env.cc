@@ -585,6 +585,7 @@ std::string Env::PriorityToString(Env::Priority priority) {
       return "High";
     case Env::Priority::USER:
       return "User";
+    case Env::Priority::FORCE:
     case Env::Priority::TOTAL:
       assert(false);
   }

@@ -501,6 +501,7 @@ class VersionStorageInfo {
   std::unordered_map<uint64_t, uint64_t>& blob_overlap_scores() {
     return blob_overlap_scores_;
   }
+
   void CalculateEdge();
   std::vector<uint64_t> edge_cnt_levels() const { return edge_cnt_levels_; }
 

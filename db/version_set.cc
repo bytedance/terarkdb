@@ -2995,7 +2995,7 @@ VersionSet::~VersionSet() {
   // we need to delete column_family_set_ because its destructor depends on
   // VersionSet
   Cache* table_cache = column_family_set_->get_table_cache();
-  column_family_set_.reset();
+  column_family_set_->Cleanup();
   int evict_type = table_evict_type();
   for (auto& file : obsolete_files_) {
     if (file.metadata->table_reader_handle) {
@@ -3011,6 +3011,7 @@ VersionSet::~VersionSet() {
     file.DeleteMetadata();
     file.table_cache.reset();
   }
+  column_family_set_.reset();
   obsolete_files_.clear();
   table_cache->ApplyToAllCacheEntries(&CloseTables, false /* thread_safe */);
 }

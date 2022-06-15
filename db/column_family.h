@@ -242,7 +242,7 @@ class ColumnFamilyData {
       const std::unordered_map<std::string, std::string>& options_map);
 #endif  // ROCKSDB_LITE
 
-  InternalStats* internal_stats() { return internal_stats_.get(); }
+  InternalStats* internal_stats() { return table_cache_->internal_stats(); }
 
   MemTableList* imm() { return &imm_; }
   MemTable* mem() { return mem_; }
@@ -449,8 +449,6 @@ class ColumnFamilyData {
 
   const bool is_delete_range_supported_;
 
-  std::unique_ptr<InternalStats> internal_stats_;
-
   WriteBufferManager* write_buffer_manager_;
 
   MemTable* mem_;
@@ -557,6 +555,8 @@ class ColumnFamilySet {
                   WriteBufferManager* write_buffer_manager,
                   WriteController* write_controller);
   ~ColumnFamilySet();
+
+  void Cleanup();
 
   ColumnFamilyData* GetDefault() const;
   // GetColumnFamily() calls return nullptr if column family is not found
