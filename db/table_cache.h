@@ -13,9 +13,11 @@
 #include <stdint.h>
 
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "db/dbformat.h"
+#include "db/internal_stats.h"
 #include "db/range_del_aggregator.h"
 #include "options/cf_options.h"
 #include "port/port.h"
@@ -29,11 +31,13 @@
 
 namespace TERARKDB_NAMESPACE {
 
-class Env;
 class Arena;
+class ColumnFamilyData;
+class Env;
 struct FileDescriptor;
 class GetContext;
 class HistogramImpl;
+class InternalStats;
 
 class TableCache : public LifeCycle {
  public:
@@ -41,6 +45,8 @@ class TableCache : public LifeCycle {
              const ImmutableDBOptions& db_options,
              const EnvOptions* storage_options, Cache* cache);
   ~TableCache();
+
+  void InitInternalStats(ColumnFamilyData* cfd);
 
   void bind_life_cycle() { ioptions_.life_cycle = shared_from_this(); }
 
@@ -141,8 +147,8 @@ class TableCache : public LifeCycle {
   const ColumnFamilyOptions& initial_cf_options() const {
     return initial_cf_options_;
   }
-
   const ImmutableCFOptions& ioptions() const { return ioptions_; }
+  InternalStats* internal_stats() { return internal_stats_; }
 
   void TEST_AddMockTableReader(TableReader* table_reader, FileDescriptor fd);
 
@@ -168,6 +174,9 @@ class TableCache : public LifeCycle {
 
   ColumnFamilyOptions initial_cf_options_;
   ImmutableCFOptions ioptions_;
+  InternalStats* internal_stats_;
+  std::aligned_storage<sizeof(InternalStats), alignof(InternalStats)>::type
+      internal_stats_storage_;
   const EnvOptions& env_options_;
   Cache* const cache_;
   bool immortal_tables_;

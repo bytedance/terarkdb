@@ -141,11 +141,22 @@ TableCache::TableCache(const ColumnFamilyOptions& initial_cf_options,
                        const EnvOptions* env_options, Cache* const cache)
     : initial_cf_options_(initial_cf_options),
       ioptions_(db_options, initial_cf_options_),
+      internal_stats_(nullptr),
       env_options_(*env_options),
       cache_(cache),
       immortal_tables_(false) {}
 
-TableCache::~TableCache() {}
+TableCache::~TableCache() {
+  if (internal_stats_ != nullptr) {
+    internal_stats_->~InternalStats();
+  }
+}
+
+void TableCache::InitInternalStats(ColumnFamilyData* cfd) {
+  assert(internal_stats_ == nullptr);
+  internal_stats_ = new (&internal_stats_storage_)
+      InternalStats(ioptions_.num_levels, ioptions_.env, cfd);
+}
 
 TableReader* TableCache::GetTableReaderFromHandle(Cache::Handle* handle) {
   return reinterpret_cast<TableReader*>(cache_->Value(handle));

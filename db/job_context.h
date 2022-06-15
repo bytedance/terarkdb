@@ -14,6 +14,7 @@
 
 #include "db/column_family.h"
 #include "db/log_writer.h"
+#include "db/version_set.h"
 #include "rocksdb/terark_namespace.h"
 #include "util/chash_map.h"
 

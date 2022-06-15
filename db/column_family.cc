@@ -454,8 +454,7 @@ ColumnFamilyData::ColumnFamilyData(
 
   // if _dummy_versions is nullptr, then this is a dummy column family.
   if (_dummy_versions != nullptr) {
-    internal_stats_.reset(
-        new InternalStats(ioptions_.num_levels, db_options.env, this));
+    table_cache_->InitInternalStats(this);
     if (ioptions_.compaction_style == kCompactionStyleLevel) {
       compaction_picker_.reset(new LevelCompactionPicker(
           table_cache_.get(), *env_options, ioptions_, &internal_comparator_));
@@ -756,7 +755,7 @@ WriteStallCondition ColumnFamilyData::RecalculateWriteStallConditions(
     if (write_stall_condition == WriteStallCondition::kStopped &&
         write_stall_cause == WriteStallCause::kMemtableLimit) {
       write_controller_token_ = write_controller->GetStopToken();
-      internal_stats_->AddCFStats(InternalStats::MEMTABLE_LIMIT_STOPS, 1);
+      internal_stats()->AddCFStats(InternalStats::MEMTABLE_LIMIT_STOPS, 1);
       ROCKS_LOG_WARN(
           ioptions_.info_log,
           "[%s] Stopping writes because we have %d immutable memtables "
@@ -766,9 +765,9 @@ WriteStallCondition ColumnFamilyData::RecalculateWriteStallConditions(
     } else if (write_stall_condition == WriteStallCondition::kStopped &&
                write_stall_cause == WriteStallCause::kL0FileCountLimit) {
       write_controller_token_ = write_controller->GetStopToken();
-      internal_stats_->AddCFStats(InternalStats::L0_FILE_COUNT_LIMIT_STOPS, 1);
+      internal_stats()->AddCFStats(InternalStats::L0_FILE_COUNT_LIMIT_STOPS, 1);
       if (compaction_picker_->IsLevel0CompactionInProgress()) {
-        internal_stats_->AddCFStats(
+        internal_stats()->AddCFStats(
             InternalStats::LOCKED_L0_FILE_COUNT_LIMIT_STOPS, 1);
       }
       ROCKS_LOG_WARN(ioptions_.info_log,
@@ -777,7 +776,7 @@ WriteStallCondition ColumnFamilyData::RecalculateWriteStallConditions(
     } else if (write_stall_condition == WriteStallCondition::kStopped &&
                write_stall_cause == WriteStallCause::kPendingCompactionBytes) {
       write_controller_token_ = write_controller->GetStopToken();
-      internal_stats_->AddCFStats(
+      internal_stats()->AddCFStats(
           InternalStats::PENDING_COMPACTION_BYTES_LIMIT_STOPS, 1);
       ROCKS_LOG_WARN(
           ioptions_.info_log,
@@ -787,7 +786,7 @@ WriteStallCondition ColumnFamilyData::RecalculateWriteStallConditions(
     } else if (write_stall_condition == WriteStallCondition::kStopped &&
                write_stall_cause == WriteStallCause::kReadAmpLimit) {
       write_controller_token_ = write_controller->GetStopToken();
-      internal_stats_->AddCFStats(InternalStats::READ_AMP_LIMIT_STOPS, 1);
+      internal_stats()->AddCFStats(InternalStats::READ_AMP_LIMIT_STOPS, 1);
       ROCKS_LOG_WARN(
           ioptions_.info_log,
           "[%s] Stopping writes because we have %f times read amplification "
@@ -799,7 +798,7 @@ WriteStallCondition ColumnFamilyData::RecalculateWriteStallConditions(
           SetupDelay(write_controller, compaction_needed_bytes,
                      prev_compaction_needed_bytes_, was_stopped,
                      mutable_cf_options.disable_auto_compactions);
-      internal_stats_->AddCFStats(InternalStats::MEMTABLE_LIMIT_SLOWDOWNS, 1);
+      internal_stats()->AddCFStats(InternalStats::MEMTABLE_LIMIT_SLOWDOWNS, 1);
       ROCKS_LOG_WARN(
           ioptions_.info_log,
           "[%s] Stalling writes because we have %d immutable memtables "
@@ -817,10 +816,10 @@ WriteStallCondition ColumnFamilyData::RecalculateWriteStallConditions(
           SetupDelay(write_controller, compaction_needed_bytes,
                      prev_compaction_needed_bytes_, was_stopped || near_stop,
                      mutable_cf_options.disable_auto_compactions);
-      internal_stats_->AddCFStats(InternalStats::L0_FILE_COUNT_LIMIT_SLOWDOWNS,
-                                  1);
+      internal_stats()->AddCFStats(InternalStats::L0_FILE_COUNT_LIMIT_SLOWDOWNS,
+                                   1);
       if (compaction_picker_->IsLevel0CompactionInProgress()) {
-        internal_stats_->AddCFStats(
+        internal_stats()->AddCFStats(
             InternalStats::LOCKED_L0_FILE_COUNT_LIMIT_SLOWDOWNS, 1);
       }
       ROCKS_LOG_WARN(ioptions_.info_log,
@@ -846,7 +845,7 @@ WriteStallCondition ColumnFamilyData::RecalculateWriteStallConditions(
           SetupDelay(write_controller, compaction_needed_bytes,
                      prev_compaction_needed_bytes_, was_stopped || near_stop,
                      mutable_cf_options.disable_auto_compactions);
-      internal_stats_->AddCFStats(
+      internal_stats()->AddCFStats(
           InternalStats::PENDING_COMPACTION_BYTES_LIMIT_SLOWDOWNS, 1);
       ROCKS_LOG_WARN(
           ioptions_.info_log,
@@ -862,7 +861,7 @@ WriteStallCondition ColumnFamilyData::RecalculateWriteStallConditions(
           SetupDelay(write_controller, compaction_needed_bytes,
                      prev_compaction_needed_bytes_, was_stopped || near_stop,
                      mutable_cf_options.disable_auto_compactions);
-      internal_stats_->AddCFStats(InternalStats::READ_AMP_LIMIT_SLOWDOWNS, 1);
+      internal_stats()->AddCFStats(InternalStats::READ_AMP_LIMIT_SLOWDOWNS, 1);
       ROCKS_LOG_WARN(
           ioptions_.info_log,
           "[%s] Stalling writes because we have %f times read amplification "

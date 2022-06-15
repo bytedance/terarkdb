@@ -21,6 +21,7 @@
 #include "db/range_del_aggregator.h"
 #include "db/table_cache.h"
 #include "db/version_edit.h"
+#include "db/version_set.h"
 #include "monitoring/iostats_context_imp.h"
 #include "monitoring/thread_status_util.h"
 #include "rocksdb/env.h"

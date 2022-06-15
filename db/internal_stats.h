@@ -13,14 +13,20 @@
 #include <string>
 #include <vector>
 
-#include "db/version_set.h"
+#include "monitoring/histogram.h"
+#include "rocksdb/cache.h"
+#include "rocksdb/env.h"
+#include "rocksdb/listener.h"
+#include "rocksdb/slice.h"
 #include "rocksdb/terark_namespace.h"
 
 namespace TERARKDB_NAMESPACE {
 
 class ColumnFamilyData;
 class DBImpl;
+class InternalStats;
 class MemTableList;
+class Version;
 
 // Config for retrieving a property's value.
 struct DBPropertyInfo {
