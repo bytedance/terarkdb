@@ -1344,7 +1344,9 @@ ColumnFamilySet::ColumnFamilySet(const std::string& dbname,
   dummy_cfd_->next_ = dummy_cfd_;
 }
 
-ColumnFamilySet::~ColumnFamilySet() {
+ColumnFamilySet::~ColumnFamilySet() { assert(column_family_data_.empty()); }
+
+void ColumnFamilySet::Cleanup() {
   while (column_family_data_.size() > 0) {
     // cfd destructor will delete itself from column_family_data_
     auto cfd = column_family_data_.begin()->second;

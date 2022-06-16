@@ -556,6 +556,8 @@ class ColumnFamilySet {
                   WriteController* write_controller);
   ~ColumnFamilySet();
 
+  void Cleanup();
+
   ColumnFamilyData* GetDefault() const;
   // GetColumnFamily() calls return nullptr if column family is not found
   ColumnFamilyData* GetColumnFamily(uint32_t id) const;
