@@ -223,10 +223,11 @@ class PartitionIndexReader : public IndexReader, public Cleanable {
                        const bool index_value_is_full,
                        MemoryAllocator* memory_allocator) {
     std::unique_ptr<Block> index_block;
+    Slice dummy_comp_dict;
     auto s = ReadBlockFromFile(
         file, prefetch_buffer, footer, ReadOptions(), index_handle,
         &index_block, ioptions, true /* decompress */,
-        true /*maybe_compressed*/, Slice() /*compression dict*/, cache_options,
+        true /*maybe_compressed*/, dummy_comp_dict /*compression dict*/, cache_options,
         kDisableGlobalSequenceNumber, 0 /* read_amp_bytes_per_bit */,
         memory_allocator);
 
@@ -404,10 +405,11 @@ class BinarySearchIndexReader : public IndexReader {
                        const bool index_value_is_full,
                        MemoryAllocator* memory_allocator) {
     std::unique_ptr<Block> index_block;
+    Slice dummy_comp_dict;
     auto s = ReadBlockFromFile(
         file, prefetch_buffer, footer, ReadOptions(), index_handle,
         &index_block, ioptions, true /* decompress */,
-        true /*maybe_compressed*/, Slice() /*compression dict*/, cache_options,
+        true /*maybe_compressed*/, dummy_comp_dict /*compression dict*/, cache_options,
         kDisableGlobalSequenceNumber, 0 /* read_amp_bytes_per_bit */,
         memory_allocator);
 
@@ -478,10 +480,11 @@ class HashIndexReader : public IndexReader {
       const bool index_key_includes_seq, const bool index_value_is_full,
       MemoryAllocator* memory_allocator) {
     std::unique_ptr<Block> index_block;
+    Slice dummy_comp_dict;
     auto s = ReadBlockFromFile(
         file, prefetch_buffer, footer, ReadOptions(), index_handle,
         &index_block, ioptions, true /* decompress */,
-        true /*maybe_compressed*/, Slice() /*compression dict*/, cache_options,
+        true /*maybe_compressed*/, dummy_comp_dict /*compression dict*/, cache_options,
         kDisableGlobalSequenceNumber, 0 /* read_amp_bytes_per_bit */,
         memory_allocator);
 
@@ -516,7 +519,6 @@ class HashIndexReader : public IndexReader {
       return Status::OK();
     }
 
-    Slice dummy_comp_dict;
     // Read contents for the blocks
     BlockContents prefixes_contents;
     BlockFetcher prefixes_block_fetcher(
@@ -946,11 +948,12 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
     PersistentCacheOptions cache_options;
     ReadOptions read_options;
     read_options.verify_checksums = false;
+    Slice dummy_comp_dict;
     BlockFetcher compression_block_fetcher(
         rep->file.get(), prefetch_buffer.get(), rep->footer, read_options,
         compression_dict_handle, compression_dict_cont.get(), rep->ioptions,
         false /* decompress */, false /*maybe_compressed*/,
-        Slice() /*compression dict*/, cache_options);
+        dummy_comp_dict /*compression dict*/, cache_options);
     s = compression_block_fetcher.ReadBlockContents();
 
     if (!s.ok()) {
@@ -1204,11 +1207,12 @@ Status BlockBasedTable::ReadMetaBlock(
   // TODO(sanjay): Skip this if footer.metaindex_handle() size indicates
   // it is an empty block.
   std::unique_ptr<Block> meta;
+  Slice dummy_comp_dict;
   Status s = ReadBlockFromFile(
       rep->file.get(), prefetch_buffer, rep->footer, ReadOptions(),
       rep->footer.metaindex_handle(), &meta, rep->ioptions,
       true /* decompress */, true /*maybe_compressed*/,
-      Slice() /*compression dict*/, rep->persistent_cache_options,
+      dummy_comp_dict /*compression dict*/, rep->persistent_cache_options,
       kDisableGlobalSequenceNumber, 0 /* read_amp_bytes_per_bit */,
       GetMemoryAllocator(rep->table_options));
 
