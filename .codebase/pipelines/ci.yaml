@@ -49,7 +49,7 @@ jobs:
         commands:
           - rm -rf build
           - cmake -E make_directory build || true
-          - cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=`pwd` -DWITH_COVERAGE=ON -DCMAKE_BUILD_TYPE=Debug -DWITH_TESTS=ON -DWITH_TOOLS=ON -DWITH_TERARK_ZIP=ON -DWITH_BYTEDANCE_METRICS=ON -DBYTEDANCE_METRICS_PATH=`pwd`/../third-party/metrics2-cmake
+          - cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=`pwd` -DWITH_COVERAGE=ON -DCMAKE_BUILD_TYPE=Debug -DWITH_TESTS=ON -DWITH_TOOLS=ON -DWITH_TERARK_ZIP=ON -DWITH_BYTEDANCE_METRICS=ON -DBYTEDANCE_METRICS_PATH=`pwd`/../third-party/metrics2-cmake -DWITH_ASAN=ON -DWITH_JEMALLOC=OFF
           - make -j4
           - ctest -R "db_compaction_test" -V
           - ctest -R "db_test2" -V
