@@ -824,6 +824,7 @@ class DBImpl : public DB {
   std::unique_ptr<VersionSet> versions_;
   // Flag to check whether we allocated and own the info log file
   bool own_info_log_;
+  bool fetch_table_properties_before_deletion_;
   const DBOptions initial_db_options_;
   const ImmutableDBOptions immutable_db_options_;
   MutableDBOptions mutable_db_options_;
@@ -1035,9 +1036,10 @@ class DBImpl : public DB {
   // Delete any unneeded files and stale in-memory entries.
   void DeleteObsoleteFiles();
   // Delete obsolete files and log status and information of file deletion
-  void DeleteObsoleteFileImpl(int job_id, const std::string& fname,
-                              const std::string& path_to_sync, FileType type,
-                              uint64_t number);
+  void DeleteObsoleteFileImpl(
+      int job_id, const std::string& fname, const std::string& path_to_sync,
+      FileType type, uint64_t number,
+      const std::shared_ptr<const TableProperties>& table_properties);
 
   // Background process needs to call
   //     auto x = CaptureCurrentFileNumberInPendingOutputs()
@@ -1242,9 +1244,11 @@ class DBImpl : public DB {
                             FlushReason flush_reason);
   void SchedulePendingCompaction(ColumnFamilyData* cfd);
   void SchedulePendingGarbageCollection(ColumnFamilyData* cfd);
-  void SchedulePendingPurge(const std::string& fname,
-                            const std::string& dir_to_sync, FileType type,
-                            uint64_t number, int job_id);
+  void SchedulePendingPurge(
+      const std::string& fname, const std::string& dir_to_sync, FileType type,
+      uint64_t number, int job_id,
+      std::function<std::shared_ptr<const TableProperties>()>
+          get_table_properties);
   static void BGWorkCompaction(void* arg);
   static void BGWorkGarbageCollection(void* arg);
   // Runs a pre-chosen universal compaction involving bottom level in a
@@ -1529,9 +1533,18 @@ class DBImpl : public DB {
     FileType type;
     uint64_t number;
     int job_id;
-    PurgeFileInfo(std::string fn, std::string d, FileType t, uint64_t num,
-                  int jid)
-        : fname(fn), dir_to_sync(d), type(t), number(num), job_id(jid) {}
+    std::function<std::shared_ptr<const TableProperties>()>
+        get_table_properties;
+
+    PurgeFileInfo(
+        std::string fn, std::string d, FileType t, uint64_t num, int jid,
+        std::function<std::shared_ptr<const TableProperties>()> gtp) noexcept
+        : fname(fn),
+          dir_to_sync(d),
+          type(t),
+          number(num),
+          job_id(jid),
+          get_table_properties(std::move(gtp)) {}
   };
 
   // flush_queue_ and compaction_queue_ hold column families that we need to

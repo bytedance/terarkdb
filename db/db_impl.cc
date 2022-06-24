@@ -284,6 +284,11 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
     : env_(options.env),
       dbname_(dbname),
       own_info_log_(options.info_log == nullptr),
+      fetch_table_properties_before_deletion_(
+          std::find_if(options.listeners.begin(), options.listeners.end(),
+                       [](const std::shared_ptr<EventListener>& ptr) {
+                         return ptr->FetchTablePropertiesBeforeDeletion();
+                       }) != options.listeners.end()),
       initial_db_options_(SanitizeOptions(dbname, options)),
       immutable_db_options_(initial_db_options_),
       mutable_db_options_(initial_db_options_),
@@ -1873,13 +1878,19 @@ void DBImpl::BackgroundCallPurge() {
       auto type = purge_file->type;
       auto number = purge_file->number;
       auto job_id = purge_file->job_id;
+      auto get_table_properties = std::move(purge_file->get_table_properties);
       purge_queue_.pop_front();
 
       mutex_.Unlock();
-      DeleteObsoleteFileImpl(job_id, fname, dir_to_sync, type, number);
+      auto table_properties = get_table_properties();
+      get_table_properties = nullptr;
+      DeleteObsoleteFileImpl(job_id, fname, dir_to_sync, type, number,
+                             table_properties);
+      table_properties.reset();
 #ifndef ROCKSDB_LITE
       wal_manager_.PurgeObsoleteWALFiles();
 #endif  // ROCKSDB_LITE
+
       mutex_.Lock();
     }
   }

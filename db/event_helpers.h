@@ -41,7 +41,8 @@ class EventHelpers {
       EventLogger* event_logger, int job_id, uint64_t file_number,
       const std::string& file_path, const Status& status,
       const std::string& db_name,
-      const std::vector<std::shared_ptr<EventListener>>& listeners);
+      const std::vector<std::shared_ptr<EventListener>>& listeners,
+      const std::shared_ptr<const TableProperties>& table_properties);
   static void NotifyOnErrorRecoveryCompleted(
       const std::vector<std::shared_ptr<EventListener>>& listeners,
       Status bg_error, InstrumentedMutex* db_mutex);

@@ -87,6 +87,7 @@ class TableCache : public LifeCycle {
 
   // Evict any entry for the specified file number
   static void Evict(Cache* cache, uint64_t file_number);
+  void Evict(uint64_t file_number) { Evict(cache_, file_number); }
 
   // Evict any entry for the specified file number
   void ForceEvict(uint64_t file_number,

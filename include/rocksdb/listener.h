@@ -195,6 +195,9 @@ struct TableFileDeletionInfo {
   int job_id;
   // The status indicating whether the deletion was successful or not.
   Status status;
+  // The properties of table if
+  // EventListener::FetchTablePropertiesBeforeDeletion() returns true
+  std::shared_ptr<const TableProperties> table_properties;
 };
 
 struct FileOperationInfo {
@@ -503,6 +506,9 @@ class EventListener {
   // If true, the OnFileReadFinish and OnFileWriteFinish will be called. If
   // false, then they won't be called.
   virtual bool ShouldBeNotifiedOnFileIO() { return false; }
+
+  // If true, the TableFileDeletionInfo will fill table_properties.
+  virtual bool FetchTablePropertiesBeforeDeletion() { return false; }
 
   // A callback function for RocksDB which will be called just before
   // starting the automatic recovery process for recoverable background

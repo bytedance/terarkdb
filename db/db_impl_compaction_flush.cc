@@ -2041,12 +2041,14 @@ void DBImpl::SchedulePendingGarbageCollection(ColumnFamilyData* cfd) {
   }
 }
 
-void DBImpl::SchedulePendingPurge(const std::string& fname,
-                                  const std::string& dir_to_sync, FileType type,
-                                  uint64_t number, int job_id) {
+void DBImpl::SchedulePendingPurge(
+    const std::string& fname, const std::string& dir_to_sync, FileType type,
+    uint64_t number, int job_id,
+    std::function<std::shared_ptr<const TableProperties>()>
+        get_table_properties) {
   mutex_.AssertHeld();
-  PurgeFileInfo file_info(fname, dir_to_sync, type, number, job_id);
-  purge_queue_.push_back(std::move(file_info));
+  purge_queue_.emplace_back(fname, dir_to_sync, type, number, job_id,
+                            std::move(get_table_properties));
 
   for (auto listener : candidate_file_listener_) {
     listener->emplace_back(number);

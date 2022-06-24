@@ -69,6 +69,83 @@ void PushCandidateFile(
     candidate_files.emplace_back(
         JobContext::CandidateFileInfo{std::move(file), path_ptr});
   }
+}
+
+struct TablePropertiesGetterImpl {
+  int table_evict_type;
+  const EnvOptions* env_options;
+  FileMetaData* file_meta;
+  std::shared_ptr<TableCache> table_cache;
+
+  TablePropertiesGetterImpl(int tet, const EnvOptions* eo, FileMetaData* fm,
+                            std::shared_ptr<TableCache> tc) noexcept
+      : table_evict_type(tet),
+        env_options(eo),
+        file_meta(fm),
+        table_cache(std::move(tc)) {
+    file_meta->Ref();
+  }
+
+  TablePropertiesGetterImpl(const TablePropertiesGetterImpl& o) noexcept
+      : table_evict_type(o.table_evict_type),
+        env_options(o.env_options),
+        file_meta(o.file_meta),
+        table_cache(o.table_cache) {
+    file_meta->Ref();
+  }
+  TablePropertiesGetterImpl(TablePropertiesGetterImpl&& o) noexcept
+      : table_evict_type(o.table_evict_type),
+        env_options(o.env_options),
+        file_meta(o.file_meta),
+        table_cache(std::move(o.table_cache)) {
+    assert(this != &o);
+    o.file_meta = nullptr;
+  }
+  TablePropertiesGetterImpl& operator=(
+      const TablePropertiesGetterImpl& o) noexcept {
+    assert(this != &o);
+    Cleanup();
+    table_evict_type = o.table_evict_type;
+    env_options = o.env_options;
+    file_meta = o.file_meta;
+    table_cache = o.table_cache;
+    return *this;
+  }
+  TablePropertiesGetterImpl& operator=(TablePropertiesGetterImpl&& o) noexcept {
+    assert(this != &o);
+    Cleanup();
+    table_evict_type = o.table_evict_type;
+    env_options = o.env_options;
+    file_meta = o.file_meta;
+    table_cache = std::move(o.table_cache);
+    o.file_meta = nullptr;
+    return *this;
+  }
+
+  std::shared_ptr<const TableProperties> operator()() {
+    std::shared_ptr<const TableProperties> ptr;
+    table_cache->GetTableProperties(*env_options, *file_meta, &ptr);
+    return ptr;
+  }
+
+  void Cleanup() {
+    if (file_meta != nullptr && file_meta->Unref()) {
+      if (table_evict_type != kSkipForceEvict) {
+        table_cache->ForceEvict(
+            file_meta->fd.GetNumber(),
+            table_evict_type == kAlwaysForceEvict ? file_meta : nullptr);
+      } else {
+        table_cache->Evict(file_meta->fd.GetNumber());
+      }
+      if (file_meta->table_reader_handle != nullptr) {
+        table_cache->ReleaseHandle(file_meta->table_reader_handle);
+      }
+      delete file_meta;
+      file_meta = nullptr;
+    }
+  }
+
+  ~TablePropertiesGetterImpl() noexcept { Cleanup(); }
 };
 };  // namespace
 
@@ -302,9 +379,10 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
 }
 
 // Delete obsolete files and log status and information of file deletion
-void DBImpl::DeleteObsoleteFileImpl(int job_id, const std::string& fname,
-                                    const std::string& path_to_sync,
-                                    FileType type, uint64_t number) {
+void DBImpl::DeleteObsoleteFileImpl(
+    int job_id, const std::string& fname, const std::string& path_to_sync,
+    FileType type, uint64_t number,
+    const std::shared_ptr<const TableProperties>& table_properties) {
   TEST_SYNC_POINT("DBImpl::DeleteObsoleteFileImpl:BeforeDeletion");
   Status file_deletion_status;
   if (type == kTableFile) {
@@ -336,7 +414,7 @@ void DBImpl::DeleteObsoleteFileImpl(int job_id, const std::string& fname,
   if (type == kTableFile) {
     EventHelpers::LogAndNotifyTableFileDeletion(
         &event_logger_, job_id, number, fname, file_deletion_status, GetName(),
-        immutable_db_options_.listeners);
+        immutable_db_options_.listeners, table_properties);
   }
 }
 
@@ -378,9 +456,6 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
     candidate_files.emplace_back(JobContext::CandidateFileInfo{
         MakeTableFileName(kDumbDbName, file.metadata->fd.GetNumber()),
         state.PushPath(file.path)});
-    if (file.metadata->table_reader_handle) {
-      table_cache_->Release(file.metadata->table_reader_handle);
-    }
   }
 
   for (auto file_num : state.log_delete_files) {
@@ -518,17 +593,21 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
 
     std::string fname;
     std::string dir_to_sync;
+    std::function<std::shared_ptr<const TableProperties>()>
+        get_table_properties =
+            [] { return std::shared_ptr<const TableProperties>(); };
     if (type == kTableFile) {
-      // evict from cache
       auto find = state.sst_delete_files.end();
-      if (table_evict_type != kSkipForceEvict &&
-          (find = state.sst_delete_files.find(number)) !=
+      if ((find = state.sst_delete_files.find(number)) !=
               state.sst_delete_files.end() &&
           find->second.table_cache != nullptr) {
-        find->second.table_cache->ForceEvict(
-            number, table_evict_type == kAlwaysForceEvict
-                        ? find->second.metadata
-                        : nullptr);
+        TablePropertiesGetterImpl getter(table_evict_type, &env_options_,
+                                         find->second.metadata,
+                                         std::move(find->second.table_cache));
+        state.sst_delete_files.erase(find);
+        if (fetch_table_properties_before_deletion_) {
+          get_table_properties = std::move(getter);
+        }
       } else {
         TableCache::Evict(table_cache_.get(), number);
       }
@@ -573,9 +652,13 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
     Status file_deletion_status;
     if (schedule_only) {
       InstrumentedMutexLock guard_lock(&mutex_);
-      SchedulePendingPurge(fname, dir_to_sync, type, number, state.job_id);
+      SchedulePendingPurge(fname, dir_to_sync, type, number, state.job_id,
+                           std::move(get_table_properties));
     } else {
-      DeleteObsoleteFileImpl(state.job_id, fname, dir_to_sync, type, number);
+      auto table_properties = get_table_properties();
+      get_table_properties = nullptr;
+      DeleteObsoleteFileImpl(state.job_id, fname, dir_to_sync, type, number,
+                             table_properties);
     }
   }
 
@@ -586,8 +669,12 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
   }
 
   for (auto& pair : state.sst_delete_files) {
-    pair.second.DeleteMetadata();
-    pair.second.table_cache.reset();
+    auto& file = pair.second;
+    if (file.metadata->table_reader_handle) {
+      table_cache_->Release(file.metadata->table_reader_handle);
+    }
+    file.DeleteMetadata();
+    file.table_cache.reset();
   }
 
   // Delete old info log files.
