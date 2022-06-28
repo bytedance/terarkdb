@@ -76,13 +76,16 @@ struct TablePropertiesGetterImpl {
   const EnvOptions* env_options;
   FileMetaData* file_meta;
   std::shared_ptr<TableCache> table_cache;
+  std::shared_ptr<Logger> info_log;
 
   TablePropertiesGetterImpl(int tet, const EnvOptions* eo, FileMetaData* fm,
-                            std::shared_ptr<TableCache> tc) noexcept
+                            std::shared_ptr<TableCache> tc,
+                            std::shared_ptr<Logger> log) noexcept
       : table_evict_type(tet),
         env_options(eo),
         file_meta(fm),
-        table_cache(std::move(tc)) {
+        table_cache(std::move(tc)),
+        info_log(log) {
     file_meta->Ref();
   }
 
@@ -90,14 +93,16 @@ struct TablePropertiesGetterImpl {
       : table_evict_type(o.table_evict_type),
         env_options(o.env_options),
         file_meta(o.file_meta),
-        table_cache(o.table_cache) {
+        table_cache(o.table_cache),
+        info_log(o.info_log) {
     file_meta->Ref();
   }
   TablePropertiesGetterImpl(TablePropertiesGetterImpl&& o) noexcept
       : table_evict_type(o.table_evict_type),
         env_options(o.env_options),
         file_meta(o.file_meta),
-        table_cache(std::move(o.table_cache)) {
+        table_cache(std::move(o.table_cache)),
+        info_log(std::move(o.info_log)) {
     assert(this != &o);
     o.file_meta = nullptr;
   }
@@ -109,6 +114,7 @@ struct TablePropertiesGetterImpl {
     env_options = o.env_options;
     file_meta = o.file_meta;
     table_cache = o.table_cache;
+    info_log = o.info_log;
     return *this;
   }
   TablePropertiesGetterImpl& operator=(TablePropertiesGetterImpl&& o) noexcept {
@@ -119,12 +125,18 @@ struct TablePropertiesGetterImpl {
     file_meta = o.file_meta;
     table_cache = std::move(o.table_cache);
     o.file_meta = nullptr;
+    info_log = std::move(o.info_log);
     return *this;
   }
 
   std::shared_ptr<const TableProperties> operator()() {
     std::shared_ptr<const TableProperties> ptr;
-    table_cache->GetTableProperties(*env_options, *file_meta, &ptr);
+    Status s = table_cache->GetTableProperties(*env_options, *file_meta, &ptr);
+    if (!s.ok()) {
+      ROCKS_LOG_ERROR(info_log, "[Get properties failed] status: %s",
+                      s.ToString().c_str());
+      return nullptr;
+    }
     return ptr;
   }
 
@@ -603,7 +615,8 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
           find->second.table_cache != nullptr) {
         TablePropertiesGetterImpl getter(table_evict_type, &env_options_,
                                          find->second.metadata,
-                                         std::move(find->second.table_cache));
+                                         std::move(find->second.table_cache),
+                                         immutable_db_options_.info_log);
         state.sst_delete_files.erase(find);
         if (fetch_table_properties_before_deletion_) {
           get_table_properties = std::move(getter);
