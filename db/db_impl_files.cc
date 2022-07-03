@@ -103,12 +103,12 @@ struct TablePropertiesGetterImpl {
         file_meta(o.file_meta),
         table_cache(std::move(o.table_cache)),
         info_log(std::move(o.info_log)) {
-    assert(this != &o);
+    terarkdb_assert(this != &o);
     o.file_meta = nullptr;
   }
   TablePropertiesGetterImpl& operator=(
       const TablePropertiesGetterImpl& o) noexcept {
-    assert(this != &o);
+    terarkdb_assert(this != &o);
     Cleanup();
     table_evict_type = o.table_evict_type;
     env_options = o.env_options;
@@ -118,14 +118,14 @@ struct TablePropertiesGetterImpl {
     return *this;
   }
   TablePropertiesGetterImpl& operator=(TablePropertiesGetterImpl&& o) noexcept {
-    assert(this != &o);
+    terarkdb_assert(this != &o);
     Cleanup();
     table_evict_type = o.table_evict_type;
     env_options = o.env_options;
     file_meta = o.file_meta;
     table_cache = std::move(o.table_cache);
-    o.file_meta = nullptr;
     info_log = std::move(o.info_log);
+    o.file_meta = nullptr;
     return *this;
   }
 
@@ -153,8 +153,8 @@ struct TablePropertiesGetterImpl {
         table_cache->ReleaseHandle(file_meta->table_reader_handle);
       }
       delete file_meta;
-      file_meta = nullptr;
     }
+    file_meta = nullptr;
   }
 
   ~TablePropertiesGetterImpl() noexcept { Cleanup(); }

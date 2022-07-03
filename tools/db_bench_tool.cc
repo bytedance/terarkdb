@@ -1182,6 +1182,8 @@ DEFINE_double(zenfs_low_gc_ratio, 0.25,
 DEFINE_double(zenfs_high_gc_ratio, 0.6, "");
 DEFINE_double(zenfs_force_gc_ratio, 0.9, "");
 
+DEFINE_bool(compaction_listenr, false, "observe the blob info when compaction");
+
 static const bool FLAGS_soft_rate_limit_dummy __attribute__((__unused__)) =
     RegisterFlagValidator(&FLAGS_soft_rate_limit, &ValidateRateLimit);
 
@@ -2083,6 +2085,45 @@ class Benchmark {
   int64_t merge_keys_;
   bool report_file_operations_;
 
+  class CompactionListener : public EventListener {
+   public:
+    CompactionListener(std::shared_ptr<Logger> log) : info_log(log) {}
+    void OnFlushCompleted(DB* db, const FlushJobInfo& job_info) {
+      ROCKS_LOG_INFO(info_log, "[JOB %d] Flush SST %s", job_info.job_id,
+                     job_info.file_info.file_path.c_str());
+      for (auto& file_info : job_info.blob_file_info) {
+        ROCKS_LOG_INFO(info_log, "[JOB %d] Flush Blob SST %s", job_info.job_id,
+                       file_info.file_path.c_str());
+      }
+    }
+    void OnCompactionCompleted(DB* /*db*/, const CompactionJobInfo& ci) {
+      std::string inputs;
+      std::string input_blobs;
+      std::string outputs;
+      std::string output_blobs;
+      for (auto& file : ci.input_files) {
+        inputs += file + ",";
+      }
+      for (auto& file : ci.input_blob_files) {
+        input_blobs += file + ",";
+      }
+      for (auto& file : ci.output_files) {
+        outputs += file + ",";
+      }
+      for (auto& file : ci.input_blob_files) {
+        output_blobs += file + ",";
+      }
+      ROCKS_LOG_INFO(
+          info_log,
+          "[JOB %d]Compaction Completed inputs:{%s} input_blobs:{%s} "
+          "outputs:{%s} output_blobs{%s}",
+          ci.job_id, inputs.c_str(), input_blobs.c_str(), outputs.c_str(),
+          output_blobs.c_str());
+    }
+
+   private:
+    std::shared_ptr<Logger> info_log = nullptr;
+  };
   class ErrorHandlerListener : public EventListener {
    public:
     ErrorHandlerListener()
@@ -2128,6 +2169,7 @@ class Benchmark {
   };
 
   std::shared_ptr<ErrorHandlerListener> listener_;
+  std::shared_ptr<CompactionListener> compaction_listener_;
 
   bool SanityCheck() {
     if (FLAGS_compression_ratio > 1) {
@@ -2460,6 +2502,8 @@ class Benchmark {
     }
 
     listener_.reset(new ErrorHandlerListener());
+    compaction_listener_.reset(
+        new CompactionListener(std::make_shared<StderrLogger>()));
   }
 
   ~Benchmark() {
@@ -3694,6 +3738,9 @@ class Benchmark {
     }
 
     options.listeners.emplace_back(listener_);
+    if (FLAGS_compaction_listenr) {
+      options.listeners.emplace_back(compaction_listener_);
+    }
     if (FLAGS_num_multi_db <= 1) {
       OpenDb(options, FLAGS_db, &db_);
     } else {

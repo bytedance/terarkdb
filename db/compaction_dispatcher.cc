@@ -26,6 +26,7 @@
 #include <terark/util/process.hpp>
 #endif
 
+#include "db/compaction.h"
 #include "db/compaction_iterator.h"
 #include "db/map_builder.h"
 #include "db/merge_helper.h"
@@ -931,7 +932,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
       }
     }
     if (s.ok()) {
-      meta.marked_for_compaction =
+      meta.marked_for_compaction |=
           builder->NeedCompact() ? FileMetaData::kMarkedFromTableBuilder : 0;
       meta.prop.num_entries = builder->NumEntries();
       for (auto& pair : dependence) {

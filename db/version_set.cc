@@ -2151,6 +2151,7 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
     }
     assert(temp.size() == files.size());
 
+    // initialize files_by_compaction_pri_
     std::stable_sort(
         temp.begin(), temp.end(), [&](const Fsize& l, const Fsize& r) {
           // lp rp

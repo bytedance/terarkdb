@@ -198,11 +198,13 @@ class TestFlushListener : public EventListener {
     ASSERT_EQ(prev_fc_info_.db_name, db->GetName());
     ASSERT_EQ(prev_fc_info_.cf_name, info.cf_name);
     ASSERT_EQ(prev_fc_info_.job_id, info.job_id);
-    ASSERT_EQ(prev_fc_info_.file_path, info.file_path);
+    ASSERT_EQ(prev_fc_info_.file_path, info.file_info.file_path);
     ASSERT_EQ(db->GetEnv()->GetThreadID(), info.thread_id);
     ASSERT_GT(info.thread_id, 0U);
-    ASSERT_EQ(info.table_properties.user_collected_properties.find("0")->second,
-              "1");
+    ASSERT_EQ(
+        info.file_info.table_properties.user_collected_properties.find("0")
+            ->second,
+        "1");
   }
 
   std::vector<std::string> flushed_column_family_names_;
@@ -712,7 +714,7 @@ class MemTableSealedListener : public EventListener {
 
   void OnFlushCompleted(DB* /*db*/,
                         const FlushJobInfo& flush_job_info) override {
-    ASSERT_LE(flush_job_info.smallest_seqno, latest_seq_number_);
+    ASSERT_LE(flush_job_info.file_info.smallest_seqno, latest_seq_number_);
   }
 };
 

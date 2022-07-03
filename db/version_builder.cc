@@ -382,8 +382,10 @@ class VersionBuilder::Rep {
           switch (item.f->gc_status) {
             case FileMetaData::kGarbageCollectionForbidden:
               if (item.gc_forbidden_version == dependence_version) {
+                // sst status
                 push_old_file(item.f);
               } else {
+                // sst -> blob , switch mark status
                 if (item.f->refs > 1) {
                   // if item.f in other versions, that assigning
                   // item.f->gc_status to permitted might let this item

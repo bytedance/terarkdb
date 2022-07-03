@@ -60,7 +60,7 @@ class FlushedFileCollector : public EventListener {
 
   virtual void OnFlushCompleted(DB* /*db*/, const FlushJobInfo& info) override {
     std::lock_guard<std::mutex> lock(mutex_);
-    flushed_files_.push_back(info.file_path);
+    flushed_files_.push_back(info.file_info.file_path);
   }
 
   std::vector<std::string> GetFlushedFiles() {

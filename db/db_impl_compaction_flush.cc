@@ -575,13 +575,14 @@ void DBImpl::NotifyOnFlushBegin(ColumnFamilyData* cfd,
     info.cf_name = cfd->GetName();
     // TODO(yhchiang): make db_paths dynamic in case flush does not
     //                 go to L0 in the future.
-    info.file_path = MakeTableFileName(cfd->ioptions()->cf_paths[0].path, 0);
     info.thread_id = env_->GetThreadID();
     info.job_id = job_id;
     info.triggered_writes_slowdown = triggered_writes_slowdown;
     info.triggered_writes_stop = triggered_writes_stop;
-    info.smallest_seqno = 0;
-    info.largest_seqno = 0;
+    info.file_info.file_path =
+        MakeTableFileName(cfd->ioptions()->cf_paths[0].path, 0);
+    info.file_info.smallest_seqno = 0;
+    info.file_info.largest_seqno = 0;
     info.flush_reason = cfd->GetFlushReason();
     for (auto listener : immutable_db_options_.listeners) {
       listener->OnFlushBegin(this, info);
@@ -622,25 +623,33 @@ void DBImpl::NotifyOnFlushCompleted(
   {
     assert(file_meta_vec.size() == prop_vec.size());
     FlushJobInfo info;
+    info.cf_name = cfd->GetName();
+    // TODO(yhchiang): make db_paths dynamic in case flush does not
+    //                 go to L0 in the future.
+    info.thread_id = env_->GetThreadID();
+    info.job_id = job_id;
+    info.triggered_writes_slowdown = triggered_writes_slowdown;
+    info.triggered_writes_stop = triggered_writes_stop;
+    info.flush_reason = cfd->GetFlushReason();
+
     for (size_t i = 0; i < file_meta_vec.size(); ++i) {
       auto file_meta = &file_meta_vec[i];
       auto& prop = prop_vec[i];
-      info.cf_name = cfd->GetName();
-      // TODO(yhchiang): make db_paths dynamic in case flush does not
-      //                 go to L0 in the future.
-      info.file_path = MakeTableFileName(cfd->ioptions()->cf_paths[0].path,
-                                         file_meta->fd.GetNumber());
-      info.thread_id = env_->GetThreadID();
-      info.job_id = job_id;
-      info.triggered_writes_slowdown = triggered_writes_slowdown;
-      info.triggered_writes_stop = triggered_writes_stop;
-      info.smallest_seqno = file_meta->fd.smallest_seqno;
-      info.largest_seqno = file_meta->fd.largest_seqno;
-      info.table_properties = prop;
-      info.flush_reason = cfd->GetFlushReason();
-      for (auto listener : immutable_db_options_.listeners) {
-        listener->OnFlushCompleted(this, info);
+
+      FlushJobInfo::FileInfo file_info;
+      file_info.file_path = MakeTableFileName(cfd->ioptions()->cf_paths[0].path,
+                                              file_meta->fd.GetNumber());
+      file_info.smallest_seqno = file_meta->fd.smallest_seqno;
+      file_info.largest_seqno = file_meta->fd.largest_seqno;
+      file_info.table_properties = prop;
+      if (i == 0) {
+        info.file_info = std::move(file_info);
+      } else {
+        info.blob_file_info.emplace_back(std::move(file_info));
       }
+    }
+    for (auto listener : immutable_db_options_.listeners) {
+      listener->OnFlushCompleted(this, info);
     }
   }
   mutex_.Lock();
@@ -1201,7 +1210,11 @@ void DBImpl::NotifyOnCompactionCompleted(
       for (const auto fmd : *c->inputs(i)) {
         auto fn = TableFileName(c->immutable_cf_options()->cf_paths,
                                 fmd->fd.GetNumber(), fmd->fd.GetPathId());
-        info.input_files.push_back(fn);
+        if (c->compaction_type() != kGarbageCollection) {
+          info.input_files.push_back(fn);
+        } else {
+          info.input_blob_files.push_back(fn);
+        }
         if (info.table_properties.count(fn) == 0) {
           std::shared_ptr<const TableProperties> tp;
           auto s = current->GetTableProperties(&tp, fmd, &fn);
@@ -1215,11 +1228,16 @@ void DBImpl::NotifyOnCompactionCompleted(
       if (!c->IsNewOutputTable(newf.second.fd.GetNumber())) {
         continue;
       }
-      info.output_files.push_back(TableFileName(
-          c->immutable_cf_options()->cf_paths, newf.second.fd.GetNumber(),
-          newf.second.fd.GetPathId()));
+      auto file_name =
+          TableFileName(c->immutable_cf_options()->cf_paths,
+                        newf.second.fd.GetNumber(), newf.second.fd.GetPathId());
+      if (newf.first >= 0) {
+        info.output_files.emplace_back(std::move(file_name));
+      } else {
+        info.output_blob_files.emplace_back(std::move(file_name));
+      }
     }
-    for (auto listener : immutable_db_options_.listeners) {
+    for (auto& listener : immutable_db_options_.listeners) {
       listener->OnCompactionCompleted(this, info);
     }
   }

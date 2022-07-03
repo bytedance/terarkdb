@@ -1236,7 +1236,7 @@ class DbStressListener : public EventListener {
 #ifndef ROCKSDB_LITE
   virtual void OnFlushCompleted(DB* /*db*/, const FlushJobInfo& info) override {
     assert(IsValidColumnFamilyName(info.cf_name));
-    VerifyFilePath(info.file_path);
+    VerifyFilePath(info.file_info.file_path);
     // pretending doing some work here
     std::this_thread::sleep_for(
         std::chrono::microseconds(Random::GetTLSInstance()->Uniform(5000)));
@@ -2190,7 +2190,7 @@ class StressTest {
             "TestBackupRestore\n");
     std::terminate();
   }
-#else  // ROCKSDB_LITE
+#else   // ROCKSDB_LITE
   virtual Status TestBackupRestore(ThreadState* thread,
                                    const std::vector<int>& rand_column_families,
                                    const std::vector<int64_t>& rand_keys) {

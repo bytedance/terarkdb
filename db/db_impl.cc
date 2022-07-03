@@ -137,7 +137,7 @@ class TablePropertiesCollectionIteratorImpl
       file_meta_.emplace(pair.second);
     }
   }
-  virtual ~TablePropertiesCollectionIteratorImpl() {
+  ~TablePropertiesCollectionIteratorImpl() override {
     JobContext job_context(0);
     bool need_purge = false;
     impl_->mutex()->Lock();
@@ -1890,7 +1890,6 @@ void DBImpl::BackgroundCallPurge() {
 #ifndef ROCKSDB_LITE
       wal_manager_.PurgeObsoleteWALFiles();
 #endif  // ROCKSDB_LITE
-
       mutex_.Lock();
     }
   }
@@ -3669,7 +3668,8 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
       }
       deleted_range.resize(c + 1);
       MapBuilder map_builder(job_context.job_id, immutable_db_options_,
-                             env_options_, versions_.get(), stats_, dbname_);
+                             env_options_, versions_.get(),
+                             stats_, dbname_);
       auto level_being_compacted = [vstorage, &auto_release](int level) {
         for (auto f : vstorage->LevelFiles(level)) {
           if (auto_release.file_marked.count(f) == 0) {

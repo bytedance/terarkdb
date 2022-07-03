@@ -218,8 +218,6 @@ struct FileOperationInfo {
 struct FlushJobInfo {
   // the name of the column family
   std::string cf_name;
-  // the path to the newly created file
-  std::string file_path;
   // the id of the thread that completed this flush job.
   uint64_t thread_id;
   // the job id, which is unique in the same thread.
@@ -234,12 +232,19 @@ struct FlushJobInfo {
   // files in level 0.  Compactions should try to compact L0 files down
   // to lower levels as soon as possible.
   bool triggered_writes_stop;
-  // The smallest sequence number in the newly created file
-  SequenceNumber smallest_seqno;
-  // The largest sequence number in the newly created file
-  SequenceNumber largest_seqno;
-  // Table properties of the table being flushed
-  TableProperties table_properties;
+
+  struct FileInfo {
+    // the path to the newly created file
+    std::string file_path;
+    // The smallest sequence number in the newly created file
+    SequenceNumber smallest_seqno;
+    // The largest sequence number in the newly created file
+    SequenceNumber largest_seqno;
+    // Table properties of the table being flushed
+    TableProperties table_properties;
+  };
+  FileInfo file_info;
+  std::vector<FileInfo> blob_file_info;
 
   FlushReason flush_reason;
 };
@@ -280,9 +285,12 @@ struct CompactionJobInfo {
   int output_level;
   // the names of the compaction input files.
   std::vector<std::string> input_files;
+  std::vector<std::string> input_blob_files;
 
   // the names of the compaction output files.
   std::vector<std::string> output_files;
+  std::vector<std::string> output_blob_files;
+
   // Table properties for input and output tables.
   // The map is keyed by values from input_files and output_files.
   TablePropertiesCollection table_properties;

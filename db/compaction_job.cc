@@ -2432,9 +2432,9 @@ Status CompactionJob::FinishCompactionOutputFile(
     }
   }
   if (s.ok()) {
-    meta->marked_for_compaction = sub_compact->builder->NeedCompact()
-                                      ? FileMetaData::kMarkedFromTableBuilder
-                                      : 0;
+    meta->marked_for_compaction |= sub_compact->builder->NeedCompact()
+                                       ? FileMetaData::kMarkedFromTableBuilder
+                                       : 0;
     meta->prop.num_entries = sub_compact->builder->NumEntries();
     for (auto& pair : dependence) {
       meta->prop.dependence.emplace_back(Dependence{pair.first, pair.second});
