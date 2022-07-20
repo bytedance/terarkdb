@@ -122,14 +122,6 @@ enum Tickers : uint32_t {
   // # of bytes written into cache.
   BLOCK_CACHE_BYTES_WRITE_FG,
 
-  // # of times bloom filter has avoided file reads, i.e., negatives.
-  BLOOM_FILTER_USEFUL_FG,
-  // # of times bloom FullFilter has not avoided the reads.
-  BLOOM_FILTER_FULL_POSITIVE_FG,
-  // # of times bloom FullFilter has not avoided the reads and data actually
-  // exist.
-  BLOOM_FILTER_FULL_TRUE_POSITIVE_FG,
-
   BLOCK_CACHE_MISS_BG,
 
   BLOCK_CACHE_HIT_BG,
@@ -395,6 +387,7 @@ enum Histograms : uint32_t {
   NUM_FILES_IN_SINGLE_COMPACTION,
   DB_SEEK,
   SEEK_ON_MEMTABLE_TIME,
+  SEEK_ON_LN_TIME_FG,
   SEEK_ON_L0_TIME_FG,
   SEEK_ON_L1_TIME_FG,
   SEEK_ON_L2_TIME_FG,
@@ -402,6 +395,7 @@ enum Histograms : uint32_t {
   SEEK_ON_L4_TIME_FG,
   SEEK_ON_L5_TIME_FG,
   SEEK_ON_L6_TIME_FG,
+  SEEK_ON_L7_TIME_FG,
   GET_ON_BLOB_TIME_FG,
 
   WRITE_STALL,

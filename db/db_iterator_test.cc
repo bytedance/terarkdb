@@ -121,7 +121,7 @@ TEST_P(DBIteratorTest, NonBlockingIteration) {
   do {
     ReadOptions non_blocking_opts, regular_opts;
     Options options = CurrentOptions();
-    options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
+    options.cf_statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
     non_blocking_opts.read_tier = kBlockCacheTier;
     CreateAndReopenWithCF({"pikachu"}, options);
     // write one kv to the database.
@@ -144,8 +144,10 @@ TEST_P(DBIteratorTest, NonBlockingIteration) {
 
     // verify that a non-blocking iterator does not find any
     // kvs. Neither does it do any IOs to storage.
-    uint64_t numopen = TestGetTickerCount(options, NO_FILE_OPENS);
-    uint64_t cache_added = TestGetTickerCount(options, BLOCK_CACHE_ADD);
+    uint64_t numopen =
+        TestGetTickerCount(options.cf_statistics, NO_FILE_OPENS);
+    uint64_t cache_added =
+        TestGetTickerCount(options.cf_statistics, BLOCK_CACHE_ADD);
     iter = NewIterator(non_blocking_opts, handles_[1]);
     count = 0;
     for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
@@ -153,16 +155,19 @@ TEST_P(DBIteratorTest, NonBlockingIteration) {
     }
     ASSERT_EQ(count, 0);
     ASSERT_TRUE(iter->status().IsIncomplete());
-    ASSERT_EQ(numopen, TestGetTickerCount(options, NO_FILE_OPENS));
-    ASSERT_EQ(cache_added, TestGetTickerCount(options, BLOCK_CACHE_ADD));
+    ASSERT_EQ(numopen,
+              TestGetTickerCount(options.cf_statistics, NO_FILE_OPENS));
+    ASSERT_EQ(cache_added,
+              TestGetTickerCount(options.cf_statistics, BLOCK_CACHE_ADD));
     delete iter;
 
     // read in the specified block via a regular get
     ASSERT_EQ(Get(1, "a"), "b");
 
     // verify that we can find it via a non-blocking scan
-    numopen = TestGetTickerCount(options, NO_FILE_OPENS);
-    cache_added = TestGetTickerCount(options, BLOCK_CACHE_ADD);
+    numopen = TestGetTickerCount(options.cf_statistics, NO_FILE_OPENS);
+    cache_added =
+        TestGetTickerCount(options.cf_statistics, BLOCK_CACHE_ADD);
     iter = NewIterator(non_blocking_opts, handles_[1]);
     count = 0;
     for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
@@ -170,8 +175,10 @@ TEST_P(DBIteratorTest, NonBlockingIteration) {
       count++;
     }
     ASSERT_EQ(count, 1);
-    ASSERT_EQ(numopen, TestGetTickerCount(options, NO_FILE_OPENS));
-    ASSERT_EQ(cache_added, TestGetTickerCount(options, BLOCK_CACHE_ADD));
+    ASSERT_EQ(numopen,
+              TestGetTickerCount(options.cf_statistics, NO_FILE_OPENS));
+    ASSERT_EQ(cache_added,
+              TestGetTickerCount(options.cf_statistics, BLOCK_CACHE_ADD));
     delete iter;
 
     // This test verifies block cache behaviors, which is not used by plain
@@ -522,7 +529,7 @@ TEST_P(DBIteratorTest, IterReseek) {
   Options options = CurrentOptions(options_override);
   options.max_sequential_skip_in_iterations = 3;
   options.create_if_missing = true;
-  options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
+  options.cf_statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   DestroyAndReopen(options);
   CreateAndReopenWithCF({"pikachu"}, options);
 
@@ -535,10 +542,14 @@ TEST_P(DBIteratorTest, IterReseek) {
   ASSERT_OK(Put(1, "b", "bone"));
   Iterator* iter = NewIterator(ReadOptions(), handles_[1]);
   iter->SeekToFirst();
-  ASSERT_EQ(TestGetTickerCount(options, NUMBER_OF_RESEEKS_IN_ITERATION), 0);
+  ASSERT_EQ(TestGetTickerCount(options.cf_statistics,
+                               NUMBER_OF_RESEEKS_IN_ITERATION),
+            0);
   ASSERT_EQ(IterStatus(iter), "a->two");
   iter->Next();
-  ASSERT_EQ(TestGetTickerCount(options, NUMBER_OF_RESEEKS_IN_ITERATION), 0);
+  ASSERT_EQ(TestGetTickerCount(options.cf_statistics,
+                               NUMBER_OF_RESEEKS_IN_ITERATION),
+            0);
   ASSERT_EQ(IterStatus(iter), "b->bone");
   delete iter;
 
@@ -549,7 +560,9 @@ TEST_P(DBIteratorTest, IterReseek) {
   iter->SeekToFirst();
   ASSERT_EQ(IterStatus(iter), "a->three");
   iter->Next();
-  ASSERT_EQ(TestGetTickerCount(options, NUMBER_OF_RESEEKS_IN_ITERATION), 0);
+  ASSERT_EQ(TestGetTickerCount(options.cf_statistics,
+                               NUMBER_OF_RESEEKS_IN_ITERATION),
+            0);
   ASSERT_EQ(IterStatus(iter), "b->bone");
   delete iter;
 
@@ -559,27 +572,33 @@ TEST_P(DBIteratorTest, IterReseek) {
   iter = NewIterator(ReadOptions(), handles_[1]);
   iter->SeekToFirst();
   ASSERT_EQ(IterStatus(iter), "a->four");
-  ASSERT_EQ(TestGetTickerCount(options, NUMBER_OF_RESEEKS_IN_ITERATION), 0);
+  ASSERT_EQ(TestGetTickerCount(options.cf_statistics,
+                               NUMBER_OF_RESEEKS_IN_ITERATION),
+            0);
   iter->Next();
-  ASSERT_EQ(TestGetTickerCount(options, NUMBER_OF_RESEEKS_IN_ITERATION), 1);
+  ASSERT_EQ(TestGetTickerCount(options.cf_statistics,
+                               NUMBER_OF_RESEEKS_IN_ITERATION),
+            1);
   ASSERT_EQ(IterStatus(iter), "b->bone");
   delete iter;
 
   // Testing reverse iterator
   // At this point, we have three versions of "a" and one version of "b".
   // The reseek statistics is already at 1.
-  int num_reseeks = static_cast<int>(
-      TestGetTickerCount(options, NUMBER_OF_RESEEKS_IN_ITERATION));
+  int num_reseeks = static_cast<int>(TestGetTickerCount(
+      options.cf_statistics, NUMBER_OF_RESEEKS_IN_ITERATION));
 
   // Insert another version of b and assert that reseek is not invoked
   ASSERT_OK(Put(1, "b", "btwo"));
   iter = NewIterator(ReadOptions(), handles_[1]);
   iter->SeekToLast();
   ASSERT_EQ(IterStatus(iter), "b->btwo");
-  ASSERT_EQ(TestGetTickerCount(options, NUMBER_OF_RESEEKS_IN_ITERATION),
+  ASSERT_EQ(TestGetTickerCount(options.cf_statistics,
+                               NUMBER_OF_RESEEKS_IN_ITERATION),
             num_reseeks);
   iter->Prev();
-  ASSERT_EQ(TestGetTickerCount(options, NUMBER_OF_RESEEKS_IN_ITERATION),
+  ASSERT_EQ(TestGetTickerCount(options.cf_statistics,
+                               NUMBER_OF_RESEEKS_IN_ITERATION),
             num_reseeks + 1);
   ASSERT_EQ(IterStatus(iter), "a->four");
   delete iter;
@@ -591,12 +610,14 @@ TEST_P(DBIteratorTest, IterReseek) {
   iter = NewIterator(ReadOptions(), handles_[1]);
   iter->SeekToLast();
   ASSERT_EQ(IterStatus(iter), "b->bfour");
-  ASSERT_EQ(TestGetTickerCount(options, NUMBER_OF_RESEEKS_IN_ITERATION),
+  ASSERT_EQ(TestGetTickerCount(options.cf_statistics,
+                               NUMBER_OF_RESEEKS_IN_ITERATION),
             num_reseeks + 2);
   iter->Prev();
 
   // the previous Prev call should have invoked reseek
-  ASSERT_EQ(TestGetTickerCount(options, NUMBER_OF_RESEEKS_IN_ITERATION),
+  ASSERT_EQ(TestGetTickerCount(options.cf_statistics,
+                               NUMBER_OF_RESEEKS_IN_ITERATION),
             num_reseeks + 3);
   ASSERT_EQ(IterStatus(iter), "a->four");
   delete iter;
@@ -995,9 +1016,9 @@ TEST_P(DBIteratorTest, DBIteratorBoundMultiSeek) {
     ASSERT_EQ(iter->key().compare(Slice("foo1")), 0);
 
     uint64_t prev_block_cache_hit =
-        TestGetTickerCount(options, BLOCK_CACHE_HIT);
+        TestGetTickerCount(options.statistics, BLOCK_CACHE_HIT);
     uint64_t prev_block_cache_miss =
-        TestGetTickerCount(options, BLOCK_CACHE_MISS);
+        TestGetTickerCount(options.statistics, BLOCK_CACHE_MISS);
 
     ASSERT_GT(prev_block_cache_hit + prev_block_cache_miss, 0);
 
@@ -1005,9 +1026,9 @@ TEST_P(DBIteratorTest, DBIteratorBoundMultiSeek) {
     ASSERT_TRUE(iter->Valid());
     ASSERT_EQ(iter->key().compare(Slice("foo4")), 0);
     ASSERT_EQ(prev_block_cache_hit,
-              TestGetTickerCount(options, BLOCK_CACHE_HIT));
+              TestGetTickerCount(options.statistics, BLOCK_CACHE_HIT));
     ASSERT_EQ(prev_block_cache_miss,
-              TestGetTickerCount(options, BLOCK_CACHE_MISS));
+              TestGetTickerCount(options.statistics, BLOCK_CACHE_MISS));
 
     iter->Seek("foo2");
     ASSERT_TRUE(iter->Valid());
@@ -1016,9 +1037,9 @@ TEST_P(DBIteratorTest, DBIteratorBoundMultiSeek) {
     ASSERT_TRUE(iter->Valid());
     ASSERT_EQ(iter->key().compare(Slice("foo3")), 0);
     ASSERT_EQ(prev_block_cache_hit,
-              TestGetTickerCount(options, BLOCK_CACHE_HIT));
+              TestGetTickerCount(options.statistics, BLOCK_CACHE_HIT));
     ASSERT_EQ(prev_block_cache_miss,
-              TestGetTickerCount(options, BLOCK_CACHE_MISS));
+              TestGetTickerCount(options.statistics, BLOCK_CACHE_MISS));
   }
 }
 #endif
@@ -1447,7 +1468,7 @@ TEST_P(DBIteratorTest, IterPrevKeyCrossingBlocksRandomized) {
 
 TEST_P(DBIteratorTest, IteratorWithLocalStatistics) {
   Options options = CurrentOptions();
-  options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
+  options.cf_statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   DestroyAndReopen(options);
 
   Random rnd(301);
@@ -1529,13 +1550,15 @@ TEST_P(DBIteratorTest, IteratorWithLocalStatistics) {
     t.join();
   }
 
-  ASSERT_EQ(TestGetTickerCount(options, NUMBER_DB_NEXT), (uint64_t)total_next);
-  ASSERT_EQ(TestGetTickerCount(options, NUMBER_DB_NEXT_FOUND),
+  ASSERT_EQ(TestGetTickerCount(options.cf_statistics, NUMBER_DB_NEXT),
+            (uint64_t)total_next);
+  ASSERT_EQ(TestGetTickerCount(options.cf_statistics, NUMBER_DB_NEXT_FOUND),
             (uint64_t)total_next_found);
-  ASSERT_EQ(TestGetTickerCount(options, NUMBER_DB_PREV), (uint64_t)total_prev);
-  ASSERT_EQ(TestGetTickerCount(options, NUMBER_DB_PREV_FOUND),
+  ASSERT_EQ(TestGetTickerCount(options.cf_statistics, NUMBER_DB_PREV),
+            (uint64_t)total_prev);
+  ASSERT_EQ(TestGetTickerCount(options.cf_statistics, NUMBER_DB_PREV_FOUND),
             (uint64_t)total_prev_found);
-  // ASSERT_EQ(TestGetTickerCount(options, ITER_BYTES_READ),
+  // ASSERT_EQ(TestGetTickerCount(options.cf_statistics, ITER_BYTES_READ),
   // (uint64_t)total_bytes);
 }
 
@@ -1546,6 +1569,7 @@ TEST_P(DBIteratorTest, ReadAhead) {
   options.disable_auto_compactions = true;
   options.blob_size = -1;
   options.write_buffer_size = 4 << 20;
+  options.cf_statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   BlockBasedTableOptions table_options;
   table_options.block_size = 1024;
@@ -1579,21 +1603,24 @@ TEST_P(DBIteratorTest, ReadAhead) {
   ReadOptions read_options;
   auto* iter = NewIterator(read_options);
   iter->SeekToFirst();
-  int64_t num_file_opens = TestGetTickerCount(options, NO_FILE_OPENS);
+  int64_t num_file_opens =
+      TestGetTickerCount(options.statistics, NO_FILE_OPENS);
   size_t bytes_read = env_->random_read_bytes_counter_;
   delete iter;
 
-  int64_t num_file_closes = TestGetTickerCount(options, NO_FILE_CLOSES);
+  int64_t num_file_closes =
+      TestGetTickerCount(options.statistics, NO_FILE_CLOSES);
   env_->random_read_bytes_counter_ = 0;
   options.statistics->setTickerCount(NO_FILE_OPENS, 0);
   read_options.readahead_size = 1024 * 10;
   iter = NewIterator(read_options);
   iter->SeekToFirst();
-  int64_t num_file_opens_readahead = TestGetTickerCount(options, NO_FILE_OPENS);
+  int64_t num_file_opens_readahead =
+      TestGetTickerCount(options.statistics, NO_FILE_OPENS);
   size_t bytes_read_readahead = env_->random_read_bytes_counter_;
   delete iter;
   int64_t num_file_closes_readahead =
-      TestGetTickerCount(options, NO_FILE_CLOSES);
+      TestGetTickerCount(options.statistics, NO_FILE_CLOSES);
   ASSERT_EQ(num_file_opens + 3, num_file_opens_readahead);
   ASSERT_EQ(num_file_closes + 3, num_file_closes_readahead);
   ASSERT_GT(bytes_read_readahead, bytes_read);
@@ -1624,7 +1651,7 @@ TEST_P(DBIteratorTest, DBIteratorSkipRecentDuplicatesTest) {
   options.max_sequential_skip_in_iterations = 3;
   options.prefix_extractor = nullptr;
   options.write_buffer_size = 1 << 27;  // big enough to avoid flush
-  options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
+  options.cf_statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   DestroyAndReopen(options);
 
   // Insert.
@@ -1666,8 +1693,8 @@ TEST_P(DBIteratorTest, DBIteratorSkipRecentDuplicatesTest) {
   EXPECT_EQ(get_perf_context()->internal_merge_count, 0);
   EXPECT_GE(get_perf_context()->internal_recent_skipped_count, 2);
   EXPECT_GE(get_perf_context()->seek_on_memtable_count, 2);
-  EXPECT_EQ(1,
-            options.statistics->getTickerCount(NUMBER_OF_RESEEKS_IN_ITERATION));
+  EXPECT_EQ(1, options.cf_statistics->getTickerCount(
+                   NUMBER_OF_RESEEKS_IN_ITERATION));
 }
 
 TEST_P(DBIteratorTest, Refresh) {
@@ -1916,7 +1943,7 @@ TEST_P(DBIteratorTest, UpperBoundWithPrevReseek) {
 
 TEST_P(DBIteratorTest, SkipStatistics) {
   Options options = CurrentOptions();
-  options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
+  options.cf_statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   DestroyAndReopen(options);
 
   int skip_count = 0;
@@ -1945,7 +1972,8 @@ TEST_P(DBIteratorTest, SkipStatistics) {
   ASSERT_EQ(count, 3);
   delete iter;
   skip_count += 8;  // 3 deletes + 3 original keys + 2 lower in sequence
-  ASSERT_EQ(skip_count, TestGetTickerCount(options, NUMBER_ITER_SKIP));
+  ASSERT_EQ(skip_count,
+            TestGetTickerCount(options.cf_statistics, NUMBER_ITER_SKIP));
 
   iter = NewIterator(ReadOptions());
   count = 0;
@@ -1956,7 +1984,8 @@ TEST_P(DBIteratorTest, SkipStatistics) {
   ASSERT_EQ(count, 3);
   delete iter;
   skip_count += 8;  // Same as above, but in reverse order
-  ASSERT_EQ(skip_count, TestGetTickerCount(options, NUMBER_ITER_SKIP));
+  ASSERT_EQ(skip_count,
+            TestGetTickerCount(options.cf_statistics, NUMBER_ITER_SKIP));
 
   ASSERT_OK(Put("aa", "1"));
   ASSERT_OK(Put("ab", "1"));
@@ -1980,7 +2009,8 @@ TEST_P(DBIteratorTest, SkipStatistics) {
   ASSERT_EQ(count, 1);
   delete iter;
   skip_count += 6;  // 3 deletes + 3 original keys
-  ASSERT_EQ(skip_count, TestGetTickerCount(options, NUMBER_ITER_SKIP));
+  ASSERT_EQ(skip_count,
+            TestGetTickerCount(options.cf_statistics, NUMBER_ITER_SKIP));
 
   iter = NewIterator(ro);
   count = 0;
@@ -1992,7 +2022,8 @@ TEST_P(DBIteratorTest, SkipStatistics) {
   delete iter;
   // 3 deletes + 3 original keys + lower sequence of "a"
   skip_count += 7;
-  ASSERT_EQ(skip_count, TestGetTickerCount(options, NUMBER_ITER_SKIP));
+  ASSERT_EQ(skip_count,
+            TestGetTickerCount(options.cf_statistics, NUMBER_ITER_SKIP));
 }
 
 TEST_P(DBIteratorTest, SeekAfterHittingManyInternalKeys) {

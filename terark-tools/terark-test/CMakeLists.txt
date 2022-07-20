@@ -1,6 +1,10 @@
 Cmake_minimum_required(VERSION 3.0)
 project(rocksdb_test)
 
+if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+    message("[terark-test] skipped on MacOS")
+else()
+
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -DROCKSDB_PLATFORM_POSIX -DOS_MACOSX -DDebugBreak=__builtin_debugtrap -O3 -g3")
 
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1y -DROCKSDB_PLATFORM_POSIX -D_DEBUG=1 -DDebugBreak=__builtin_trap -O2 -g3 -march=haswell -fsanitize=address")
@@ -13,3 +17,5 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCKSDB_PLATFORM_POSIX -DDebugBreak=__
 add_executable(rocksdb_test chaos_test.cc)
 
 target_link_libraries(rocksdb_test terarkdb gtest)
+
+endif()

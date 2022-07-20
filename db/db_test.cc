@@ -4428,7 +4428,7 @@ TEST_F(DBTest, DynamicMiscOptions) {
   options.create_if_missing = true;
   options.max_sequential_skip_in_iterations = 16;
   options.compression = kNoCompression;
-  options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
+  options.cf_statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   DestroyAndReopen(options);
 
   auto assert_reseek_count = [this, &options](int key_start, int num_reseek) {
@@ -4448,8 +4448,8 @@ TEST_F(DBTest, DynamicMiscOptions) {
     iter->Next();
     ASSERT_TRUE(iter->Valid());
     ASSERT_EQ(iter->key().compare(Key(key2)), 0);
-    ASSERT_EQ(num_reseek,
-              TestGetTickerCount(options, NUMBER_OF_RESEEKS_IN_ITERATION));
+    ASSERT_EQ(num_reseek, TestGetTickerCount(options.cf_statistics,
+                                             NUMBER_OF_RESEEKS_IN_ITERATION));
   };
   // No reseek
   assert_reseek_count(100, 0);
@@ -4516,16 +4516,17 @@ TEST_F(DBTest, L0L1L2AndUpHitCounter) {
   options.max_write_buffer_number = 2;
   options.max_background_compactions = 8;
   options.max_background_flushes = 8;
-  options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
+  options.cf_statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   CreateAndReopenWithCF({"mypikachu"}, options);
 
   int numkeys = 20000;
   for (int i = 0; i < numkeys; i++) {
     ASSERT_OK(Put(1, Key(i), "val"));
   }
-  ASSERT_EQ(0, TestGetTickerCount(options, GET_HIT_L0));
-  ASSERT_EQ(0, TestGetTickerCount(options, GET_HIT_L1));
-  ASSERT_EQ(0, TestGetTickerCount(options, GET_HIT_L2_AND_UP));
+  ASSERT_EQ(0, TestGetTickerCount(options.cf_statistics, GET_HIT_L0));
+  ASSERT_EQ(0, TestGetTickerCount(options.cf_statistics, GET_HIT_L1));
+  ASSERT_EQ(0,
+            TestGetTickerCount(options.cf_statistics, GET_HIT_L2_AND_UP));
 
   ASSERT_OK(Flush(1));
   dbfull()->TEST_WaitForCompact();
@@ -4534,13 +4535,16 @@ TEST_F(DBTest, L0L1L2AndUpHitCounter) {
     ASSERT_EQ(Get(1, Key(i)), "val");
   }
 
-  ASSERT_GT(TestGetTickerCount(options, GET_HIT_L0), 100);
-  ASSERT_GT(TestGetTickerCount(options, GET_HIT_L1), 100);
-  ASSERT_GT(TestGetTickerCount(options, GET_HIT_L2_AND_UP), 100);
+  ASSERT_GT(TestGetTickerCount(options.cf_statistics, GET_HIT_L0), 100);
+  ASSERT_GT(TestGetTickerCount(options.cf_statistics, GET_HIT_L1), 100);
+  ASSERT_GT(TestGetTickerCount(options.cf_statistics, GET_HIT_L2_AND_UP),
+            100);
 
-  ASSERT_EQ(numkeys, TestGetTickerCount(options, GET_HIT_L0) +
-                         TestGetTickerCount(options, GET_HIT_L1) +
-                         TestGetTickerCount(options, GET_HIT_L2_AND_UP));
+  ASSERT_EQ(
+      numkeys,
+      TestGetTickerCount(options.cf_statistics, GET_HIT_L0) +
+          TestGetTickerCount(options.cf_statistics, GET_HIT_L1) +
+          TestGetTickerCount(options.cf_statistics, GET_HIT_L2_AND_UP));
 }
 
 TEST_F(DBTest, EncodeDecompressedBlockSizeTest) {
@@ -4675,6 +4679,7 @@ TEST_F(DBTest, MergeTestTime) {
   this->env_->no_slowdown_ = true;
   Options options = CurrentOptions();
   options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
+  options.cf_statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   options.merge_operator.reset(new DelayedMergeOperator(this));
   DestroyAndReopen(options);
 
@@ -4703,7 +4708,9 @@ TEST_F(DBTest, MergeTestTime) {
   }
 
   ASSERT_EQ(1, count);
-  ASSERT_EQ(2000000, TestGetTickerCount(options, MERGE_OPERATION_TOTAL_TIME));
+  ASSERT_EQ(1000000, TestGetTickerCount(options, MERGE_OPERATION_TOTAL_TIME));
+  ASSERT_EQ(1000000, TestGetTickerCount(options.cf_statistics,
+                                        MERGE_OPERATION_TOTAL_TIME));
 #ifdef ROCKSDB_USING_THREAD_STATUS
   ASSERT_GT(TestGetTickerCount(options, FLUSH_WRITE_BYTES), 0);
 #endif  // ROCKSDB_USING_THREAD_STATUS

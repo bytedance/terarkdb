@@ -3683,7 +3683,7 @@ class Benchmark {
 
     options.create_missing_column_families = FLAGS_num_column_families > 1;
     options.statistics = dbstats;
-    options.engine_statistics = cf_stats;
+    options.cf_statistics = cf_stats;
     options.wal_dir = FLAGS_wal_dir;
     options.create_if_missing = !FLAGS_use_existing_db;
     options.dump_malloc_stats = FLAGS_dump_malloc_stats;

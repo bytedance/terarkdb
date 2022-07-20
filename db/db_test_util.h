@@ -977,6 +977,11 @@ class DBTestBase : public testing::Test {
     return options.statistics->getTickerCount(ticker_type);
   }
 
+  uint64_t TestGetTickerCount(std::shared_ptr<Statistics> statistics,
+                              Tickers ticker_type) {
+    return statistics->getTickerCount(ticker_type);
+  }
+
   uint64_t TestGetAndResetTickerCount(const Options& options,
                                       Tickers ticker_type) {
     return options.statistics->getAndResetTickerCount(ticker_type);

@@ -373,6 +373,8 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
        sizeof(std::shared_ptr<CompactionFilterFactory>)},
       {offset_of(&ColumnFamilyOptions::compaction_dispatcher),
        sizeof(std::shared_ptr<CompactionDispatcher>)},
+      {offset_of(&ColumnFamilyOptions::cf_statistics),
+       sizeof(std::shared_ptr<Statistics>)},
       {offset_of(&ColumnFamilyOptions::prefix_extractor),
        sizeof(std::shared_ptr<const SliceTransform>)},
       {offset_of(&ColumnFamilyOptions::table_factory),

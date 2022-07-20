@@ -28,7 +28,7 @@ namespace TERARKDB_NAMESPACE {
 
 static uint64_t TestGetTickerCount(const Options& options,
                                    Tickers ticker_type) {
-  return options.statistics->getTickerCount(ticker_type);
+  return options.cf_statistics->getTickerCount(ticker_type);
 }
 
 class TestIterator : public InternalIterator {
@@ -692,7 +692,7 @@ TEST_F(DBIteratorTest, DBIteratorEmpty) {
 TEST_F(DBIteratorTest, DBIteratorUseSkipCountSkips) {
   ReadOptions ro;
   Options options;
-  options.statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
+  options.cf_statistics = TERARKDB_NAMESPACE::CreateDBStatistics();
   options.merge_operator = MergeOperators::CreateFromStringId("stringappend");
 
   TestIterator* internal_iter = new TestIterator(BytewiseComparator());

@@ -152,18 +152,22 @@ const std::vector<std::pair<Tickers, std::string>> CFTickersNameMap = {
     {BLOCK_CACHE_INDEX_MISS_FG, "rocksdb.block.cache.index.miss.fg"},
     {BLOCK_CACHE_INDEX_HIT_FG, "rocksdb.block.cache.index.hit.fg"},
     {BLOCK_CACHE_INDEX_ADD_FG, "rocksdb.block.cache.index.add.fg"},
-    {BLOCK_CACHE_INDEX_BYTES_INSERT_FG, "rocksdb.block.cache.index.bytes.insert.fg"},
-    {BLOCK_CACHE_INDEX_BYTES_EVICT_FG, "rocksdb.block.cache.index.bytes.evict.fg"},
+    {BLOCK_CACHE_INDEX_BYTES_INSERT_FG,
+     "rocksdb.block.cache.index.bytes.insert.fg"},
+    {BLOCK_CACHE_INDEX_BYTES_EVICT_FG,
+     "rocksdb.block.cache.index.bytes.evict.fg"},
     {BLOCK_CACHE_FILTER_MISS_FG, "rocksdb.block.cache.filter.miss.fg"},
     {BLOCK_CACHE_FILTER_HIT_FG, "rocksdb.block.cache.filter.hit.fg"},
     {BLOCK_CACHE_FILTER_ADD_FG, "rocksdb.block.cache.filter.add.fg"},
     {BLOCK_CACHE_FILTER_BYTES_INSERT_FG,
-        "rocksdb.block.cache.filter.bytes.insert.fg"},
-    {BLOCK_CACHE_FILTER_BYTES_EVICT_FG, "rocksdb.block.cache.filter.bytes.evict.fg"},
+     "rocksdb.block.cache.filter.bytes.insert.fg"},
+    {BLOCK_CACHE_FILTER_BYTES_EVICT_FG,
+     "rocksdb.block.cache.filter.bytes.evict.fg"},
     {BLOCK_CACHE_DATA_MISS_FG, "rocksdb.block.cache.data.miss.fg"},
     {BLOCK_CACHE_DATA_HIT_FG, "rocksdb.block.cache.data.hit.fg"},
     {BLOCK_CACHE_DATA_ADD_FG, "rocksdb.block.cache.data.add.fg"},
-    {BLOCK_CACHE_DATA_BYTES_INSERT_FG, "rocksdb.block.cache.data.bytes.insert.fg"},
+    {BLOCK_CACHE_DATA_BYTES_INSERT_FG,
+     "rocksdb.block.cache.data.bytes.insert.fg"},
     {BLOCK_CACHE_BYTES_READ_FG, "rocksdb.block.cache.bytes.read.fg"},
     {BLOCK_CACHE_BYTES_WRITE_FG, "rocksdb.block.cache.bytes.write.fg"},
 
@@ -174,21 +178,24 @@ const std::vector<std::pair<Tickers, std::string>> CFTickersNameMap = {
     {BLOCK_CACHE_INDEX_MISS_BG, "rocksdb.block.cache.index.miss.bg"},
     {BLOCK_CACHE_INDEX_HIT_BG, "rocksdb.block.cache.index.hit.bg"},
     {BLOCK_CACHE_INDEX_ADD_BG, "rocksdb.block.cache.index.add.bg"},
-    {BLOCK_CACHE_INDEX_BYTES_INSERT_BG, "rocksdb.block.cache.index.bytes.insert.bg"},
-    {BLOCK_CACHE_INDEX_BYTES_EVICT_BG, "rocksdb.block.cache.index.bytes.evict.bg"},
+    {BLOCK_CACHE_INDEX_BYTES_INSERT_BG,
+     "rocksdb.block.cache.index.bytes.insert.bg"},
+    {BLOCK_CACHE_INDEX_BYTES_EVICT_BG,
+     "rocksdb.block.cache.index.bytes.evict.bg"},
     {BLOCK_CACHE_FILTER_MISS_BG, "rocksdb.block.cache.filter.miss.bg"},
     {BLOCK_CACHE_FILTER_HIT_BG, "rocksdb.block.cache.filter.hit.bg"},
     {BLOCK_CACHE_FILTER_ADD_BG, "rocksdb.block.cache.filter.add.bg"},
     {BLOCK_CACHE_FILTER_BYTES_INSERT_BG,
-        "rocksdb.block.cache.filter.bytes.insert.bg"},
-    {BLOCK_CACHE_FILTER_BYTES_EVICT_BG, "rocksdb.block.cache.filter.bytes.evict.bg"},
+     "rocksdb.block.cache.filter.bytes.insert.bg"},
+    {BLOCK_CACHE_FILTER_BYTES_EVICT_BG,
+     "rocksdb.block.cache.filter.bytes.evict.bg"},
     {BLOCK_CACHE_DATA_MISS_BG, "rocksdb.block.cache.data.miss.bg"},
     {BLOCK_CACHE_DATA_HIT_BG, "rocksdb.block.cache.data.hit.bg"},
     {BLOCK_CACHE_DATA_ADD_BG, "rocksdb.block.cache.data.add.bg"},
-    {BLOCK_CACHE_DATA_BYTES_INSERT_BG, "rocksdb.block.cache.data.bytes.insert.bg"},
+    {BLOCK_CACHE_DATA_BYTES_INSERT_BG,
+     "rocksdb.block.cache.data.bytes.insert.bg"},
     {BLOCK_CACHE_BYTES_READ_BG, "rocksdb.block.cache.bytes.read.bg"},
-    {BLOCK_CACHE_BYTES_WRITE_BG, "rocksdb.block.cache.bytes.write.bg"}
-};
+    {BLOCK_CACHE_BYTES_WRITE_BG, "rocksdb.block.cache.bytes.write.bg"}};
 
 const std::vector<std::pair<Histograms, std::string>> CFHistogramsNameMap = {
     {DB_GET, "rocksdb.db.get.micros"},
@@ -196,6 +203,7 @@ const std::vector<std::pair<Histograms, std::string>> CFHistogramsNameMap = {
     {READ_BLOCK_GET_MICROS_FG, "rocksdb.read.block.get.micros.fg"},
     {READ_BLOCK_GET_MICROS_BG, "rocksdb.read.block.get.micros.bg"},
     {SEEK_ON_MEMTABLE_TIME, "rocksdb.seek.memtable.micros"},
+    {SEEK_ON_LN_TIME_FG, "rocksdb.seek.ln.micros.fg"},
     {SEEK_ON_L0_TIME_FG, "rocksdb.seek.l0.micros.fg"},
     {SEEK_ON_L1_TIME_FG, "rocksdb.seek.l1.micros.fg"},
     {SEEK_ON_L2_TIME_FG, "rocksdb.seek.l2.micros.fg"},
@@ -203,8 +211,8 @@ const std::vector<std::pair<Histograms, std::string>> CFHistogramsNameMap = {
     {SEEK_ON_L4_TIME_FG, "rocksdb.seek.l4.micros.fg"},
     {SEEK_ON_L5_TIME_FG, "rocksdb.seek.l5.micros.fg"},
     {SEEK_ON_L6_TIME_FG, "rocksdb.seek.l6.micros.fg"},
-    {GET_ON_BLOB_TIME_FG,"rocksdb.get.blob.micros.fg"}
-};
+    {SEEK_ON_L7_TIME_FG, "rocksdb.seek.l7.micros.fg"},
+    {GET_ON_BLOB_TIME_FG, "rocksdb.get.blob.micros.fg"}};
 
 const std::vector<std::pair<Histograms, std::string>> HistogramsNameMap = {
     {DB_WRITE, "rocksdb.db.write.micros"},
@@ -373,32 +381,35 @@ std::string StatisticsImpl::ToString() const {
   MutexLock lock(&aggregate_lock_);
   std::string res;
   res.reserve(20000);
-  auto ticker = [&](const std::vector<std::pair<Tickers, std::string>> & TickersNameMap){
-    for (const auto& t : TickersNameMap) {
-      assert(t.first < TICKER_ENUM_MAX);
-      char buffer[kTmpStrBufferSize];
-      snprintf(buffer, kTmpStrBufferSize, "%s COUNT : %" PRIu64 "\n",
-               t.second.c_str(), getTickerCountLocked(t.first));
-      res.append(buffer);
-    }
-  };
+  auto ticker =
+      [&](const std::vector<std::pair<Tickers, std::string>>& TickersNameMap) {
+        for (const auto& t : TickersNameMap) {
+          assert(t.first < TICKER_ENUM_MAX);
+          char buffer[kTmpStrBufferSize];
+          snprintf(buffer, kTmpStrBufferSize, "%s COUNT : %" PRIu64 "\n",
+                   t.second.c_str(), getTickerCountLocked(t.first));
+          res.append(buffer);
+        }
+      };
   ticker(TickersNameMap);
   ticker(CFTickersNameMap);
 
-  auto histogram = [&](const std::vector<std::pair<Histograms, std::string>> &HistogramsNameMap){
+  auto histogram = [&](const std::vector<std::pair<Histograms, std::string>>&
+                           HistogramsNameMap) {
     for (const auto& h : HistogramsNameMap) {
       assert(h.first < HISTOGRAM_ENUM_MAX);
       char buffer[kTmpStrBufferSize];
       HistogramData hData;
       getHistogramImplLocked(h.first)->Data(&hData);
-      // don't handle failures - buffer should always be big enough and arguments
-      // should be provided correctly
+      // don't handle failures - buffer should always be big enough and
+      // arguments should be provided correctly
       int ret = snprintf(
           buffer, kTmpStrBufferSize,
           "%s P50 : %f P95 : %f P99 : %f P99.9 : %f P100 : %f COUNT : %" PRIu64
           " SUM : %" PRIu64 "\n",
-          h.second.c_str(), hData.median, hData.percentile95, hData.percentile99,
-          hData.percentile999, hData.max, hData.count, hData.sum);
+          h.second.c_str(), hData.median, hData.percentile95,
+          hData.percentile99, hData.percentile999, hData.max, hData.count,
+          hData.sum);
       if (ret < 0 || ret >= kTmpStrBufferSize) {
         assert(false);
         continue;

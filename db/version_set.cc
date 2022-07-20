@@ -1399,7 +1399,7 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
 
     // report the counters before returning
     if (get_context.State() != GetContext::kNotFound &&
-        get_context.State() != GetContext::kMerge && statistics_ != nullptr) {
+        get_context.State() != GetContext::kMerge && (statistics_ != nullptr || db_statistics_ != nullptr)) {
       get_context.ReportCounters();
     }
     switch (get_context.State()) {
@@ -1431,7 +1431,7 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
     f = fp.GetNextFile();
   }
 
-  if (statistics_ != nullptr) {
+  if (statistics_ != nullptr || db_statistics_ != nullptr) {
     get_context.ReportCounters();
   }
   if (GetContext::kMerge == get_context.State()) {

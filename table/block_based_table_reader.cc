@@ -186,6 +186,9 @@ Cache::Handle* GetEntryFromCache(
       RecordTick(cf_statistics, cf_block_cache_hit_ticker);
       RecordTick(db_statistics, db_block_cache_hit_ticker);
       RecordTick(db_statistics, BLOCK_CACHE_HIT);
+      // total bytes read from cache
+      RecordTick(db_statistics, BLOCK_CACHE_BYTES_READ,
+                 block_cache->GetUsage(cache_handle));
     }
   } else {
     if (get_context != nullptr) {
@@ -2435,9 +2438,10 @@ void BlockBasedTableIteratorBase<TBlockIter, TValue>::Seek(
     const Slice& target) {
   Histograms htype = HISTOGRAM_ENUM_MAX;
   if (is_foreground_operation()) {
-    assert(SEEK_ON_L0_TIME_FG + level_ <= SEEK_ON_L6_TIME_FG);
-    assert(SEEK_ON_L0_TIME_FG + level_ >= SEEK_ON_L0_TIME_FG);
-    htype = static_cast<Histograms>(SEEK_ON_L0_TIME_FG + level_);
+    if (SEEK_ON_L0_TIME_FG + level_ <= SEEK_ON_L7_TIME_FG &&
+        SEEK_ON_L0_TIME_FG + level_ >= SEEK_ON_LN_TIME_FG) {
+      htype = static_cast<Histograms>(SEEK_ON_L0_TIME_FG + level_);
+    }
   }
   is_out_of_bound_ = false;
   if (!CheckPrefixMayMatch(target)) {
@@ -2473,9 +2477,10 @@ void BlockBasedTableIteratorBase<TBlockIter, TValue>::SeekForPrev(
     const Slice& target) {
   Histograms htype = HISTOGRAM_ENUM_MAX;
   if (is_foreground_operation()) {
-    assert(SEEK_ON_L0_TIME_FG + level_ <= SEEK_ON_L6_TIME_FG);
-    assert(SEEK_ON_L0_TIME_FG + level_ >= SEEK_ON_L0_TIME_FG);
-    htype = static_cast<Histograms>(SEEK_ON_L0_TIME_FG + level_);
+    if (SEEK_ON_L0_TIME_FG + level_ <= SEEK_ON_L7_TIME_FG &&
+        SEEK_ON_L0_TIME_FG + level_ >= SEEK_ON_LN_TIME_FG) {
+      htype = static_cast<Histograms>(SEEK_ON_L0_TIME_FG + level_);
+    }
   }
   is_out_of_bound_ = false;
   if (!CheckPrefixMayMatch(target)) {
@@ -2523,9 +2528,10 @@ template <class TBlockIter, typename TValue>
 void BlockBasedTableIteratorBase<TBlockIter, TValue>::SeekToFirst() {
   Histograms htype = HISTOGRAM_ENUM_MAX;
   if (is_foreground_operation()) {
-    assert(SEEK_ON_L0_TIME_FG + level_ <= SEEK_ON_L6_TIME_FG);
-    assert(SEEK_ON_L0_TIME_FG + level_ >= SEEK_ON_L0_TIME_FG);
-    htype = static_cast<Histograms>(SEEK_ON_L0_TIME_FG + level_);
+    if (SEEK_ON_L0_TIME_FG + level_ <= SEEK_ON_L7_TIME_FG &&
+        SEEK_ON_L0_TIME_FG + level_ >= SEEK_ON_LN_TIME_FG) {
+      htype = static_cast<Histograms>(SEEK_ON_L0_TIME_FG + level_);
+    }
   }
   StopWatch sw(env_, statistics_, htype);
   is_out_of_bound_ = false;
@@ -2544,9 +2550,10 @@ template <class TBlockIter, typename TValue>
 void BlockBasedTableIteratorBase<TBlockIter, TValue>::SeekToLast() {
   Histograms htype = HISTOGRAM_ENUM_MAX;
   if (is_foreground_operation()) {
-    assert(SEEK_ON_L0_TIME_FG + level_ <= SEEK_ON_L6_TIME_FG);
-    assert(SEEK_ON_L0_TIME_FG + level_ >= SEEK_ON_L0_TIME_FG);
-    htype = static_cast<Histograms>(SEEK_ON_L0_TIME_FG + level_);
+    if (SEEK_ON_L0_TIME_FG + level_ <= SEEK_ON_L7_TIME_FG &&
+        SEEK_ON_L0_TIME_FG + level_ >= SEEK_ON_LN_TIME_FG) {
+      htype = static_cast<Histograms>(SEEK_ON_L0_TIME_FG + level_);
+    }
   }
   StopWatch sw(env_, statistics_, htype);
   is_out_of_bound_ = false;
