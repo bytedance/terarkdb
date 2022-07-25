@@ -301,7 +301,8 @@ class VersionBuilder::Rep {
         }
         continue;
       }
-      terarkdb_assert(dependence_map.pos(find->second.item_pos) != dependence_map.end());
+      terarkdb_assert(dependence_map.pos(find->second.item_pos) !=
+                      dependence_map.end());
       auto item = &dependence_map.pos(find->second.item_pos)->second;
       if (finish) {
         find->second.depended = true;
@@ -373,8 +374,8 @@ class VersionBuilder::Rep {
       auto& item = it->second;
       if (item.dependence_version == dependence_version) {
         terarkdb_assert(inheritance_counter.count(it->first) > 0 &&
-               inheritance_counter.find(it->first)->second.item_pos ==
-                   it.pos());
+                        inheritance_counter.find(it->first)->second.item_pos ==
+                            it.pos());
         if (finish) {
           uint64_t entry_depended = std::max<uint64_t>(1, item.entry_depended);
           entry_depended = std::min(item.f->prop.num_entries, entry_depended);
@@ -664,7 +665,7 @@ class VersionBuilder::Rep {
         FileMetaData* f = new FileMetaData(pair.second);
         terarkdb_assert(f->table_reader_handle == nullptr);
         terarkdb_assert(level < 0 ||
-               context_->levels[level].count(f->fd.GetNumber()) == 0);
+                        context_->levels[level].count(f->fd.GetNumber()) == 0);
         PutSst(f, level);
       } else {
         uint64_t number = pair.second.fd.GetNumber();

@@ -161,7 +161,6 @@ enum Tickers : uint32_t {
   // # of bytes written into cache.
   BLOCK_CACHE_BYTES_WRITE_BG,
 
-
   // # persistent cache hit
   PERSISTENT_CACHE_HIT,
   // # persistent cache miss
@@ -428,7 +427,8 @@ enum Histograms : uint32_t {
 };
 
 extern const std::vector<std::pair<Histograms, std::string>> HistogramsNameMap;
-extern const std::vector<std::pair<Histograms, std::string>> CFHistogramsNameMap;
+extern const std::vector<std::pair<Histograms, std::string>>
+    CFHistogramsNameMap;
 
 struct HistogramData {
   double median;

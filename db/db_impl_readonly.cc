@@ -234,7 +234,7 @@ Status DB::OpenForReadOnly(
   return s;
 }
 
-#else  // !ROCKSDB_LITE
+#else   // !ROCKSDB_LITE
 
 Status DB::OpenForReadOnly(const Options& /*options*/,
                            const std::string& /*dbname*/, DB** /*dbptr*/,

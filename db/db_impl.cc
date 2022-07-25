@@ -2081,8 +2081,6 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
 
   StopWatch sw_cf(env_, cfd->ioptions()->cf_statistics, DB_GET);
 
-
-
   if (tracer_) {
     // TODO: This mutex should be removed later, to improve performance when
     // tracing is enabled.

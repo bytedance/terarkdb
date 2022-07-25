@@ -1022,7 +1022,8 @@ class VersionSet {
   void SetLastSequence(uint64_t s) {
     terarkdb_assert(s >= last_sequence_);
     // Last visible sequence must always be less than last written seq
-    terarkdb_assert(!db_options_->two_write_queues || s <= last_allocated_sequence_);
+    terarkdb_assert(!db_options_->two_write_queues ||
+                    s <= last_allocated_sequence_);
     last_sequence_.store(s, std::memory_order_release);
   }
 

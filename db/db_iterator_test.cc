@@ -144,8 +144,7 @@ TEST_P(DBIteratorTest, NonBlockingIteration) {
 
     // verify that a non-blocking iterator does not find any
     // kvs. Neither does it do any IOs to storage.
-    uint64_t numopen =
-        TestGetTickerCount(options.cf_statistics, NO_FILE_OPENS);
+    uint64_t numopen = TestGetTickerCount(options.cf_statistics, NO_FILE_OPENS);
     uint64_t cache_added =
         TestGetTickerCount(options.cf_statistics, BLOCK_CACHE_ADD);
     iter = NewIterator(non_blocking_opts, handles_[1]);
@@ -166,8 +165,7 @@ TEST_P(DBIteratorTest, NonBlockingIteration) {
 
     // verify that we can find it via a non-blocking scan
     numopen = TestGetTickerCount(options.cf_statistics, NO_FILE_OPENS);
-    cache_added =
-        TestGetTickerCount(options.cf_statistics, BLOCK_CACHE_ADD);
+    cache_added = TestGetTickerCount(options.cf_statistics, BLOCK_CACHE_ADD);
     iter = NewIterator(non_blocking_opts, handles_[1]);
     count = 0;
     for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
@@ -542,14 +540,14 @@ TEST_P(DBIteratorTest, IterReseek) {
   ASSERT_OK(Put(1, "b", "bone"));
   Iterator* iter = NewIterator(ReadOptions(), handles_[1]);
   iter->SeekToFirst();
-  ASSERT_EQ(TestGetTickerCount(options.cf_statistics,
-                               NUMBER_OF_RESEEKS_IN_ITERATION),
-            0);
+  ASSERT_EQ(
+      TestGetTickerCount(options.cf_statistics, NUMBER_OF_RESEEKS_IN_ITERATION),
+      0);
   ASSERT_EQ(IterStatus(iter), "a->two");
   iter->Next();
-  ASSERT_EQ(TestGetTickerCount(options.cf_statistics,
-                               NUMBER_OF_RESEEKS_IN_ITERATION),
-            0);
+  ASSERT_EQ(
+      TestGetTickerCount(options.cf_statistics, NUMBER_OF_RESEEKS_IN_ITERATION),
+      0);
   ASSERT_EQ(IterStatus(iter), "b->bone");
   delete iter;
 
@@ -560,9 +558,9 @@ TEST_P(DBIteratorTest, IterReseek) {
   iter->SeekToFirst();
   ASSERT_EQ(IterStatus(iter), "a->three");
   iter->Next();
-  ASSERT_EQ(TestGetTickerCount(options.cf_statistics,
-                               NUMBER_OF_RESEEKS_IN_ITERATION),
-            0);
+  ASSERT_EQ(
+      TestGetTickerCount(options.cf_statistics, NUMBER_OF_RESEEKS_IN_ITERATION),
+      0);
   ASSERT_EQ(IterStatus(iter), "b->bone");
   delete iter;
 
@@ -572,13 +570,13 @@ TEST_P(DBIteratorTest, IterReseek) {
   iter = NewIterator(ReadOptions(), handles_[1]);
   iter->SeekToFirst();
   ASSERT_EQ(IterStatus(iter), "a->four");
-  ASSERT_EQ(TestGetTickerCount(options.cf_statistics,
-                               NUMBER_OF_RESEEKS_IN_ITERATION),
-            0);
+  ASSERT_EQ(
+      TestGetTickerCount(options.cf_statistics, NUMBER_OF_RESEEKS_IN_ITERATION),
+      0);
   iter->Next();
-  ASSERT_EQ(TestGetTickerCount(options.cf_statistics,
-                               NUMBER_OF_RESEEKS_IN_ITERATION),
-            1);
+  ASSERT_EQ(
+      TestGetTickerCount(options.cf_statistics, NUMBER_OF_RESEEKS_IN_ITERATION),
+      1);
   ASSERT_EQ(IterStatus(iter), "b->bone");
   delete iter;
 
@@ -593,13 +591,13 @@ TEST_P(DBIteratorTest, IterReseek) {
   iter = NewIterator(ReadOptions(), handles_[1]);
   iter->SeekToLast();
   ASSERT_EQ(IterStatus(iter), "b->btwo");
-  ASSERT_EQ(TestGetTickerCount(options.cf_statistics,
-                               NUMBER_OF_RESEEKS_IN_ITERATION),
-            num_reseeks);
+  ASSERT_EQ(
+      TestGetTickerCount(options.cf_statistics, NUMBER_OF_RESEEKS_IN_ITERATION),
+      num_reseeks);
   iter->Prev();
-  ASSERT_EQ(TestGetTickerCount(options.cf_statistics,
-                               NUMBER_OF_RESEEKS_IN_ITERATION),
-            num_reseeks + 1);
+  ASSERT_EQ(
+      TestGetTickerCount(options.cf_statistics, NUMBER_OF_RESEEKS_IN_ITERATION),
+      num_reseeks + 1);
   ASSERT_EQ(IterStatus(iter), "a->four");
   delete iter;
 
@@ -610,15 +608,15 @@ TEST_P(DBIteratorTest, IterReseek) {
   iter = NewIterator(ReadOptions(), handles_[1]);
   iter->SeekToLast();
   ASSERT_EQ(IterStatus(iter), "b->bfour");
-  ASSERT_EQ(TestGetTickerCount(options.cf_statistics,
-                               NUMBER_OF_RESEEKS_IN_ITERATION),
-            num_reseeks + 2);
+  ASSERT_EQ(
+      TestGetTickerCount(options.cf_statistics, NUMBER_OF_RESEEKS_IN_ITERATION),
+      num_reseeks + 2);
   iter->Prev();
 
   // the previous Prev call should have invoked reseek
-  ASSERT_EQ(TestGetTickerCount(options.cf_statistics,
-                               NUMBER_OF_RESEEKS_IN_ITERATION),
-            num_reseeks + 3);
+  ASSERT_EQ(
+      TestGetTickerCount(options.cf_statistics, NUMBER_OF_RESEEKS_IN_ITERATION),
+      num_reseeks + 3);
   ASSERT_EQ(IterStatus(iter), "a->four");
   delete iter;
 }
@@ -1693,8 +1691,8 @@ TEST_P(DBIteratorTest, DBIteratorSkipRecentDuplicatesTest) {
   EXPECT_EQ(get_perf_context()->internal_merge_count, 0);
   EXPECT_GE(get_perf_context()->internal_recent_skipped_count, 2);
   EXPECT_GE(get_perf_context()->seek_on_memtable_count, 2);
-  EXPECT_EQ(1, options.cf_statistics->getTickerCount(
-                   NUMBER_OF_RESEEKS_IN_ITERATION));
+  EXPECT_EQ(
+      1, options.cf_statistics->getTickerCount(NUMBER_OF_RESEEKS_IN_ITERATION));
 }
 
 TEST_P(DBIteratorTest, Refresh) {

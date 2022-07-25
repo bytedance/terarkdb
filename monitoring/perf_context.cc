@@ -31,13 +31,9 @@ thread_local DBOperationType db_operation_type = kOpTypeUndefined;
 #endif
 #endif
 
-DBOperationType get_db_operation_type() {
-  return db_operation_type;
-}
+DBOperationType get_db_operation_type() { return db_operation_type; }
 
-bool is_foreground_operation() {
-  return db_operation_type == kOpTypeFG;
-}
+bool is_foreground_operation() { return db_operation_type == kOpTypeFG; }
 
 DBOperationTypeGuard::DBOperationTypeGuard(
     const DBOperationType& _db_operation_type) {

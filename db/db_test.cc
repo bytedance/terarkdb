@@ -4525,8 +4525,7 @@ TEST_F(DBTest, L0L1L2AndUpHitCounter) {
   }
   ASSERT_EQ(0, TestGetTickerCount(options.cf_statistics, GET_HIT_L0));
   ASSERT_EQ(0, TestGetTickerCount(options.cf_statistics, GET_HIT_L1));
-  ASSERT_EQ(0,
-            TestGetTickerCount(options.cf_statistics, GET_HIT_L2_AND_UP));
+  ASSERT_EQ(0, TestGetTickerCount(options.cf_statistics, GET_HIT_L2_AND_UP));
 
   ASSERT_OK(Flush(1));
   dbfull()->TEST_WaitForCompact();
@@ -4537,14 +4536,12 @@ TEST_F(DBTest, L0L1L2AndUpHitCounter) {
 
   ASSERT_GT(TestGetTickerCount(options.cf_statistics, GET_HIT_L0), 100);
   ASSERT_GT(TestGetTickerCount(options.cf_statistics, GET_HIT_L1), 100);
-  ASSERT_GT(TestGetTickerCount(options.cf_statistics, GET_HIT_L2_AND_UP),
-            100);
+  ASSERT_GT(TestGetTickerCount(options.cf_statistics, GET_HIT_L2_AND_UP), 100);
 
-  ASSERT_EQ(
-      numkeys,
-      TestGetTickerCount(options.cf_statistics, GET_HIT_L0) +
-          TestGetTickerCount(options.cf_statistics, GET_HIT_L1) +
-          TestGetTickerCount(options.cf_statistics, GET_HIT_L2_AND_UP));
+  ASSERT_EQ(numkeys,
+            TestGetTickerCount(options.cf_statistics, GET_HIT_L0) +
+                TestGetTickerCount(options.cf_statistics, GET_HIT_L1) +
+                TestGetTickerCount(options.cf_statistics, GET_HIT_L2_AND_UP));
 }
 
 TEST_F(DBTest, EncodeDecompressedBlockSizeTest) {

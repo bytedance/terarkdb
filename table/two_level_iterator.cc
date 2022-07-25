@@ -271,10 +271,10 @@ class MapSstIterator final : public InternalIterator {
         return false;
       }
       terarkdb_assert(file_meta_ == nullptr ||
-             std::binary_search(file_meta_->prop.dependence.begin(),
-                                file_meta_->prop.dependence.end(),
-                                Dependence{link_[i], 0},
-                                TERARK_CMP(file_number, <)));
+                      std::binary_search(file_meta_->prop.dependence.begin(),
+                                         file_meta_->prop.dependence.end(),
+                                         Dependence{link_[i], 0},
+                                         TERARK_CMP(file_number, <)));
     }
     return true;
   }

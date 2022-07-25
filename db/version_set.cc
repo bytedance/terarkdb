@@ -168,9 +168,10 @@ class FilePicker {
           // right bound point to the same find, we are sure key falls in
           // range.
           terarkdb_assert(curr_level_ == 0 ||
-                 curr_index_in_curr_level_ == start_index_in_curr_level_ ||
-                 user_comparator_->Compare(
-                     user_key_, ExtractUserKey(f->smallest_key)) <= 0);
+                          curr_index_in_curr_level_ ==
+                              start_index_in_curr_level_ ||
+                          user_comparator_->Compare(
+                              user_key_, ExtractUserKey(f->smallest_key)) <= 0);
 
           int cmp_smallest = user_comparator_->Compare(
               user_key_, ExtractUserKey(f->smallest_key));
@@ -276,7 +277,7 @@ class FilePicker {
         // also empty.
         terarkdb_assert(search_left_bound_ == 0);
         terarkdb_assert(search_right_bound_ == -1 ||
-               search_right_bound_ == FileIndexer::kLevelMaxIndex);
+                        search_right_bound_ == FileIndexer::kLevelMaxIndex);
         // Since current level is empty, it will need to search all files in
         // the next level
         search_left_bound_ = 0;
@@ -1399,7 +1400,8 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
 
     // report the counters before returning
     if (get_context.State() != GetContext::kNotFound &&
-        get_context.State() != GetContext::kMerge && (statistics_ != nullptr || db_statistics_ != nullptr)) {
+        get_context.State() != GetContext::kMerge &&
+        (statistics_ != nullptr || db_statistics_ != nullptr)) {
       get_context.ReportCounters();
     }
     switch (get_context.State()) {
@@ -2029,7 +2031,7 @@ void VersionStorageInfo::SetFinalized() {
     return;
   }
   terarkdb_assert(base_level_ < 0 || num_levels() == 1 ||
-         (base_level_ >= 1 && base_level_ < num_levels()));
+                  (base_level_ >= 1 && base_level_ < num_levels()));
   // Verify all levels newer than base_level are empty except L0
   for (int level = 1; level < base_level(); level++) {
     terarkdb_assert(NumLevelBytes(level) == 0);
@@ -2045,7 +2047,8 @@ void VersionStorageInfo::SetFinalized() {
   int num_empty_non_l0_level = 0;
   for (int level = 0; level < num_levels(); level++) {
     terarkdb_assert(LevelFiles(level).size() == 0 ||
-           LevelFiles(level).size() == LevelFilesBrief(level).num_files);
+                    LevelFiles(level).size() ==
+                        LevelFilesBrief(level).num_files);
     if (level > 0 && NumLevelBytes(level) > 0) {
       num_empty_non_l0_level++;
     }
@@ -2175,7 +2178,8 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
       files_by_compaction_pri.push_back(static_cast<int>(temp[i].index));
     }
     next_file_to_compact_by_size_[level] = 0;
-    terarkdb_assert(files_[level].size() == files_by_compaction_pri_[level].size());
+    terarkdb_assert(files_[level].size() ==
+                    files_by_compaction_pri_[level].size());
   }
 }
 
@@ -2572,7 +2576,7 @@ void VersionStorageInfo::ExtendFileRangeWithinInterval(
     auto& smallest = f->file_metadata->smallest;
     auto& largest = f->file_metadata->largest;
     terarkdb_assert(sstableKeyCompare(user_cmp, begin, smallest) <= 0 &&
-           sstableKeyCompare(user_cmp, largest, end) <= 0);
+                    sstableKeyCompare(user_cmp, largest, end) <= 0);
   }
 #endif
   ExtendFileRangeOverlappingInterval(level, begin, end, mid_index, start_index,
@@ -3116,7 +3120,7 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
             }
             for (auto i = group_start; i < batch_edits.size(); ++i) {
               terarkdb_assert(static_cast<uint32_t>(k) <=
-                     batch_edits.back()->remaining_entries_);
+                              batch_edits.back()->remaining_entries_);
               batch_edits[i]->remaining_entries_ -= static_cast<uint32_t>(k);
             }
           }
@@ -3130,7 +3134,7 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
         uint32_t cf_id = last_writer->cfd->GetID();
         if (versions[i]->cfd()->GetID() == cf_id) {
           terarkdb_assert(!builder_guards.empty() &&
-                 builder_guards.size() == versions.size());
+                          builder_guards.size() == versions.size());
           builder = builder_guards[i].get();
           TEST_SYNC_POINT_CALLBACK(
               "VersionSet::ProcessManifestWrites:SameColumnFamily", &cf_id);
@@ -3181,7 +3185,7 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
         break;
       }
       terarkdb_assert(i - k + batch_edits[i]->remaining_entries_ ==
-             batch_edits[k]->remaining_entries_);
+                      batch_edits[k]->remaining_entries_);
       if (batch_edits[i]->remaining_entries_ == 0) {
         ++i;
         break;
@@ -3231,7 +3235,7 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
       StopWatch sw(env_, db_options_->statistics.get(), BUILD_VERSION_TIME);
       for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
         terarkdb_assert(!builder_guards.empty() &&
-               builder_guards.size() == versions.size());
+                        builder_guards.size() == versions.size());
         builder_guards[i]->DoApplyAndSaveTo(
             versions[i]->storage_info(),
             mutable_cf_options_ptrs[i]->maintainer_job_ratio);
@@ -3246,9 +3250,9 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
           TableCache::kInfiniteCapacity;
       for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
         terarkdb_assert(!builder_guards.empty() &&
-               builder_guards.size() == versions.size());
+                        builder_guards.size() == versions.size());
         terarkdb_assert(!mutable_cf_options_ptrs.empty() &&
-               builder_guards.size() == versions.size());
+                        builder_guards.size() == versions.size());
         ColumnFamilyData* cfd = versions[i]->cfd_;
         builder_guards[i]->version_builder()->LoadTableHandlers(
             cfd->internal_stats(),
@@ -3377,7 +3381,8 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
           }
         }
         if (max_log_number_in_batch != 0) {
-          terarkdb_assert(version->cfd_->GetLogNumber() <= max_log_number_in_batch);
+          terarkdb_assert(version->cfd_->GetLogNumber() <=
+                          max_log_number_in_batch);
           version->cfd_->SetLogNumber(max_log_number_in_batch);
         }
       }
@@ -3499,7 +3504,8 @@ Status VersionSet::LogAndApply(
 
   std::deque<ManifestWriter> writers;
   if (num_cfds > 0) {
-    terarkdb_assert(static_cast<size_t>(num_cfds) == mutable_cf_options_list.size());
+    terarkdb_assert(static_cast<size_t>(num_cfds) ==
+                    mutable_cf_options_list.size());
     terarkdb_assert(static_cast<size_t>(num_cfds) == edit_lists.size());
   }
   for (int i = 0; i < num_cfds; ++i) {

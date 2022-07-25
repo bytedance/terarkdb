@@ -288,7 +288,7 @@ Status UncompressBlockContentsForCompressionType(
   CacheAllocationPtr ubuf;
 
   terarkdb_assert(uncompression_ctx.type() != kNoCompression &&
-         "Invalid compression type");
+                  "Invalid compression type");
 
   StopWatchNano timer(ioptions.env, ShouldReportDetailedTime(
                                         ioptions.env, ioptions.statistics));

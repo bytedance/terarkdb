@@ -547,7 +547,8 @@ InternalIterator* NewMemTableIterator(Env* _env, MemTable& mem,
 
 InternalIterator* MemTable::NewIterator(const ReadOptions& read_options,
                                         Arena* arena) {
-  return NewMemTableIterator(env_,*this, read_options, arena,moptions_.statistics);
+  return NewMemTableIterator(env_, *this, read_options, arena,
+                             moptions_.statistics);
 }
 
 FragmentedRangeTombstoneIterator* MemTable::NewRangeTombstoneIterator(

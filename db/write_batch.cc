@@ -436,7 +436,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
       case kTypeColumnFamilyValue:
       case kTypeValue:
         terarkdb_assert(content_flags_.load(std::memory_order_relaxed) &
-               (ContentFlags::DEFERRED | ContentFlags::HAS_PUT));
+                        (ContentFlags::DEFERRED | ContentFlags::HAS_PUT));
         s = handler->PutCF(column_family, key, value);
         if (LIKELY(s.ok())) {
           empty_batch = false;
@@ -446,7 +446,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
       case kTypeColumnFamilyDeletion:
       case kTypeDeletion:
         terarkdb_assert(content_flags_.load(std::memory_order_relaxed) &
-               (ContentFlags::DEFERRED | ContentFlags::HAS_DELETE));
+                        (ContentFlags::DEFERRED | ContentFlags::HAS_DELETE));
         s = handler->DeleteCF(column_family, key);
         if (LIKELY(s.ok())) {
           empty_batch = false;
@@ -455,8 +455,9 @@ Status WriteBatch::Iterate(Handler* handler) const {
         break;
       case kTypeColumnFamilySingleDeletion:
       case kTypeSingleDeletion:
-        terarkdb_assert(content_flags_.load(std::memory_order_relaxed) &
-               (ContentFlags::DEFERRED | ContentFlags::HAS_SINGLE_DELETE));
+        terarkdb_assert(
+            content_flags_.load(std::memory_order_relaxed) &
+            (ContentFlags::DEFERRED | ContentFlags::HAS_SINGLE_DELETE));
         s = handler->SingleDeleteCF(column_family, key);
         if (LIKELY(s.ok())) {
           empty_batch = false;
@@ -465,8 +466,9 @@ Status WriteBatch::Iterate(Handler* handler) const {
         break;
       case kTypeColumnFamilyRangeDeletion:
       case kTypeRangeDeletion:
-        terarkdb_assert(content_flags_.load(std::memory_order_relaxed) &
-               (ContentFlags::DEFERRED | ContentFlags::HAS_DELETE_RANGE));
+        terarkdb_assert(
+            content_flags_.load(std::memory_order_relaxed) &
+            (ContentFlags::DEFERRED | ContentFlags::HAS_DELETE_RANGE));
         s = handler->DeleteRangeCF(column_family, key, value);
         if (LIKELY(s.ok())) {
           empty_batch = false;
@@ -476,7 +478,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
       case kTypeColumnFamilyMerge:
       case kTypeMerge:
         terarkdb_assert(content_flags_.load(std::memory_order_relaxed) &
-               (ContentFlags::DEFERRED | ContentFlags::HAS_MERGE));
+                        (ContentFlags::DEFERRED | ContentFlags::HAS_MERGE));
         s = handler->MergeCF(column_family, key, value);
         if (LIKELY(s.ok())) {
           empty_batch = false;
@@ -494,8 +496,9 @@ Status WriteBatch::Iterate(Handler* handler) const {
         empty_batch = false;
         break;
       case kTypeBeginPrepareXID:
-        terarkdb_assert(content_flags_.load(std::memory_order_relaxed) &
-               (ContentFlags::DEFERRED | ContentFlags::HAS_BEGIN_PREPARE));
+        terarkdb_assert(
+            content_flags_.load(std::memory_order_relaxed) &
+            (ContentFlags::DEFERRED | ContentFlags::HAS_BEGIN_PREPARE));
         handler->MarkBeginPrepare();
         empty_batch = false;
         if (!handler->WriteAfterCommit()) {
@@ -513,8 +516,9 @@ Status WriteBatch::Iterate(Handler* handler) const {
         }
         break;
       case kTypeBeginPersistedPrepareXID:
-        terarkdb_assert(content_flags_.load(std::memory_order_relaxed) &
-               (ContentFlags::DEFERRED | ContentFlags::HAS_BEGIN_PREPARE));
+        terarkdb_assert(
+            content_flags_.load(std::memory_order_relaxed) &
+            (ContentFlags::DEFERRED | ContentFlags::HAS_BEGIN_PREPARE));
         handler->MarkBeginPrepare();
         empty_batch = false;
         if (handler->WriteAfterCommit()) {
@@ -526,8 +530,9 @@ Status WriteBatch::Iterate(Handler* handler) const {
         }
         break;
       case kTypeBeginUnprepareXID:
-        terarkdb_assert(content_flags_.load(std::memory_order_relaxed) &
-               (ContentFlags::DEFERRED | ContentFlags::HAS_BEGIN_UNPREPARE));
+        terarkdb_assert(
+            content_flags_.load(std::memory_order_relaxed) &
+            (ContentFlags::DEFERRED | ContentFlags::HAS_BEGIN_UNPREPARE));
         handler->MarkBeginPrepare(true /* unprepared */);
         empty_batch = false;
         if (handler->WriteAfterCommit()) {
@@ -545,20 +550,21 @@ Status WriteBatch::Iterate(Handler* handler) const {
         }
         break;
       case kTypeEndPrepareXID:
-        terarkdb_assert(content_flags_.load(std::memory_order_relaxed) &
-               (ContentFlags::DEFERRED | ContentFlags::HAS_END_PREPARE));
+        terarkdb_assert(
+            content_flags_.load(std::memory_order_relaxed) &
+            (ContentFlags::DEFERRED | ContentFlags::HAS_END_PREPARE));
         handler->MarkEndPrepare(xid);
         empty_batch = true;
         break;
       case kTypeCommitXID:
         terarkdb_assert(content_flags_.load(std::memory_order_relaxed) &
-               (ContentFlags::DEFERRED | ContentFlags::HAS_COMMIT));
+                        (ContentFlags::DEFERRED | ContentFlags::HAS_COMMIT));
         handler->MarkCommit(xid);
         empty_batch = true;
         break;
       case kTypeRollbackXID:
         terarkdb_assert(content_flags_.load(std::memory_order_relaxed) &
-               (ContentFlags::DEFERRED | ContentFlags::HAS_ROLLBACK));
+                        (ContentFlags::DEFERRED | ContentFlags::HAS_ROLLBACK));
         handler->MarkRollback(xid);
         empty_batch = true;
         break;
@@ -1601,7 +1607,8 @@ class MemTableInserter : public WriteBatch::Handler {
 
   Status MarkEndPrepare(const Slice& name) override {
     terarkdb_assert(db_);
-    terarkdb_assert((rebuilding_trx_ != nullptr) == (recovering_log_number_ != 0));
+    terarkdb_assert((rebuilding_trx_ != nullptr) ==
+                    (recovering_log_number_ != 0));
 
     if (recovering_log_number_ != 0) {
       terarkdb_assert(db_->allow_2pc());
@@ -1746,7 +1753,8 @@ Status WriteBatchInternal::InsertInto(
       return w->status;
     }
     terarkdb_assert(!seq_per_batch || w->batch_cnt != 0);
-    terarkdb_assert(!seq_per_batch || inserter.sequence() - w->sequence == w->batch_cnt);
+    terarkdb_assert(!seq_per_batch ||
+                    inserter.sequence() - w->sequence == w->batch_cnt);
   }
   return Status::OK();
 }
@@ -1769,7 +1777,8 @@ Status WriteBatchInternal::InsertInto(
   inserter.set_log_number_ref(writer->log_ref);
   Status s = writer->batch->Iterate(&inserter);
   terarkdb_assert(!seq_per_batch || batch_cnt != 0);
-  terarkdb_assert(!seq_per_batch || inserter.sequence() - sequence == batch_cnt);
+  terarkdb_assert(!seq_per_batch ||
+                  inserter.sequence() - sequence == batch_cnt);
   if (concurrent_memtable_writes) {
     inserter.PostProcess();
   }
