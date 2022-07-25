@@ -62,6 +62,7 @@ class ChaosTest {
   }
 
   void set_options() {
+    options.table_evict_type = static_cast<TableEvictType>(FLAGS_force_evict);
     options.allow_mmap_reads = false;
     options.max_open_files = 8192;
     options.allow_fallocate = true;
