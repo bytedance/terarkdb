@@ -98,6 +98,10 @@ ENDIF()
 
 if(WITH_ZENFS)
   include_directories(third-party/zenfs)
+  FILE(GLOB ZENFS_CMAKE_FILE "third-party/zenfs/CMakeLists.txt")
+  IF(EXISTS ${ZENFS_CMAKE_FILE})
+    ADD_SUBDIRECTORY(third-party/zenfs)
+  ENDIF()
 ENDIF()
 
 #-------------------------- Print Global Options
@@ -389,7 +393,11 @@ if(WITH_TBB)
 endif()
 
 if(WITH_ZENFS)
-  list(APPEND THIRDPARTY_LIBS zbd)
+  if(DEFINED zenfs_LIBS)
+    list(APPEND THIRDPARTY_LIBS ${zenfs_LIBS})
+  else()
+    list(APPEND THIRDPARTY_LIBS zbd)
+  endif()
 endif()
 
 # Stall notifications eat some performance from inserts
@@ -849,11 +857,17 @@ if(WIN32)
       env/io_posix.cc)
 
     if(WITH_ZENFS)
-      list(APPEND SOURCES
-        env/env_zenfs.cc
-        third-party/zenfs/fs/fs_zenfs.cc
-        third-party/zenfs/fs/io_zenfs.cc
-        third-party/zenfs/fs/zbd_zenfs.cc)
+      list(APPEND SOURCES env/env_zenfs.cc)
+      if(DEFINED zenfs_SOURCES)
+        foreach(SOURCE_FILE ${zenfs_SOURCES})
+          list(APPEND SOURCES "third-party/zenfs/${SOURCE_FILE}")
+	endforeach()
+      else()
+        list(APPEND SOURCES
+          third-party/zenfs/fs/fs_zenfs.cc
+          third-party/zenfs/fs/io_zenfs.cc
+          third-party/zenfs/fs/zbd_zenfs.cc)
+      endif()
     endif()
 endif()
 
