@@ -20,6 +20,7 @@
 
 #include <chrono>
 #include <cstdarg>
+#include <cstdint>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -69,6 +70,12 @@ enum class IOType : uint8_t {
   kIndex,
   kMetadata,
   kWAL,
+
+  /*
+   * We also need level information
+   */
+  kKeySST,
+  kValueSST,
   kManifest,
   kLog,
   kUnknown,
@@ -754,13 +761,15 @@ class FSWritableFile {
       : last_preallocated_block_(0),
         preallocation_block_size_(0),
         io_priority_(Env::IO_TOTAL),
-        write_hint_(Env::WLTH_NOT_SET) {}
+        write_hint_(Env::WLTH_NOT_SET),
+        file_level_(uint64_t(-1)) {}
 
   explicit FSWritableFile(const FileOptions& options)
       : last_preallocated_block_(0),
         preallocation_block_size_(0),
         io_priority_(Env::IO_TOTAL),
-        write_hint_(Env::WLTH_NOT_SET) {}
+        write_hint_(Env::WLTH_NOT_SET),
+        file_level_(uint64_t(-1)) {}
 
   virtual ~FSWritableFile() {}
 
@@ -768,7 +777,9 @@ class FSWritableFile {
   // Note: A WriteableFile object must support either Append or
   // PositionedAppend, so the users cannot mix the two.
   virtual IOStatus Append(const Slice& data, const IOOptions& options,
-                          IODebugContext* dbg) = 0;
+                          IODebugContext* dbg) {
+    return IOStatus::OK();
+  };
 
   // Append data with verification information.
   // Note that this API change is experimental and it might be changed in
@@ -835,10 +846,16 @@ class FSWritableFile {
                             IODebugContext* /*dbg*/) {
     return IOStatus::OK();
   }
-  virtual IOStatus Close(const IOOptions& options, IODebugContext* dbg) = 0;
-  virtual IOStatus Flush(const IOOptions& options, IODebugContext* dbg) = 0;
-  virtual IOStatus Sync(const IOOptions& options,
-                        IODebugContext* dbg) = 0;  // sync data
+  virtual IOStatus Close(const IOOptions& options, IODebugContext* dbg) {
+    return IOStatus::OK();
+  }
+
+  virtual IOStatus Flush(const IOOptions& options, IODebugContext* dbg) {
+    return IOStatus::OK();
+  }
+  virtual IOStatus Sync(const IOOptions& options, IODebugContext* dbg) {
+    return IOStatus::OK();
+  }
 
   /*
    * Sync data and/or metadata as well.
@@ -899,6 +916,9 @@ class FSWritableFile {
   virtual size_t GetUniqueId(char* /*id*/, size_t /*max_size*/) const {
     return 0;  // Default implementation to prevent issues with backwards
   }
+
+  virtual uint64_t GetFileLevel() const { return file_level_; }
+  virtual void SetFileLevel(uint64_t level) { file_level_ = level; }
 
   // Remove any kind of caching of data from the offset to offset+length
   // of this file. If the length is 0, then it refers to the end of file.
@@ -968,6 +988,17 @@ class FSWritableFile {
  protected:
   Env::IOPriority io_priority_;
   Env::WriteLifeTimeHint write_hint_;
+
+  /*
+   * (xzw):
+   * I changed class WritableFile and FSWritableFile from two abstract classes
+   * to concrete classes so that we can instantiate them to carry file_level_
+   * from the DB to the FS.
+   *
+   * We do not use the class FileOptions because the file level is not visible
+   * to FileOptions when its instances are created. 
+   */
+  uint64_t file_level_;
 };
 
 // A file abstraction for random reading and writing.

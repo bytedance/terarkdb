@@ -124,11 +124,12 @@ Status BuildTable(
     TableBuilder* builder;
     std::unique_ptr<WritableFileWriter> file_writer;
     {
-      std::unique_ptr<WritableFile> file;
+      std::unique_ptr<WritableFile> file = std::make_unique<WritableFile>();
 #ifndef NDEBUG
       bool use_direct_writes = env_options.use_direct_writes;
       TEST_SYNC_POINT_CALLBACK("BuildTable:create_file", &use_direct_writes);
 #endif  // !NDEBUG
+      file->SetFileLevel(level);
       s = NewWritableFile(env, fname, &file, env_options);
       if (!s.ok()) {
         EventHelpers::LogAndNotifyTableFileCreationFinished(

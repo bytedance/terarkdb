@@ -1058,7 +1058,6 @@ void InternalStats::DumpCFMapStats(
       (*cf_stats)[key_str] = std::to_string(stat_ent.second);
     }
   }
-
   DumpCFMapStatsIOStalls(cf_stats);
 }
 void InternalStats::DumpBlobStat(

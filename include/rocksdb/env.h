@@ -19,6 +19,7 @@
 #include <stdint.h>
 
 #include <cstdarg>
+#include <cstdint>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -78,6 +79,7 @@ enum class DBFileType {
   kWAL = 1,
   kFlushFile = 2,
   kCompactionOutputFile = 3,
+  kManifest = 4,
 };
 
 // Options while opening a file to read/write
@@ -779,13 +781,17 @@ class WritableFile {
       : last_preallocated_block_(0),
         preallocation_block_size_(0),
         io_priority_(Env::IO_TOTAL),
-        write_hint_(Env::WLTH_NOT_SET) {}
+        write_hint_(Env::WLTH_NOT_SET),
+        file_type_(DBFileType::kNoType),
+        file_level_(uint64_t(-1)) {}
 
   explicit WritableFile(const EnvOptions& options)
       : last_preallocated_block_(0),
         preallocation_block_size_(0),
         io_priority_(Env::IO_TOTAL),
-        write_hint_(Env::WLTH_NOT_SET) {}
+        write_hint_(Env::WLTH_NOT_SET),
+        file_type_(DBFileType::kNoType),
+        file_level_((uint64_t(-1))) {}
   // No copying allowed
   WritableFile(const WritableFile&) = delete;
   void operator=(const WritableFile&) = delete;
@@ -795,7 +801,7 @@ class WritableFile {
   // Append data to the end of the file
   // Note: A WriteableFile object must support either Append or
   // PositionedAppend, so the users cannot mix the two.
-  virtual Status Append(const Slice& data) = 0;
+  virtual Status Append(const Slice& data) { return Status::OK(); }
 
   // PositionedAppend data to the specified offset. The new EOF after append
   // must be larger than the previous EOF. This is to be used when writes are
@@ -829,9 +835,9 @@ class WritableFile {
   // with other writes to follow.
   virtual Status Truncate(uint64_t /*size*/) { return Status::OK(); }
   virtual Status Frozen() { return Status::OK(); }
-  virtual Status Close() = 0;
-  virtual Status Flush() = 0;
-  virtual Status Sync() = 0;  // sync data
+  virtual Status Close() { return Status::OK(); };
+  virtual Status Flush() { return Status::OK(); };
+  virtual Status Sync() { return Status::OK(); };  // sync data
 
   /*
    * Sync data and/or metadata as well.
@@ -868,6 +874,8 @@ class WritableFile {
 
   virtual void SetFileType(DBFileType type) { file_type_ = type; }
   virtual DBFileType GetFileType() const { return file_type_; }
+  virtual void SetFileLevel(uint64_t level) { file_level_ = level; }
+  virtual uint64_t GetFileLevel() const { return file_level_; }
 
   /*
    * Get the size of valid data in the file.
@@ -958,6 +966,7 @@ class WritableFile {
   Env::IOPriority io_priority_;
   Env::WriteLifeTimeHint write_hint_;
   DBFileType file_type_;
+  uint64_t file_level_;
 };
 
 // A file abstraction for random reading and writing.

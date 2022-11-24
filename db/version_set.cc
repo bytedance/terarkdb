@@ -3212,6 +3212,8 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
 
   {
     EnvOptions opt_env_opts = env_->OptimizeForManifestWrite(env_options_);
+    // (kqh): Specify that this is a manifest file
+    opt_env_opts.db_file_type = DBFileType::kManifest;
     mu->Unlock();
 
     if (!first_writer.edit_list.front()->IsColumnFamilyManipulation()) {
@@ -3325,6 +3327,7 @@ Status VersionSet::ProcessManifestWrites(std::deque<ManifestWriter>& writers,
 
   // Append the old manifest file to the obsolete_manifest_ list to be deleted
   // by PurgeObsoleteFiles later.
+  // (kqh) Delete old manifest file by first add them into an obsolete list 
   if (s.ok() && new_descriptor_log) {
     obsolete_manifests_.emplace_back(
         DescriptorFileName("", manifest_file_number_));

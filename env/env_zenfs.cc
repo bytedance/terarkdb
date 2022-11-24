@@ -230,8 +230,11 @@ class ZenfsEnv : public EnvWrapper {
 
   Status NewWritableFile(const std::string& f, std::unique_ptr<WritableFile>* r,
                          const EnvOptions& options) override {
-    std::unique_ptr<FSWritableFile> file;
+    std::unique_ptr<FSWritableFile> file = std::make_unique<FSWritableFile>();
 
+    if (*r) {
+      file->SetFileLevel((*r)->GetFileLevel());
+    }
     // Generally, we should let our user to decide whether a file is WAL
     // or not. However, current TerarkDB environment doesn't provide such
     // capability to hint. Therefore, we simply check the suffix of filename
@@ -259,6 +262,7 @@ class ZenfsEnv : public EnvWrapper {
       }
     }
 
+    // (xzw): the file here now contains a valid level
     IOStatus s = fs_->NewWritableFile(f, foptions, &file, nullptr);
     if (s.ok()) {
       r->reset(new ZenfsWritableFile(std::move(file)));

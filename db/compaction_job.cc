@@ -1432,7 +1432,13 @@ Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
       "files in(%d, %d) out(%d) "
       "MB in(%.1f, %.1f) out(%.1f), read-write-amplify(%.1f) "
       "write-amplify(%.1f) %s, records in: %" PRIu64
+<<<<<<< HEAD
       ", records dropped: %" PRIu64 " output_compression: %s\n",
+=======
+      ", records dropped: %" PRIu64
+      " output_compression: %s "
+      "output_blob_compression: %s\n",
+>>>>>>> d7c6cb160... remove zenfs
       cfd->GetName().c_str(), vstorage->LevelSummary(&tmp), bytes_read_per_sec,
       bytes_written_per_sec, compact_->compaction->output_level(),
       stats.num_input_files_in_non_output_levels,
@@ -1457,7 +1463,14 @@ Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
          << compact_->num_input_records << "num_output_records"
          << compact_->num_output_records << "num_subcompactions"
          << compact_->sub_compact_states.size() << "output_compression"
+<<<<<<< HEAD
          << CompressionTypeToString(compact_->compaction->output_compression());
+=======
+         << CompressionTypeToString(compact_->compaction->output_compression())
+         << "output_blob_compression"
+         << CompressionTypeToString(
+                compact_->compaction->output_blob_compression());
+>>>>>>> d7c6cb160... remove zenfs
 
   if (compaction_job_stats_ != nullptr) {
     stream << "num_single_delete_mismatches"
@@ -2905,7 +2918,8 @@ Status CompactionJob::OpenCompactionOutputFile(
       TableFileCreationReason::kCompaction);
 #endif  // !ROCKSDB_LITE
   // Make the output file
-  std::unique_ptr<WritableFile> writable_file;
+  std::unique_ptr<WritableFile> writable_file =
+      std::make_unique<WritableFile>();
 #ifndef NDEBUG
   bool syncpoint_arg = env_options_.use_direct_writes;
   TEST_SYNC_POINT_CALLBACK("CompactionJob::OpenCompactionOutputFile",
@@ -2914,7 +2928,15 @@ Status CompactionJob::OpenCompactionOutputFile(
   // (kqh): Mark the file type as compaction output file
   auto env_options = env_options_;
   env_options.db_file_type = DBFileType::kCompactionOutputFile;
+  // (kqh): May set the LSM-Tree Level of this file on creation:
+  // To get the target level of compaction output file, use:
+  //
+  //   sub_compact->compaction->output_level();
+  //
+  writable_file->SetFileLevel(sub_compact->compaction->output_level());
   Status s = NewWritableFile(env_, fname, &writable_file, env_options_);
+  ZnsLog(Color::kBlue, ">>>> xzw >>>> Compacting file %s to level %d\n", fname.c_str(),
+         sub_compact->compaction->output_level());
   if (!s.ok()) {
     ROCKS_LOG_ERROR(
         db_options_.info_log,
@@ -3037,7 +3059,7 @@ Status CompactionJob::OpenCompactionOutputBlob(
   sub_compact->blob_outputs.push_back(out);
   writable_file->SetIOPriority(Env::IO_LOW);
   // writable_file->SetWriteLifeTimeHint(write_hint_);
-  // (kqh): Blob file should have extremely long lifetime 
+  // (kqh): Blob file should have extremely long lifetime
   writable_file->SetWriteLifeTimeHint(Env::WriteLifeTimeHint::WLTH_EXTREME);
   writable_file->SetPreallocationBlockSize(static_cast<size_t>(
       sub_compact->compaction->OutputFilePreallocationSize()));

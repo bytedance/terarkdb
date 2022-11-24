@@ -11,6 +11,7 @@
 #define __STDC_FORMAT_MACROS
 #include <chrono>
 
+#include "fs/log.h"
 #include "gflags/gflags.h"
 #include "rocksdb/lazy_buffer.h"
 #include "rocksdb/thread_status.h"
@@ -5019,6 +5020,10 @@ class Benchmark {
       } else if (!s.IsNotFound()) {
         fprintf(stderr, "Get returned an error: %s\n", s.ToString().c_str());
         abort();
+      } else {
+        assert(s.IsNotFound());
+        ZnsLog(kRed, "[kqh] Key%llu NotFound", key_rand);
+        assert(false);
       }
 
       if (thread->shared->read_rate_limiter.get() != nullptr &&

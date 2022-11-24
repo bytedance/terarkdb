@@ -10,6 +10,7 @@
 
 #include <thread>
 
+#include "fs/log.h"
 
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
@@ -1261,26 +1262,28 @@ void DBImpl::MaybeDoZoneCompaction() {
     if (candidate_zone.free_capacity == 0) {
       curr_free += candidate_zone.reclaim_capacity;
       migrate_zone_ids.emplace_back(candidate_zone.start_position);
-      printf(
-          "[kqh] Pick Zone(%lu) for Compaction: GR=%.4lf VR=%.4lf start=%zu "
-          "expect "
-          "release %zu MiB\n",
-          candidate_zone.ZoneId(), candidate_zone.GarbageRate(),
-          candidate_zone.ValidRate(), candidate_zone.start_position,
-          candidate_zone.reclaim_capacity / (1024 * 1024));
+      ZnsLog(kYellow,
+             "[kqh] Pick Zone(%lu) for Compaction: GR=%.4lf VR=%.4lf start=%zu "
+             "expect "
+             "release %zu MiB\n",
+             candidate_zone.ZoneId(), candidate_zone.GarbageRate(),
+             candidate_zone.ValidRate(), candidate_zone.start_position,
+             ToMiB(candidate_zone.reclaim_capacity));
     }
   }
 
   // (kqh) Maybe we should limit the maximum number of compact zones?
   if (migrate_zone_ids.size() > 5) {
-    migrate_zone_ids.erase(migrate_zone_ids.begin() + 5, migrate_zone_ids.end());
+    migrate_zone_ids.erase(migrate_zone_ids.begin() + 5,
+                           migrate_zone_ids.end());
     assert(migrate_zone_ids.size() <= 5);
   }
 
   uint32_t min_size = 0;  // 128 << 10;
   std::vector<ZoneExtentSnapshot*> compact_exts;
   for (auto& ext : zenfs_stat.snapshot_.extents_) {
-    auto iter = std::find(migrate_zone_ids.begin(), migrate_zone_ids.end(), ext.zone_start);
+    auto iter = std::find(migrate_zone_ids.begin(), migrate_zone_ids.end(),
+                          ext.zone_start);
     if (iter != migrate_zone_ids.end()) {
       if (ext.length > min_size) {
         compact_exts.push_back(&ext);
@@ -1294,7 +1297,7 @@ void DBImpl::MaybeDoZoneCompaction() {
 }
 
 void DBImpl::ScheduleZNSGC() {
-#define ZNS_GC
+// #define ZNS_GC
 #ifdef ZNS_GC
   TEST_SYNC_POINT("DBImpl:ScheduleZNSGC");
 
