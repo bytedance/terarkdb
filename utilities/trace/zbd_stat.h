@@ -28,6 +28,8 @@ public:
 
   //uint64_t write_position;
   uint64_t start_position;
+  uint64_t wp;
+  uint64_t id;
   
   std::vector<BDZoneFileStat> files;
   BDZoneStat(const ZoneSnapshot& z):
@@ -36,7 +38,9 @@ public:
     used_capacity(z.used_capacity),
     reclaim_capacity(z.max_capacity - z.used_capacity - z.capacity),
     //write_position(zs.WritePosition()),
-    start_position(z.start) {}
+    start_position(z.start),
+    wp(z.wp),
+    id(z.id) {}
 
   ~BDZoneStat() = default;
 
@@ -45,7 +49,18 @@ public:
     return double(reclaim_capacity) / total;
   }
 
+  double ValidRate() const {
+    uint64_t total = reclaim_capacity + used_capacity + free_capacity;
+    return (double)used_capacity / total;
+  }
+
+  double WritePointRate() const {
+    uint64_t total = reclaim_capacity + used_capacity + free_capacity;
+    return (double)wp / total;
+  }
+
   uint64_t FakeID() const { return start_position; }
+  uint64_t ZoneId() const { return id; }
 
   std::string ToString() const {
     std::ostringstream msg;

@@ -1,3 +1,5 @@
+#include "fs/metrics.h"
+#include "fs/snapshot.h"
 #include "rocksdb/env.h"
 #include "rocksdb/file_system.h"
 #include "rocksdb/terark_namespace.h"
@@ -236,9 +238,25 @@ class ZenfsEnv : public EnvWrapper {
     // here.
     FileOptions foptions(options);
     static const std::string log_end = ".log";
+
     if (f.size() > log_end.size()) {
       bool is_wal = std::equal(log_end.rbegin(), log_end.rend(), f.rbegin());
       foptions.io_options.type = is_wal ? IOType::kWAL : IOType::kUnknown;
+    }
+    if (options.db_file_type != DBFileType::kNoType) {
+      switch (options.db_file_type) {
+        case DBFileType::kFlushFile:
+          foptions.io_options.type = IOType::kFlushFile;
+          break;
+        case DBFileType::kCompactionOutputFile:
+          foptions.io_options.type = IOType::kCompactionOutputFile;
+          break;
+        case DBFileType::kWAL:
+          foptions.io_options.type = IOType::kWAL;
+          break;
+        default:
+          break;
+      }
     }
 
     IOStatus s = fs_->NewWritableFile(f, foptions, &file, nullptr);
@@ -533,6 +551,12 @@ class ZenfsEnv : public EnvWrapper {
     zen_fs->MigrateExtents(exts);
   }
 
+  void CompactZones(uint64_t zone_start,
+                    const std::vector<ZoneExtentSnapshot*>& exts) {
+    auto zen_fs = dynamic_cast<ZenFS*>(fs_);
+    zen_fs->CompactZone(zone_start, exts);
+  }
+
   void Set_metrics_tag(std::string tag) { metrics_tag_ = tag; }
   std::string MetricsTag() { return metrics_tag_; }
 
@@ -591,6 +615,14 @@ void MigrateExtents(Env* env, const std::vector<ZoneExtentSnapshot*>& exts,
   auto zen_env = dynamic_cast<ZenfsEnv*>(env);
   if (!zen_env) return;
   zen_env->MigrateExtents(exts, direct_io);
+}
+
+void CompactZones(Env* env, uint64_t zone_start,
+                  const std::vector<ZoneExtentSnapshot*>& exts,
+                  bool direct_io) {
+  auto zen_env = dynamic_cast<ZenfsEnv*>(env);
+  if (!zen_env) return;
+  zen_env->CompactZones(zone_start, exts);
 }
 
 std::string MetricsTag(Env* env) {

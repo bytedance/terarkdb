@@ -13,6 +13,7 @@ namespace TERARKDB_NAMESPACE {
 
 const int kNanosInMilli = 1000000;
 static const char default_namespace[] = "terarkdb.engine.stats";
+const int kReportInterval = 30; // Report every 5 seconds
 
 #ifdef WITH_BYTEDANCE_METRICS
 static std::mutex metrics_mtx;
@@ -127,7 +128,7 @@ void ByteDanceCountReporterHandle::AddCount(size_t n) {
     if (!reporter_lock_.exchange(true, std::memory_order_acquire)) {
       auto curr_time_ns = env_->NowNanos();
       auto diff_ms = (curr_time_ns - last_report_time_ns_) / kNanosInMilli;
-      if (diff_ms >= 30000 /* 30 seconds */) {
+      if (diff_ms >= kReportInterval * 1000 /* 30 seconds */) {
         size_t curr_count = count_.load(std::memory_order_relaxed);
         size_t qps = (curr_count - last_report_count_) /
                      (static_cast<double>(diff_ms) / 1000);

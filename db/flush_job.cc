@@ -383,9 +383,12 @@ Status FlushJob::WriteLevel0Table() {
         }
         return range_del_iters;
       };
+      // (kqh) Pass the L0 information down to the File system layer
+      auto env_options = env_options_;
+      env_options.db_file_type = DBFileType::kFlushFile;
       s = BuildTable(
           dbname_, versions_, db_options_.env, *cfd_->ioptions(),
-          mutable_cf_options_, env_options_, cfd_->table_cache(),
+          mutable_cf_options_, env_options, cfd_->table_cache(),
           c_style_callback(get_arena_input_iter), &get_arena_input_iter,
           c_style_callback(get_range_del_iters), &get_range_del_iters, &meta_,
           cfd_->internal_comparator(),

@@ -1691,8 +1691,23 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
 
   if (!s.ok()) {
     // how do we fail if we're not creating new log?
+<<<<<<< HEAD
     assert(creating_new_log);
     assert(!new_log);
+=======
+<<<<<<< HEAD
+    terarkdb_assert(creating_new_log);
+    terarkdb_assert(!new_log);
+=======
+<<<<<<< HEAD
+    assert(creating_new_log);
+    assert(!new_log);
+=======
+    terarkdb_assert(creating_new_log);
+    // terarkdb_assert(!new_log);
+>>>>>>> 314a3b767... Add garbage rate monitoring
+>>>>>>> 8303e7d38... Add garbage rate monitoring
+>>>>>>> 153d15469...     Add garbage rate monitoring
     if (two_write_queues_) {
       nonmem_write_thread_.ExitUnbatched(&nonmem_w);
     }

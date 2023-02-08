@@ -219,5 +219,10 @@ IF(WITH_TERARK_ZIP)
 ENDIF()
 
 IF(WITH_ZENFS)
+<<<<<<< HEAD
   EXECUTE_PROCESS(COMMAND bash "-c" "cd ${CMAKE_CURRENT_SOURCE_DIR}/zenfs && ./generate-version.sh" COMMAND_ERROR_IS_FATAL ANY)
+=======
+  # EXECUTE_PROCESS(COMMAND bash "-c" "cd ${CMAKE_CURRENT_SOURCE_DIR}/zenfs && git apply ${CMAKE_CURRENT_SOURCE_DIR}/zenfs.patch" COMMAND_ERROR_IS_FATAL ANY)
+  # EXECUTE_PROCESS(COMMAND bash "-c" "cd ${CMAKE_CURRENT_SOURCE_DIR}/zenfs && ./generate-version.sh" COMMAND_ERROR_IS_FATAL ANY)
+>>>>>>> 314a3b767... Add garbage rate monitoring
 ENDIF()

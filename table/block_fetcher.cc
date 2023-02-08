@@ -66,6 +66,7 @@ inline void BlockFetcher::CheckBlockChecksum() {
           "block checksum mismatch: expected " + ToString(actual) + ", got " +
           ToString(value) + "  in " + file_->file_name() + " offset " +
           ToString(handle_.offset()) + " size " + ToString(block_size_));
+      assert(false);
     }
   }
 }

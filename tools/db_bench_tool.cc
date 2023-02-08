@@ -9,6 +9,11 @@
 
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
+#include <chrono>
+
+#include "gflags/gflags.h"
+#include "rocksdb/lazy_buffer.h"
+#include "rocksdb/thread_status.h"
 #endif
 
 #ifdef GFLAGS
@@ -128,7 +133,8 @@ DEFINE_string(
     "fillseekseq,"
     "randomtransaction,"
     "randomreplacekeys,"
-    "timeseries",
+    "timeseries,"
+    "ycsb_a, ycsb_b, ycsb_c",
 
     "Comma-separated list of operations to run in the specified"
     " order. Available benchmarks:\n"
@@ -201,6 +207,7 @@ DEFINE_string(
     "\treplay      -- replay the trace file specified with trace_file\n");
 
 DEFINE_int64(num, 1000000, "Number of key/values to place in database");
+DEFINE_int64(num_op, -1, "Number of operations(for YCSB benchmark only)");
 
 DEFINE_int64(numdistinct, 1000,
              "Number of distinct keys to use. Used in RandomWithVerify to "
@@ -1211,6 +1218,248 @@ static const bool FLAGS_table_cache_numshardbits_dummy
     __attribute__((__unused__)) = RegisterFlagValidator(
         &FLAGS_table_cache_numshardbits, &ValidateTableCacheNumshardbits);
 
+// ============================================================================
+//                         YCSB Benchmark Key generator
+// ============================================================================
+namespace ycsb {
+namespace utils {
+const uint64_t kFNVOffsetBasis64 = 0xCBF29CE484222325ull;
+const uint64_t kFNVPrime64 = 1099511628211ull;
+
+inline uint64_t FNVHash64(uint64_t val) {
+  uint64_t hash = kFNVOffsetBasis64;
+
+  for (int i = 0; i < 8; i++) {
+    uint64_t octet = val & 0x00ff;
+    val = val >> 8;
+
+    hash = hash ^ octet;
+    hash = hash * kFNVPrime64;
+  }
+  return hash;
+}
+
+inline uint64_t Hash(uint64_t val) { return FNVHash64(val); }
+
+inline uint32_t ThreadLocalRandomInt() {
+  static thread_local std::random_device rd;
+  static thread_local std::minstd_rand rn(rd());
+  return rn();
+}
+
+inline double ThreadLocalRandomDouble(double min = 0.0, double max = 1.0) {
+  static thread_local std::random_device rd;
+  static thread_local std::minstd_rand rn(rd());
+  static thread_local std::uniform_real_distribution<double> uniform(min, max);
+  return uniform(rn);
+}
+
+///
+/// Returns an ASCII code that can be printed to desplay
+///
+inline char RandomPrintChar() { return rand() % 94 + 33; }
+
+class Exception : public std::exception {
+ public:
+  Exception(const std::string& message) : message_(message) {}
+  const char* what() const noexcept { return message_.c_str(); }
+
+ private:
+  std::string message_;
+};
+
+inline bool StrToBool(std::string str) {
+  std::transform(str.begin(), str.end(), str.begin(), ::tolower);
+  if (str == "true" || str == "1") {
+    return true;
+  } else if (str == "false" || str == "0") {
+    return false;
+  } else {
+    throw Exception("Invalid bool string: " + str);
+  }
+}
+
+inline std::string Trim(const std::string& str) {
+  auto front = std::find_if_not(str.begin(), str.end(),
+                                [](int c) { return std::isspace(c); });
+  return std::string(
+      front,
+      std::find_if_not(str.rbegin(), std::string::const_reverse_iterator(front),
+                       [](int c) { return std::isspace(c); })
+          .base());
+}
+
+};  // namespace utils
+
+template <typename Value>
+class Generator {
+ public:
+  virtual Value Next() = 0;
+  virtual Value Last() = 0;
+  virtual ~Generator() {}
+};
+
+class ZipfianGenerator : public Generator<uint64_t> {
+ public:
+  constexpr static const double kZipfianConst = 0.90;
+  static const uint64_t kMaxNumItems = (UINT64_MAX >> 24);
+
+  ZipfianGenerator(uint64_t min, uint64_t max,
+                   double zipfian_const = kZipfianConst)
+      : num_items_(max - min + 1),
+        base_(min),
+        theta_(zipfian_const),
+        zeta_n_(0),
+        n_for_zeta_(0) {
+    assert(num_items_ >= 2 && num_items_ < kMaxNumItems);
+    zeta_2_ = Zeta(2, theta_);
+    alpha_ = 1.0 / (1.0 - theta_);
+    RaiseZeta(num_items_);
+    eta_ = Eta();
+
+    Next();
+  }
+
+  ZipfianGenerator(uint64_t num_items)
+      : ZipfianGenerator(0, num_items - 1, kZipfianConst) {}
+
+  uint64_t Next(uint64_t num) {
+    assert(num >= 2 && num < kMaxNumItems);
+    // std::lock_guard<std::mutex> lock(mutex_);
+
+    if (num > n_for_zeta_) {  // Recompute zeta_n and eta
+      RaiseZeta(num);
+      eta_ = Eta();
+    }
+
+    double u = utils::ThreadLocalRandomDouble();
+    double uz = u * zeta_n_;
+
+    if (uz < 1.0) {
+      return last_value_ = 0;
+    }
+
+    if (uz < 1.0 + std::pow(0.5, theta_)) {
+      return last_value_ = 1;
+    }
+
+    return last_value_ = base_ + num * std::pow(eta_ * u - eta_ + 1, alpha_);
+  }
+
+  uint64_t Next() { return Next(num_items_); }
+
+  uint64_t Last() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return last_value_;
+  }
+
+ private:
+  ///
+  /// Compute the zeta constant needed for the distribution.
+  /// Remember the number of items, so if it is changed, we can recompute zeta.
+  ///
+  void RaiseZeta(uint64_t num) {
+    assert(num >= n_for_zeta_);
+    zeta_n_ = Zeta(n_for_zeta_, num, theta_, zeta_n_);
+    n_for_zeta_ = num;
+  }
+
+  double Eta() {
+    return (1 - std::pow(2.0 / num_items_, 1 - theta_)) /
+           (1 - zeta_2_ / zeta_n_);
+  }
+
+  ///
+  /// Calculate the zeta constant needed for a distribution.
+  /// Do this incrementally from the last_num of items to the cur_num.
+  /// Use the zipfian constant as theta. Remember the new number of items
+  /// so that, if it is changed, we can recompute zeta.
+  ///
+  static double Zeta(uint64_t last_num, uint64_t cur_num, double theta,
+                     double last_zeta) {
+    double zeta = last_zeta;
+    for (uint64_t i = last_num + 1; i <= cur_num; ++i) {
+      zeta += 1 / std::pow(i, theta);
+    }
+    return zeta;
+  }
+
+  static double Zeta(uint64_t num, double theta) {
+    return Zeta(0, num, theta, 0);
+  }
+
+  uint64_t num_items_;
+  uint64_t base_;  /// Min number of items to generate
+
+  // Computed parameters for generating the distribution
+  double theta_, zeta_n_, eta_, alpha_, zeta_2_;
+  uint64_t n_for_zeta_;  /// Number of items used to compute zeta_n
+  uint64_t last_value_;
+  std::mutex mutex_;
+};
+
+class ScrambledZipfianGenerator : public Generator<uint64_t> {
+ public:
+  ScrambledZipfianGenerator(
+      uint64_t min, uint64_t max,
+      double zipfian_const = ZipfianGenerator::kZipfianConst)
+      : base_(min),
+        num_items_(max - min + 1),
+        generator_(min, max, zipfian_const) {}
+
+  ScrambledZipfianGenerator(uint64_t num_items)
+      : ScrambledZipfianGenerator(0, num_items - 1) {}
+
+  uint64_t Scramble(uint64_t value) const {
+    return base_ + utils::FNVHash64(value) % num_items_;
+  }
+  uint64_t Next() { return Scramble(generator_.Next()); }
+  uint64_t Last() { return Scramble(generator_.Last()); }
+
+ private:
+  const uint64_t base_;
+  const uint64_t num_items_;
+  ZipfianGenerator generator_;
+};
+
+template <typename Value>
+class DiscreteGenerator : public Generator<Value> {
+ public:
+  DiscreteGenerator() : sum_(0) {}
+  void AddValue(Value value, double weight) {
+    if (values_.empty()) {
+      last_ = value;
+    }
+    values_.push_back(std::make_pair(value, weight));
+    sum_ += weight;
+  };
+
+  Value Next() {
+    double chooser = utils::ThreadLocalRandomDouble();
+
+    for (auto p = values_.cbegin(); p != values_.cend(); ++p) {
+      if (chooser < p->second / sum_) {
+        return last_ = p->first;
+      }
+      chooser -= p->second / sum_;
+    }
+
+    assert(false);
+    return last_;
+  }
+  Value Last() { return last_; }
+
+ private:
+  std::vector<std::pair<Value, double>> values_;
+  double sum_;
+  std::atomic<Value> last_;
+};
+
+};  // namespace ycsb
+
+// ============================================================================
+//                     YCSB Benchmark Key generator End
+// ============================================================================
 namespace TERARKDB_NAMESPACE {
 
 static std::shared_ptr<ByteDanceMetricsReporterFactory>
@@ -2008,6 +2257,7 @@ struct ThreadState {
   Stats stats;
   SharedState* shared;
   bool write;
+  std::shared_ptr<ycsb::ScrambledZipfianGenerator> ycsb_generator;
 
   /* implicit */ ThreadState(int index)
       : tid(index),
@@ -2083,6 +2333,28 @@ class Benchmark {
   int64_t readwrites_;
   int64_t merge_keys_;
   bool report_file_operations_;
+  enum YCSBBenchmarkType { YCSB_A, YCSB_B, YCSB_C, YCSB_NONE };
+  struct BenchmarkProperty {
+    double update_prop;
+    double read_prop;
+    double insert_prop;
+    double scan_prop;
+  };
+
+  YCSBBenchmarkType ycsb_type_ = YCSB_NONE;
+
+  BenchmarkProperty GetYCSBBenchProperty(YCSBBenchmarkType type) {
+    switch (type) {
+      case YCSB_A:
+        return {0.5, 0.5, 0.0, 0.0};
+      case YCSB_B:
+        return {0.05, 0.95, 0.0, 0.0};
+      case YCSB_C:
+        return {0.0, 1.0, 0.0, 0.0};
+      default:
+        return {0.0, 0.0, 0.0, 0.0};
+    }
+  }
 
   class ErrorHandlerListener : public EventListener {
    public:
@@ -2707,6 +2979,15 @@ class Benchmark {
         method = &Benchmark::ReadSequential;
         num_threads = 1;
         reads_ = num_;
+      } else if (name == "ycsb_a") {
+        method = &Benchmark::YCSBBenchmarkA;
+        ycsb_type_ = YCSB_A;
+      } else if (name == "ycsb_b") {
+        method = &Benchmark::YCSBBenchmarkB;
+        ycsb_type_ = YCSB_B;
+      } else if (name == "ycsb_c") {
+        method = &Benchmark::YCSBBenchmarkC;
+        ycsb_type_ = YCSB_C;
       } else if (name == "readreverse") {
         method = &Benchmark::ReadReverse;
       } else if (name == "readrandom") {
@@ -3000,6 +3281,21 @@ class Benchmark {
 
     ThreadArg* arg = new ThreadArg[n];
 
+    // Init YCSB generator
+    if (FLAGS_num_op == -1) {
+      // Num op is not set yet, set it to be multiple
+      // key number
+      FLAGS_num_op = FLAGS_num * 2;
+    }
+    const int64_t num_ops = FLAGS_num_op;
+    auto property = GetYCSBBenchProperty(ycsb_type_);
+
+    int new_key = FLAGS_num_op * property.insert_prop * 2;
+    std::shared_ptr<ycsb::ScrambledZipfianGenerator> key_gen(
+        new ycsb::ScrambledZipfianGenerator(num_ + new_key));
+    // Call key_gen once so that generator can finish its initialization
+    key_gen->Next();
+
     for (int i = 0; i < n; i++) {
 #ifdef NUMA
       if (FLAGS_enable_numa) {
@@ -3024,6 +3320,8 @@ class Benchmark {
       arg[i].thread = new ThreadState(i);
       arg[i].thread->stats.SetReporterAgent(reporter_agent.get());
       arg[i].thread->shared = &shared;
+      // Set the YCSB generator of each thread located in each Thread arguments
+      arg[i].thread->ycsb_generator = key_gen;
       if (i < FLAGS_read_threads) arg[i].thread->write = false;
       FLAGS_env->StartThread(ThreadBody, &arg[i]);
     }
@@ -3847,6 +4145,197 @@ class Benchmark {
   void WriteSeq(ThreadState* thread) { DoWrite(thread, SEQUENTIAL); }
 
   void WriteRandom(ThreadState* thread) { DoWrite(thread, RANDOM); }
+
+  void DoYCSBBenchmark(ThreadState* thread, YCSBBenchmarkType type) {
+    const int test_duration = FLAGS_duration;
+    if (FLAGS_num_op == -1) {
+      // Num op is not set yet, set it to be multiple
+      // key number
+      FLAGS_num_op = FLAGS_num * 2;
+    }
+    const int64_t num_ops = FLAGS_num_op;
+
+    enum Operation {
+      INSERT,
+      READ,
+      UPDATE,
+      SCAN,
+      READMODIFYWRITE,
+      DELETE,
+      MAXOPTYPE
+    };
+
+    std::shared_ptr<ycsb::Generator<uint64_t>> key_generator;
+    ycsb::DiscreteGenerator<Operation> op_generator;
+
+    auto property = GetYCSBBenchProperty(type);
+
+    op_generator.AddValue(INSERT, property.insert_prop);
+    op_generator.AddValue(READ, property.read_prop);
+    op_generator.AddValue(UPDATE, property.update_prop);
+    op_generator.AddValue(SCAN, property.scan_prop);
+
+    int new_key = num_ops * property.insert_prop * 2;
+    key_generator.reset(new ycsb::ScrambledZipfianGenerator(num_ + new_key));
+    // key_generator = thread->ycsb_generator;
+
+    Duration duration(test_duration, num_ops, num_ops);
+
+    if (num_ != FLAGS_num) {
+      char msg[100];
+      snprintf(msg, sizeof(msg), "(%" PRIu64 " ops)", num_);
+      thread->stats.AddMessage(msg);
+    }
+
+    RandomGenerator gen;
+    WriteBatch batch;
+    Status s;
+    int64_t bytes = 0;
+    int64_t read = 0;
+    int64_t found = 0;
+
+    std::unique_ptr<const char[]> key_guard;
+    Slice key = AllocateKey(&key_guard);
+    LazyBuffer lazy_value;
+    ReadOptions read_option(FLAGS_verify_checksum, true);
+
+    int64_t stage = 0;
+    // int64_t num_written = 0;
+
+    while (!duration.Done(entries_per_batch_)) {
+      if (duration.GetStage() != stage) {
+        stage = duration.GetStage();
+        if (db_.db != nullptr) {
+          db_.CreateNewCf(open_options_, stage);
+        } else {
+          for (auto& db : multi_dbs_) {
+            db.CreateNewCf(open_options_, stage);
+          }
+        }
+      }
+
+      // size_t id = thread->rand.Next() % num_key_gens;
+      // we have only one CF
+      DBWithColumnFamilies* db_with_cfh = SelectDBWithCfh(uint64_t(0));
+      batch.Clear();
+
+      if (thread->shared->write_rate_limiter.get() != nullptr) {
+        thread->shared->write_rate_limiter->Request(
+            entries_per_batch_ * (value_size_ + key_size_), Env::IO_HIGH,
+            nullptr /* stats */, RateLimiter::OpType::kWrite);
+        // Set time at which last op finished to Now() to hide latency and
+        // sleep from rate limiter. Also, do the check once per batch, not
+        // once per write.
+        thread->stats.ResetLastOpTime();
+      }
+
+      auto op = op_generator.Next();
+      int64_t rand_num = key_generator->Next();
+
+      // (kqh) Set tid to be -1 to make sure all threads share the same key
+      // space
+      GenerateKeyFromInt(rand_num, num_, &key, -1);
+
+      // Dealing with different operation types accordingly
+      switch (op) {
+        // Both INSERT and UPDATE use db.write interface
+        case INSERT:
+        case UPDATE: {
+          if (FLAGS_num_column_families <= 1) {
+            batch.Put(key, gen.Generate(value_size_));
+          } else {
+            // We use same rand_num as seed for key and column family so that we
+            // can deterministically find the cfh corresponding to a particular
+            // key while reading the key.
+            batch.Put(db_with_cfh->GetCfh(rand_num), key,
+                      gen.Generate(value_size_));
+          }
+          bytes += value_size_ + key_size_;
+          // ++num_written;
+          s = db_with_cfh->db->Write(write_options_, &batch);
+
+          thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db,
+                                    entries_per_batch_, kWrite);
+          if (!s.ok()) {
+            fprintf(stderr, "try recovering from put error: %s\n",
+                    s.ToString().c_str());
+            s = listener_->WaitForRecovery(600000000) ? Status::OK() : s;
+          }
+          if (!s.ok()) {
+            fprintf(stderr, "put error: %s\n", s.ToString().c_str());
+            exit(1);
+          }
+          break;
+        }
+        case READ: {
+          read++;
+          lazy_value.clear();
+          int64_t key_rand = GetRandomKey(&thread->rand);
+          if (FLAGS_num_column_families > 1) {
+            s = db_with_cfh->db->Get(read_option, db_with_cfh->GetCfh(key_rand),
+                                     key, &lazy_value);
+          } else {
+            s = db_with_cfh->db->Get(read_option,
+                                     db_with_cfh->db->DefaultColumnFamily(),
+                                     key, &lazy_value);
+          }
+          if (s.ok()) {
+            found++;
+            bytes += key.size() + lazy_value.size();
+          } else if (!s.IsNotFound()) {
+            fprintf(stderr, "Get returned an error: %s\n",
+                    s.ToString().c_str());
+            abort();
+          }
+          thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db, 1, kRead);
+          break;
+        }
+        // TODO(kqh): Add Scan support
+        default:
+          assert(false);
+      }
+      if (FLAGS_sine_write_rate) {
+        uint64_t now = FLAGS_env->NowMicros();
+        uint64_t usecs_since_last;
+        if (now > thread->stats.GetSineInterval()) {
+          usecs_since_last = now - thread->stats.GetSineInterval();
+        } else {
+          usecs_since_last = 0;
+        }
+
+        if (usecs_since_last >
+            (FLAGS_sine_write_rate_interval_milliseconds * uint64_t{1000})) {
+          double usecs_since_start =
+              static_cast<double>(now - thread->stats.GetStart());
+          thread->stats.ResetSineInterval();
+          uint64_t write_rate =
+              static_cast<uint64_t>(SineRate(usecs_since_start / 1000000.0));
+          thread->shared->write_rate_limiter.reset(
+              NewGenericRateLimiter(write_rate));
+        }
+      }
+    }
+    printf("[TID] %llu Finish Looping\n", std::this_thread::get_id());
+
+    char msg[100];
+    snprintf(msg, sizeof(msg), "(%" PRIu64 " of %" PRIu64 " found)\n", found,
+             read);
+    thread->stats.AddBytes(bytes);
+    thread->stats.AddMessage(msg);
+
+    printf("[Tid %llu] %s", std::this_thread::get_id(), msg);
+
+    if (FLAGS_perf_level > TERARKDB_NAMESPACE::PerfLevel::kDisable) {
+      thread->stats.AddMessage(std::string("PERF_CONTEXT:\n") +
+                               get_perf_context()->ToString());
+    }
+  }
+
+  void YCSBBenchmarkA(ThreadState* thread) { DoYCSBBenchmark(thread, YCSB_A); }
+
+  void YCSBBenchmarkB(ThreadState* thread) { DoYCSBBenchmark(thread, YCSB_B); }
+
+  void YCSBBenchmarkC(ThreadState* thread) { DoYCSBBenchmark(thread, YCSB_C); }
 
   void WriteUniqueRandom(ThreadState* thread) {
     DoWrite(thread, UNIQUE_RANDOM);

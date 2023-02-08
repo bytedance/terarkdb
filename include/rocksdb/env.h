@@ -73,6 +73,13 @@ enum class CpuPriority {
   kHigh = 3,
 };
 
+enum class DBFileType {
+  kNoType = 0,
+  kWAL = 1,
+  kFlushFile = 2,
+  kCompactionOutputFile = 3,
+};
+
 // Options while opening a file to read/write
 struct EnvOptions {
   // Construct with default Options
@@ -126,6 +133,9 @@ struct EnvOptions {
 
   // If not nullptr, write rate limiting is enabled for flush and compaction
   RateLimiter* rate_limiter = nullptr;
+
+  // (kqh) Only used as a file creation hint
+  DBFileType db_file_type = DBFileType::kNoType;
 };
 
 class Env {
@@ -855,6 +865,10 @@ class WritableFile {
   }
 
   virtual Env::WriteLifeTimeHint GetWriteLifeTimeHint() { return write_hint_; }
+
+  virtual void SetFileType(DBFileType type) { file_type_ = type; }
+  virtual DBFileType GetFileType() const { return file_type_; }
+
   /*
    * Get the size of valid data in the file.
    */
@@ -943,6 +957,7 @@ class WritableFile {
  protected:
   Env::IOPriority io_priority_;
   Env::WriteLifeTimeHint write_hint_;
+  DBFileType file_type_;
 };
 
 // A file abstraction for random reading and writing.

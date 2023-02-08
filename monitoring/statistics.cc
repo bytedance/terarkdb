@@ -179,6 +179,7 @@ const std::vector<std::pair<Histograms, std::string>> HistogramsNameMap = {
     {PICK_COMPACTION_TIME, "rocksdb.pick.compaction.micros"},
     {PICK_GARBAGE_COLLECTION_TIME, "rocksdb.pick.gc.micros"},
     {INSTALL_SUPER_VERSION_TIME, "rocksdb.install.super.version.micros"},
+    {ZNS_GC_MICRO, "rocksdb.db.zns_gc.micros"},
     {BUILD_VERSION_TIME, "rocksdb.build.version.micros"},
 };
 

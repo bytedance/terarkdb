@@ -56,6 +56,11 @@ void PeriodicWorkScheduler::Register(DBImpl* dbi,
              initial_delay.fetch_add(1) % kDefaultScheduleZNSMetricsPeriodSec *
                  kMicrosInSecond,
              kDefaultScheduleZNSMetricsPeriodSec * kMicrosInSecond);
+  timer->Add([dbi]() { dbi->ScheduleZNSStatusReporter(); },
+             GetTaskName(dbi, "schedule_zns_status_reporter"),
+             initial_delay.fetch_add(1) % kDefaultScheduleZNSTTLPeriodSec *
+                 kMicrosInSecond,
+             kDefaultScheduleZNSTTLPeriodSec * kMicrosInSecond);
 #endif
 }
 
@@ -68,6 +73,7 @@ void PeriodicWorkScheduler::Unregister(DBImpl* dbi) {
 #ifdef WITH_ZENFS
   timer->Cancel(GetTaskName(dbi, "schedule_gc_zns"));
   timer->Cancel(GetTaskName(dbi, "schedule_metrics_background_report"));
+  timer->Cancel(GetTaskName(dbi, "schedule_zns_status_reporter"));
 #endif
   if (!timer->HasPendingTask()) {
     timer->Shutdown();

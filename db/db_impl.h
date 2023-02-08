@@ -62,6 +62,7 @@
 #include "util/thread_local.h"
 #include "util/trace_replay.h"
 #include "utilities/console/server.h"
+#include "utilities/trace/zbd_stat.h"
 
 namespace TERARKDB_NAMESPACE {
 
@@ -796,6 +797,16 @@ class DBImpl : public DB {
 
 #endif  // NDEBUG
 
+<<<<<<< HEAD
+=======
+  bool IsShuttingDown() {
+    return shutting_down_.load(std::memory_order_acquire);
+  }
+
+  // warm up index cache when open the db
+  void WarmUpDBIndexCache();
+
+>>>>>>> 314a3b767... Add garbage rate monitoring
   // persist stats to column family "_persistent_stats"
   void PersistStats();
 
@@ -808,10 +819,32 @@ class DBImpl : public DB {
   void ScheduleTtlGC();
 
 #ifdef WITH_ZENFS
+  struct ZenFSStatisticsStatus {
+    uint64_t used = 0;
+    uint64_t free = 0;
+    uint64_t garbage = 0;
+    uint64_t total = 0;
+    uint64_t empty_zone_cnt = 0;
+    uint64_t reclaim = 0;
+  };
+
+  // Get Current ZenFS Statistics
+  ZenFSStatisticsStatus GetZenFSStatistics(const BDZenFSStat& zenfs_stat);
+
   // schedule Metrics Reporter background.
   void ScheduleMetricsReporter();
   // schedule GC by polling ZNS zone status
   void ScheduleZNSGC();
+  // (kqh): Report ZNS status
+  void ScheduleZNSStatusReporter();
+  // (kqh): Pick zones for migration during ZNS GC
+  void PickMigrationZone(const std::vector<BDZoneStat>& zone_stat,
+                         std::set<uint64_t>* picked_zones);
+  // (kqh): Do Compaction work for a zone to reclaim the free space
+  void MaybeDoZoneCompaction();
+  int force_gc_count = 0;
+  int schedule_gc_count = 0;
+  int compact_zone_count = 0;
 #endif
 
  protected:
@@ -1859,6 +1892,8 @@ class DBImpl : public DB {
   LatencyReporter prev_latency_reporter_;
 
   LatencyReporter zenfs_get_snapshot_latency_reporter_;
+  // Report ZenFS GC latency
+  LatencyReporter zenfs_gc_latency_reporter_;
 
   ThroughputReporter write_throughput_reporter_;
   DistributionReporter write_batch_size_reporter_;

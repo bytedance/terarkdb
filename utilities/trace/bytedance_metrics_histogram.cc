@@ -1,3 +1,4 @@
+#include "fs/metrics.h"
 #include "rocksdb/terark_namespace.h"
 #if !defined(ROCKSDB_LITE) && defined(OS_LINUX) && defined(WITH_ZENFS)
 
@@ -47,7 +48,29 @@ const std::unordered_map<uint32_t, std::pair<std::string, uint32_t>>
         {ZENFS_OPEN_ZONES_COUNT, {"zenfs_open_zones", TYPE_GENERAL}},
         {ZENFS_RESETABLE_ZONES_COUNT, {"zenfs_resetable_zones", TYPE_GENERAL}},
         {ZENFS_ZONE_WRITE_THROUGHPUT,
+<<<<<<< HEAD
          {"zenfs_zone_write_throughput", TYPE_THROUGHPUT}}};
+=======
+         {"zenfs_zone_write_throughput", TYPE_THROUGHPUT}},
+        {ZENFS_ZONE_WRITE_LATENCY, {"zenfs_zone_write_latency", TYPE_LATENCY}},
+        {ZENFS_ZONE_GC_WRITE_LATENCY,
+         {"zenfs_zone_gc_write_latency", TYPE_LATENCY}},
+        {ZENFS_ZONE_GC_WRITE_THROUGHPUT,
+         {"zenfs_zone_gc_write_throughput", TYPE_THROUGHPUT}},
+        {ZENFS_ZONE_WAL_WRITE_THROUGHPUT,
+         {"zenfs_zone_wal_write_throughput", TYPE_THROUGHPUT}},
+        {ZENFS_ZONE_FLUSH_FILE_WRITE_THROUGHPUT,
+         {"zenfs_zone_flush_file_write_throughput", TYPE_THROUGHPUT}},
+        {ZENFS_ZONE_COMPACTION_OUTPUT_FILE_WRITE_THROUGHPUT,
+         {"zenfs_zone_compaction_output_file_write_throughput",
+          TYPE_THROUGHPUT}},
+        {ZENFS_ZONE_READ_THROUGHPUT,
+         {"zenfs_zone_read_throughput", TYPE_THROUGHPUT}},
+        {ZENFS_ZONE_GC_READ_THROUGHPUT,
+         {"zenfs_zone_gc_read_throughput", TYPE_THROUGHPUT}},
+        {ZENFS_L0_IO_ALLOC_LATENCY,
+         {"zenfs_l0_io_alloc_latency", TYPE_LATENCY}}};
+>>>>>>> 314a3b767... Add garbage rate monitoring
 
 void BDZenFSMetrics::AddReporter(uint32_t label, uint32_t type) {
   assert(BDZenFSHistMap.find(label) != BDZenFSHistMap.end());

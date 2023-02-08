@@ -273,7 +273,9 @@ Status BuildTable(
           return status;
         }
         blob_file->SetIOPriority(io_priority);
-        blob_file->SetWriteLifeTimeHint(write_hint);
+        // blob_file->SetWriteLifeTimeHint(write_hint);
+        // (kqh): Should set the lifetime hint of blob file to be extreme
+        blob_file->SetWriteLifeTimeHint(Env::WriteLifeTimeHint::WLTH_EXTREME);
 
         separate_helper.file_writer.reset(
             new WritableFileWriter(std::move(blob_file), fname, env_options,

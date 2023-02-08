@@ -8,6 +8,9 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #include "db/db_impl.h"
 
+#include <thread>
+
+
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
 #endif
@@ -272,6 +275,7 @@ static std::string prev_latency_metric_name = "dbiter_prev_latency";
 
 static std::string zenfs_get_snapshot_latency_metric_name =
     "dbimpl_zenfs_get_snapshot_latency";
+static std::string zenfs_gc_latency_metric_name = "dbimpl_zenfs_gc_latency";
 
 static std::string write_throughput_metric_name = "dbimpl_writeimpl_throughput";
 static std::string write_batch_size_metric_name = "dbimpl_writeimpl_batch_size";
@@ -434,6 +438,9 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
           *metrics_reporter_factory_->BuildHistReporter(
               zenfs_get_snapshot_latency_metric_name, bytedance_tags_,
               immutable_db_options_.info_log.get(), env_)),
+      zenfs_gc_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
+          zenfs_gc_latency_metric_name, bytedance_tags_,
+          immutable_db_options_.info_log.get(), env_)),
       write_throughput_reporter_(*metrics_reporter_factory_->BuildCountReporter(
           write_throughput_metric_name, bytedance_tags_,
           immutable_db_options_.info_log.get(), env_)),
@@ -1098,6 +1105,8 @@ void GetZenFSSnapshot(Env* env, ZenFSSnapshot& snapshot,
 // Migrate target zone's all extents to a new zone
 void MigrateExtents(Env* env, const std::vector<ZoneExtentSnapshot*>& ext,
                     bool direct_io);
+void CompactZones(Env* env, uint64_t zone_start,
+                  const std::vector<ZoneExtentSnapshot*>& ext, bool direct_io);
 
 void DBImpl::ScheduleMetricsReporter() {
   // TEST_SYNC_POINT("DBImpl:ScheduleMetricsReporter");
@@ -1110,8 +1119,192 @@ void DBImpl::ScheduleMetricsReporter() {
   GetZenFSSnapshot(env_, snapshot, options);
 }
 
+// (kqh) report use status of ZNS
+void DBImpl::ScheduleZNSStatusReporter() {
+  TEST_SYNC_POINT("DBImpl::ScheduleZNSStatusReporter");
+  LogBuffer log_buffer_info(InfoLogLevel::INFO_LEVEL,
+                            immutable_db_options_.info_log.get());
+  LogBuffer log_buffer_debug(InfoLogLevel::DEBUG_LEVEL,
+                             immutable_db_options_.info_log.get());
+  BDZenFSStat zenfs_stat;
+  {
+    LatencyHistGuard guard(&zenfs_get_snapshot_latency_reporter_);
+    // Pick files for GC
+    GetStat(env_, zenfs_stat);
+    // ROCKS_LOG_BUFFER(&log_buffer_info,"ZNS GC :\n\t[GetStat]=%s\n",
+    //                  zenfs_stat.ToString());
+  }
+  std::vector<BDZoneStat>& stat = zenfs_stat.zone_stats_;
+
+  size_t free = 0, used = 0, reclaim = 0, total = 0;
+  size_t garbage = 0;
+  int empty_zone_cnt = 0;
+
+  // (kqh) Statistics on Garbage rate
+  int zone_num_on_garbage_rate[11] = {0};
+
+  for (const auto& zone : stat) {
+    // Collect all zones with over 80% garbage
+    free += zone.free_capacity;
+    used += zone.used_capacity;
+    total += zone.used_capacity + zone.reclaim_capacity;
+    garbage += zone.reclaim_capacity;
+    if (zone.free_capacity == 0) {
+      reclaim += zone.reclaim_capacity;
+    }
+
+    if (zone.GarbageRate() > 0) {
+      auto id = static_cast<int>(zone.GarbageRate() * 10);
+      zone_num_on_garbage_rate[id] += 1;
+    }
+
+    if (zone.wp == zone.start_position) {
+      empty_zone_cnt += 1;
+    }
+  }
+
+  double used_in_gb = (double)used / (1 << 30);
+  double free_in_gb = (double)free / (1 << 30);
+  double reclaim_in_gb = (double)reclaim / (1 << 30);
+  double garbage_in_gb = (double)garbage / (1 << 30);
+  double total_in_gb = (double)total / (1 << 30);
+
+  printf("[Garbage Rate Distribution]:\n");
+  // (kqh): Report garbage rate statistics
+  for (int i = 0; i < 11; ++i) {
+    printf("[%5d%%, %5d%%]: %d\n", i * 10, (i + 1) * 10,
+           zone_num_on_garbage_rate[i]);
+  }
+  printf(
+      "\n[Used: %.2lf GB][Free: %.2lf GB][Reclaimable: %.2lf GB][Garbage: "
+      "%.2lf GB]"
+      "[Total: %.2lf GB][Empty Zone: %d]\n",
+      used_in_gb, free_in_gb, reclaim_in_gb, garbage_in_gb, total_in_gb,
+      empty_zone_cnt);
+  printf(
+      "[Space Amplification: %.4lf][Average Garbage Ratio: %.4lf][Free "
+      "Capacity Ratio: %.4lf]\n",
+      static_cast<double>(total) / static_cast<double>(used),
+      static_cast<double>(garbage) / static_cast<double>(total),
+      static_cast<double>(free) / static_cast<double>(free + total));
+  printf(
+      "[Schedule GC Count: %d][Force GC Count: %d][Compact Zone Count: %d]\n",
+      schedule_gc_count, force_gc_count, compact_zone_count);
+}
+
+void DBImpl::PickMigrationZone(const std::vector<BDZoneStat>& zone_stat,
+                               std::set<uint64_t>* picked_zones) {}
+
+DBImpl::ZenFSStatisticsStatus DBImpl::GetZenFSStatistics(
+    const BDZenFSStat& zenfs_stat) {
+  ZenFSStatisticsStatus ret_stat;
+  const auto& stat = zenfs_stat.zone_stats_;
+  for (const auto& zone : stat) {
+    // Collect all zones with over 80% garbage
+    ret_stat.free += zone.free_capacity;
+    ret_stat.used += zone.used_capacity;
+    ret_stat.total += (zone.used_capacity + zone.reclaim_capacity);
+    ret_stat.garbage += zone.reclaim_capacity;
+    if (zone.free_capacity == 0) {
+      ret_stat.reclaim += zone.reclaim_capacity;
+    }
+    if (zone.wp == zone.start_position) {
+      ret_stat.empty_zone_cnt += 1;
+    }
+  }
+  return ret_stat;
+}
+
+void DBImpl::MaybeDoZoneCompaction() {
+  const double force_free_r = 0.15;
+  TEST_SYNC_POINT("DBImpl::MaybeDoZoneCompaction");
+  printf("[kqh] Running Zone Compaction\n");
+
+  BDZenFSStat zenfs_stat;
+  {
+    LatencyHistGuard guard(&zenfs_get_snapshot_latency_reporter_);
+    GetStat(env_, zenfs_stat);
+  }
+  auto zenfs_statistics = GetZenFSStatistics(zenfs_stat);
+  const auto& stat = zenfs_stat.zone_stats_;
+
+  double free_ratio = static_cast<double>(zenfs_statistics.free) /
+                      (zenfs_statistics.total + zenfs_statistics.free);
+  bool need_zone_compact = free_ratio < force_free_r;
+  printf("[kqh] Current Free Capacity Ratio: %.4lf; Empty Zone Cnt=%lu\n",
+         free_ratio, zenfs_statistics.empty_zone_cnt);
+
+  if (!need_zone_compact) {
+    return;
+  }
+  compact_zone_count += 1;
+  std::vector<uint64_t> migrate_zone_ids;
+
+  // Pick zones for compaction
+  printf("[kqh] Running Force Zone Compaction\n");
+  std::deque<BDZoneStat> zone_heap(stat.begin(), stat.end());
+  std::sort(zone_heap.begin(), zone_heap.end(),
+            [](const BDZoneStat& z1, const BDZoneStat& z2) {
+              return z1.GarbageRate() > z2.GarbageRate();
+            });
+  // Calculate the expect free space
+  uint64_t expect_free =
+      (zenfs_statistics.free + zenfs_statistics.total) * force_free_r;
+  auto theory_free = zenfs_statistics.free + zenfs_statistics.reclaim;
+  expect_free = std::min(expect_free, theory_free);
+
+  auto curr_free = zenfs_statistics.free;
+  while (curr_free < expect_free && !zone_heap.empty()) {
+    auto candidate_zone = zone_heap.front();
+    zone_heap.pop_front();
+    // Only compact zones that are full
+    if (candidate_zone.free_capacity == 0) {
+      curr_free += candidate_zone.reclaim_capacity;
+      migrate_zone_ids.emplace_back(candidate_zone.start_position);
+      printf(
+          "[kqh] Pick Zone(%lu) for Compaction: GR=%.4lf VR=%.4lf start=%zu "
+          "expect "
+          "release %zu MiB\n",
+          candidate_zone.ZoneId(), candidate_zone.GarbageRate(),
+          candidate_zone.ValidRate(), candidate_zone.start_position,
+          candidate_zone.reclaim_capacity / (1024 * 1024));
+    }
+  }
+
+  // (kqh) Maybe we should limit the maximum number of compact zones?
+  if (migrate_zone_ids.size() > 5) {
+    migrate_zone_ids.erase(migrate_zone_ids.begin() + 5, migrate_zone_ids.end());
+    assert(migrate_zone_ids.size() <= 5);
+  }
+
+  uint32_t min_size = 0;  // 128 << 10;
+  std::vector<ZoneExtentSnapshot*> compact_exts;
+  for (auto& ext : zenfs_stat.snapshot_.extents_) {
+    auto iter = std::find(migrate_zone_ids.begin(), migrate_zone_ids.end(), ext.zone_start);
+    if (iter != migrate_zone_ids.end()) {
+      if (ext.length > min_size) {
+        compact_exts.push_back(&ext);
+      }
+    }
+  }
+
+  for (const auto& compact_zone_start : migrate_zone_ids) {
+    CompactZones(env_, compact_zone_start, compact_exts, true);
+  }
+}
+
 void DBImpl::ScheduleZNSGC() {
+#define ZNS_GC
+#ifdef ZNS_GC
   TEST_SYNC_POINT("DBImpl:ScheduleZNSGC");
+
+  printf("[kqh] Start Running ZNS GC tid=%zu\n", std::this_thread::get_id());
+
+  schedule_gc_count += 1;
+
+  // (kqh): Report ZNS GC latency
+  StopWatch sw(env_, stats_, ZNS_GC_MICRO);
+
   uint64_t nowSeconds = env_->NowMicros() / 1000U / 1000U;
   LogBuffer log_buffer_info(InfoLogLevel::INFO_LEVEL,
                             immutable_db_options_.info_log.get());
@@ -1123,10 +1316,7 @@ void DBImpl::ScheduleZNSGC() {
   BDZenFSStat zenfs_stat;
   {
     LatencyHistGuard guard(&zenfs_get_snapshot_latency_reporter_);
-    // Pick files for GC
     GetStat(env_, zenfs_stat);
-    // ROCKS_LOG_BUFFER(&log_buffer_info,"ZNS GC :\n\t[GetStat]=%s\n",
-    //                  zenfs_stat.ToString());
   }
   std::vector<BDZoneStat>& stat = zenfs_stat.zone_stats_;
 
@@ -1136,54 +1326,87 @@ void DBImpl::ScheduleZNSGC() {
   // Merge db paths and column family paths together
   chash_set<std::string> db_paths;
 
-  // Get column family paths
-  mutex_.Lock();
-  double low_r = mutable_db_options_.zenfs_low_gc_ratio;
-  double high_r = mutable_db_options_.zenfs_high_gc_ratio;
-  double force_r = mutable_db_options_.zenfs_force_gc_ratio;
-
-  for (auto cfd : *versions_->GetColumnFamilySet()) {
-    for (const auto& path : cfd->ioptions()->db_paths) {
-      db_paths.emplace(path.path);
-    }
-  }
-  mutex_.Unlock();
-
-  // Get database paths
-  for (const auto& path : immutable_db_options_.db_paths) {
-    db_paths.emplace(path.path);
-  }
+  const double force_free_r = 0.15;
 
   std::set<uint64_t> migrate_zone_ids;
   std::string strip_filename;
-  size_t free = 0, used = 0, reclaim = 0, total = 0;
-  for (const auto& zone : stat) {
-    // Collect all zones with over 80% garbage
-    if (zone.GarbageRate() > 0.8) {
-      migrate_zone_ids.emplace(zone.start_position);
-    }
+  auto zenfs_statistics = GetZenFSStatistics(zenfs_stat);
 
-    free += zone.free_capacity;
-    used += zone.used_capacity;
-    total += zone.used_capacity + zone.reclaim_capacity;
-    if (zone.free_capacity == 0) {
-      reclaim += zone.reclaim_capacity;
+  double free_ratio = static_cast<double>(zenfs_statistics.free) /
+                      (zenfs_statistics.total + zenfs_statistics.free);
+
+  // May trigger force gc in two conditions:
+  //  1. No enough free space left
+  bool need_force_gc = free_ratio < force_free_r;
+  printf("[kqh] Current Free Capacity Ratio: %.4lf; Empty Zone Cnt=%lu\n",
+         free_ratio, zenfs_statistics.empty_zone_cnt);
+  if (need_force_gc) {
+    // Force GC, release space until there is enough free space.
+    // To achive this goal, we have to release Zone with higher GC ratio at
+    // first
+    printf("[kqh] Running Force GC\n");
+    std::deque<BDZoneStat> zone_heap(stat.begin(), stat.end());
+    std::sort(zone_heap.begin(), zone_heap.end(),
+              [](const BDZoneStat& z1, const BDZoneStat& z2) {
+                return z1.GarbageRate() > z2.GarbageRate();
+              });
+    auto expect_free =
+        (zenfs_statistics.free + zenfs_statistics.total) * force_free_r;
+    auto curr_free = zenfs_statistics.free;
+    while (curr_free < expect_free && !zone_heap.empty()) {
+      auto candidate_zone = zone_heap.front();
+      zone_heap.pop_front();
+      // if (candidate_zone.GarbageRate() < 0.8 && candidate_zone.free_capacity
+      // > 0) { continue;
+      // }
+      curr_free += candidate_zone.reclaim_capacity;
+      migrate_zone_ids.emplace(candidate_zone.start_position);
+      printf(
+          "[kqh] Pick Zone(%lu) for migration: GR=%.4lf VR=%.4lf start=%zu "
+          "expect "
+          "release %zu MiB\n",
+          candidate_zone.ZoneId(), candidate_zone.GarbageRate(),
+          candidate_zone.ValidRate(), candidate_zone.start_position,
+          candidate_zone.reclaim_capacity / (1024 * 1024));
+    }
+    force_gc_count += 1;
+  } else {
+    // regular periodically GC, which means only migrate zones with Garage Rate
+    // > 80%
+    for (const auto& zone : stat) {
+      if (zone.GarbageRate() >= 0.8 && zone.free_capacity == 0) {
+        migrate_zone_ids.emplace(zone.start_position);
+        printf("[kqh] Pick Zone for migration: GR=%.4lf VR=%.4lf start=%zu\n",
+               zone.GarbageRate(), zone.ValidRate(), zone.start_position);
+      }
     }
   }
 
   // Migrate all proper extents larger than `min_szie`
-  uint32_t min_size = 128 << 10;
+  // xzw: migrate extents unconditionally
+  uint32_t min_size = 0;  // 128 << 10;
   std::vector<ZoneExtentSnapshot*> migrate_exts;
   for (auto& ext : zenfs_stat.snapshot_.extents_) {
-    if (migrate_zone_ids.find(ext.zone_start) != migrate_zone_ids.end() &&
-        ext.length > min_size) {
-      migrate_exts.push_back(&ext);
+    if (migrate_zone_ids.find(ext.zone_start) != migrate_zone_ids.end()) {
+      if (ext.length > min_size) {
+        migrate_exts.push_back(&ext);
+      }
     }
   }
   MigrateExtents(env_, migrate_exts,
                  immutable_db_options_.use_direct_io_for_flush_and_compaction);
   ROCKS_LOG_BUFFER(&log_buffer_info, "ZNS GC: Migrate Extent Count: %d",
                    migrate_exts.size());
+
+  // Do compaction on Zone to reclaim space for a fixed time interval
+  if (schedule_gc_count % 2 == 0) {
+    MaybeDoZoneCompaction();
+  }
+
+  // (xzw): early return to skip compaction
+  return;
+
+  /*
 
   // Overall free capacity ratio of disk.
   double free_r = double(free) / total;
@@ -1289,6 +1512,7 @@ void DBImpl::ScheduleZNSGC() {
         bool marked = !!(meta->marked_for_compaction & mask);
         old_mark_count += marked;
         TEST_SYNC_POINT("DBImpl:Exist-SST");
+        // Mark an SST file for GC, use compaction to release the file
         if (mark_for_gc.count(meta->fd.GetNumber()) > 0) {
           if (!marked) {
             meta->marked_for_compaction |= mask;
@@ -1353,7 +1577,10 @@ void DBImpl::ScheduleZNSGC() {
                    used_r, trash_r, target_r);
   log_buffer_info.FlushBufferToLog();
   log_buffer_debug.FlushBufferToLog();
+  */
+#endif
 }
+
 #endif
 
 void DBImpl::DumpStats() {

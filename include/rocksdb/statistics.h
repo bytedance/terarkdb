@@ -325,6 +325,9 @@ enum Histograms : uint32_t {
   INSTALL_SUPER_VERSION_TIME,
   BUILD_VERSION_TIME,
 
+  // ZNS related
+  ZNS_GC_MICRO,
+
   HISTOGRAM_ENUM_MAX,
 };
 

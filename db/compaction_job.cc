@@ -2911,6 +2911,9 @@ Status CompactionJob::OpenCompactionOutputFile(
   TEST_SYNC_POINT_CALLBACK("CompactionJob::OpenCompactionOutputFile",
                            &syncpoint_arg);
 #endif
+  // (kqh): Mark the file type as compaction output file
+  auto env_options = env_options_;
+  env_options.db_file_type = DBFileType::kCompactionOutputFile;
   Status s = NewWritableFile(env_, fname, &writable_file, env_options_);
   if (!s.ok()) {
     ROCKS_LOG_ERROR(
@@ -3007,7 +3010,10 @@ Status CompactionJob::OpenCompactionOutputBlob(
   TEST_SYNC_POINT_CALLBACK("CompactionJob::OpenCompactionOutputFile",
                            &syncpoint_arg);
 #endif
-  Status s = NewWritableFile(env_, fname, &writable_file, env_options_);
+  // (kqh): Control the file type
+  auto env_options = env_options_;
+  env_options.db_file_type = DBFileType::kCompactionOutputFile;
+  Status s = NewWritableFile(env_, fname, &writable_file, env_options);
   if (!s.ok()) {
     ROCKS_LOG_ERROR(
         db_options_.info_log,
@@ -3030,7 +3036,9 @@ Status CompactionJob::OpenCompactionOutputBlob(
 
   sub_compact->blob_outputs.push_back(out);
   writable_file->SetIOPriority(Env::IO_LOW);
-  writable_file->SetWriteLifeTimeHint(write_hint_);
+  // writable_file->SetWriteLifeTimeHint(write_hint_);
+  // (kqh): Blob file should have extremely long lifetime 
+  writable_file->SetWriteLifeTimeHint(Env::WriteLifeTimeHint::WLTH_EXTREME);
   writable_file->SetPreallocationBlockSize(static_cast<size_t>(
       sub_compact->compaction->OutputFilePreallocationSize()));
   const auto& listeners =
