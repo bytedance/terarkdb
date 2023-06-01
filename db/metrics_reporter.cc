@@ -10,7 +10,7 @@
 #include "util/logging.h"
 
 #ifdef WITH_BOOSTLIB
-#define REPORT_DEBUG_STACKTRACE 1
+#define REPORT_DEBUG_STACKTRACE 0
 #if REPORT_DEBUG_STACKTRACE
 #if defined(__APPLE__)
 #define _GNU_SOURCE
