@@ -156,7 +156,8 @@ class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
                                  std::shared_ptr<class TableFactory> fallback);
   ~TerarkZipTableFactory();
 
-  const char* Name() const override { return "TerarkZipTable"; }
+  static const std::string kName;
+  const char* Name() const override { return kName.c_str(); }
 
   Status NewTableReader(const TableReaderOptions& table_reader_options,
                         unique_ptr<RandomAccessFileReader>&& file,
