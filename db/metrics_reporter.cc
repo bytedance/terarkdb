@@ -9,14 +9,11 @@
 #include "rocksdb/env.h"
 #include "util/logging.h"
 
-#ifdef WITH_BOOSTLIB
-#define REPORT_DEBUG_STACKTRACE 1
-#if REPORT_DEBUG_STACKTRACE
+#ifdef REPORT_DEBUG_STACKTRACE
 #if defined(__APPLE__)
 #define _GNU_SOURCE
 #endif
 #include <boost/stacktrace.hpp>
-#endif
 #endif
 
 namespace TERARKDB_NAMESPACE {
@@ -35,11 +32,12 @@ LatencyHistLoggedGuard::LatencyHistLoggedGuard(HistReporterHandle* handle,
                                                uint64_t threshold_us)
     : handle_(handle),
       begin_time_ns_(handle_->GetEnv()->NowNanos()),
-      log_threshold_us_(threshold_us) {
+      log_threshold_us_(threshold_us),
+      start_stacktrace_(nullptr) {
   assert(handle_ != nullptr);
-#if REPORT_DEBUG_STACKTRACE
-  auto stacktrace = new boost::stacktrace::stacktrace();
-  start_stacktrace_ = stacktrace;
+#ifdef REPORT_DEBUG_STACKTRACE
+  start_stacktrace_ =
+      reinterpret_cast<void*>(new boost::stacktrace::stacktrace());
 #endif
 }
 
@@ -47,9 +45,9 @@ LatencyHistLoggedGuard::~LatencyHistLoggedGuard() {
   auto us = (handle_->GetEnv()->NowNanos() - begin_time_ns_) / 1000;
   handle_->AddRecord(us);
   if (us >= log_threshold_us_ && handle_->GetLogger() != nullptr) {
-#if REPORT_DEBUG_STACKTRACE
+#ifdef REPORT_DEBUG_STACKTRACE
     auto stacktrace =
-        static_cast<boost::stacktrace::stacktrace*>(start_stacktrace_);
+        reinterpret_cast<boost::stacktrace::stacktrace*>(start_stacktrace_);
     ROCKS_LOG_WARN(
         handle_->GetLogger(),
         "[name:%s] [tags:%s]: %" PRIu64 "us\n%s----------\n%s-----------\n",
@@ -63,7 +61,7 @@ LatencyHistLoggedGuard::~LatencyHistLoggedGuard() {
 #endif
   }
 
-#if REPORT_DEBUG_STACKTRACE
+#ifdef REPORT_DEBUG_STACKTRACE
   auto stacktrace =
       static_cast<boost::stacktrace::stacktrace*>(start_stacktrace_);
   start_stacktrace_ = nullptr;
