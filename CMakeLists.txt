@@ -61,6 +61,7 @@ MESSAGE(STATUS "terarkdb namespace: " ${WITH_TERARKDB_NAMESPACE})
 
 option(BUILD_SUFFIX "library suffix" "d")
 option(FORCE_TERARKDB_RELEASE_BUILD "ignore outside cmake_build_type" OFF)
+CMAKE_DEPENDENT_OPTION(REPORT_DEBUG_STACKTRACE "enable stack trace for LatencyHistLoggedGuard" OFF "WITH_BOOSTLIB" OFF)
 
 SET(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 Find_Package(Threads REQUIRED)
@@ -144,6 +145,7 @@ endif()
 if(WITH_BOOSTLIB)
   message("[terarkdb] with boost")
 else()
+  SET(REPORT_DEBUG_STACKTRACE OFF)
   message("[terarkdb] without boost")
 endif()
 
