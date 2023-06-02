@@ -62,7 +62,10 @@
 #include "rocksdb/utilities/transaction.h"
 #include "rocksdb/utilities/transaction_db.h"
 #include "rocksdb/write_batch.h"
+#ifdef WITH_TERARK_ZIP
 #include "table/terark_zip_table.h"
+#include "table/terark_zip_internal.h"
+#endif
 #include "util/cast_util.h"
 #include "util/compression.h"
 #include "util/crc32c.h"
@@ -969,7 +972,9 @@ DEFINE_bool(print_malloc_stats, false,
 
 DEFINE_bool(disable_auto_compactions, false, "Do not auto trigger compactions");
 
-DEFINE_bool(enable_lazy_compaction, true, "Enable map or link compaction");
+DEFINE_bool(enable_lazy_compaction,
+            TERARKDB_NAMESPACE::Options().enable_lazy_compaction,
+            "Enable map or link compaction");
 
 DEFINE_uint64(blob_size, size_t(-1), "Key Value Separate blob size");
 
@@ -1146,7 +1151,14 @@ DEFINE_bool(use_plain_table, false,
             "instead of block-based table format");
 DEFINE_bool(use_cuckoo_table, false, "if use cuckoo table format");
 DEFINE_double(cuckoo_hash_ratio, 0.9, "Hash ratio for Cuckoo SST table.");
-DEFINE_bool(use_terark_table, true, "if use terark table format");
+DEFINE_bool(use_terark_table,
+#ifdef WITH_TERARK_ZIP
+            TERARKDB_NAMESPACE::TerarkZipTableFactory::kName ==
+                TERARKDB_NAMESPACE::Options().table_factory->Name(),
+#else
+            false,
+#endif
+            "if use terark table format");
 DEFINE_int32(cbt_hash_bit, 0,
              "the num of hash bits when use critbit trie prefix");
 DEFINE_int32(cbt_entry_per_trie, 65536,

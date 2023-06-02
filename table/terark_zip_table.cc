@@ -229,6 +229,8 @@ TerarkZipTableFactory::TerarkZipTableFactory(
 
 TerarkZipTableFactory::~TerarkZipTableFactory() { delete adaptive_factory_; }
 
+const std::string TerarkZipTableFactory::kName = "TerarkZipTable";
+
 Status TerarkZipTableFactory::NewTableReader(
     const TableReaderOptions& table_reader_options,
     unique_ptr<RandomAccessFileReader>&& file, uint64_t file_size,
