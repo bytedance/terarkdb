@@ -36,3 +36,6 @@ jobs:
     - name: Build
       working-directory: build
       run: make -j $(nproc)
+    - name: unittest
+      working-directory: build
+      run: ctest -j $(nproc)
