@@ -26,7 +26,7 @@ public class FlinkCompactionFilter
    public FlinkCompactionFilter(ConfigHolder configHolder, TimeProvider timeProvider, Logger logger) {
     super(createNewFlinkCompactionFilter0(configHolder.nativeHandle_, timeProvider, logger == null ? 0 : logger.nativeHandle_));
   }
-
+   private native static long createFlinkValueExtractorFactory(long configHolderHandle);
    private native static long createNewFlinkCompactionFilter0(long configHolderHandle, TimeProvider timeProvider, long loggerHandle);
   private native static long createNewFlinkCompactionFilterConfigHolder();
   private native static void disposeFlinkCompactionFilterConfigHolder(long configHolderHandle);
@@ -116,6 +116,18 @@ public class FlinkCompactionFilter
    /** Provides current timestamp to check expiration, it must be thread safe. */
   public interface TimeProvider {
     long currentTimestamp();
+  }
+
+  public static class FlinkValueExtractorFactory
+    extends AbstractValueExtractorFactory<Slice> {
+
+      public FlinkValueExtractor(ConfigHolder configHolder) {
+          super(createFlinkValueExtractorFactory(configHolder));
+      }
+      @Override
+      public String name() {
+        return "FlinkValueExtractorFactory";
+      }
   }
 
    public static class FlinkCompactionFilterFactory extends AbstractCompactionFilterFactory<FlinkCompactionFilter> {

@@ -50,7 +50,6 @@ FlinkCompactionFilter::ConfigHolder::~ConfigHolder() {
     delete config;
   }
 }
-
 // at the moment Flink configures filters (can be already created) only once
 // when user creates state
 // otherwise it can lead to ListElementFilter leak in Config
@@ -112,17 +111,43 @@ inline void FlinkCompactionFilter::InitConfigIfNotYet() const {
       config_cached_ == &DISABLED_CONFIG ? config_holder_->GetConfig()
                                          : config_cached_;
 }
+Status FlinkCompactionFilter::Extract(const Slice& key, const Slice& value,
+                                      std::string* output) const try {
+  const StateType state_type = config_cached_->state_type_;
+  const bool tooShortValue =
+      value.size() < config_cached_->timestamp_offset_ + TIMESTAMP_BYTE_SIZE;
+  if (state_type != StateType::List && !tooShortValue) {
+    output->assign(value.data() + config_cached_->timestamp_offset_,
+                   TIMESTAMP_BYTE_SIZE);
+  }
+  return Status::OK();
+} catch (const std::exception& e) {
+  return Status::Corruption(e.what());
+}
 
 CompactionFilter::Decision FlinkCompactionFilter::FilterV2(
     int /*level*/, const Slice& key, ValueType value_type,
-    const Slice& /*existing_value_meta*/, const LazyBuffer& existing_lazy_value,
+    const Slice& value_meta, const LazyBuffer& existing_lazy_value,
     LazyBuffer* new_value, std::string* /*skip_until*/) const {
-  auto s = existing_lazy_value.fetch();
-  if (!s.ok()) {
-    new_value->reset(std::move(s));
-    return CompactionFilter::Decision::kKeep;
+  const StateType state_type = config_cached_->state_type_;
+  const bool value_or_merge =
+      value_type == ValueType::kValue || value_type == ValueType::kMergeOperand;
+  const bool value_state =
+      state_type == StateType::Value && value_type == ValueType::kValue;
+  const bool list_entry = state_type == StateType::List && value_or_merge;
+  const bool toDecide = value_state || list_entry;
+  const bool list_filter = list_entry && list_element_filter_;
+  Status s;
+  bool no_meta = list_filter || value_meta == nullptr;
+  if (no_meta) {
+    s = existing_lazy_value.fetch();
+    if (!s.ok()) {
+      new_value->reset(std::move(s));
+      return CompactionFilter::Decision::kKeep;
+    }
   }
-  const Slice& existing_value = existing_lazy_value.slice();
+  const Slice& existing_value =
+      no_meta ? existing_lazy_value.slice() : value_meta;
 
   InitConfigIfNotYet();
   CreateListElementFilterIfNull();
@@ -142,15 +167,6 @@ CompactionFilter::Decision FlinkCompactionFilter::FilterV2(
   const bool tooShortValue =
       existing_value.size() <
       config_cached_->timestamp_offset_ + TIMESTAMP_BYTE_SIZE;
-
-  const StateType state_type = config_cached_->state_type_;
-  const bool value_or_merge =
-      value_type == ValueType::kValue || value_type == ValueType::kMergeOperand;
-  const bool value_state =
-      state_type == StateType::Value && value_type == ValueType::kValue;
-  const bool list_entry = state_type == StateType::List && value_or_merge;
-  const bool toDecide = value_state || list_entry;
-  const bool list_filter = list_entry && list_element_filter_;
 
   Decision decision = Decision::kKeep;
   if (!tooShortValue && toDecide) {

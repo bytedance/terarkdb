@@ -183,6 +183,15 @@ void Java_org_rocksdb_FlinkCompactionFilter_disposeFlinkCompactionFilterConfigHo
   delete config_holder;
 }
 
+jlong Java_org_rocksdb_FlinkCompactionFilter_createFlinkValueExtractorFactory(
+    JNIEnv* env, jclass /* jcls */, jlong config_holder_handle) {
+  using namespace TERARKDB_NAMESPACE::flink;
+  auto config_holder =
+      *(reinterpret_cast<std::shared_ptr<FlinkCompactionFilter::ConfigHolder>*>(
+          config_holder_handle));
+  return reinterpret_cast<jlong>(new FlinkValueExtractorFactory(config_holder));
+}
+
 /*
  * Class:     org_rocksdb_FlinkCompactionFilter
  * Method:    createNewFlinkCompactionFilter0
