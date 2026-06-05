@@ -99,13 +99,18 @@ class TablePropertiesCollector {
 
   // AddUserKey() will be called when a new key/value pair is inserted into the
   // table.
-  // @params key    the user key that is inserted into the table.
-  // @params value  the value that is inserted into the table.
-  virtual Status AddUserKey(const Slice& key, const Slice& value,
-                            EntryType /*type*/, SequenceNumber /*seq*/,
+  // @params key            the user key that is inserted into the table.
+  // @params value_or_meta  the value that is inserted into the table.
+  virtual Status AddUserKey(const Slice& key, const Slice& value_or_meta,
+                            EntryType type, SequenceNumber /*seq*/,
                             uint64_t /*file_size*/) {
+    if (type == kEntryMergeIndex || type == kEntryValueIndex) {
+      return Status::NotSupported(
+          "TablePropertiesCollector::AddUserKey() need key value separation "
+          "support.");
+    }
     // For backwards-compatibility.
-    return Add(key, value);
+    return Add(key, value_or_meta);
   }
 
   // Finish() will be called when a table has already been built and is ready

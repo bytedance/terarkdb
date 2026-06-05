@@ -45,9 +45,13 @@ Status UserKeyTablePropertiesCollector::InternalAdd(const Slice& key,
   if (!ParseInternalKey(key, &ikey)) {
     return Status::InvalidArgument("Invalid internal key");
   }
-
-  return collector_->AddUserKey(ikey.user_key, value, GetEntryType(ikey.type),
-                                ikey.sequence, file_size);
+  Slice value_or_meta = value;
+  if (ikey.type == kEntryMergeIndex || ikey.type == kEntryValueIndex) {
+    value_or_meta = SeparateHelper::DecodeValueMeta(value);
+  }
+  return collector_->AddUserKey(ikey.user_key, value_or_meta,
+                                GetEntryType(ikey.type), ikey.sequence,
+                                file_size);
 }
 
 Status UserKeyTablePropertiesCollector::Finish(
