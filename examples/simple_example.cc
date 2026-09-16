@@ -50,32 +50,42 @@ int main() {
   db->Get(ReadOptions(), "key2", &value);
   assert(value == "value");
 
+  // TerarkDB replaced the PinnableSlice family of interfaces with LazyBuffer,
+  // which defers materialising the value until it is actually read.
   {
-    PinnableSlice pinnable_val;
-    db->Get(ReadOptions(), db->DefaultColumnFamily(), "key2", &pinnable_val);
-    assert(pinnable_val == "value");
+    LazyBuffer lazy_val;
+    s = db->Get(ReadOptions(), db->DefaultColumnFamily(), "key2", &lazy_val);
+    assert(s.ok());
+    // fetch() materialises the value; slice() is only valid once it succeeds.
+    s = lazy_val.fetch();
+    assert(s.ok());
+    assert(lazy_val.slice() == "value");
   }
 
   {
+    // A LazyBuffer can dump into a caller-owned string, which is the
+    // equivalent of giving PinnableSlice an external buffer.
     std::string string_val;
-    // If it cannot pin the value, it copies the value to its internal buffer.
-    // The intenral buffer could be set during construction.
-    PinnableSlice pinnable_val(&string_val);
-    db->Get(ReadOptions(), db->DefaultColumnFamily(), "key2", &pinnable_val);
-    assert(pinnable_val == "value");
-    // If the value is not pinned, the internal buffer must have the value.
-    assert(pinnable_val.IsPinned() || string_val == "value");
+    LazyBuffer lazy_val;
+    s = db->Get(ReadOptions(), db->DefaultColumnFamily(), "key2", &lazy_val);
+    assert(s.ok());
+    s = std::move(lazy_val).dump(&string_val);
+    assert(s.ok());
+    assert(string_val == "value");
   }
 
-  PinnableSlice pinnable_val;
-  db->Get(ReadOptions(), db->DefaultColumnFamily(), "key1", &pinnable_val);
+  LazyBuffer lazy_val;
+  s = db->Get(ReadOptions(), db->DefaultColumnFamily(), "key1", &lazy_val);
   assert(s.IsNotFound());
-  // Reset PinnableSlice after each use and before each reuse
-  pinnable_val.Reset();
-  db->Get(ReadOptions(), db->DefaultColumnFamily(), "key2", &pinnable_val);
-  assert(pinnable_val == "value");
-  pinnable_val.Reset();
-  // The Slice pointed by pinnable_val is not valid after this point
+  // Reset the buffer after each use and before each reuse.
+  lazy_val.reset();
+  s = db->Get(ReadOptions(), db->DefaultColumnFamily(), "key2", &lazy_val);
+  assert(s.ok());
+  s = lazy_val.fetch();
+  assert(s.ok());
+  assert(lazy_val.slice() == "value");
+  lazy_val.reset();
+  // The Slice returned by lazy_val.slice() is not valid after this point.
 
   delete db;
 

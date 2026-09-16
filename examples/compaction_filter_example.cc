@@ -12,16 +12,24 @@ class MyMerge : public TERARKDB_NAMESPACE::MergeOperator {
  public:
   virtual bool FullMergeV2(const MergeOperationInput& merge_in,
                            MergeOperationOutput* merge_out) const override {
-    merge_out->new_value.clear();
+    // MergeOperationInput/Output now carry LazyBuffer instead of Slice/string,
+    // so each operand must be fetched before its bytes can be read. The
+    // inherited Fetch() helper reports the failure through new_value for us.
+    merge_out->new_value.reset();
     if (merge_in.existing_value != nullptr) {
-      merge_out->new_value.assign(merge_in.existing_value->data(),
-                                  merge_in.existing_value->size());
+      if (!Fetch(*merge_in.existing_value, &merge_out->new_value)) {
+        return false;
+      }
+      merge_out->new_value.assign(*merge_in.existing_value);
     }
-    for (const TERARKDB_NAMESPACE::Slice& m : merge_in.operand_list) {
-      fprintf(stderr, "Merge(%s)\n", m.ToString().c_str());
+    for (const TERARKDB_NAMESPACE::LazyBuffer& m : merge_in.operand_list) {
+      if (!Fetch(m, &merge_out->new_value)) {
+        return false;
+      }
+      fprintf(stderr, "Merge(%s)\n", m.slice().ToString().c_str());
       // the compaction filter filters out bad values
-      assert(m.ToString() != "bad");
-      merge_out->new_value.assign(m.data(), m.size());
+      assert(m.slice().ToString() != "bad");
+      merge_out->new_value.assign(m);
     }
     return true;
   }
